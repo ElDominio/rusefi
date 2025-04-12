@@ -21,7 +21,7 @@ ifeq ($(PROJECT_BOARD),)
 ifneq ($(SHORT_BOARD_NAME),)
   PROJECT_BOARD = $(SHORT_BOARD_NAME)
 else
-  PROJECT_BOARD = f407-discovery
+  PROJECT_BOARD = paralela
 endif
 endif
 

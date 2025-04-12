@@ -1,0 +1,24 @@
+.dep*
+build/
+pinouts
+workarea
+bundle_name.txt
+out/
+logs/
+blbuild/
+Debug/
+.settings/
+*_ram_report.txt
+/.idea
+workspace.xml
+java_console_binary
+.vscode/.*
+*.cmp
+*.net
+err.txt
+log.txt
+*.rusefi_binary
+
+# Eclipse
+.metadata/
+
