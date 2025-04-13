@@ -806,11 +806,7 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 	isSpinningJustForWatchdog = true;
 
 #if EFI_HD_ACR
-    bool firstEventInAWhile = m_lastEventTimer.hasElapsedSec(1);
-	if (firstEventInAWhile) {
-        // let's open that valve on first sign of movement
-        engine->module<HarleyAcr>()->updateAcr();
-	}
+
 #endif // EFI_HD_ACR
 
   if (boardAllowTriggerActions()) {
