@@ -2,7 +2,7 @@
 
 #if EFI_CAN_SUPPORT || EFI_UNIT_TEST
 #include "AemXSeriesLambda.h"
-#include "wideband_firmware/for_rusefi/wideband_can.h"
+#include "wideband_can.h"
 
 static constexpr uint32_t aem_base    = 0x180;
 static constexpr uint32_t rusefi_base = WB_DATA_BASE_ADDR;
