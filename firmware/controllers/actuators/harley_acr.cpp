@@ -12,24 +12,5 @@
 
 #if EFI_HD_ACR
 
-static bool getAcrState() {
-    
-		return false;
-	
-}
-
-void HarleyAcr::onSlowCallback() {
-	// skip if no pin
-		m_active = false;
-		
-}
-
-void HarleyAcr::updateAcr() {
-    onSlowCallback();
-}
-
-bool HarleyAcr::isActive() const {
-	return m_active;
-}
 
 #endif // EFI_HD_ACR
