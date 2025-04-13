@@ -21,7 +21,7 @@
 #include "can_sensor.h"
 #include "can_vss.h"
 #include "rusefi_wideband.h"
-#include "wideband_firmware/for_rusefi/wideband_can.h"
+#include "wideband_can.h"
 
 
 /**
