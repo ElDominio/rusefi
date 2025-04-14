@@ -50,45 +50,6 @@ Gpio getWarningLedPin() {
 	return Gpio::E1;
 }
 
-static void setupVbatt() {
-/*
- below 0.4
-	// 1k high side/1.5k low side = 1.6667 ratio divider
-	engineConfiguration->analogInputDividerCoefficient = 2.5f / 1.5f;
-*/
-
-	// 6.8k high side/10k low side = 1.68 ratio divider
-	engineConfiguration->analogInputDividerCoefficient = 16.8f / 10.0f;
-
-	// set vbatt_divider 8.23
-	// R139=39k high side/R141=10k low side multiplied by above analogInputDividerCoefficient = 8.232f
-	engineConfiguration->vbattDividerCoeff = (49.0f / 10.0f) * engineConfiguration->analogInputDividerCoefficient;
-	// PC1, pin #1 input +12 from Main Relay. Main Relay controlled by TLE8888
-	engineConfiguration->vbattAdcChannel = EFI_ADC_11;
-
-	engineConfiguration->adcVcc = 3.29f;
-}
-
-static void setupTle8888() {
-	// on microRusEFI SPI3 is exposed on PC10/PC11 and there is interest to use SD card there
-	// PB3/PB4 could be either SPI1 or SP3, let's use not SPI3 to address the contention
-
-	// Enable and wire up SPI1
-	engineConfiguration->is_enabled_spi_1 = true;
-	engineConfiguration->spi1mosiPin = Gpio::B5;
-	engineConfiguration->spi1misoPin = Gpio::B4;
-	engineConfiguration->spi1sckPin = Gpio::B3;
-
-	// Chip select
-	engineConfiguration->tle8888_cs = Gpio::D5;
-
-	// SPI device
-	engineConfiguration->tle8888spiDevice = SPI_DEVICE_1;
-}
-
-static void setupEtb() {
-	setupTLE9201(/*PWM controlPin*/Gpio::C7, Gpio::A8, Gpio::C8);
-}
 
 static void setupDefaultSensorInputs() {
 	// trigger inputs
@@ -118,29 +79,6 @@ static void setupDefaultSensorInputs() {
 #endif // EFI_BOOTLOADER
 }
 
-void setBoardConfigOverrides() {
-	setupVbatt();
-	setupTle8888();
-	setupEtb();
-
-	engineConfiguration->clt.config.bias_resistor = 2700;
-	engineConfiguration->iat.config.bias_resistor = 2700;
-
-	engineConfiguration->canTxPin = Gpio::B6;
-	engineConfiguration->canRxPin = Gpio::B12;
-
-	// SPI2 for onboard SD card on v0.6.0
-	engineConfiguration->is_enabled_spi_2 = true;
-	engineConfiguration->spi2mosiPin = Gpio::B15;
-	engineConfiguration->spi2misoPin = Gpio::B14;
-	engineConfiguration->spi2sckPin = Gpio::B13;
-
-	// SPI3 for expansion header
-	// Don't override enable since you might want these pins for something else
-	engineConfiguration->spi3mosiPin = Gpio::C12;
-	engineConfiguration->spi3misoPin = Gpio::C11;
-	engineConfiguration->spi3sckPin = Gpio::C10;
-}
 
 /**
  * @brief   Board-specific configuration defaults.
@@ -189,41 +127,3 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->injectionMode = IM_SIMULTANEOUS;//IM_BATCH;// IM_SEQUENTIAL;
 }
 
-static Gpio MRE_OUTPUTS[] = {
-MRE_INJ_1,
-MRE_INJ_2,
-MRE_INJ_3,
-MRE_INJ_4,
-MRE_LS_1,
-};
-
-static Gpio M111_OUTPUTS[] = {
-MRE_INJ_1, // green
-MRE_INJ_2, // white
-MRE_INJ_3, // blue
-MRE_INJ_4, //
-#if HW_MICRO_RUSEFI
-MRE_AV9_REUSE, // brown boost control
-MRE_LS_1, // VVT
-MRE_LS_2, // SC clutch
-//MRE_GPOUT_3, // SC Bypass
-#endif // HW_MICRO_RUSEFI
-};
-
-int getBoardMetaOutputsCount() {
-    if (engineConfiguration->engineType == engine_type_e::MERCEDES_M111) {
-        return efi::size(M111_OUTPUTS);
-    }
-    return efi::size(MRE_OUTPUTS);
-}
-
-Gpio* getBoardMetaOutputs() {
-    if (engineConfiguration->engineType == engine_type_e::MERCEDES_M111) {
-        return M111_OUTPUTS;
-    }
-    return MRE_OUTPUTS;
-}
-
-int getBoardMetaDcOutputsCount() {
-    return 1;
-}
