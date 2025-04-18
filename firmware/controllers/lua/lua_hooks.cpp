@@ -1037,6 +1037,7 @@ extern int luaCommandCounters[LUA_BUTTON_COUNT];
                                  		lua_pushboolean(l, enginePins.acRelay.getLogicValue());
                                  		return 1;
                                  	});
+
 	lua_register(lState, "getDigital", lua_getDigital);
 	lua_register(lState, "getAuxDigital", lua_getAuxDigital);
 	lua_register(lState, "setDebug", lua_setDebug);

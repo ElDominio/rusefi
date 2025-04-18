@@ -209,11 +209,11 @@
 #define CanGpioType_enum "None", "DRT protocol", "MS protocol"
 #define CanGpioType_MS 2
 #define CanGpioType_NONE 0
-#define CLT_CRANKING_CURVE_SIZE 5
+#define CLT_CRANKING_CURVE_SIZE 8
 #define CLT_CRANKING_TAPER_CURVE_SIZE 5
-#define CLT_CURVE_SIZE 5
-#define CLT_FUEL_CURVE_SIZE 5
-#define CLT_IDLE_TABLE_CLT_SIZE 5
+#define CLT_CURVE_SIZE 8
+#define CLT_FUEL_CURVE_SIZE 8
+#define CLT_IDLE_TABLE_CLT_SIZE 8
 #define CLT_IDLE_TABLE_RPM_SIZE 2
 #define CLT_LIMITER_CURVE_SIZE 4
 #define CLT_TIMING_CURVE_SIZE 5
@@ -272,7 +272,7 @@
 #define COMPOSITE_PACKET_SIZE 5
 #define CONSOLE_DATA_PROTOCOL_TAG " @"
 #define CRANKING_ADVANCE_CURVE_SIZE 4
-#define CRANKING_CLT_IDLE_CURVE_SIZE 5
+#define CRANKING_CLT_IDLE_CURVE_SIZE 8
 #define CRANKING_CURVE_SIZE 5
 #define CRANKING_CYCLE_CLT_SIZE 4
 #define CRANKING_ENRICH_COUNT 6
@@ -1127,7 +1127,7 @@
 #define HPFP_TARGET_SIZE 2
 #define HW_EVENT_TYPES 4
 #define IAC_PID_MULT_SIZE 8
-#define IAT_CURVE_SIZE 5
+#define IAT_CURVE_SIZE 6
 #define IAT_IGN_CORR_COUNT 6
 #define IDLE_ADVANCE_CURVE_SIZE 6
 #define idle_hardware_s_size 12
@@ -1308,7 +1308,7 @@
 #define pedalSensor_NAME "Accelerator pedal"
 #define pedalToTpsTbl_NAME "ETB pedal target"
 #define PERCENT_TRIM_BYTE_PACKING_DIV 0.02
-#define persistent_config_s_size 25272
+#define persistent_config_s_size 25372
 #define pid_s_size 20
 #define pin_input_mode_e_auto_enum 0="PI_DEFAULT",4="PI_INVERTED_DEFAULT",6="PI_INVERTED_PULLDOWN",5="PI_INVERTED_PULLUP",2="PI_PULLDOWN",1="PI_PULLUP"
 #define pin_input_mode_e_enum "DEFAULT", "PULLUP", "PULLDOWN", "INVALID", "INVERTED DEFAULT", "INVERTED PULLUP", "INVERTED PULLDOWN"
@@ -1385,7 +1385,7 @@
 #define SentInput_NONE 0
 #define show_tcu_gauges false
 #define show_vvt_output_pin true
-#define SIGNATURE_HASH 1419012085
+#define SIGNATURE_HASH 1851770590
 #define SIMULATOR_TUNE_BIN_FILE_NAME "generated/simulator_tune_image.bin"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX "generated/simulator_tune_image"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX ".bin"
@@ -1450,7 +1450,7 @@
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_BUTTON 0
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_DOWN_SWITCH 2
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_UP_SWITCH 3
-#define TOTAL_CONFIG_SIZE 25272
+#define TOTAL_CONFIG_SIZE 25372
 #define TPS_2_BYTE_PACKING_MULT 100
 #define TPS_PPS_TOO_HIGH_THRESHOLD 110
 #define TPS_PPS_TOO_LOW_THRESHOLD -10
@@ -1885,7 +1885,7 @@
 #define ts_show_wastegate_sensor true
 #define ts_show_wbo_canbus_index true
 #define ts_show_wbo_canbus_set_index true
-#define TS_SIGNATURE "rusEFI master.2025.04.14.paralela.1419012085"
+#define TS_SIGNATURE "rusEFI master.2025.04.17.paralela.1851770590"
 #define TS_SIMULATE_CAN '>'
 #define TS_SIMULATE_CAN_char >
 #define TS_SINGLE_WRITE_COMMAND 'W'
