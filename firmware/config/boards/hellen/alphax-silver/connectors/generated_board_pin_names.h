@@ -30,4 +30,3 @@
 #define PIN_25A_event_inputs MM100_IN_D1
 #define PIN_25A_switch_inputs MM100_IN_D1
 #define PIN_24A25A MM100_IN_CRANK
-#define PIN_28A_a TLE9104_1_OUT_3

@@ -12,6 +12,7 @@
 
 #include "sensor.h"
 #include "efi_pid.h"
+#include "error_accumulator.h"
 #include "electronic_throttle_generated.h"
 
 /**
@@ -52,6 +53,8 @@ public:
 	expected<percent_t> getClosedLoop(percent_t setpoint, percent_t observation) override;
 	expected<percent_t> getClosedLoopAutotune(percent_t setpoint, percent_t actualThrottlePosition);
 
+	dc_function_e getFunction() const { return m_function; }
+
 	void checkJam(percent_t setpoint, percent_t observation);
 
 	void setOutput(expected<percent_t> outputValue) override;
@@ -86,7 +89,6 @@ protected:
 	bool hadTpsError = false;
 	bool hadPpsError = false;
 
-	dc_function_e getFunction() const { return m_function; }
 	DcMotor* getMotor() { return m_motor; }
 
 private:
@@ -95,6 +97,8 @@ private:
 	DcMotor *m_motor = nullptr;
 	Pid m_pid;
 	bool m_shouldResetPid = false;
+
+	ErrorAccumulator m_targetErrorAccumulator;
 
 	/**
 	 * @return true if OK, false if should be disabled
@@ -116,7 +120,7 @@ private:
 
 	// Autotune helpers
 	bool m_lastIsPositive = false;
-	Timer m_autotuneCycleStart;
+	Timer m_cycleTimer;
 	float m_minCycleTps = 0;
 	float m_maxCycleTps = 0;
 	// Autotune measured parameters: gain and ultimate period
@@ -131,6 +135,8 @@ private:
 #endif
 
 	Timer m_luaAdjustmentTimer;
+
+	efitimeus_t lastTickUs;
 };
 
 void etbPidReset();

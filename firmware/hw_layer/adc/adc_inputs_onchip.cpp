@@ -127,7 +127,7 @@ AdcDevice fastAdc(&ADC_FAST_DEVICE, &adcgrpcfgFast, fastAdcSampleBuf, ADC_BUF_DE
 
 static void fastAdcDoneCB(ADCDriver *adcp) {
 	// State may not be complete if we get a callback for "half done"
-	if (adcp->state == ADC_COMPLETE) {
+	if (adcIsBufferComplete(adcp)) {
 		fastAdc.conversionCount++;
 		onFastAdcComplete(adcp->samples);
 	}
@@ -208,7 +208,6 @@ void AdcDevice::startConversionI()
 {
 	chSysLockFromISR();
 	if ((ADC_FAST_DEVICE.state != ADC_READY) &&
-		(ADC_FAST_DEVICE.state != ADC_COMPLETE) &&
 		(ADC_FAST_DEVICE.state != ADC_ERROR)) {
 		engine->outputChannels.fastAdcErrorsCount++;
 		// todo: when? why? criticalError("ADC fast not ready?");

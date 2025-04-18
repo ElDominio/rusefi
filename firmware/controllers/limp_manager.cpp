@@ -183,6 +183,7 @@ void LimpManager::updateState(float rpm, efitick_t nowNt) {
 	}
 
 	{
+		// todo: we need to add some tests of this?
 		// If duty cycle is high, impose a fuel cut rev limiter.
 		// This is safer than attempting to limp along with injectors or a pump that are out of flow.
 		// Two conditions will trigger a cut:
@@ -210,6 +211,29 @@ void LimpManager::updateState(float rpm, efitick_t nowNt) {
 			warning(ObdCode::CUSTOM_TOO_LONG_FUEL_INJECTION, "Injector duty cycle cut %.1f", injDutyCycle);
 		}
 	}
+
+	{
+		// GDI Fuel cut
+		bool isGDIDriverInjectorTimeTooLong = engine->engineState.injectionDuration > engineConfiguration->mc33_t_hold_tot;
+
+		if (isGdiEngine() && isGDIDriverInjectorTimeTooLong) {
+			allowFuel.clear(ClearReason::GdiLimits);
+			warning(ObdCode::CUSTOM_TOO_LONG_FUEL_INJECTION, "Injection duration excess PT2001 limits time: %.4f", engine->engineState.injectionDuration);
+		}
+	}
+
+#if EFI_HPFP
+	{
+		// HPFP Fuel cut
+		angle_t finalHpfpPumpAngle = engine->module<HpfpController>().unmock().m_deadangle + static_cast<angle_t>(engineConfiguration->hpfpActivationAngle);
+		float finalHpfpPumpTime = static_cast<float>(finalHpfpPumpAngle) * engine->rpmCalculator.oneDegreeUs;
+
+		if(isGdiEngine() && finalHpfpPumpTime > MS2US(engineConfiguration->mc33_hpfp_max_hold)) {
+			allowFuel.clear(ClearReason::GdiPumpLimit);
+			warning(ObdCode::CUSTOM_TOO_LONG_FUEL_INJECTION, "Injection HPFP pump time excess PT2001 limits time: %.4f", finalHpfpPumpTime);
+		}
+	}
+#endif
 
 	// If the pedal is pushed while not running, cut fuel to clear a flood condition.
 	if (!engine->rpmCalculator.isRunning() &&

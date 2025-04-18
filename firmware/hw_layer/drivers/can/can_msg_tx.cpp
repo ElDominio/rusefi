@@ -81,14 +81,15 @@ CanTxMessage::~CanTxMessage() {
 #endif // EFI_SIMULATOR
 
 #if EFI_CAN_SUPPORT
-	auto device = s_devices[busIndex];
+	ScopePerf pc(PE::CanDriverTx);
 
-	if (!device) {
-		criticalError("Send: CAN%d device not configured", busIndex + 1);
+	if (!engine->allowCanTx) {
 		return;
 	}
 
-	if (!engine->allowCanTx) {
+	auto device = s_devices[busIndex];
+	if (!device) {
+		criticalError("Send: CAN%d device not configured", busIndex + 1);
 		return;
 	}
 

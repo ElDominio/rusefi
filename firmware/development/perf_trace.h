@@ -73,7 +73,22 @@ enum class PE : uint8_t {
 	LuaOneCanRxFunction,
 	LuaAllCanRxFunction,
 	LuaOneCanRxCallback,
-  LuaOneCanTxFunction,
+	LuaOneCanTxFunction,
+	CanThreadTx,
+	CanThreadRx,
+	CanDriverTx,
+	Temporary5,
+	Temporary6,
+	Temporary7,
+	Temporary8,
+	Temporary9,
+	Temporary10,
+	Temporary11,
+	Temporary12,
+	Temporary13,
+	Temporary14,
+	Temporary15,
+	Temporary16,
 	// enum_end_tag
 	// The tag above is consumed by PerfTraceTool.java
 	// please note that the tool requires a comma at the end of last value

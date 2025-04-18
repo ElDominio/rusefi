@@ -98,6 +98,9 @@ float getOutputValueByName(const char *name) {
 // isTuningNow
 		case 1109228234:
 			return engine->outputChannels.isTuningNow;
+// sd_formating
+		case 352763970:
+			return engine->outputChannels.sd_formating;
 // RPMValue
 		case 1699696209:
 			return engine->outputChannels.RPMValue;
@@ -851,6 +854,9 @@ float getOutputValueByName(const char *name) {
 // mcuSerial
 		case 714144074:
 			return engine->outputChannels.mcuSerial;
+// sd_error
+		case -1811686395:
+			return engine->outputChannels.sd_error;
 // totalFuelCorrection
 #if EFI_ENGINE_CONTROL
 		case -1779658835:
@@ -1926,10 +1932,20 @@ float getOutputValueByName(const char *name) {
 		case 561614935:
 			return getLiveData<electronic_throttle_s>(0)->m_wastegatePosition;
 #endif
+// etb1m_lastPidDtMs
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+		case -1808022618:
+			return getLiveData<electronic_throttle_s>(0)->m_lastPidDtMs;
+#endif
 // etb1etbFeedForward
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 		case -1970249707:
 			return getLiveData<electronic_throttle_s>(0)->etbFeedForward;
+#endif
+// etb1integralError
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+		case -1507281103:
+			return getLiveData<electronic_throttle_s>(0)->integralError;
 #endif
 // etb1etbCurrentTarget
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
@@ -2016,10 +2032,20 @@ float getOutputValueByName(const char *name) {
 		case -308232520:
 			return getLiveData<electronic_throttle_s>(1)->m_wastegatePosition;
 #endif
+// etb2m_lastPidDtMs
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+		case -813957817:
+			return getLiveData<electronic_throttle_s>(1)->m_lastPidDtMs;
+#endif
 // etb2etbFeedForward
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 		case 769117654:
 			return getLiveData<electronic_throttle_s>(1)->etbFeedForward;
+#endif
+// etb2integralError
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+		case -513216302:
+			return getLiveData<electronic_throttle_s>(1)->integralError;
 #endif
 // etb2etbCurrentTarget
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS

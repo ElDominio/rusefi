@@ -2528,8 +2528,9 @@ struct engine_configuration_s {
 	offset 1300 bit 10 */
 	bool verboseTriggerSynchDetails : 1 {};
 	/**
+	 * Measure actual dt for PID instead of pre-defined
 	offset 1300 bit 11 */
-	bool unusedCutFuelInAcr : 1 {};
+	bool etbUsePreciseTiming : 1 {};
 	/**
 	offset 1300 bit 12 */
 	bool hondaK : 1 {};
@@ -5038,7 +5039,7 @@ struct engine_configuration_s {
 	/**
 	 * offset 3892
 	 */
-	float mapExpAverageAfr;
+	float afrExpAverageAlpha;
 	/**
 	 * Compensates for trigger delay due to belt stretch, or other electromechanical issues. beware that raising this value advances ignition timing!
 	 * units: uS

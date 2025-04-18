@@ -33,6 +33,7 @@ static const LogField fields[] = {
 	{engine->outputChannels, 0, 28, "hasFaultReportFile", ""},
 	{engine->outputChannels, 0, 29, "Analog sensors supply failure", ""},
 	{engine->outputChannels, 0, 30, "isTuningNow", ""},
+	{engine->outputChannels, 0, 31, "SD: formating is in progress", ""},
 	{engine->outputChannels.RPMValue, "RPM", "RPM", 0},
 	{engine->outputChannels.rpmAcceleration, "dRPM", "RPM acceleration/Rate of Change/ROC", 2},
 	{engine->outputChannels.speedToRpmRatio, "Gearbox Ratio", "value", 2},
@@ -412,6 +413,7 @@ static const LogField fields[] = {
 	{engine->outputChannels.throttlePressureRatio, "throttlePressureRatio", "", 0},
 	{engine->outputChannels.throttleEffectiveAreaOpening, "throttleEffectiveAreaOpening", "", 0},
 	{engine->outputChannels.mcuSerial, "mcuSerial", "", 0},
+	{engine->outputChannels.sd_error, "sd_error", "", 0},
 #if EFI_ENGINE_CONTROL
 	{engine->fuelComputer.totalFuelCorrection, "Fuel: Total correction", "mult", 2, "Fuel: math"},
 #endif
@@ -1026,7 +1028,13 @@ static const LogField fields[] = {
 	{getLiveData<electronic_throttle_s>(0)->m_wastegatePosition, "etb1DC: wastegatePosition", "%", 2, "ETB more"},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+	{getLiveData<electronic_throttle_s>(0)->m_lastPidDtMs, "etb1EBT: last PID dT", "mS", 3, "ETB more"},
+#endif
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(0)->etbFeedForward, "etb1etbFeedForward", "", 0},
+#endif
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+	{getLiveData<electronic_throttle_s>(0)->integralError, "etb1Integral error", "", 3, "ETB more"},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(0)->etbCurrentTarget, "etb1ETB: target for current pedal", "%", 3},
@@ -1035,13 +1043,13 @@ static const LogField fields[] = {
 	{getLiveData<electronic_throttle_s>(0)->m_adjustedTarget, "etb1Adjusted target", "%", 2},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(0), 28, 0, "etb1etbRevLimitActive", ""},
+	{*getLiveData<electronic_throttle_s>(0), 36, 0, "etb1etbRevLimitActive", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(0), 28, 1, "etb1jamDetected", ""},
+	{*getLiveData<electronic_throttle_s>(0), 36, 1, "etb1jamDetected", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(0), 28, 2, "etb1validPlantPosition", ""},
+	{*getLiveData<electronic_throttle_s>(0), 36, 2, "etb1validPlantPosition", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(0)->etbTpsErrorCounter, "etb1ETB TPS error counter", "count", 0, "ETB more"},
@@ -1080,7 +1088,13 @@ static const LogField fields[] = {
 	{getLiveData<electronic_throttle_s>(1)->m_wastegatePosition, "etb2DC: wastegatePosition", "%", 2, "ETB more"},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+	{getLiveData<electronic_throttle_s>(1)->m_lastPidDtMs, "etb2EBT: last PID dT", "mS", 3, "ETB more"},
+#endif
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(1)->etbFeedForward, "etb2etbFeedForward", "", 0},
+#endif
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+	{getLiveData<electronic_throttle_s>(1)->integralError, "etb2Integral error", "", 3, "ETB more"},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(1)->etbCurrentTarget, "etb2ETB: target for current pedal", "%", 3},
@@ -1089,13 +1103,13 @@ static const LogField fields[] = {
 	{getLiveData<electronic_throttle_s>(1)->m_adjustedTarget, "etb2Adjusted target", "%", 2},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(1), 28, 0, "etb2etbRevLimitActive", ""},
+	{*getLiveData<electronic_throttle_s>(1), 36, 0, "etb2etbRevLimitActive", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(1), 28, 1, "etb2jamDetected", ""},
+	{*getLiveData<electronic_throttle_s>(1), 36, 1, "etb2jamDetected", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(1), 28, 2, "etb2validPlantPosition", ""},
+	{*getLiveData<electronic_throttle_s>(1), 36, 2, "etb2validPlantPosition", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(1)->etbTpsErrorCounter, "etb2ETB TPS error counter", "count", 0, "ETB more"},
