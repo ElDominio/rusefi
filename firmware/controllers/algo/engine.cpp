@@ -26,7 +26,6 @@
 #include "idle_thread.h"
 #include "idle_hardware.h"
 #include "gppwm.h"
-#include "tachometer.h"
 #include "speedometer.h"
 #include "dynoview.h"
 #include "boost_control.h"
@@ -113,6 +112,9 @@ trigger_type_e getVvtTriggerType(vvt_mode_e vvtMode) {
 	case VVT_HONDA_CBR_600:
 	    return trigger_type_e::TT_HONDA_CBR_600;
 	case VVT_CHRYSLER_PHASER:
+		return trigger_type_e::TT_CHRYSLER_PHASER;
+	case VVT_TOYOTA_3TOOTH_UZ:
+		return trigger_type_e::TT_TOYOTA_3TOOTH_UZ;
 	case VVT_NISSAN_MR:
 		return trigger_type_e::TT_NISSAN_MR18_CAM_VVT;
 	case VVT_MITSUBISHI_4G9x:
@@ -143,7 +145,9 @@ void Engine::updateTriggerConfiguration() {
 }
 
 PUBLIC_API_WEAK void boardPeriodicSlowCallback() {
+}
 
+PUBLIC_API_WEAK void boardPeriodicFastCallback() {
 }
 
 void Engine::periodicSlowCallback() {
@@ -561,13 +565,14 @@ injection_mode_e getCurrentInjectionMode() {
 void Engine::periodicFastCallback() {
 	ScopePerf pc(PE::EnginePeriodicFastCallback);
 
+	boardPeriodicFastCallback();
+
 #if EFI_MAP_AVERAGING
 	refreshMapAveragingPreCalc();
 #endif
 
 	engineState.periodicFastCallback();
 
-	tachUpdate();
 	speedoUpdate();
 
 	engineModules.apply_all([](auto & m) { m.onFastCallback(); });

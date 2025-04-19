@@ -46,7 +46,6 @@
 #include "harley_acr.h"
 #include "dfco.h"
 #include "fuel_computer.h"
-#include "gear_detector.h"
 #include "advance_map.h"
 #include "ignition_state.h"
 #include "fan_control.h"
@@ -58,11 +57,14 @@
 #include "lambda_monitor.h"
 #include "efi_output.h"
 #include "vvt.h"
-#include "trip_odometer.h"
 #include "long_term_fuel_trim.h"
 #include "electronic_throttle_generated.h"
 
 #include <functional>
+
+#ifndef EFI_BOOTLOADER
+#include "engine_modules_generated.h"
+#endif
 
 #ifndef EFI_UNIT_TEST
 #error EFI_UNIT_TEST must be defined!
@@ -145,7 +147,6 @@ public:
 #if EFI_ALTERNATOR_CONTROL
 		AlternatorController,
 #endif /* EFI_ALTERNATOR_CONTROL */
-		FuelPumpController,
 		MainRelayController,
 		Mockable<IgnitionController>,
 		Mockable<AcController>,
@@ -157,10 +158,6 @@ public:
 		HarleyAcr,
 #endif // EFI_HD_ACR
 		Mockable<WallFuelController>,
-#if EFI_VEHICLE_SPEED
-		GearDetector,
-		TripOdometer,
-#endif // EFI_VEHICLE_SPEED
 		KnockController,
 		SensorChecker,
 #if EFI_ENGINE_CONTROL
@@ -182,6 +179,8 @@ public:
 #if EFI_LTFT_CONTROL
 		LongTermFuelTrim,
 #endif
+
+#include "modules_list_generated.h"
 
 		EngineModule // dummy placeholder so the previous entries can all have commas
 		> engineModules;
