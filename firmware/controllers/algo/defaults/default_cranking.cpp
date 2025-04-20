@@ -44,9 +44,9 @@ void setDefaultCranking() {
 
 	// Cranking temperature compensation
 	static const float crankingCoef[] = {
-		2.8,
-		2.2,
-		1.8,
+	//	2.8,
+	//	2.2,
+	//	1.8,
 		1.55,
 		1.3,
 		1.1,
@@ -58,9 +58,9 @@ void setDefaultCranking() {
 
 	// Deg C
 	static const float crankingBins[] = {
-		-20,
-		-10,
-		5,
+	//	-20,
+	//	-10,
+	//	5,
 		20,
 		35,
 		50,

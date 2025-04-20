@@ -1,0 +1,193 @@
+pins:
+    
+  - id: EFI_ADC_0
+    class: analog_inputs
+# getAdcChannelBrainPin in 'stm32_adc.cpp' says EFI_ADC_0 is PA0
+    ts_name: TPS (A0)
+
+  - id: EFI_ADC_5
+    class: analog_inputs
+    ts_name: TPS2 (A5)
+    
+  - id: EFI_ADC_1
+    class: analog_inputs
+    ts_name: MAP (A1)
+
+  - id: EFI_ADC_2
+    class: analog_inputs
+    ts_name: CLT (A2)
+
+    
+  - id: EFI_ADC_11
+    class: analog_inputs
+    ts_name: BattV  (C1)
+  
+  - id: EFI_ADC_8
+    class: analog_inputs
+    ts_name: O2-2 (B0)
+
+  - id: EFI_ADC_12
+    class: analog_inputs
+    ts_name: IAT  (C2)
+
+  - id: EFI_ADC_13
+    class: analog_inputs
+    ts_name: O2-1 (C3)
+    
+  - id: EFI_ADC_14
+    class: analog_inputs
+    ts_name: PPS1 (C4)
+
+  - id: EFI_ADC_15
+    class: analog_inputs
+    ts_name: PPS2 (C5)
+
+  - id: A8
+    class: outputs
+    ts_name: Ignition 1
+
+  - id: C9
+    class: outputs
+    ts_name: Ignition 2
+
+  - id: A10
+    class: outputs
+    ts_name: Ignition 3
+
+  - id: C8
+    class: outputs
+    ts_name: Ignition 4
+
+  - id: E0
+    class: outputs
+    ts_name: Injector 1
+
+  - id: E6
+    class: outputs
+    ts_name: Injector 2
+
+  - id: D9
+    class: outputs
+    ts_name: Injector 3
+
+  - id: E3
+    class: outputs
+    ts_name: Injector 4
+
+  - id: E4
+    class: outputs
+    ts_name: Fuel Pump (PE4)
+
+  - id: E5
+    class: outputs
+    ts_name: NOS (PE5)
+    
+  - id: B8
+    class: outputs
+    ts_name: Tach (PB8)
+
+  - id: B9
+    class: outputs
+    ts_name: Boost (PB9)
+
+  - id: [B14, B14]
+    class: [outputs, event_inputs]
+    ts_name: ETB_DIS/StepDir
+
+  - id: [B15, B15]
+    class: [outputs, event_inputs]
+    ts_name: ETB_DIR/StepStep
+
+  - id: C5
+    class: outputs
+    ts_name: PPS2 (PC5)
+
+  - id: C6
+    class: outputs
+    ts_name: ETB PWM
+
+  - id: C10
+    class: outputs
+    ts_name: VVT1 (C10)
+
+  - id: C11
+    class: outputs
+    ts_name: VVT2 (C11)
+
+  - id: C13
+    class: outputs
+    ts_name: Fan (PC13)
+    
+  - id: [E2, E2]
+    class: [switch_inputs, event_inputs]
+    ts_name: Clutch
+
+  - id: [A7, A7]
+    class: [switch_inputs, event_inputs]
+    ts_name: FlexFuel
+
+  - id: [B1, B1]
+    class: [switch_inputs, event_inputs]
+    ts_name: CKP
+    
+  - id: [A6, A6]
+    class: [switch_inputs, event_inputs]
+    ts_name: CMP
+
+  - id: [D4, D4, D4]
+    class: [outputs, switch_inputs, event_inputs]
+    ts_name: CAM2 (PD4)
+    
+  - id: [D5, D5, D5]
+    class: [outputs, switch_inputs, event_inputs]
+    ts_name: USART-TX (PD5)
+
+  - id: [D6, D6, D6]
+    class: [outputs, switch_inputs, event_inputs]
+    ts_name: USART-RX (PD6)
+
+  - id: [D2, D2, D2]
+    class: [outputs, switch_inputs, event_inputs]
+    ts_name: Ignition 7 (PD2)
+
+  - id: [D3, D3]
+    class: [outputs, switch_inputs]
+    ts_name: Ignition 8 (PD3)
+    
+  - id: [D10, D10]
+    class: [outputs, switch_inputs]
+    ts_name: Injector 5 (PD10)
+
+  - id: [D11, D11]
+    class: [outputs, switch_inputs]
+    ts_name: Injector 6 (PD11)
+
+  - id: [D12, D12]
+    class: [outputs, switch_inputs]
+    ts_name: Injector 7 (PD12)
+
+  - id: [D13, D13, D13]
+    class: [outputs, switch_inputs, event_inputs]
+    ts_name: Injector 8 (PD13)
+
+  - id: [D14, D14]
+    class: [outputs, switch_inputs]
+    ts_name: Threshold (PD14)
+
+  - id: [E11, E11, E11]
+    class: [outputs, switch_inputs, event_inputs]
+    ts_name: Ignition 5 (PE11)
+
+  - id: [E12, E12, E12]
+    class: [outputs, switch_inputs, event_inputs]
+    ts_name: Ignition 6 (PE12)
+
+
+  - id: [E14, E14, E14]
+    class: [outputs, switch_inputs, event_inputs]
+    ts_name: Extra I/O PE14
+
+
+  - id: [E15, E15, E15]
+    class: [outputs, switch_inputs, event_inputs]
+    ts_name: Idle (PE15)

@@ -1323,65 +1323,105 @@ float getOutputValueByName(const char *name) {
 			return engine->module<NitrousController>()->isNitrousCondition;
 #endif
 // fan1cranking
+#if FULL_SD_LOGS
 		case -113087656:
 			return engine->module<FanControl1>()->cranking;
+#endif
 // fan1notRunning
+#if FULL_SD_LOGS
 		case -150769059:
 			return engine->module<FanControl1>()->notRunning;
+#endif
 // fan1disabledWhileEngineStopped
+#if FULL_SD_LOGS
 		case 168011889:
 			return engine->module<FanControl1>()->disabledWhileEngineStopped;
+#endif
 // fan1brokenClt
+#if FULL_SD_LOGS
 		case -614909137:
 			return engine->module<FanControl1>()->brokenClt;
+#endif
 // fan1enabledForAc
+#if FULL_SD_LOGS
 		case -662113279:
 			return engine->module<FanControl1>()->enabledForAc;
+#endif
 // fan1hot
+#if FULL_SD_LOGS
 		case -1717868938:
 			return engine->module<FanControl1>()->hot;
+#endif
 // fan1cold
+#if FULL_SD_LOGS
 		case -855279955:
 			return engine->module<FanControl1>()->cold;
+#endif
 // fan1disabledBySpeed
+#if FULL_SD_LOGS
 		case 890832495:
 			return engine->module<FanControl1>()->disabledBySpeed;
+#endif
 // fan1m_state
+#if FULL_SD_LOGS
 		case -1997175144:
 			return engine->module<FanControl1>()->m_state;
+#endif
 // fan1radiatorFanStatus
+#if FULL_SD_LOGS
 		case -1478067590:
 			return engine->module<FanControl1>()->radiatorFanStatus;
+#endif
 // fan2cranking
+#if FULL_SD_LOGS
 		case 1841224793:
 			return engine->module<FanControl2>()->cranking;
+#endif
 // fan2notRunning
+#if FULL_SD_LOGS
 		case 2086676382:
 			return engine->module<FanControl2>()->notRunning;
+#endif
 // fan2disabledWhileEngineStopped
+#if FULL_SD_LOGS
 		case 494714802:
 			return engine->module<FanControl2>()->disabledWhileEngineStopped;
+#endif
 // fan2brokenClt
+#if FULL_SD_LOGS
 		case -547107760:
 			return engine->module<FanControl2>()->brokenClt;
+#endif
 // fan2enabledForAc
+#if FULL_SD_LOGS
 		case 669515138:
 			return engine->module<FanControl2>()->enabledForAc;
+#endif
 // fan2hot
+#if FULL_SD_LOGS
 		case -1717833001:
 			return engine->module<FanControl2>()->hot;
+#endif
 // fan2cold
+#if FULL_SD_LOGS
 		case -854094034:
 			return engine->module<FanControl2>()->cold;
+#endif
 // fan2disabledBySpeed
+#if FULL_SD_LOGS
 		case 1095642192:
 			return engine->module<FanControl2>()->disabledBySpeed;
+#endif
 // fan2m_state
+#if FULL_SD_LOGS
 		case 1966562169:
 			return engine->module<FanControl2>()->m_state;
+#endif
 // fan2radiatorFanStatus
+#if FULL_SD_LOGS
 		case -1778606949:
 			return engine->module<FanControl2>()->radiatorFanStatus;
+#endif
 // fan1isPrime
 		case -2088993020:
 			return engine->module<FuelPumpController>()->isPrime;

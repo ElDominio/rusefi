@@ -576,7 +576,7 @@ static const float hardCodedHpfpLobeProfileQuantityBins[HpfpLobeProfile_SIZE] = 
 90.5, 95.5, 99.0, 100.0};
 
 void setBoschHDEV_5_injectors() {
-	copyArray(config->hpfpLobeProfileQuantityBins, hardCodedHpfpLobeProfileQuantityBins);
+	//copyArray(config->hpfpLobeProfileQuantityBins, hardCodedHpfpLobeProfileQuantityBins);
 	setHpfpLobeProfileAngle(3);
 	setLinearCurve(config->hpfpDeadtimeVoltsBins, 8, 16, 0.5);
 

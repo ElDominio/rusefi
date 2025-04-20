@@ -128,6 +128,7 @@ Usages:
     output_name: [ "fan1", "fan2" ]
     constexpr: ["engine->module<FanControl1>()", "engine->module<FanControl2>()"]
     isPtr: true
+    conditional_compilation: "FULL_SD_LOGS"
 
   - name: fuel_pump_control
     cppFileName: fuel_pump

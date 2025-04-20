@@ -1,0 +1,53 @@
+#define ts_show_etb_pins true
+#define ts_show_software_knock true
+
+
+#define LUA_SCRIPT_SIZE 12000
+
+#define ts_show_spi true
+#define ts_show_can2 false
+#define ts_show_hardware_simulator false
+#define ts_show_tcu false
+#define ts_show_gdi false
+#define ts_show_fancy_hardware false
+#define ts_show_fuel_trim_cylinder_10 false
+#define ts_show_fuel_trim_cylinder_11 false
+#define ts_show_fuel_trim_cylinder_12 false
+#define ts_show_fuel_trim_cylinder_9 false
+#define ts_show_cylinder_10 false
+#define ts_show_cylinder_11 false
+#define ts_show_cylinder_12 false
+#define ts_show_cylinder_9 false
+#define ts_show_check_engine true
+
+#define INJ_PHASE_RPM_COUNT 6
+#define INJ_PHASE_LOAD_COUNT 6
+
+#define MAP_EST_RPM_COUNT 6
+#define MAP_EST_LOAD_COUNT 6
+
+#define CLT_CURVE_SIZE 8
+#define CLT_FUEL_CURVE_SIZE 8
+#define CLT_CRANKING_CURVE_SIZE 8
+#define CLT_CRANKING_TAPER_CURVE_SIZE 5
+#define CLT_IDLE_TABLE_CLT_SIZE 8
+#define CRANKING_CLT_IDLE_CURVE_SIZE 8
+#define CRANKING_CURVE_SIZE 5
+#define DWELL_CURVE_SIZE 5
+#define ENGINE_NOISE_CURVE_SIZE 10
+#define IAT_CURVE_SIZE 6
+#define IDLE_ADVANCE_CURVE_SIZE 6
+#define IAT_IGN_CORR_COUNT 6
+#define HPFP_COMPENSATION_SIZE 2
+#define HPFP_DEADTIME_SIZE 2
+#define HPFP_FUEL_MASS_COMPENSATION_SIZE 2
+#define HPFP_LOBE_PROFILE_SIZE 2
+#define HPFP_TARGET_SIZE 2
+#define MAP_ANGLE_SIZE 4
+#define TORQUE_CURVE_SIZE 2
+#define VBAT_INJECTOR_CURVE_SIZE 6
+#define VEHICLE_INFO_SIZE 16
+#define TCU_GEAR_COUNT 2
+#define TCU_RANGE_COUNT 2
+#define TCU_SOLENOID_COUNT 2
+#define TCU_TABLE_WIDTH 2

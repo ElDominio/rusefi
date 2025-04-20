@@ -705,7 +705,7 @@ void configureRusefiLuaHooks(lua_State* lState) {
 #define WITH_LUA_CONSUMPTION TRUE
 #endif
 
-#if EFI_VEHICLE_SPEED && WITH_LUA_CONSUMPTION && defined (MODULE_ODOMETER)
+#if EFI_VEHICLE_SPEED && WITH_LUA_CONSUMPTION
 	lua_register(lState, "getConsumedGrams", [](lua_State* l) {
 		lua_pushnumber(l, engine->module<TripOdometer>()->getConsumedGrams());
 		return 1;
@@ -722,7 +722,7 @@ void configureRusefiLuaHooks(lua_State* lState) {
 		engine->module<TripOdometer>()->reset();
 		return 0;
 	});
-#endif // EFI_VEHICLE_SPEED WITH_LUA_CONSUMPTION MODULE_ODOMETER
+#endif // EFI_VEHICLE_SPEED
 	lua_register(lState, "table3d", [](lua_State* l) {
 		auto humanTableIdx = luaL_checkinteger(l, 1);
 		auto x = luaL_checknumber(l, 2);
@@ -1029,6 +1029,15 @@ extern int luaCommandCounters[LUA_BUTTON_COUNT];
                                  		lua_pushboolean(l, enginePins.fanRelay.getLogicValue());
                                  		return 1;
                                  	});
+	lua_register(lState, "getFan2", [](lua_State* l) {
+                                 		lua_pushboolean(l, enginePins.fanRelay2.getLogicValue());
+                                 		return 1;
+                                 	});
+	lua_register(lState, "getAcRelay", [](lua_State* l) {
+                                 		lua_pushboolean(l, enginePins.acRelay.getLogicValue());
+                                 		return 1;
+                                 	});
+
 	lua_register(lState, "getDigital", lua_getDigital);
 	lua_register(lState, "getAuxDigital", lua_getAuxDigital);
 	lua_register(lState, "setDebug", lua_setDebug);
