@@ -43,10 +43,12 @@ void setDefaultCranking() {
 	setLinearCurve(config->cltCrankingCorr, 50, 50, 1); // now as % of idle valve/etb
 
 	// Cranking temperature compensation
+	#if CRANKING_CURVE_SIZE != 5
 	static const float crankingCoef[] = {
-	//	2.8,
-	//	2.2,
-	//	1.8,
+	
+		2.8,
+		2.2,
+		1.8,
 		1.55,
 		1.3,
 		1.1,
@@ -55,12 +57,11 @@ void setDefaultCranking() {
 	};
 	copyArray(config->crankingFuelCoef,     crankingCoef);
 	copyArray(config->crankingFuelCoefE100, crankingCoef);
-
 	// Deg C
 	static const float crankingBins[] = {
-	//	-20,
-	//	-10,
-	//	5,
+		-20,
+		-10,
+		5,
 		20,
 		35,
 		50,
@@ -68,7 +69,7 @@ void setDefaultCranking() {
 		90
 	};
 	copyArray(config->crankingFuelBins, crankingBins);
-
+	#endif
 	// Cranking cycle compensation
 
 	// Whole table is 1.0, except first two columns which are steeper

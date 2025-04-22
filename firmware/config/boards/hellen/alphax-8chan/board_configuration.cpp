@@ -71,7 +71,7 @@ static void setupDefaultSensorInputs() {
 
 	engineConfiguration->iat.adcChannel = MM176_IN_IAT_ANALOG;
 }
-
+/*
 void boardInitHardware() {
   // technically same thing as setHellenMegaEnPin() since underlying pin E10 is same as H144_GP8
 	setHellenEnPin(Gpio::MM176_EN_PIN);
@@ -84,7 +84,7 @@ void boardInitHardware() {
 	alphaHall5PullDown.initPin("PullDown-Hall5", Gpio::MM176_GP24);
 	alphaFlexPullDown.initPin("PullDown-Flex",   Gpio::MM176_GP25);
 	tempPullUp.initPin("Temp PullUp", Gpio::MM176_OUT_IO12);
-}
+}*/
 
 void boardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
 	alphaCrankPPullUp.setValue(config->boardUseCrankPullUp);
@@ -96,14 +96,14 @@ void boardOnConfigurationChange(engine_configuration_s * /*previousConfiguration
 	alphaFlexPullDown.setValue(config->boardUseFlexPullDown);
 	tempPullUp.setValue(config->boardUseTempPullUp);
 }
-
+/*
 void setBoardConfigOverrides() {
 	hellenMegaModule();
 	setHellenCan();
 
 	engineConfiguration->can2RxPin = Gpio::B12;
 	engineConfiguration->can2TxPin = Gpio::B13;
-}
+}*/
 
 /**
  * @brief   Board-specific configuration defaults.
@@ -149,7 +149,7 @@ void boardPrepareForStop() {
 	// Wake on the CAN RX pin
 	palEnableLineEvent(PAL_LINE(GPIOD, 0), PAL_EVENT_MODE_RISING_EDGE);
 }
-
+/*
 static Gpio OUTPUTS[] = {
 	Gpio::MM176_INJ1, // 1D - Injector 1
 	Gpio::MM176_INJ2, // 2D - Injector 2
@@ -223,3 +223,4 @@ Gpio* getBoardMetaOutputs() {
 int getBoardMetaDcOutputsCount() {
     return 2;
 }
+*/

@@ -6,19 +6,20 @@
 
 static void setBosch02880155868(injector_s& cfg) {
 	// http://www.boschdealer.com/specsheets/0280155868cs.jpg (use web.archive.org)
-
-    static const float vBattBins[6] = { 6.0, 8.0, 10.0,/* 11.0,*/ 12.0,/* 13.0,*/ 14.0, 16.0 };
+#if VBAT_INJECTOR_CURVE_SIZE == 8
+    static const float vBattBins[8] = { 6.0, 8.0, 10.0, 11.0, 12.0, 13.0, 14.0, 16.0 };
 	static const float pressureBins[2] = { 206.843, 413.685 };
 
     // see https://github.com/rusefi/rusefi/issues/7521 for adding more values
-    static const float corrBins[2][6] = {
-	    { 4.240, 2.483, 1.739, 1.501, 1.308, 1.149/*, 0.964, 0.913*/ },
-		{ 3.084, 1.641, 1.149, 1.194, 0.992, 0.759/*, 0.637, 0.603*/ },
+    static const float corrBins[2][8] = {
+	    { 4.240, 2.483, 1.739, 1.501, 1.308, 1.149, 0.964, 0.913 },
+		{ 3.084, 1.641, 1.149, 1.194, 0.992, 0.759, 0.637, 0.603 },
     };
 
 	copyArray(cfg.battLagCorrBattBins, vBattBins);
 	copyArray(cfg.battLagCorrPressBins,pressureBins);
 	copyTable(cfg.battLagCorrTable, corrBins);
+#endif //inj lag check
 }
 
 static void setDefaultWarmupFuelEnrichment() {
