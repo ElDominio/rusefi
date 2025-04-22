@@ -158,6 +158,7 @@ static void setGmGdi() {
   engineConfiguration->camInputs[0] = Gpio::H144_IN_SENS3; // Digital Input 4
   engineConfiguration->camInputs[1] = Gpio::Unassigned;
   engineConfiguration->sentInputPins[0] = Gpio::H144_IN_AUX2_DIGITAL;
+  setGmCltSensor(&engineConfiguration->clt, HELLEN_DEFAULT_AT_PULLUP);
 
   // engineConfiguration->starterControlPin = high side :()
 #endif // HW_HELLEN_4K_GDI
@@ -175,6 +176,7 @@ static void setGmGdi() {
 	config->boardUseCrankPullUp = true;
 
 	engineConfiguration->starterControlPin = Gpio::PIN_5C; // 5C - High Side 1, ignition output is not enough at least on HHR
+	setGmCltSensor(&engineConfiguration->clt, HELLEN_DEFAULT_AT_PULLUP);
 #endif // HW_HELLEN_8CHAN
 
   setPPSCalibration(1, 4.25, 0.5, 2.14);
@@ -210,11 +212,15 @@ void setGmLnf() {
   setGmGdi();
   engineConfiguration->displacement = 2.0;
   strcpy(engineConfiguration->engineCode, "LNF");
+  // todo: engineConfiguration->hpfpCam = HPFP_CAM_IN1;
 #ifdef HW_HELLEN_8CHAN
   engineConfiguration->vvtMode[1] = VVT_BOSCH_QUICK_START;
   engineConfiguration->invertCamVVTSignal = true;
 	engineConfiguration->invertPrimaryTriggerSignal = true;
   engineConfiguration->highPressureFuel.hwChannel = MM176_IN_MAP1_ANALOG; // 2A Aux Analog 4
+
+	engineConfiguration->vvtPins[0] = Gpio::MM176_OUT_PWM1;
+	engineConfiguration->vvtPins[1] = Gpio::MM176_OUT_PWM2;
 #endif // HW_HELLEN_8CHAN
 }
 

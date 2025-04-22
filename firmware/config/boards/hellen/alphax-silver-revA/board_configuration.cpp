@@ -32,7 +32,6 @@ static void setupDefaultSensorInputs() {
 
     engineConfiguration->boardUseTempPullUp = true;
 
-
 //	engineConfiguration->map.sensor.hwChannel = H144_IN_MAP1; // external MAP
   engineConfiguration->map.sensor.hwChannel = H144_IN_MAP2; // On-board MAP
   engineConfiguration->map.sensor.type = MT_MPXH6400;
@@ -50,6 +49,7 @@ void setBoardConfigOverrides() {
 
 	/* Two TLE9104 */
 	enableHellenSpi3();
+	engineConfiguration->vrThreshold[0].pin = Gpio::MM100_OUT_PWM2;
 }
 
 void setBoardDefaultConfiguration() {

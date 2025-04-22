@@ -118,7 +118,18 @@ void miataNAcommonEngineSettings() {
 	copyTable(config->ignitionTable, mapBased16IgnitionTable);
 #endif
 
+#ifdef HW_HELLEN_UAEFI
+	engineConfiguration->injectionPins[4] = Gpio::Unassigned;
+	engineConfiguration->injectionPins[5] = Gpio::Unassigned;
+	engineConfiguration->ignitionPins[4] = Gpio::Unassigned;
+	engineConfiguration->ignitionPins[5] = Gpio::Unassigned;
 
+  engineConfiguration->camInputs[0] = Gpio::Unassigned;
+  engineConfiguration->camInputs[1] = Gpio::Unassigned;
+	//  Gpio::MM100_IN_D1; // HALL1
+	// Gpio::MM100_IN_D2; // HALL2
+	// engineConfiguration->triggerInputPins[1] =
+#endif // HW_HELLEN_UAEFI
 
 	miataNA_setCltIdleCorrBins();
 	miataNA_setCltIdleRpmBins();

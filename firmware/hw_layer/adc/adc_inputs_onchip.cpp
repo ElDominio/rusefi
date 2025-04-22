@@ -78,13 +78,25 @@ static void fastAdcDoneCB(ADCDriver *adcp);
 static void fastAdcErrorCB(ADCDriver *, adcerror_t err);
 
 static ADCConversionGroup adcgrpcfgFast = {
+#if defined(EFI_INTERNAL_FAST_ADC_PWM)
+	.circular			= TRUE,
+#elif defined (EFI_INTERNAL_FAST_ADC_GPT)
 	.circular			= FALSE,
+#endif
 	.num_channels		= 0,
 	.end_cb				= fastAdcDoneCB,
 	.error_cb			= fastAdcErrorCB,
 	/* HW dependent part.*/
 	.cr1				= 0,
+#if defined(EFI_INTERNAL_FAST_ADC_PWM)
+	/* HW start using TIM8 CC 1 event rising edge
+	 * See "External trigger for regular channels" for magic 13 number
+	 * NOTE: Currently only TIM8 in PWM mode is supported */
+	.cr2				= ADC_CR2_EXTEN_0 | (13 << ADC_CR2_EXTSEL_Pos),
+#elif defined (EFI_INTERNAL_FAST_ADC_GPT)
+	/* SW start through GPT callback and SW kick */
 	.cr2				= ADC_CR2_SWSTART,
+#endif
 		/**
 		 * here we configure all possible channels for fast mode. Some channels would not actually
          * be used hopefully that's fine to configure all possible channels.
@@ -125,10 +137,18 @@ static volatile NO_CACHE adcsample_t fastAdcSampleBuf[ADC_BUF_DEPTH_FAST * ADC_M
 
 AdcDevice fastAdc(&ADC_FAST_DEVICE, &adcgrpcfgFast, fastAdcSampleBuf, ADC_BUF_DEPTH_FAST);
 
+static efitick_t lastTick = 0;
+
 static void fastAdcDoneCB(ADCDriver *adcp) {
 	// State may not be complete if we get a callback for "half done"
 	if (adcIsBufferComplete(adcp)) {
-		fastAdc.conversionCount++;
+		efitick_t nowTick = getTimeNowNt();
+		efitick_t diff = nowTick - lastTick;
+		lastTick = nowTick;
+
+		engine->outputChannels.fastAdcPeriod = (uint32_t)diff;
+		engine->outputChannels.fastAdcConversionCount++;
+
 		onFastAdcComplete(adcp->samples);
 	}
 }
@@ -140,7 +160,31 @@ static void fastAdcErrorCB(ADCDriver *, adcerror_t err) {
 	engine->outputChannels.fastAdcErrorCallbackCount++;
 }
 
-static void fastAdcTrigger(GPTDriver*) {
+#if defined(EFI_INTERNAL_FAST_ADC_PWM)
+
+static const PWMConfig pwmcfg = {
+	/* on each trigger event regular group of channels is converted,
+	 * to get whole buffer filled we need ADC_BUF_DEPTH_FAST trigger events */
+	.frequency = GPT_FREQ_FAST * ADC_BUF_DEPTH_FAST,
+	.period = GPT_PERIOD_FAST,
+	.callback = nullptr,
+	.channels = {
+		{PWM_OUTPUT_ACTIVE_HIGH, nullptr},
+		{PWM_OUTPUT_ACTIVE_HIGH, nullptr},
+		{PWM_OUTPUT_ACTIVE_HIGH, nullptr},
+		{PWM_OUTPUT_ACTIVE_HIGH, nullptr}
+	},
+	.cr2 = 0,
+#if STM32_PWM_USE_ADVANCED
+	.bdtr = 0,
+#endif
+	.dier = 0,
+};
+
+#elif defined (EFI_INTERNAL_FAST_ADC_GPT)
+
+static void fastAdcStartTrigger(GPTDriver*)
+{
 #if EFI_INTERNAL_ADC
 	/*
 	 * Starts an asynchronous ADC conversion operation, the conversion
@@ -151,12 +195,16 @@ static void fastAdcTrigger(GPTDriver*) {
 #endif /* EFI_INTERNAL_ADC */
 }
 
-static GPTConfig fast_adc_config = {
+static const GPTConfig fast_adc_config = {
 	.frequency = GPT_FREQ_FAST,
-	.callback = fastAdcTrigger,
+	.callback = fastAdcStartTrigger,
 	.cr2 = 0,
 	.dier = 0,
 };
+
+#else
+	#error Please define EFI_INTERNAL_FAST_ADC_PWM or EFI_INTERNAL_FAST_ADC_GPT for Fast ADC
+#endif
 
 int AdcDevice::size() const {
 	return channelCount;
@@ -167,8 +215,15 @@ void AdcDevice::init(void) {
 	/* driver does this internally */
 	//hwConfig->sqr1 += ADC_SQR1_NUM_CH(size());
 
+#if defined(EFI_INTERNAL_FAST_ADC_PWM)
+	// Start the timer running
+	pwmStart(EFI_INTERNAL_FAST_ADC_PWM, &pwmcfg);
+	pwmEnableChannel(EFI_INTERNAL_FAST_ADC_PWM, 0, /* width */ 1);
+	adcStartConversion(adcp, hwConfig, (adcsample_t *)samples, depth);
+#elif defined (EFI_INTERNAL_FAST_ADC_GPT)
 	gptStart(EFI_INTERNAL_FAST_ADC_GPT, &fast_adc_config);
 	gptStartContinuous(EFI_INTERNAL_FAST_ADC_GPT, GPT_PERIOD_FAST);
+#endif
 }
 
 int AdcDevice::enableChannel(adc_channel_e hwChannel) {
@@ -207,14 +262,14 @@ int AdcDevice::enableChannel(adc_channel_e hwChannel) {
 void AdcDevice::startConversionI()
 {
 	chSysLockFromISR();
-	if ((ADC_FAST_DEVICE.state != ADC_READY) &&
-		(ADC_FAST_DEVICE.state != ADC_ERROR)) {
+	if ((ADC_FAST_DEVICE.state == ADC_READY) ||
+		(ADC_FAST_DEVICE.state == ADC_ERROR)) {
+		/* drop volatile type qualifier - this is safe */
+		adcStartConversionI(adcp, hwConfig, (adcsample_t *)samples, depth);
+	} else {
 		engine->outputChannels.fastAdcErrorsCount++;
 		// todo: when? why? criticalError("ADC fast not ready?");
 		// see notes at https://github.com/rusefi/rusefi/issues/6399
-	} else {
-		/* drop volatile type qualifier - this is safe */
-		adcStartConversionI(adcp, hwConfig, (adcsample_t *)samples, depth);
 	}
 	chSysUnlockFromISR();
 }
