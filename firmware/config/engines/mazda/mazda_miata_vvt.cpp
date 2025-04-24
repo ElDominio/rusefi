@@ -61,7 +61,7 @@
 
 #if HW_HELLEN
 static const float injectorLagPressureBins[VBAT_INJECTOR_CURVE_PRESSURE_SIZE] = { 300, 600 };
-
+#if VBAT_INJECTOR_CURVE_SIZE == 8
 static const float injectorLagVbattBins[VBAT_INJECTOR_CURVE_SIZE] = {
 	6.0, 8.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0
 };
@@ -70,7 +70,7 @@ static const float injectorLagCorrection[VBAT_INJECTOR_CURVE_PRESSURE_SIZE][VBAT
 	{ 4.0, 3.0, 2.0, 1.7, 1.5, 1.35, 1.25, 1.20 },
 	{ 4.0, 3.0, 2.0, 1.7, 1.5, 1.35, 1.25, 1.20 },
 };
-
+#endif
 #if VVT_TABLE_SIZE == 8
 static const float vvt18RpmBins[VVT_TABLE_SIZE] =
 {700.0, 1000.0, 2000.0, 3000.0, 3500.0, 4500.0, 5500.0, 6500.0}
