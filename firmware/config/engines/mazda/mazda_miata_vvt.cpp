@@ -234,9 +234,11 @@ static void setMAFTransferFunction() {
 }
 
 static void setMazdaMiataNbInjectorLag() {
+	#if VBAT_INJECTOR_CURVE_SIZE == 8
 	copyArray(engineConfiguration->injector.battLagCorrBattBins, injectorLagVbattBins);
 	copyArray(engineConfiguration->injector.battLagCorrPressBins, injectorLagPressureBins);
 	copyTable(engineConfiguration->injector.battLagCorrTable, injectorLagCorrection);
+		#endif
 }
 
 /**
