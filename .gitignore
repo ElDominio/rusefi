@@ -33,4 +33,3 @@ rusefi_simulator_log.mlg
 
 # bundle
 artifacts
-firmware/controllers/can/wideband_firmware
