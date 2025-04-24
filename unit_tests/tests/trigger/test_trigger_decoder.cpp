@@ -18,6 +18,7 @@
 #include "fuel_math.h"
 #include "spark_logic.h"
 #include "trigger_universal.h"
+#include "engine_configuration_defaults.h"
 
 using ::testing::_;
 
@@ -166,10 +167,25 @@ static void assertREqualsM(const char *msg, void *expected, void *actual) {
 
 extern bool debugSignalExecutor;
 
+void configureTestDefaultLambdas() {
+	constexpr size_t TEST_LAMBDA_TABLE_COLUMN_COUNT = efi::size(engine_configuration_defaults::DEFAULT_LAMBDA_TABLE_ROW);
+    static_assert(TEST_LAMBDA_TABLE_COLUMN_COUNT == efi::size(engine_configuration_defaults::DEFAULT_LAMBDA_LOAD_BINS));
+	static_assert(TEST_LAMBDA_TABLE_COLUMN_COUNT <= FUEL_LOAD_COUNT);
+	copyArray(config->lambdaLoadBins, engine_configuration_defaults::DEFAULT_LAMBDA_LOAD_BINS);
+
+	// Set each row to the corresponding value from rowValues
+	for (size_t i = 0; i < efi::size(config->lambdaTable); i++) {
+		for (size_t j = 0; j < efi::size(config->lambdaTable[i]); j++) {
+			config->lambdaTable[i][j] = engine_configuration_defaults::DEFAULT_LAMBDA_TABLE_ROW[i];
+		}
+	}
+}
+
 TEST(misc, testRpmCalculator) {
 	EngineTestHelper eth(engine_type_e::FORD_INLINE_6_1995);
 	efiAssertVoid(ObdCode::CUSTOM_ERR_6670, engineConfiguration!=NULL, "null config in engine");
 
+	configureTestDefaultLambdas();
 	setTable(config->injectionPhase, -180.0f);
 
 	engine->tdcMarkEnabled = false;
@@ -762,11 +778,14 @@ void setInjectionMode(int value) {
 	incrementGlobalConfigurationVersion();
 }
 
+#if FUEL_RPM_COUNT == 16
 TEST(big, testFuelSchedulerBug299smallAndMedium) {
 	doTestFuelSchedulerBug299smallAndMedium(0);
 	doTestFuelSchedulerBug299smallAndMedium(1000);
 }
+#endif //FUEL_RPM_COUNT == 16
 
+#if FUEL_RPM_COUNT == 16
 TEST(big, testTwoWireBatch) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setTable(config->injectionPhase, -180.0f);
@@ -793,7 +812,9 @@ TEST(big, testTwoWireBatch) {
 	assertInjectionEventBatch("#2@", &t->elements[2],		3, 0, 0, 153);	// Cyl 4 and 1
 	assertInjectionEventBatch("inj#3@", &t->elements[3],	1, 2, 0, 153 + 180);	// Cyl 2 and 3
 }
+#endif //FUEL_RPM_COUNT == 16
 
+#if FUEL_RPM_COUNT == 16
 TEST(big, testSequential) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setTable(config->injectionPhase, -180.0f);
@@ -821,7 +842,9 @@ TEST(big, testSequential) {
 	assertInjectionEvent("#2@", &t->elements[2],	3, 0, 126);	// Cyl 4
 	assertInjectionEvent("inj#3@", &t->elements[3],	1, 0, 126 + 180);	// Cyl 2
 }
+#endif //FUEL_RPM_COUNT == 16
 
+#if FUEL_RPM_COUNT == 16
 TEST(big, testBatch) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setTable(config->injectionPhase, -180.0f);
@@ -849,7 +872,9 @@ TEST(big, testBatch) {
 	assertInjectionEventBatch("#2@",	&t->elements[2], 3, 0, 0, 153);			// Cyl 4 + 1
 	assertInjectionEventBatch("inj#3@",	&t->elements[3], 1, 2, 0, 153 + 180);	// Cyl 2 + 3
 }
+#endif //FUEL_RPM_COUNT == 16
 
+#if FUEL_RPM_COUNT == 16
 TEST(big, testSinglePoint) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->hpfpCamLobes = 0;
@@ -878,7 +903,9 @@ TEST(big, testSinglePoint) {
 	assertInjectionEvent("#2@",		&t->elements[2], 0, 0, 126);		// Cyl 4
 	assertInjectionEvent("inj#3@",	&t->elements[3], 0, 0, 126 + 180);	// Cyl 2
 }
+#endif //FUEL_RPM_COUNT == 16
 
+#if FUEL_RPM_COUNT == 16
 TEST(big, testFuelSchedulerBug299smallAndLarge) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	extern bool unitTestBusyWaitHack;
@@ -995,6 +1022,7 @@ TEST(big, testFuelSchedulerBug299smallAndLarge) {
 	eth.executeActions();
 	ASSERT_EQ( 0,  getRecentWarnings()->getCount()) << "warningCounter#testFuelSchedulerBug299smallAndLarge";
 }
+#endif //FUEL_RPM_COUNT == 16
 
 TEST(big, testSparkReverseOrderBug319) {
 	printf("*************************************************** testSparkReverseOrderBug319 small to medium\r\n");

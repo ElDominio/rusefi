@@ -809,7 +809,7 @@ struct engine_configuration_s {
 	bool launchControlEnabled : 1 {};
 	/**
 	offset 168 bit 17 */
-	bool unusedBitHere : 1 {};
+	bool tempPumpLimitCheck : 1 {};
 	/**
 	offset 168 bit 18 */
 	bool antiLagEnabled : 1 {};
@@ -3929,6 +3929,7 @@ struct engine_configuration_s {
 	scaled_channel<uint16_t, 1000, 1> hpfpPumpVolume;
 	/**
 	 * How long to keep the valve activated (in order to allow the pump to build pressure and keep the valve open on its own)
+	 * https://rusefi.com/forum/viewtopic.php?t=2192
 	 * units: deg
 	 * offset 2866
 	 */

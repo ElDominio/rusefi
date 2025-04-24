@@ -96,13 +96,13 @@ static float getLoad() {
     }
 }
 
-float HpfpQuantity::calcPI(float rpm, float calc_fuel_percent) {
+float HpfpQuantity::calcPI(float rpm, float calc_fuel_percent, HpfpController *model) {
 	float load = getLoad();
 
-	float possibleValue = m_pressureTarget_kPa - (engineConfiguration->hpfpTargetDecay *
+	float possibleValue = model->m_pressureTarget_kPa - (engineConfiguration->hpfpTargetDecay *
 			(FAST_CALLBACK_PERIOD_MS / 1000.));
 
-	m_pressureTarget_kPa = std::max<float>(possibleValue,
+	model->m_pressureTarget_kPa = std::max<float>(possibleValue,
 		interpolate3d(config->hpfpTarget,
 				config->hpfpTargetLoadBins, load,
 				config->hpfpTargetRpmBins, rpm));
@@ -113,9 +113,9 @@ float HpfpQuantity::calcPI(float rpm, float calc_fuel_percent) {
 	}
 
 	float pressureError_kPa =
-		m_pressureTarget_kPa - fuelPressure.Value;
+		model->m_pressureTarget_kPa - fuelPressure.Value;
 
-	float p_control_percent = pressureError_kPa * engineConfiguration->hpfpPidP;
+	model->hpfp_p_control_percent = pressureError_kPa * engineConfiguration->hpfpPidP;
 	float i_factor_divisor =
 		1000. * // ms/sec
 		60. *   // sec/min -> ms/min
@@ -126,27 +126,23 @@ float HpfpQuantity::calcPI(float rpm, float calc_fuel_percent) {
 		engineConfiguration->hpfpCamLobes * // lobes/cycle -> (% * revs) / (kPa * min * cycles)
 		(FAST_CALLBACK_PERIOD_MS / // (% * revs * ms) / (kPa * min * cycles)
 		 i_factor_divisor); // % / kPa
-	float i_control_percent = m_I_sum_percent + pressureError_kPa * i_factor;
+	float unclamped_i_control_percent = model->hpfp_i_control_percent + pressureError_kPa * i_factor;
 	// Clamp the output so that calc_fuel_percent+i_control_percent is within 0% to 100%
 	// That way the I term can override any fuel calculations over the long term.
 	// The P term is still allowed to drive the total output over 100% or under 0% to react to
 	// short term errors.
-	i_control_percent = clampF(-calc_fuel_percent, i_control_percent,
+	model->hpfp_i_control_percent = clampF(-calc_fuel_percent, unclamped_i_control_percent,
 				   100.f - calc_fuel_percent);
-	m_I_sum_percent = i_control_percent;
-	return p_control_percent + i_control_percent;
+	return model->hpfp_p_control_percent + model->hpfp_i_control_percent;
 }
 
 angle_t HpfpQuantity::pumpAngleFuel(float rpm, HpfpController *model) {
 	// Math based on fuel requested
 	model->fuel_requested_percent = calcFuelPercent(rpm);
 
-	model->fuel_requested_percent_pi = calcPI(rpm, model->fuel_requested_percent);
-	// todo: streamline this logging field see 'calcPI' comment
-	model->m_pressureTarget_kPa = m_pressureTarget_kPa;
+	model->fuel_requested_percent_pi = calcPI(rpm, model->fuel_requested_percent, model);
 	// Apply PI control
 	float fuel_requested_percentTotal = model->fuel_requested_percent + model->fuel_requested_percent_pi;
-
 
 	// Convert to degrees
 	return interpolate2d(fuel_requested_percentTotal,
@@ -164,7 +160,7 @@ void HpfpController::onFastCallback() {
 		    !enginePins.hpfpValve.isInitialized());
 	// What conditions can we not handle?
 	if (!isHpfpActive) {
-		m_quantity.reset();
+		resetQuantity();
 		m_requested_pump = 0;
 		m_deadangle = 0;
 	} else {
@@ -198,6 +194,13 @@ void HpfpController::pinTurnOn(HpfpController *self) {
 
 	// By scheduling the close after we already open, we don't have to worry if the engine
 	// stops, the valve will be turned off in a certain amount of time regardless.
+	//
+	// We do not need precise control of valve _duration_ since
+	// For the solenoid type pump, the pump has a certain volume. You can activate the solenoid to request that the pump start pressurizing.
+	// Once it reaches a certain pressure, it is effectively self running and won't unlatch until the pump reaches the top.
+  // Since the solenoid latches itself, you don't have to keep it activated for the whole lobe. You just need to activate it until it latches and then let it do the rest of the work.
+  // see also https://rusefi.com/forum/viewtopic.php?f=5&t=2192
+
 	scheduleByAngle(&self->m_event.eventScheduling,
 			self->m_event.eventScheduling.getMomentNt(),
 			self->m_deadangle + engineConfiguration->hpfpActivationAngle,
@@ -226,7 +229,7 @@ void HpfpController::scheduleNextCycle() {
 
 	angleAboveMin = angle_requested > engineConfiguration->hpfpMinAngle;
 	if (angleAboveMin) {
-		// TODO: som manuals suggest also substracting peak time (converted to angle)
+		// TODO: some manuals suggest also substracting peak time (converted to angle)
 		di_nextStart = lobeAngle - angle_requested - m_deadangle;
 		wrapAngle(di_nextStart, "di_nextStart", ObdCode::CUSTOM_ERR_6557);
 
@@ -245,7 +248,7 @@ void HpfpController::scheduleNextCycle() {
 	    wrapAngle(lobeAngle, "lobe", ObdCode::CUSTOM_ERR_6557);
 		// Schedule this, even if we aren't opening the valve this time, since this
 		// will schedule the next lobe.
-		// todo: would it have been cleaner to schedule 'scheduleNextCycle' directly?
+		// todo: schedule only 'scheduleNextCycle' directly since we do not need output control part of the logic here!
 		engine->module<TriggerScheduler>()->schedule(
 			HPFP_CONTROLLER,
 			&m_event, lobeAngle,

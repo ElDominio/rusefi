@@ -702,22 +702,22 @@
          75.0 70.0 70.0 65.0 60.0 55.0 55.0 50.0
 </constant>
         <constant cols="1" digits="0" name="cltIdleRpm" rows="16">
-         1360.0
-         1360.0
-         1300.0
-         1200.0
-         1160.0
-         1100.0
-         1060.0
-         1000.0
-         1000.0
-         960.0
-         960.0
-         940.0
-         900.0
-         900.0
-         1000.0
-         1100.0
+         1860.0
+         1860.0
+         1800.0
+         1700.0
+         1660.0
+         1600.0
+         1560.0
+         1500.0
+         1500.0
+         1460.0
+         1460.0
+         1440.0
+         1400.0
+         1400.0
+         1500.0
+         1600.0
 </constant>
         <constant cols="1" digits="0" name="cltIdleRpmBins" rows="16">
          -30.0
@@ -939,14 +939,14 @@
         <constant name="drv8860_miso">"NONE"</constant>
         <constant name="drv8860spiDevice">"Off"</constant>
         <constant cols="1" digits="2" name="dwellVoltageCorrValues" rows="8">
+         1.26
+         1.2
+         1.16
+         1.1
+         1.06
          1.0
-         1.0
-         1.0
-         1.0
-         1.0
-         1.0
-         1.0
-         1.0
+         0.9
+         0.8
 </constant>
         <constant cols="1" digits="1" name="dwellVoltageCorrVoltBins" rows="8">
          8.0
@@ -1539,21 +1539,21 @@
 </constant>
         <constant cols="1" digits="1" name="hpfpLobeProfileQuantityBins" rows="16">
          0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
+         1.0
+         4.5
+         9.5
+         16.5
+         25.0
+         34.5
+         45.0
+         55.0
+         65.5
+         75.0
+         83.5
+         90.5
+         95.5
+         99.0
+         100.0
 </constant>
         <constant digits="0" name="hpfpMinAngle" units="deg">10.0</constant>
         <constant digits="0" name="hpfpPeakPos" units="deg">10.0</constant>
@@ -1749,24 +1749,24 @@
         <constant name="idle_stepperDirectionPin">"NONE"</constant>
         <constant name="idle_stepperStepPin">"NONE"</constant>
         <constant cols="1" digits="1" name="idleAdvance" rows="8">
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
+         10.0
+         10.57143
+         11.14286
+         11.71429
+         12.28571
+         12.85714
+         13.42857
+         14.0
 </constant>
         <constant cols="1" digits="0" name="idleAdvanceBins" rows="8">
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
+         600.0
+         800.0
+         1000.0
+         1200.0
+         1400.0
+         1600.0
+         1800.0
+         2000.0
 </constant>
         <constant cols="1" digits="2" name="idleFlowEstimateFlow" rows="8">
          0.0
@@ -2101,22 +2101,22 @@
         <constant name="ignitionKeyDigitalPin">"NONE"</constant>
         <constant name="ignitionKeyDigitalPinMode">"DEFAULT"</constant>
         <constant cols="1" digits="0" name="ignitionLoadBins" rows="16">
-         21.0
+         15.0
          27.0
          33.0
-         39.0
-         48.0
-         54.0
-         60.0
-         66.0
-         72.0
+         45.0
+         57.0
+         69.0
          81.0
-         87.0
          93.0
-         99.0
-         108.0
-         114.0
-         120.0
+         105.0
+         129.0
+         157.0
+         186.0
+         214.0
+         243.0
+         271.0
+         300.0
 </constant>
         <constant name="ignitionMode">"Individual Coils"</constant>
         <constant name="ignitionPinMode">"default"</constant>
@@ -2133,22 +2133,22 @@
         <constant name="ignitionPins8">"NONE"</constant>
         <constant name="ignitionPins9">"NONE"</constant>
         <constant cols="1" digits="0" name="ignitionRpmBins" rows="16">
-         650.0
          800.0
-         1100.0
-         1400.0
-         1700.0
+         1000.0
+         1300.0
+         1600.0
          2000.0
-         2300.0
-         2600.0
-         2900.0
-         3200.0
-         3500.0
-         3800.0
-         4100.0
+         2500.0
+         3000.0
+         3600.0
+         4000.0
          4400.0
-         4700.0
-         7000.0
+         4900.0
+         5300.0
+         5800.0
+         6200.0
+         7100.0
+         8000.0
 </constant>
         <constant cols="16" digits="1" name="ignitionTable" rows="16">
          12.2 14.2 18.1 22.0 25.9 29.9 33.8 37.7 41.6 42.9 42.9 42.9 42.9 42.9 42.9 42.9
@@ -2299,7 +2299,7 @@
          12.0
          13.0
          14.0
-         16.0
+         15.0
 </constant>
         <constant cols="1" digits="2" name="injector_battLagCorrPressBins" rows="2">
          206.8
@@ -2330,7 +2330,7 @@
          12.0
          13.0
          14.0
-         16.0
+         15.0
 </constant>
         <constant cols="1" digits="2" name="injectorSecondary_battLagCorrPressBins" rows="2">
          206.8
@@ -3350,13 +3350,13 @@ end</constant>
 </constant>
         <constant cols="1" digits="2" name="sparkDwellValues" rows="8">
          4.0
-         4.0
-         4.0
-         4.0
-         4.0
-         4.0
-         4.0
-         4.0
+         3.3
+         3.2
+         3.1
+         3.05
+         2.97
+         2.88
+         2.8
 </constant>
         <constant digits="0" name="sparkHardwareLatencyCorrection" units="uS">0.0</constant>
         <constant name="speedometerOutputPin">"NONE"</constant>
@@ -4006,6 +4006,7 @@ end</constant>
         <constant name="tcuUpshiftButtonPin">"NONE"</constant>
         <constant name="tcuUpshiftButtonPinMode">"DEFAULT"</constant>
         <constant digits="0" name="technicalDebt7738" units="">0.0</constant>
+        <constant name="tempPumpLimitCheck">"false"</constant>
         <constant cols="1" digits="0" name="throttle2TrimRpmBins" rows="6">
          0.0
          0.0
@@ -4412,7 +4413,6 @@ end</constant>
         <constant name="unused1320_28">"false"</constant>
         <constant name="unused920_1testChange">"false"</constant>
         <constant digits="0" name="unusedafterCrankingIACtaperDuration" units="">0.0</constant>
-        <constant name="unusedBitHere">"false"</constant>
         <constant digits="0" name="unusedcrankingIACposition" units="">0.0</constant>
         <constant name="unusedFancy10">"false"</constant>
         <constant name="unusedFancy11">"false"</constant>
@@ -4989,8 +4989,8 @@ end</constant>
 </constant>
         <constant name="yesUnderstandLocking">"no"</constant>
     </page>
-    <versionInfo firmwareInfo="20250403" nPages="1" signature="rusEFI master.2025.04.24.f407-discovery.1588823582" version="5.0"/>
-    <bibliography author="rusEFI 20250403" writeDate="date"/>
+    <versionInfo firmwareInfo="20250424" nPages="1" signature="rusEFI master.2025.04.24.f407-discovery.1584886776" version="5.0"/>
+    <bibliography author="rusEFI 20250424" writeDate="date"/>
     <settings/>
     <userComments/>
 </msq>
