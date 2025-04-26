@@ -1972,3 +1972,36 @@ idle return target ramp duration
 ### dynoCarFrontalAreaM2
 @@DYNO_CAR_FRONTAL_AREA_TOOLTIP@@
 
+### boardUseTempPullUp
+
+
+### boardUse2stepPullDown
+
+
+### boardUseD2PullDown
+
+
+### boardUseD3PullDown
+
+
+### boardUseCrankPullUp
+
+
+### boardUseH1PullDown
+
+
+### boardUseH2PullDown
+
+
+### boardUseH3PullDown
+
+
+### boardUseH4PullDown
+
+
+### boardUseH5PullDown
+
+
+### boardUseFlexPullDown
+
+
