@@ -4,9 +4,9 @@
 
 name: Generate Interactive Pinouts
 
-on:
+#on:
 # this action is invoked by other repos
-  workflow_call:
+ # workflow_call:
 
 jobs:
   generate:
