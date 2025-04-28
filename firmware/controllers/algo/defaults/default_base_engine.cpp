@@ -33,6 +33,39 @@ void setHpfpLobeProfileAngle(int lobes) {
 	}
 }
 
+static void setDefaultHPFP() {
+#if ! EFI_UNIT_TEST
+    // unit tests rely on 'hpfpCamLobes' for isGdiEngine() and we need not-GDI by default for unit tests
+	engineConfiguration->hpfpCamLobes = 3;
+#endif
+
+// todo: would be nice for unit tests to be happy about these defaults
+#if EFI_PROD_CODE || EFI_SIMULATOR
+	engineConfiguration->hpfpPumpVolume = 0.290;
+#endif
+	engineConfiguration->hpfpMinAngle = 10;
+	engineConfiguration->hpfpActivationAngle = 30;
+	engineConfiguration->hpfpTargetDecay = 2000;
+	engineConfiguration->hpfpPidP = 0.01;
+	engineConfiguration->hpfpPidI = 0.0003;
+	engineConfiguration->hpfpPeakPos = 10;
+}
+
+static void setGdiDefaults() {
+  setDefaultHPFP();
+
+	setRpmTableBin(config->hpfpTargetRpmBins);
+	setLinearCurve(config->hpfpTargetLoadBins, 0, 180, 1);
+	setTable(config->hpfpTarget, 5000);
+
+	setLinearCurve(config->hpfpFuelMassCompensationFuelMass, 0.0, 500, 10);
+	setLinearCurve(config->hpfpFuelMassCompensationFuelPressure, 0, 300, 25);
+	setTable(config->hpfpFuelMassCompensation, 1.0);
+
+	setLinearCurve(config->injectorFlowLinearizationFuelMassBins, 0.0, 500, 10);
+	setLinearCurve(config->injectorFlowLinearizationPressureBins, 0, 300, 25);
+}
+
 void setGDIFueling() {
 #ifdef HW_HELLEN_8CHAN
   engineConfiguration->externalRusEfiGdiModule = true;
@@ -63,24 +96,6 @@ void setLeftRightBanksNeedBetterName() {
       // zero-based index
 	    engineConfiguration->cylinderBankSelect[i] = i % 2;
     }
-}
-
-static void setDefaultHPFP() {
-#if ! EFI_UNIT_TEST
-    // unit tests rely on 'hpfpCamLobes' for isGdiEngine() and we need not-GDI by default for unit tests
-	engineConfiguration->hpfpCamLobes = 3;
-#endif
-
-// todo: would be nice for unit tests to be happy about these defaults
-#if EFI_PROD_CODE || EFI_SIMULATOR
-	engineConfiguration->hpfpPumpVolume = 0.290;
-#endif
-	engineConfiguration->hpfpMinAngle = 10;
-	engineConfiguration->hpfpActivationAngle = 30;
-	engineConfiguration->hpfpTargetDecay = 2000;
-	engineConfiguration->hpfpPidP = 0.01;
-	engineConfiguration->hpfpPidI = 0.0003;
-	engineConfiguration->hpfpPeakPos = 10;
 }
 
 static void mc33810defaults() {
@@ -164,7 +179,7 @@ void setDefaultBaseEngine() {
   engineConfiguration->kLineDoHondaSend = true;
 #endif
 
-  setDefaultHPFP();
+  setGdiDefaults();
 
   // it's useful to know what starting point is given tune based on
   engineConfiguration->calibrationBirthday = compilationYear() * 10000 + compilationMonth() * 100 + compilationDay();
@@ -212,6 +227,12 @@ void setDefaultBaseEngine() {
 	// this should not be below default rpm! maybe even make them equal?
 	engineConfiguration->vvtControlMinRpm = 600;
 
+  // todo: this "2JZ" trigger is very powerful for many low tooth quantity applications
+  // todo: we might be getting closer to a re-name
+  // by the way 2GRFE intake likes position 160 / precision 20
+  // see also https://github.com/rusefi/rusefi/issues/7345
+  //
+  // 2JZ values
     engineConfiguration->camDecoder2jzPosition = 95;
     engineConfiguration->camDecoder2jzPrecision = 40;
 

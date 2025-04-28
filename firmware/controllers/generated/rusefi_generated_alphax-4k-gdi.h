@@ -523,6 +523,8 @@
 #define ETB_COUNT 2
 #define ETB_HW_MAX_FREQUENCY 3000
 #define FLASH_DATA_VERSION 250418
+#define FLOW_LINEARIZATION_MASS_SIZE 16
+#define FLOW_LINEARIZATION_PRESSURE_SIZE 16
 #define FRONTEND_TITLE_BAR_NAME "rusEFI"
 #define fuel_cyl_trim_s_size 16
 #define FUEL_LEVEL_TABLE_COUNT 8
@@ -1304,7 +1306,7 @@
 #define pedalSensor_NAME "Accelerator pedal"
 #define pedalToTpsTbl_NAME "ETB pedal target"
 #define PERCENT_TRIM_BYTE_PACKING_DIV 0.02
-#define persistent_config_s_size 41792
+#define persistent_config_s_size 42352
 #define pid_s_size 20
 #define pin_input_mode_e_auto_enum 0="PI_DEFAULT",4="PI_INVERTED_DEFAULT",6="PI_INVERTED_PULLDOWN",5="PI_INVERTED_PULLUP",2="PI_PULLDOWN",1="PI_PULLUP"
 #define pin_input_mode_e_enum "DEFAULT", "PULLUP", "PULLDOWN", "INVALID", "INVERTED DEFAULT", "INVERTED PULLUP", "INVERTED PULLDOWN"
@@ -1381,7 +1383,7 @@
 #define SentInput_NONE 0
 #define show_tcu_gauges false
 #define show_vvt_output_pin true
-#define SIGNATURE_HASH 1527841625
+#define SIGNATURE_HASH 4137327672
 #define SIMULATOR_TUNE_BIN_FILE_NAME "generated/simulator_tune_image.bin"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX "generated/simulator_tune_image"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX ".bin"
@@ -1448,7 +1450,7 @@
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_BUTTON 0
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_DOWN_SWITCH 2
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_UP_SWITCH 3
-#define TOTAL_CONFIG_SIZE 41792
+#define TOTAL_CONFIG_SIZE 42352
 #define TPS_2_BYTE_PACKING_MULT 100
 #define TPS_PPS_TOO_HIGH_THRESHOLD 110
 #define TPS_PPS_TOO_LOW_THRESHOLD -10
@@ -1734,17 +1736,17 @@
 #define ts_show_compressor_sensor true
 #define ts_show_console_settings true
 #define ts_show_crankingTpsCurve true
-#define ts_show_cylinder_10 true
-#define ts_show_cylinder_11 true
-#define ts_show_cylinder_12 true
+#define ts_show_cylinder_10 false
+#define ts_show_cylinder_11 false
+#define ts_show_cylinder_12 false
 #define ts_show_cylinder_2 true
 #define ts_show_cylinder_3 true
 #define ts_show_cylinder_4 true
-#define ts_show_cylinder_5 true
-#define ts_show_cylinder_6 true
-#define ts_show_cylinder_7 true
-#define ts_show_cylinder_8 true
-#define ts_show_cylinder_9 true
+#define ts_show_cylinder_5 false
+#define ts_show_cylinder_6 false
+#define ts_show_cylinder_7 false
+#define ts_show_cylinder_8 false
+#define ts_show_cylinder_9 false
 #define ts_show_cylinder_bank true
 #define ts_show_dc_hardware true
 #define ts_show_debug_mode false
@@ -1860,7 +1862,7 @@
 #define ts_show_throttle_switch true
 #define ts_show_tle8888 false
 #define ts_show_top_level_can_menu true
-#define ts_show_tps2 true
+#define ts_show_tps2 false
 #define ts_show_tps_sent true
 #define ts_show_trigger_advanced true
 #define ts_show_trigger_gap_override_flag true
@@ -1884,7 +1886,7 @@
 #define ts_show_wastegate_sensor true
 #define ts_show_wbo_canbus_index true
 #define ts_show_wbo_canbus_set_index true
-#define TS_SIGNATURE "rusEFI master.2025.04.24.alphax-4k-gdi.1527841625"
+#define TS_SIGNATURE "rusEFI master.2025.04.28.alphax-4k-gdi.4137327672"
 #define TS_SIMULATE_CAN '>'
 #define TS_SIMULATE_CAN_char >
 #define TS_SINGLE_WRITE_COMMAND 'W'

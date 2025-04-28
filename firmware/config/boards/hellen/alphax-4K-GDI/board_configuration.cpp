@@ -7,7 +7,7 @@
 static OutputPin tempPullUp;
 
 void setBoardConfigOverrides() {
-    setHellenSdCardSpi1Hardware();
+    hellenMegaSdWithAccelerometer();
 	setHellenVbatt();
     enableHellenSpi2();
     setupTLE9201(/*PWM controlPin*/Gpio::H144_OUT_PWM2, Gpio::H144_OUT_PWM3, Gpio::H144_OUT_PWM1);
@@ -35,6 +35,7 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->injectionPins[3] = Gpio::H144_LS_4;
 
   config->boardUseTempPullUp = true;
+  engineConfiguration->isSdCardEnabled = true;
 
 	hellenWbo();
 	setGDIFueling();

@@ -23,6 +23,7 @@ constexpr float convertToGramsPerSecond(float ccPerMinute) {
 	return ccPerMinute * (fuelDensity / 60.f);
 }
 
+// returns: grams per second flow
 float InjectorModelWithConfig::getBaseFlowRate() const {
 	if (engineConfiguration->injectorFlowAsMassFlow) {
 		return m_cfg->flow;
@@ -37,6 +38,7 @@ float InjectorModelPrimary::getSmallPulseFlowRate() const {
 
 float InjectorModelPrimary::getSmallPulseBreakPoint() const {
 	// convert milligrams -> grams
+	// todo: make UI deal with scaling?!
 	return 0.001f * engineConfiguration->fordInjectorSmallPulseBreakPoint;
 }
 
@@ -181,32 +183,41 @@ float InjectorModelWithConfig::getDeadtime() const {
 }
 
 //TODO: only used in the tests, refactor pending to InjectorModelWithConfig
-float InjectorModelBase::getInjectionDuration(float fuelMassGram) const {
+floatms_t InjectorModelBase::getInjectionDuration(float fuelMassGram) const {
 	if (fuelMassGram <= 0) {
 		// If 0 mass, don't do any math, just skip the injection.
 		return 0.0f;
 	}
 
 	// Get the no-offset duration
-	float baseDuration = getBaseDurationImpl(fuelMassGram);
+	floatms_t baseDuration = getBaseDurationImpl(fuelMassGram);
 
 	return baseDuration + m_deadtime;
 }
 
-float InjectorModelWithConfig::getInjectionDuration(float fuelMassGram) const {
+floatms_t InjectorModelWithConfig::getInjectionDuration(float fuelMassGram) const {
 	if (fuelMassGram <= 0) {
 		// If 0 mass, don't do any math, just skip the injection.
 		return 0.0f;
 	}
 
+  // hopefully one day we pick between useInjectorFlowLinearizationTable and ICM_HPFP_Manual_Compensation approaches
+  // and not more than one of these would stay
+	if (engineConfiguration->useInjectorFlowLinearizationTable) {
+	  auto fps = Sensor::get(SensorType::FuelPressureInjector);
+	// todo: KPA vs BAR mess?!
+    return interpolate3d(config->injectorFlowLinearization,
+			config->injectorFlowLinearizationPressureBins, KPA2BAR(fps.Value),// array values are on bar
+			config->injectorFlowLinearizationFuelMassBins, fuelMassGram * 1000);  // array values are on mg
+	}
+
 	// Get the no-offset duration
-	float baseDuration = getBaseDurationImpl(fuelMassGram);
+	floatms_t baseDuration = getBaseDurationImpl(fuelMassGram);
 
 	// default non GDI case
-	if(getInjectorCompensationMode() != ICM_HPFP_Manual_Compensation) {
+	if (getInjectorCompensationMode() != ICM_HPFP_Manual_Compensation) {
 		// Add deadtime offset
 		return baseDuration + m_deadtime;
-
 	}
 
 	if (!Sensor::hasSensor(SensorType::FuelPressureHigh)) {
@@ -214,11 +225,12 @@ float InjectorModelWithConfig::getInjectionDuration(float fuelMassGram) const {
 	}
 
 	auto fps = Sensor::get(SensorType::FuelPressureHigh);
+	// todo: KPA vs BAR mess in code and UI?!
 	float fuelMassCompensation = interpolate3d(config->hpfpFuelMassCompensation,
 			config->hpfpFuelMassCompensationFuelPressure, KPA2BAR(fps.Value),// array values are on bar
 			config->hpfpFuelMassCompensationFuelMass, fuelMassGram * 1000);  // array values are on mg
 
-	// recalculate base duration with fuell mass compensation
+	// recalculate base duration with fuel mass compensation
 	baseDuration =  getBaseDurationImpl(fuelMassGram * fuelMassCompensation);
 	return baseDuration + m_deadtime;
 }
@@ -228,7 +240,8 @@ float InjectorModelBase::getFuelMassForDuration(floatms_t duration) const {
 	return duration * m_massFlowRate * 0.001f;
 }
 
-float InjectorModelBase::getBaseDurationImpl(float fuelMassGram) const {
+// todo: all that *1000 and *0.001f is pretty annoying, we need a cleaner approach for units!
+floatms_t InjectorModelBase::getBaseDurationImpl(float fuelMassGram) const {
 	floatms_t baseDuration = fuelMassGram / m_massFlowRate * 1000;
 
 	switch (getNonlinearMode()) {
@@ -248,7 +261,7 @@ float InjectorModelBase::getBaseDurationImpl(float fuelMassGram) const {
 	}
 }
 
-float InjectorModelBase::correctInjectionPolynomial(float baseDuration) const {
+floatms_t InjectorModelBase::correctInjectionPolynomial(floatms_t baseDuration) const {
 	if (baseDuration > engineConfiguration->applyNonlinearBelowPulse) {
 		// Large pulse, skip correction.
 		return baseDuration;
