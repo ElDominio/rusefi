@@ -57,7 +57,6 @@ extern AdcDevice fastAdc;
 static volatile NO_CACHE adcsample_t slowAdcSamples[SLOW_ADC_CHANNEL_COUNT];
 
 static uint32_t slowAdcConversionCount = 0;
-static uint32_t slowAdcErrorsCount = 0;
 
 static float mcuTemperature;
 
@@ -118,7 +117,7 @@ static void printAdcChannedReport(const char *prefix, int internalIndex, adc_cha
 
 void printFullAdcReport(void) {
 #if EFI_USE_FAST_ADC
-	efiPrintf("fast %lu samples", engine->outputChannels.fastAdcConversionCount);
+	efiPrintf("fast %u samples", engine->outputChannels.fastAdcConversionCount);
 
 	for (int internalIndex = 0; internalIndex < fastAdc.size(); internalIndex++) {
 		adc_channel_e hwChannel = fastAdc.getAdcChannelByInternalIndex(internalIndex);
@@ -154,12 +153,18 @@ public:
 
 			/* drop volatile type qualifier - this is safe */
 			if (!readSlowAnalogInputs((adcsample_t *)slowAdcSamples)) {
-				slowAdcErrorsCount++;
+				engine->outputChannels.slowAdcErrorCount++;
 				return;
 			}
 
 			// Ask the port to sample the MCU temperature
 			mcuTemperature = getMcuTemperature();
+			if (mcuTemperature > 150.0f || mcuTemperature < -50.0f) {
+				/*
+				 * we have a sporadic issue with this check todo https://github.com/rusefi/rusefi/issues/2552
+				 */
+				//criticalError("Invalid CPU temperature measured %f", degrees);
+			}
 		}
 
 		{
@@ -214,8 +219,6 @@ static void configureInputs() {
 	 */
 
 	addFastAdcChannel("MAP", engineConfiguration->map.sensor.hwChannel);
-
-	addFastAdcChannel("HIP9011", engineConfiguration->hipOutputChannel);
 
 	// not currently used	addFastAdcChannel("Vref", engineConfiguration->vRefAdcChannel, ADC_SLOW);
 

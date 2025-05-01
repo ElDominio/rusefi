@@ -62,6 +62,8 @@ void portInitAdc() {
 #endif // EFI_SOFTWARE_KNOCK
 }
 
+static void slowAdcErrorCB(ADCDriver *, adcerror_t);
+
 /*
  * ADC conversion group.
  */
@@ -69,7 +71,7 @@ static const ADCConversionGroup tempSensorConvGroup = {
 	.circular			= FALSE,
 	.num_channels		= 1,
 	.end_cb				= nullptr,
-	.error_cb			= nullptr,
+	.error_cb			= slowAdcErrorCB,
 	/* HW dependent part below */
 	.cr1				= 0,
 	.cr2				= ADC_CR2_SWSTART,
@@ -90,32 +92,25 @@ static const ADCConversionGroup tempSensorConvGroup = {
 };
 
 // 4x oversample is plenty
-static constexpr int oversample = 4;
-static adcsample_t samples[oversample];
+static constexpr int tempSensorOversample = 4;
+static NO_CACHE adcsample_t tempSensorSamples[tempSensorOversample];
 
 float getMcuTemperature() {
 	// Temperature sensor is only physically wired to ADC1
-	adcConvert(&ADCD1, &tempSensorConvGroup, samples, oversample);
+	adcConvert(&ADCD1, &tempSensorConvGroup, tempSensorSamples, tempSensorOversample);
 
 	uint32_t sum = 0;
-	for (size_t i = 0; i < oversample; i++) {
-		sum += samples[i];
+	for (size_t i = 0; i < tempSensorOversample; i++) {
+		sum += tempSensorSamples[i];
 	}
 
-	float volts = (float)sum / (4096 * oversample);
+	float volts = (float)sum / (4096 * tempSensorOversample);
 	volts *= engineConfiguration->adcVcc;
 
 	volts -= 0.760f; // Subtract the reference voltage at 25 deg C
 	float degrees = volts / 0.0025f; // Divide by slope 2.5mV
 
 	degrees += 25.0; // Add the 25 deg C
-
-	if (degrees > 150.0f || degrees < -50.0f) {
-/*
- * we have a sporadic issue with this check todo https://github.com/rusefi/rusefi/issues/2552
-		criticalError("Invalid CPU temperature measured %f", degrees);
- */
-	}
 
 	return degrees;
 }
@@ -130,7 +125,11 @@ float getMcuTemperature() {
 constexpr size_t adcChannelCount = 16;
 
 static void slowAdcErrorCB(ADCDriver *, adcerror_t err) {
-	engine->outputChannels.slowAdcErrorsCount++;
+	engine->outputChannels.slowAdcErrorCount++;
+	if (err == ADC_ERR_OVERFLOW) {
+		engine->outputChannels.slowAdcOverrunCount++;
+	}
+	// TODO: restart?
 }
 
 // Conversion group for slow channels
@@ -165,9 +164,9 @@ static constexpr ADCConversionGroup convGroupSlow = {
 	.htr	= 0,
 	.ltr	= 0,
 	// Simply sequence every channel in order
-	.sqr1	= ADC_SQR1_SQ13_N(12) | ADC_SQR1_SQ14_N(13) | ADC_SQR1_SQ15_N(14) | ADC_SQR1_SQ16_N(15) | ADC_SQR1_NUM_CH(16), // Conversion group sequence 13...16 + sequence length
-	.sqr2	= ADC_SQR2_SQ7_N(6)   | ADC_SQR2_SQ8_N(7)   | ADC_SQR2_SQ9_N(8)   | ADC_SQR2_SQ10_N(9)  | ADC_SQR2_SQ11_N(10) | ADC_SQR2_SQ12_N(11), // Conversion group sequence 7...12
-	.sqr3	= ADC_SQR3_SQ1_N(0)   | ADC_SQR3_SQ2_N(1)   | ADC_SQR3_SQ3_N(2)   |  ADC_SQR3_SQ4_N(3)  |   ADC_SQR3_SQ5_N(4) |   ADC_SQR3_SQ6_N(5), // Conversion group sequence 1...6
+	.sqr1	= ADC_SQR1_SQ13_N(12) | ADC_SQR1_SQ14_N(13) | ADC_SQR1_SQ15_N(14) | ADC_SQR1_SQ16_N(15), // Conversion group sequence 13...16
+	.sqr2	=   ADC_SQR2_SQ7_N(6) |   ADC_SQR2_SQ8_N(7) |   ADC_SQR2_SQ9_N(8) | ADC_SQR2_SQ10_N(9) | ADC_SQR2_SQ11_N(10) | ADC_SQR2_SQ12_N(11), // Conversion group sequence 7...12
+	.sqr3	=   ADC_SQR3_SQ1_N(0) |   ADC_SQR3_SQ2_N(1) |   ADC_SQR3_SQ3_N(2) |  ADC_SQR3_SQ4_N(3) |   ADC_SQR3_SQ5_N(4) |   ADC_SQR3_SQ6_N(5), // Conversion group sequence 1...6
 };
 
 static NO_CACHE adcsample_t slowSampleBuffer[SLOW_ADC_OVERSAMPLE * adcChannelCount];

@@ -98,61 +98,61 @@ struct output_channels_s {
 	offset 0 bit 16 */
 	bool isPedalError : 1 {};
 	/**
-	offset 0 bit 17 */
-	bool isKnockChipOk : 1 {};
-	/**
 	 * Launch Control Triggered
-	offset 0 bit 18 */
+	offset 0 bit 17 */
 	bool launchTriggered : 1 {};
 	/**
 	 * Error: TPS2
-	offset 0 bit 19 */
+	offset 0 bit 18 */
 	bool isTps2Error : 1 {};
 	/**
 	 * Injector Fault
-	offset 0 bit 20 */
+	offset 0 bit 19 */
 	bool injectorFault : 1 {};
 	/**
 	 * Ignition Fault
-	offset 0 bit 21 */
+	offset 0 bit 20 */
 	bool ignitionFault : 1 {};
 	/**
 	 * isUsbConnected
 	 * Original reason for this is to check if USB is connected from Lua
-	offset 0 bit 22 */
+	offset 0 bit 21 */
 	bool isUsbConnected : 1 {};
 	/**
-	offset 0 bit 23 */
+	offset 0 bit 22 */
 	bool dfcoActive : 1 {};
 	/**
 	 * SD card writing
-	offset 0 bit 24 */
+	offset 0 bit 23 */
 	bool sd_active_wr : 1 {};
 	/**
 	 * SD card reading
-	offset 0 bit 25 */
+	offset 0 bit 24 */
 	bool sd_active_rd : 1 {};
 	/**
 	 * MAP from sensor seems valid
-	offset 0 bit 26 */
+	offset 0 bit 25 */
 	bool isMapValid : 1 {};
 	/**
-	offset 0 bit 27 */
+	offset 0 bit 26 */
 	bool triggerPageRefreshFlag : 1 {};
 	/**
-	offset 0 bit 28 */
+	offset 0 bit 27 */
 	bool hasFaultReportFile : 1 {};
 	/**
 	 * Analog sensors supply failure
-	offset 0 bit 29 */
+	offset 0 bit 28 */
 	bool isAnalogFailure : 1 {};
 	/**
-	offset 0 bit 30 */
+	offset 0 bit 29 */
 	bool isTuningNow : 1 {};
 	/**
 	 * SD: formating is in progress
-	offset 0 bit 31 */
+	offset 0 bit 30 */
 	bool sd_formating : 1 {};
+	/**
+	offset 0 bit 31 */
+	bool unusedBit_31_31 : 1 {};
 	/**
 	 * @@GAUGE_NAME_RPM@@
 	 * units: RPM
@@ -1330,7 +1330,7 @@ struct output_channels_s {
 	/**
 	 * offset 776
 	 */
-	uint8_t fastAdcErrorsCount = (uint8_t)0;
+	uint8_t unusedWasAdc = (uint8_t)0;
 	/**
 	 * offset 777
 	 */
@@ -1384,13 +1384,15 @@ struct output_channels_s {
 	 */
 	scaled_channel<int16_t, 1000, 1> rawAuxAnalog4 = (int16_t)0;
 	/**
+	 * ECU: Fast ADC errors
 	 * offset 796
 	 */
-	uint8_t fastAdcErrorCallbackCount = (uint8_t)0;
+	uint8_t fastAdcErrorCount = (uint8_t)0;
 	/**
+	 * ECU: Slow ADC errors
 	 * offset 797
 	 */
-	uint8_t slowAdcErrorsCount = (uint8_t)0;
+	uint8_t slowAdcErrorCount = (uint8_t)0;
 	/**
 	 * units: V
 	 * offset 798
@@ -1449,23 +1451,36 @@ struct output_channels_s {
 	 */
 	uint8_t sd_error = (uint8_t)0;
 	/**
-	 * need 4 byte alignment
-	 * units: units
+	 * ECU: Fast ADC overruns
 	 * offset 829
 	 */
-	uint8_t alignmentFill_at_829[3] = {};
+	uint8_t fastAdcOverrunCount = (uint8_t)0;
 	/**
+	 * ECU: Slow ADC overruns
+	 * offset 830
+	 */
+	uint8_t slowAdcOverrunCount = (uint8_t)0;
+	/**
+	 * ECU: Fast ADC error type
+	 * offset 831
+	 */
+	uint8_t fastAdcLastError = (uint8_t)0;
+	/**
+	 * ECU: Fast ADC period
+	 * units: ticks
 	 * offset 832
 	 */
-	uint32_t fastAdcPeriod = (uint32_t)0;
+	uint16_t fastAdcPeriod = (uint16_t)0;
+	/**
+	 * ECU: Fast ADC conversions
+	 * units: N
+	 * offset 834
+	 */
+	uint16_t fastAdcConversionCount = (uint16_t)0;
 	/**
 	 * offset 836
 	 */
-	uint32_t fastAdcConversionCount = (uint32_t)0;
-	/**
-	 * offset 840
-	 */
-	uint8_t unusedAtTheEnd[36] = {};
+	uint8_t unusedAtTheEnd[40] = {};
 };
 static_assert(sizeof(output_channels_s) == 876);
 

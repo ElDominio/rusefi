@@ -183,19 +183,6 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->isSdCardEnabled = true;
 	engineConfiguration->sdCardCsPin = Gpio::Unassigned;
 
-	/* Knock sensor */
-	/* Interface settings */
-	engineConfiguration->hip9011SpiDevice = SPI_DEVICE_4;
-	engineConfiguration->hip9011CsPin = Gpio::E11;	/* SPI4_NSS1 */
-	engineConfiguration->hip9011CsPinMode = OM_OPENDRAIN;
-	engineConfiguration->hip9011IntHoldPin = Gpio::H8;
-	engineConfiguration->hip9011IntHoldPinMode = OM_OPENDRAIN;
-	engineConfiguration->hipOutputChannel = EFI_ADC_7; /* PA7 */
-	engineConfiguration->isHip9011Enabled = true;
-	/* this board has TPIC8101, that supports advanced mode */
-	engineConfiguration->useTpicAdvancedMode = true;
-	/* HIP9011 chip settings */
-	engineConfiguration->hip9011Gain = 1.0;
 	engineConfiguration->cylinderBore = 96.9;
 
 	/* Cylinder to knock bank mapping */
@@ -234,7 +221,7 @@ void setBoardConfigOverrides() {
 	engineConfiguration->spi2mosiPin = Gpio::I3;
 	/* User can disable this bus and change pin mode, but not pins itself */
 
-	/* Smart chip and TPIC9011 */
+	/* Smart chip */
 	engineConfiguration->spi4sckPin = Gpio::E12;
 	engineConfiguration->spi4misoPin = Gpio::E13;
 	engineConfiguration->spi4mosiPin = Gpio::E14;
@@ -254,8 +241,6 @@ void setBoardConfigOverrides() {
 	/* This is mandatory to have this bus enabled */
 	engineConfiguration->is_enabled_spi_5 = true;
 
-	/* HIP9011 gets fixed 16MHz clock from STM32, this is not configurable */
-	engineConfiguration->hip9011Prescaler = 0x6; //HIP_16MHZ_PRESCALER;
 }
 
 /* Schematic RefDef DA3 */
