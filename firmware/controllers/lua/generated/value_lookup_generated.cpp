@@ -1970,39 +1970,6 @@ float getConfigValueByName(const char *name) {
 // dynoCarFrontalAreaM2
 		case -1661556925:
 			return config->dynoCarFrontalAreaM2;
-// boardUseTempPullUp
-		case -1457484942:
-			return config->boardUseTempPullUp;
-// boardUse2stepPullDown
-		case -1470758947:
-			return config->boardUse2stepPullDown;
-// boardUseD2PullDown
-		case 1868156805:
-			return config->boardUseD2PullDown;
-// boardUseD3PullDown
-		case -472498042:
-			return config->boardUseD3PullDown;
-// boardUseCrankPullUp
-		case 1280316843:
-			return config->boardUseCrankPullUp;
-// boardUseH1PullDown
-		case 185049864:
-			return config->boardUseH1PullDown;
-// boardUseH2PullDown
-		case 2139362313:
-			return config->boardUseH2PullDown;
-// boardUseH3PullDown
-		case -201292534:
-			return config->boardUseH3PullDown;
-// boardUseH4PullDown
-		case 1753019915:
-			return config->boardUseH4PullDown;
-// boardUseH5PullDown
-		case -587634932:
-			return config->boardUseH5PullDown;
-// boardUseFlexPullDown
-		case -282017410:
-			return config->boardUseFlexPullDown;
 	}
 	return EFI_ERROR_CODE;
 }
@@ -5282,61 +5249,6 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1661556925:
 	{
 		config->dynoCarFrontalAreaM2 = value;
-		return 1;
-	}
-		case -1457484942:
-	{
-		config->boardUseTempPullUp = (int)value;
-		return 1;
-	}
-		case -1470758947:
-	{
-		config->boardUse2stepPullDown = (int)value;
-		return 1;
-	}
-		case 1868156805:
-	{
-		config->boardUseD2PullDown = (int)value;
-		return 1;
-	}
-		case -472498042:
-	{
-		config->boardUseD3PullDown = (int)value;
-		return 1;
-	}
-		case 1280316843:
-	{
-		config->boardUseCrankPullUp = (int)value;
-		return 1;
-	}
-		case 185049864:
-	{
-		config->boardUseH1PullDown = (int)value;
-		return 1;
-	}
-		case 2139362313:
-	{
-		config->boardUseH2PullDown = (int)value;
-		return 1;
-	}
-		case -201292534:
-	{
-		config->boardUseH3PullDown = (int)value;
-		return 1;
-	}
-		case 1753019915:
-	{
-		config->boardUseH4PullDown = (int)value;
-		return 1;
-	}
-		case -587634932:
-	{
-		config->boardUseH5PullDown = (int)value;
-		return 1;
-	}
-		case -282017410:
-	{
-		config->boardUseFlexPullDown = (int)value;
 		return 1;
 	}
 	}
