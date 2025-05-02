@@ -25,12 +25,6 @@ Above this CLT, disable AC to prevent overheating the engine. Set to 0 to disabl
 ### compressionRatio
 Just for reference really, not taken into account by any logic at this point
 
-### wastegatePositionMin
-Voltage when the wastegate is closed.\nYou probably don't have one of these!
-
-### wastegatePositionMax
-Voltage when the wastegate is fully open.\nYou probably don't have one of these!\n1 volt = 1000 units
-
 ### idlePositionMin
 Voltage when the idle valve is closed.\nYou probably don't have one of these!
 
@@ -1540,6 +1534,12 @@ How long to keep the valve activated (in order to allow the pump to build pressu
 ### hpfpPidI
 
 
+### hpfpPid_iTermMin
+iTerm min value
+
+### hpfpPid_iTermMax
+iTerm max value
+
 ### hpfpTargetDecay
 The fastest rate the target pressure can be reduced by. This is because HPFP have no way to bleed off pressure other than injecting fuel.
 
@@ -1917,6 +1917,12 @@ Delay before cutting fuel due to extra high oil pressure. Use this to ignore sho
 
 ### idleReturnTargetRampDuration
 idle return target ramp duration
+
+### wastegatePositionOpenedVoltage
+Voltage when the wastegate is fully open
+
+### wastegatePositionClosedVoltage
+Voltage when the wastegate is closed
 
 ### tcu_shiftTime
 

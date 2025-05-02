@@ -32,12 +32,6 @@ float getConfigValueByName(const char *name) {
 // compressionRatio
 		case 355839382:
 			return engineConfiguration->compressionRatio;
-// wastegatePositionMin
-		case 2097342691:
-			return engineConfiguration->wastegatePositionMin;
-// wastegatePositionMax
-		case 2097342437:
-			return engineConfiguration->wastegatePositionMax;
 // idlePositionMin
 		case -1256791716:
 			return engineConfiguration->idlePositionMin;
@@ -1547,6 +1541,12 @@ float getConfigValueByName(const char *name) {
 // hpfpPidI
 		case 436500697:
 			return engineConfiguration->hpfpPidI;
+// hpfpPid_iTermMin
+		case 535118708:
+			return engineConfiguration->hpfpPid_iTermMin;
+// hpfpPid_iTermMax
+		case 535118454:
+			return engineConfiguration->hpfpPid_iTermMax;
 // hpfpTargetDecay
 		case 1025426144:
 			return engineConfiguration->hpfpTargetDecay;
@@ -1925,6 +1925,12 @@ float getConfigValueByName(const char *name) {
 // idleReturnTargetRampDuration
 		case 62925536:
 			return engineConfiguration->idleReturnTargetRampDuration;
+// wastegatePositionOpenedVoltage
+		case 866072300:
+			return engineConfiguration->wastegatePositionOpenedVoltage;
+// wastegatePositionClosedVoltage
+		case 20003211:
+			return engineConfiguration->wastegatePositionClosedVoltage;
 // tcu_shiftTime
 		case -1658957891:
 			return config->tcu_shiftTime;
@@ -2019,16 +2025,6 @@ bool setConfigValueByName(const char *name, float value) {
 		case 355839382:
 	{
 		engineConfiguration->compressionRatio = value;
-		return 1;
-	}
-		case 2097342691:
-	{
-		engineConfiguration->wastegatePositionMin = (int)value;
-		return 1;
-	}
-		case 2097342437:
-	{
-		engineConfiguration->wastegatePositionMax = (int)value;
 		return 1;
 	}
 		case -1256791716:
@@ -4546,6 +4542,16 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->hpfpPidI = (int)value;
 		return 1;
 	}
+		case 535118708:
+	{
+		engineConfiguration->hpfpPid_iTermMin = (int)value;
+		return 1;
+	}
+		case 535118454:
+	{
+		engineConfiguration->hpfpPid_iTermMax = (int)value;
+		return 1;
+	}
 		case 1025426144:
 	{
 		engineConfiguration->hpfpTargetDecay = (int)value;
@@ -5174,6 +5180,16 @@ bool setConfigValueByName(const char *name, float value) {
 		case 62925536:
 	{
 		engineConfiguration->idleReturnTargetRampDuration = (int)value;
+		return 1;
+	}
+		case 866072300:
+	{
+		engineConfiguration->wastegatePositionOpenedVoltage = value;
+		return 1;
+	}
+		case 20003211:
+	{
+		engineConfiguration->wastegatePositionClosedVoltage = value;
 		return 1;
 	}
 		case -1658957891:

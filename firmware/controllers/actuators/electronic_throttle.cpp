@@ -94,22 +94,30 @@ static SensorType functionToPositionSensor(dc_function_e func) {
 
 static SensorType functionToTpsSensor(dc_function_e func) {
 	switch(func) {
-		case DC_Throttle1:  return SensorType::Tps1;
-		default: return SensorType::Tps2;
+		case DC_Throttle1: return SensorType::Tps1;
+		case DC_Throttle2: return SensorType::Tps2;
+		case DC_IdleValve: return SensorType::IdlePosition;
+		case DC_Wastegate: return SensorType::WastegatePosition;
+		default: return SensorType::Invalid;
 	}
 }
 
 static SensorType functionToTpsSensorPrimary(dc_function_e func) {
 	switch(func) {
-		case DC_Throttle1:  return SensorType::Tps1Primary;
-		default: return SensorType::Tps2Primary;
+		case DC_Throttle1: return SensorType::Tps1Primary;
+		case DC_Throttle2: return SensorType::Tps2Primary;
+		case DC_IdleValve: return SensorType::IdlePosition;
+		case DC_Wastegate: return SensorType::WastegatePosition;
+		default: return SensorType::Invalid;
 	}
 }
 
 static SensorType functionToTpsSensorSecondary(dc_function_e func) {
 	switch(func) {
-		case DC_Throttle1:  return SensorType::Tps1Secondary;
-		default: return SensorType::Tps2Secondary;
+		case DC_Throttle1: return SensorType::Tps1Secondary;
+		case DC_Throttle2: return SensorType::Tps2Secondary;
+		/* No secondary sensors for Idle and EWG */
+		default: return SensorType::Invalid;
 	}
 }
 
@@ -117,28 +125,34 @@ static SensorType functionToTpsSensorSecondary(dc_function_e func) {
 static TsCalMode functionToCalModePriMin(dc_function_e func) {
 	switch (func) {
 		case DC_Throttle1: return TsCalMode::Tps1Min;
-		default: return TsCalMode::Tps2Min;
+		case DC_Throttle2: return TsCalMode::Tps2Min;
+		case DC_Wastegate: return TsCalMode::EwgPosMin;
+		default: return TsCalMode::None;
 	}
 }
 
 static TsCalMode functionToCalModePriMax(dc_function_e func) {
 	switch (func) {
 		case DC_Throttle1: return TsCalMode::Tps1Max;
-		default: return TsCalMode::Tps2Max;
+		case DC_Throttle2: return TsCalMode::Tps2Max;
+		case DC_Wastegate: return TsCalMode::EwgPosMax;
+		default: return TsCalMode::None;
 	}
 }
 
 static TsCalMode functionToCalModeSecMin(dc_function_e func) {
 	switch (func) {
 		case DC_Throttle1: return TsCalMode::Tps1SecondaryMin;
-		default: return TsCalMode::Tps2SecondaryMin;
+		case DC_Throttle2: return TsCalMode::Tps2SecondaryMin;
+		default: return TsCalMode::None;
 	}
 }
 
 static TsCalMode functionToCalModeSecMax(dc_function_e func) {
 	switch (func) {
 		case DC_Throttle1: return TsCalMode::Tps1SecondaryMax;
-		default: return TsCalMode::Tps2SecondaryMax;
+		case DC_Throttle2: return TsCalMode::Tps2SecondaryMax;
+		default: return TsCalMode::None;
 	}
 }
 #endif // EFI_TUNER_STUDIO
@@ -178,8 +192,20 @@ bool EtbController::init(dc_function_e function, DcMotor *motor, pid_s *pidParam
 	}
 
 	m_motor = motor;
-	m_pid.initPidClass(pidParameters);
 	m_pedalProvider = pedalProvider;
+
+	m_pid.initPidClass(pidParameters);
+
+#if !EFI_UNIT_TEST
+	if (isEtbMode()) {
+		m_pid.iTermMin = engineConfiguration->etb_iTermMin;
+		m_pid.iTermMax = engineConfiguration->etb_iTermMax;
+	} else {
+		// Some defaults from setDefaultEtbParameters(), find better values for EWG and Idle or add config options
+		m_pid.iTermMin = -30;
+		m_pid.iTermMax = 30;
+	}
+#endif
 
 	// Ignore 3% position error before complaining
 	m_targetErrorAccumulator.init(3.0f, etbPeriodSeconds);
@@ -201,11 +227,6 @@ void EtbController::onConfigurationChange(pid_s* previousConfiguration) {
 		m_shouldResetPid = true;
 	}
 
-	if ((m_function == DC_Throttle1) || (m_function == DC_Throttle2)) {
-		m_pid.iTermMin = engineConfiguration->etb_iTermMin;
-		m_pid.iTermMax = engineConfiguration->etb_iTermMax;
-	}
-
 	doInitElectronicThrottle();
 }
 
@@ -214,8 +235,8 @@ void EtbController::showStatus() {
 }
 
 expected<percent_t> EtbController::observePlant() {
-  expected<percent_t> plant = Sensor::get(m_positionSensor);
-  validPlantPosition = plant.Valid;
+	expected<percent_t> plant = Sensor::get(m_positionSensor);
+	validPlantPosition = plant.Valid;
 	return plant;
 }
 
@@ -283,7 +304,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 		return unexpected;
 	}
 
-  float sanitizedPedal = getSanitizedPedal();
+	float sanitizedPedal = getSanitizedPedal();
 
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
 	etbCurrentTarget = m_pedalProvider->getValue(rpm, sanitizedPedal);
@@ -527,27 +548,27 @@ void EtbController::setOutput(expected<percent_t> outputValue) {
 #endif
 
 	if (!m_motor) {
-	  state = (uint8_t)EtbState::NoMotor;
+		state = (uint8_t)EtbState::NoMotor;
 		return;
 	}
 
 	bool isEnabled;
 	if (!isEtbMode()) {
 	  // technical debt: non-ETB usages of DC motor are still mixed into ETB controller?
-    state = (uint8_t)EtbState::NotEbt;
-    isEnabled = true;
+		state = (uint8_t)EtbState::NotEbt;
+		isEnabled = true;
 	} else if (!getLimpManager()->allowElectronicThrottle()) {
-	  state = (uint8_t)EtbState::LimpProhibited;
-	  isEnabled = false;
+		state = (uint8_t)EtbState::LimpProhibited;
+		isEnabled = false;
 	} else if (engineConfiguration->pauseEtbControl) {
-	  state = (uint8_t)EtbState::Paused;
-	  isEnabled = false;
+		state = (uint8_t)EtbState::Paused;
+		isEnabled = false;
 	} else if (!outputValue) {
-	  state = (uint8_t)EtbState::NoOutput;
-	  isEnabled = false;
+		state = (uint8_t)EtbState::NoOutput;
+		isEnabled = false;
 	} else {
-	  state = (uint8_t)EtbState::Active;
-	  isEnabled = true;
+		state = (uint8_t)EtbState::Active;
+		isEnabled = true;
 	}
 
 	// If not ETB, or ETB is allowed, output is valid, and we aren't paused, output to motor.
@@ -636,7 +657,7 @@ void EtbController::update() {
 #if !EFI_UNIT_TEST
 	// If we didn't get initialized, fail fast
 	if (!m_motor) {
-	  state = (uint8_t)EtbState::FailFast;
+		state = (uint8_t)EtbState::FailFast;
 		return;
 	}
 #endif // EFI_UNIT_TEST
@@ -738,7 +759,7 @@ public:
 
 	void autoCalibrateTps(bool reportToTs) override {
 		// Only auto calibrate throttles
-		if (TBase::getFunction() == DC_Throttle1 || TBase::getFunction() == DC_Throttle2) {
+		if (TBase::getFunction() == DC_Throttle1 || TBase::getFunction() == DC_Throttle2 || TBase::getFunction() == DC_Wastegate) {
 			m_isAutocalTs = reportToTs;
 			m_autocalPhase = ACPhase::Start;
 		}
@@ -804,6 +825,9 @@ public:
 						engineConfiguration->tps2Max = convertVoltageTo10bitADC(m_primaryMax);
 						engineConfiguration->tps2SecondaryMin = convertVoltageTo10bitADC(m_secondaryMin);
 						engineConfiguration->tps2SecondaryMax = convertVoltageTo10bitADC(m_secondaryMax);
+					} else if (myFunction == DC_Wastegate) {
+						engineConfiguration->wastegatePositionClosedVoltage = m_primaryMin;
+						engineConfiguration->wastegatePositionOpenedVoltage = m_primaryMax;
 					} else {
 						/* TODO */
 					}
@@ -812,20 +836,29 @@ public:
 
 				// Next: start transmitting results
 				engine->outputChannels.calibrationMode = (uint8_t)functionToCalModePriMax(myFunction);
-				engine->outputChannels.calibrationValue = convertVoltageTo10bitADC(m_primaryMax);
+				if (TBase::isEtbMode())
+					engine->outputChannels.calibrationValue = convertVoltageTo10bitADC(m_primaryMax);
+				else
+					engine->outputChannels.calibrationValue = m_primaryMax;
 				return ACPhase::TransmitPrimaryMax;
 			}
 			break;
 		case ACPhase::TransmitPrimaryMax:
 			if (m_autocalTimer.hasElapsedMs(500)) {
 				engine->outputChannels.calibrationMode = (uint8_t)functionToCalModePriMin(myFunction);
-				engine->outputChannels.calibrationValue = convertVoltageTo10bitADC(m_primaryMin);
+				if (TBase::isEtbMode())
+					engine->outputChannels.calibrationValue = convertVoltageTo10bitADC(m_primaryMin);
+				else
+					engine->outputChannels.calibrationValue = m_primaryMin;
 				return ACPhase::TransmitPrimaryMin;
 			}
 			break;
 		case ACPhase::TransmitPrimaryMin:
 			if (m_autocalTimer.hasElapsedMs(500)) {
 				engine->outputChannels.calibrationMode = (uint8_t)functionToCalModeSecMax(myFunction);
+				// No secondary sensor?
+				if (engine->outputChannels.calibrationMode == (uint8_t)TsCalMode::None)
+					return ACPhase::Stopped;
 				engine->outputChannels.calibrationValue = convertVoltageTo10bitADC(m_secondaryMax);
 				return ACPhase::TransmitSecondaryMax;
 			}
