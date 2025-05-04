@@ -1,0 +1,493 @@
+(kicad_sch
+	(version 20231120)
+	(generator "eeschema")
+	(generator_version "8.0")
+	(uuid "63d2dd9f-d5ff-4811-a88d-0ba932475460")
+	(paper "A3" portrait)
+	(title_block
+		(title "toyota jza80")
+		(date "2024-03-01")
+		(rev "a")
+		(company "rusEFI")
+	)
+	(lib_symbols)
+	(sheet
+		(at 38.1 142.24)
+		(size 43.18 45.72)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "03e819e4-9258-47f3-81fa-91de0968ee0a")
+		(property "Sheetname" "trigger_input"
+			(at 38.1 141.5284 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "trigger_input.kicad_sch"
+			(at 38.1 188.5446 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "11")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 52.07 243.84)
+		(size 36.83 34.29)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "15753c7d-039e-4030-84e8-61934d6ca59e")
+		(property "Sheetname" "analog1"
+			(at 52.07 243.1284 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "analog1.kicad_sch"
+			(at 52.07 278.7146 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "12")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 181.61 187.96)
+		(size 29.21 31.75)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "2648c397-e33a-42b2-9ffb-18122e8fa3a5")
+		(property "Sheetname" "powersupply"
+			(at 181.61 187.2484 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "power_supply.kicad_sch"
+			(at 181.61 220.2946 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(property "Field2" ""
+			(at 181.61 187.96 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "10")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 222.25 250.19)
+		(size 34.29 39.37)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "28abedad-9cc0-4c4c-8d37-7644fd29fd6c")
+		(property "Sheetname" "digital_inputs"
+			(at 222.25 249.4784 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "digital_inputs.kicad_sch"
+			(at 222.25 290.1446 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(property "Field2" ""
+			(at 222.25 250.19 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "14")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 213.36 27.94)
+		(size 26.67 22.86)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "486e5b9f-b6ae-4cb1-a0a3-f91420b1c13e")
+		(property "Sheetname" "injectors"
+			(at 213.36 27.2284 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "injectors.kicad_sch"
+			(at 213.36 51.3846 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "3")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 252.73 59.69)
+		(size 21.59 17.78)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "7cd6bd58-67f2-44da-8601-99270ea8b1a2")
+		(property "Sheetname" "ignition"
+			(at 252.73 58.9784 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "igniton.kicad_sch"
+			(at 252.73 78.0546 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "4")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 146.05 140.97)
+		(size 36.83 29.21)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "838aa878-8db4-445e-8e1c-b58da80db3a8")
+		(property "Sheetname" "main-connector"
+			(at 146.05 140.2584 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "main-connector.kicad_sch"
+			(at 146.05 170.7646 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "8")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 81.28 85.09)
+		(size 33.02 33.02)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "a51e5e8b-c3fa-4414-a340-4a1efeea8fe7")
+		(property "Sheetname" "outputs"
+			(at 81.28 84.3784 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "outputs.kicad_sch"
+			(at 81.28 118.6946 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "9")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 212.09 90.17)
+		(size 24.13 22.86)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "aa0d47bb-9839-4011-807a-f93692b2b51d")
+		(property "Sheetname" "MCU"
+			(at 212.09 89.4584 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "MCU.kicad_sch"
+			(at 212.09 113.6146 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "5")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 83.82 322.58)
+		(size 50.8 50.8)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "b56a86ec-a2b6-4a7b-afa7-58a7a3a23349")
+		(property "Sheetname" "stepper_idle"
+			(at 83.82 321.8684 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "stepper_idle.kicad_sch"
+			(at 83.82 373.9646 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "15")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 154.94 243.84)
+		(size 38.1 35.56)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "b798681c-ec56-4a5d-bf3d-80657a2eb5d7")
+		(property "Sheetname" "analog_aux"
+			(at 154.94 243.1284 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "analog_aux.kicad_sch"
+			(at 154.94 279.9846 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "13")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 157.48 45.72)
+		(size 22.86 27.94)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "de9ed0c1-8bf2-416b-8c64-c9ffd6ad7972")
+		(property "Sheetname" "extras-pins"
+			(at 157.48 45.0084 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "extra-pins.kicad_sch"
+			(at 157.48 74.2446 0)
+			(effects
+				(font
+					(size 1 1)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "speeduino-jza80-pnp"
+				(path "/63d2dd9f-d5ff-4811-a88d-0ba932475460"
+					(page "7")
+				)
+			)
+		)
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+)

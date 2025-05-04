@@ -1217,7 +1217,7 @@ public class VariableRegistryValues {
 	public static final int MAP_UPPER_LIMIT = 650;
 	public static final int MAP_WINDOW_SIZE = 8;
 	public static final int MAX_CYLINDER_COUNT = 12;
-	public static final int MAX_TPS_PPS_DISCREPANCY = 5;
+	public static final int MAX_TPS_PPS_DISCREPANCY = 10;
 	public static final int mc33810maxDwellTimer_e_DWELL_16MS = 3;
 	public static final int mc33810maxDwellTimer_e_DWELL_2MS = 0;
 	public static final int mc33810maxDwellTimer_e_DWELL_32MS = 4;
@@ -1612,7 +1612,11 @@ public class VariableRegistryValues {
 	public static final int TS_RESPONSE_UNDERRUN = 0x80;
 	public static final int TS_RESPONSE_UNRECOGNIZED_COMMAND = 0x83;
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
+<<<<<<< Updated upstream
 	public static final String TS_SIGNATURE = "rusEFI master.2025.05.04.at_start_f435.133992786";
+=======
+	public static final String TS_SIGNATURE = "rusEFI master.2025.05.04.mega100.2797764663";
+>>>>>>> Stashed changes
 	public static final char TS_SIMULATE_CAN = '>';
 	public static final char TS_SINGLE_WRITE_COMMAND = 'W';
 	public static final char TS_TEST_COMMAND = 't';
