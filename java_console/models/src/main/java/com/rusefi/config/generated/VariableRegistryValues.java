@@ -317,6 +317,8 @@ public class VariableRegistryValues {
 	public static final int DEFAULT_SELT_STIM_VVT0 = 23;
 	public static final int DEFAULT_SOLENOID_FREQUENCY = 300;
 	public static final int DIGIPOT_COUNT = 4;
+	public static final int DISPLACEMENT_DIGITS = 3;
+	public static final int DISPLACEMENT_MULTIPLIER = 1;
 	public static final String DISPLACEMENT_TOOLTIP = "Engine displacement in litres";
 	public static final String DISPLACEMENT_UNITS = "L";
 	public static final int display_mode_e_DM_HD44780 = 1;
@@ -1217,7 +1219,7 @@ public class VariableRegistryValues {
 	public static final int MAP_UPPER_LIMIT = 650;
 	public static final int MAP_WINDOW_SIZE = 8;
 	public static final int MAX_CYLINDER_COUNT = 12;
-	public static final int MAX_TPS_PPS_DISCREPANCY = 10;
+	public static final int MAX_TPS_PPS_DISCREPANCY = 5;
 	public static final int mc33810maxDwellTimer_e_DWELL_16MS = 3;
 	public static final int mc33810maxDwellTimer_e_DWELL_2MS = 0;
 	public static final int mc33810maxDwellTimer_e_DWELL_32MS = 4;
@@ -1331,7 +1333,7 @@ public class VariableRegistryValues {
 	public static final int SentInput_INPUT6 = 6;
 	public static final int SentInput_INPUT7 = 7;
 	public static final int SentInput_NONE = 0;
-	public static final int SIGNATURE_HASH = 133992786;
+	public static final int SIGNATURE_HASH = 1075692459;
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME = "generated/simulator_tune_image.bin";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX = "generated/simulator_tune_image";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX = ".bin";
@@ -1612,19 +1614,11 @@ public class VariableRegistryValues {
 	public static final int TS_RESPONSE_UNDERRUN = 0x80;
 	public static final int TS_RESPONSE_UNRECOGNIZED_COMMAND = 0x83;
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-	public static final String TS_SIGNATURE = "rusEFI master.2025.05.04.at_start_f435.133992786";
-=======
-	public static final String TS_SIGNATURE = "rusEFI master.2025.05.04.mega100.2797764663";
->>>>>>> Stashed changes
-=======
-	public static final String TS_SIGNATURE = "rusEFI master.2025.05.04.mega100.2797764663";
->>>>>>> Stashed changes
+	public static final String TS_SIGNATURE = "rusEFI master.2025.05.04.at_start_f435.1075692459";
 	public static final char TS_SIMULATE_CAN = '>';
 	public static final char TS_SINGLE_WRITE_COMMAND = 'W';
 	public static final char TS_TEST_COMMAND = 't';
-	public static final int TS_TOTAL_OUTPUT_SIZE = 1856;
+	public static final int TS_TOTAL_OUTPUT_SIZE = 1880;
 	public static final String TS_TRIGGER_SCOPE_CHANNEL_1_NAME = "Channel 1";
 	public static final String TS_TRIGGER_SCOPE_CHANNEL_2_NAME = "Channel 2";
 	public static final int TS_TRIGGER_SCOPE_DISABLE = 5;
