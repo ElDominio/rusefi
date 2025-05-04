@@ -10,13 +10,12 @@ static OutputPin alphaTempPullUp;
 static OutputPin alphaTachSelPullUp;
 static OutputPin alphaHall1PullUp;
 static OutputPin alphaHall2PullUp;
-static OutputPin alphaHall3PullUp;
-static OutputPin alphaHall4PullUp;
+static OutputPin alphaHall34PullUp;
 
 static void setInjectorPins() {
 	engineConfiguration->injectionPins[0] = Gpio::TLE9104_0_OUT_0;
-	engineConfiguration->injectionPins[1] = Gpio::TLE9104_0_OUT_1;
-	engineConfiguration->injectionPins[2] = Gpio::TLE9104_0_OUT_2;
+	engineConfiguration->injectionPins[1] = Gpio::TLE9104_0_OUT_2;
+	engineConfiguration->injectionPins[2] = Gpio::TLE9104_0_OUT_1;
 	engineConfiguration->injectionPins[3] = Gpio::TLE9104_0_OUT_3;
 }
 
@@ -88,8 +87,8 @@ static const tle9104_config tle9104_cfg[BOARD_TLE9104_COUNT] = {
 		},
 		.direct_io = {
 			{ .port = GPIOD, .pad = 3 }, // INJ1
-			{ .port = GPIOA, .pad = 9 }, // INJ2
 			{ .port = GPIOD, .pad = 11 }, // INJ3
+			{ .port = GPIOA, .pad = 9 }, // INJ2
 			{ .port = GPIOD, .pad = 10 } // INJ4
 		},
 		.resn = Gpio::Unassigned, //Gpio::B14,
@@ -188,10 +187,9 @@ static void board_init_ext_gpios() {
 void boardInitHardware() {
 	alphaTempPullUp.initPin("a-temp", Gpio::MM100_IGN8); //  E6
 	alphaTachSelPullUp.initPin("Tach PullUp", Gpio::MM100_OUT_PWM1);
-	alphaHall1PullUp.initPin("hall1 PullUp", Gpio::MM100_OUT_PWM3);
-	alphaHall2PullUp.initPin("hall2 PullUp", Gpio::MM100_OUT_PWM4);
-	alphaHall3PullUp.initPin("hall3 PullUp", Gpio::MM100_OUT_PWM5);
-	alphaHall4PullUp.initPin("hall4 PullUp", Gpio::MM100_OUT_PWM6);
+	alphaHall1PullUp.initPin("hall1 PullUp", Gpio::MM100_IGN5);
+	alphaHall2PullUp.initPin("hall2 PullUp", Gpio::MM100_IGN6);
+	alphaHall34PullUp.initPin("hall3 PullUp", Gpio::MM100_IGN7);
 	board_init_ext_gpios();
 }
 
@@ -200,25 +198,24 @@ void boardOnConfigurationChange(engine_configuration_s * /*previousConfiguration
 	alphaTachSelPullUp.setValue(engineConfiguration->boardSelTachPullUp);
 	alphaHall1PullUp.setValue(engineConfiguration->boardEnHall1PullUp);
 	alphaHall2PullUp.setValue(engineConfiguration->boardEnHall2PullUp);
-	alphaHall3PullUp.setValue(engineConfiguration->boardEnHall3PullUp);
-	alphaHall4PullUp.setValue(engineConfiguration->boardEnHall4PullUp);
+	alphaHall34PullUp.setValue(engineConfiguration->boardEnHall34PullUp);
 }
 
 static Gpio OUTPUTS[] = {
 	Gpio::TLE9104_0_OUT_3, // 1A - Injector 4
-	Gpio::TLE9104_0_OUT_2, // 2A - Injector 3
-	Gpio::TLE9104_0_OUT_1, // 3A - Injector 2
+	Gpio::TLE9104_0_OUT_1, // 2A - Injector 3
+	Gpio::TLE9104_0_OUT_2, // 3A - Injector 2
 	Gpio::TLE9104_0_OUT_0, // 4A - Injector 1
-	Gpio::TLE9104_1_OUT_0, // 14A - Tach Output
 	Gpio::TLE9104_1_OUT_1, // 5A - Fuel Pump Relay
 	Gpio::TLE9104_1_OUT_2, // 6A - Idle Output
+	Gpio::TLE9104_1_OUT_0, // 14A - Tach Output
 //	Gpio::TLE9104_2_OUT_0, // J10.4 - OUT_VVT1
 //	Gpio::TLE9104_2_OUT_1, // J10.5 - OUT_VVT2
 //	Gpio::TLE9104_2_OUT_3, // J10.2 - OUT_BOOST
+	Gpio::MM100_IGN4,
 	Gpio::MM100_IGN1,
 	Gpio::MM100_IGN2,
 	Gpio::MM100_IGN3,
-	Gpio::MM100_IGN4,
 };
 
 int getBoardMetaOutputsCount() {

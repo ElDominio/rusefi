@@ -40,25 +40,12 @@ char * efiTrim(char *param) {
 	while (param[0] == ' ') {
 		param++; // that would skip leading spaces
 	}
-	int len = efiStrlen(param);
+	int len = std::strlen(param);
 	while (len > 0 && param[len - 1] == ' ') {
 		param[len - 1] = 0;
 		len--;
 	}
 	return param;
-}
-
-bool startsWith(const char *line, const char *prefix) {
-	uint32_t len = efiStrlen(prefix);
-	if (efiStrlen(line) < len) {
-		return false;
-	}
-	for (uint32_t i = 0; i < len; i++) {
-		if (line[i] != prefix[i]) {
-			return false;
-		}
-	}
-	return true;
 }
 
 static char *ltoa_internal(char *p, uint32_t num, unsigned radix) {
