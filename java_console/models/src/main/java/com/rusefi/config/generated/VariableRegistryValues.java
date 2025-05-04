@@ -1613,7 +1613,11 @@ public class VariableRegistryValues {
 	public static final int TS_RESPONSE_UNRECOGNIZED_COMMAND = 0x83;
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 	public static final String TS_SIGNATURE = "rusEFI master.2025.05.04.at_start_f435.133992786";
+=======
+	public static final String TS_SIGNATURE = "rusEFI master.2025.05.04.mega100.2797764663";
+>>>>>>> Stashed changes
 =======
 	public static final String TS_SIGNATURE = "rusEFI master.2025.05.04.mega100.2797764663";
 >>>>>>> Stashed changes
