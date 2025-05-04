@@ -572,7 +572,7 @@ ThermistorConf iat;
 #define DISPLACEMENT_UNITS "L"
 #define DISPLACEMENT_TOOLTIP "Engine displacement in litres"
 #define DISPLACEMENT_MULTIPLIER 0.001
-uint16_t autoscale displacement;@@DISPLACEMENT_TOOLTIP@@;@@DISPLACEMENT_UNITS@@, @@DISPLACEMENT_MULTIPLIER@@, 0, 0, 65, 3
+float autoscale displacement;@@DISPLACEMENT_TOOLTIP@@;@@DISPLACEMENT_UNITS@@, @@DISPLACEMENT_MULTIPLIER@@, 0, 0, 65, 3
 
 uint16_t triggerSimulatorRpm;;"RPM", 1, 0, 0, 30000, 0
 
