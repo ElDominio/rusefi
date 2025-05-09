@@ -125,6 +125,8 @@ PUBLIC_API_WEAK bool boardIsSpecialVvtDecoder(vvt_mode_e vvtMode) {
   return false;
 }
 
+PUBLIC_API_WEAK void boardTriggerCallback(efitick_t timestamp, float currentPhase) {}
+
 static bool vvtWithRealDecoder(vvt_mode_e vvtMode) {
 	return vvtMode != VVT_INACTIVE
 			&& vvtMode != VVT_TOYOTA_3_TOOTH /* VVT_2JZ is an unusual 3/0 missed tooth symmetrical wheel */
@@ -656,16 +658,14 @@ bool TriggerNoiseFilter::noiseFilter(efitick_t nowNt,
 	return false;
 }
 
-void TriggerCentral::decodeMapCam(efitick_t timestamp, float currentPhase) {
-    isDecodingMapCam = engineConfiguration->vvtMode[0] == VVT_MAP_V_TWIN &&
-                       			Sensor::getOrZero(SensorType::Rpm) < engineConfiguration->cranking.rpm;
-	if (isDecodingMapCam) {
+bool TriggerCentral::isMapCamSync(efitick_t timestamp, float currentPhase) {
 		// we are trying to figure out which 360 half of the total 720 degree cycle is which, so we compare those in 360 degree sense.
 		auto toothAngle360 = currentPhase;
 		while (toothAngle360 >= 360) {
 			toothAngle360 -= 360;
 		}
 
+    bool result;
 		if (mapCamPrevToothAngle < engineConfiguration->mapCamDetectionAnglePosition && toothAngle360 > engineConfiguration->mapCamDetectionAnglePosition) {
 			// we are somewhere close to 'mapCamDetectionAnglePosition'
 
@@ -681,7 +681,26 @@ void TriggerCentral::decodeMapCam(efitick_t timestamp, float currentPhase) {
 				int revolutionCounter = getTriggerCentral()->triggerState.getSynchronizationCounter();
 				mapVvt_MAP_AT_CYCLE_COUNT = revolutionCounter - prevChangeAtCycle;
 				prevChangeAtCycle = revolutionCounter;
+				result = true;
+			} else {
+				result = false;
+			}
 
+			mapVvt_MAP_AT_SPECIAL_POINT = map;
+			mapVvt_MAP_AT_DIFF = instantMapDiffBetweenReadoutAngles;
+		} else {
+			result = false;
+		}
+
+		mapCamPrevToothAngle = toothAngle360;
+		return result;
+}
+
+void TriggerCentral::decodeMapCam(efitick_t timestamp, float currentPhase) {
+    isDecodingMapCam = engineConfiguration->vvtMode[0] == VVT_MAP_V_TWIN &&
+                       			Sensor::getOrZero(SensorType::Rpm) < engineConfiguration->cranking.rpm;
+	if (isDecodingMapCam) {
+	  if (isMapCamSync(timestamp, currentPhase)) {
 				hwHandleVvtCamSignal(TriggerValue::RISE, timestamp, /*index*/0);
 				hwHandleVvtCamSignal(TriggerValue::FALL, timestamp, /*index*/0);
 #if EFI_UNIT_TEST
@@ -689,13 +708,7 @@ void TriggerCentral::decodeMapCam(efitick_t timestamp, float currentPhase) {
 				// but current implementation which is based on periodicFastCallback would only make result available on NEXT tooth
 				getLimpManager()->onFastCallback();
 #endif // EFI_UNIT_TEST
-			}
-
-			mapVvt_MAP_AT_SPECIAL_POINT = map;
-			mapVvt_MAP_AT_DIFF = instantMapDiffBetweenReadoutAngles;
-		}
-
-		mapCamPrevToothAngle = toothAngle360;
+	  }
 	}
 }
 
@@ -896,6 +909,8 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 
 		// Decode the MAP based "cam" sensor
 		decodeMapCam(timestamp, currentEngineDecodedPhase);
+
+		boardTriggerCallback(timestamp, currentEngineDecodedPhase);
 	} else {
 		// We don't have sync, but report to the wave chart anyway as index 0.
 		reportEventToWaveChart(signal, 0, triggerShape.useOnlyRisingEdges);

@@ -54,6 +54,7 @@ public class TuneCanTool {
     // IDE and GHA run from different working folders :(
     // see write_tune.sh for env variable to property mapping
     static final String ENGINE_TUNE_OUTPUT_FOLDER = System.getProperty("ENGINE_TUNE_OUTPUT_FOLDER", "../simulator/generated/");
+    private static String boardPath = "config/boards/hellen/uaefi/";
 
     protected static IniFileModel ini;
 
@@ -183,10 +184,31 @@ public class TuneCanTool {
         return value.replaceAll("\\s+", " ").trim();
     }
 
+    public static String getParentReference(ConfigField cf, StringBuffer cName) {
+    	  String parentReference;
+          if (cf.getParentStructureType().getName().equals(MetaHelper.ENGINE_CONFIGURATION_S)) {
+              parentReference = "engineConfiguration->";
+          } else if (cf.getParentStructureType().getName().equals(MetaHelper.PERSISTENT_CONFIG_S)) {
+              parentReference = "config->";
+          } else {
+              String path = getPath(cf.getParentStructureType());
+              parentReference = path + cName;
+          }
+          return parentReference;
+    }
+
+    // same logic as getTunePatch, used for testing getParentReference
+    public static ConfigField getReaderState(String fieldName) throws IOException {
+    	ReaderStateImpl state = MetaHelper.getReaderState(boardPath);
+    	StringBuffer context = new StringBuffer();
+    	ConfigField cf = MetaHelper.findField(state, fieldName, context);
+		return cf;
+    }
+
     @NotNull
     public static StringBuilder getTunePatch(Msq defaultTune, Msq customTune, IniFileModel ini, String customTuneFileName, StringBuilder methods, String defaultTuneFileName, String methodNamePrefix) throws IOException {
         Objects.requireNonNull(ini, "ini");
-        ReaderStateImpl state = MetaHelper.getReaderState();
+        ReaderStateImpl state = MetaHelper.getReaderState(boardPath);
 
         StringBuilder invokeMethods = new StringBuilder();
 
@@ -220,7 +242,7 @@ public class TuneCanTool {
             // nasty: context is a return parameter
             ConfigField cf = MetaHelper.findField(state, fieldName, context);
             if (cf == null) {
-                log.info("Not found " + fieldName);
+                log.info("ConfigField Not found " + fieldName);
                 continue;
             }
             if (TypesHelper.isFloat(cf.getTypeName()) && !cf.isArray()) {
@@ -231,7 +253,10 @@ public class TuneCanTool {
                     continue;
                 }
             }
+
             String cName = context + cf.getOriginalArrayName();
+            String parentReference = getParentReference(cf, new StringBuffer());
+
             if (TuneCanToolHelper.IGNORE_LIST.contains(cName)) {
                 log.info("Ignoring " + cName);
                 continue;
@@ -242,21 +267,14 @@ public class TuneCanTool {
             }
 
             if (cf.getTypeName().equals("boolean")) {
-                sb.append(TuneTools.getAssignmentCode(defaultValue, cName, unquote(customValue.getValue())));
+            	Boolean configFieldState = unquote(cf.getTrueName()).equals(unquote(customValue.getValue()));
+
+                sb.append(TuneTools.getAssignmentCode(defaultValue, parentReference, cName, configFieldState.toString()));
                 continue;
             }
 
             if (cf.isArray()) {
-                String parentReference;
-                if (cf.getParentStructureType().getName().equals(MetaHelper.ENGINE_CONFIGURATION_S)) {
-                    parentReference = "engineConfiguration->";
-                } else if (cf.getParentStructureType().getName().equals(MetaHelper.PERSISTENT_CONFIG_S)) {
-                    parentReference = "config->";
-                } else {
-                    // todo: unit test?
-                    String path = getPath(cf.getParentStructureType());
-                    parentReference = path + ".";
-                }
+            	parentReference = getParentReference(cf, context);
 
                 if (cf.getArraySizes().length == 2) {
                     TableResult result = getHandleTable(ini, customTuneFileName, defaultTuneFileName, methodNamePrefix, fieldName, cf, parentReference);
@@ -270,7 +288,8 @@ public class TuneCanTool {
                 }
 
                 CurveData data = CurveData.valueOf(customTuneFileName, fieldName, ini);
-                String customContent = handleCurve(ini, defaultTuneFileName, methodNamePrefix, data, parentReference, cName, fieldName);
+                // see #7832 for reason of use cf.getName() instated of getOriginalArrayName()
+                String customContent = handleCurve(ini, defaultTuneFileName, methodNamePrefix, data, parentReference, cf.getName(), fieldName);
                 if (customContent == null)
                     continue;
 
@@ -305,7 +324,7 @@ public class TuneCanTool {
                 log.info(cf + " " + sourceCodeEnum + " " + customEnum + " " + ordinal);
 
                 String sourceCodeValue = sourceCodeEnum.findByValue(ordinal);
-                sb.append(TuneTools.getAssignmentCode(defaultValue, cName, sourceCodeValue));
+                sb.append(TuneTools.getAssignmentCode(defaultValue, parentReference, cName, sourceCodeValue));
 
                 continue;
             }
@@ -313,9 +332,9 @@ public class TuneCanTool {
             int intValue = (int) doubleValue;
             boolean isInteger = intValue == doubleValue;
             if (isInteger) {
-                sb.append(TuneTools.getAssignmentCode(defaultValue, cName, Integer.toString(intValue)));
+                sb.append(TuneTools.getAssignmentCode(defaultValue, parentReference, cName, Integer.toString(intValue)));
             } else {
-                sb.append(TuneTools.getAssignmentCode(defaultValue, cName, niceToString(doubleValue)));
+                sb.append(TuneTools.getAssignmentCode(defaultValue, parentReference, cName, niceToString(doubleValue)));
             }
 
         }
@@ -330,12 +349,13 @@ public class TuneCanTool {
             log.info(" " + fieldName);
             return null;
         }
-        log.info("Handling table " + fieldName + " with " + cf.autoscaleSpecPair());
+        log.info("Handling table " + fieldName + ", C table name:" + parentReference + cf.getName() + " with " + cf.autoscaleSpecPair());
 
-        String customContent = tableData.getCsourceMethod(parentReference, methodNamePrefix, tableData.getName());
+        // usage of cf.getName() instead of tableData.getName() since TS tables and C tables differ on naming (ie gppwm1_table vs gppwm[0].table)
+        String customContent = tableData.getCsourceMethod(parentReference, methodNamePrefix, cf.getName());
         if (defaultTuneFileName != null) {
             TableData defaultTableData = TableData.readTable(defaultTuneFileName, fieldName, ini);
-            String defaultContent = defaultTableData.getCsourceMethod(parentReference, methodNamePrefix, defaultTableData.getName());
+            String defaultContent = defaultTableData.getCsourceMethod(parentReference, methodNamePrefix, cf.getName());
             if (defaultContent.equals(customContent)) {
                 log.info("Table " + fieldName + " matches default content");
                 return null;
@@ -410,7 +430,7 @@ public class TuneCanTool {
         } else {
             throw new IllegalStateException("Unexpected grandParentName " + grandFather);
         }
-        return grandParentName + configField.getOriginalArrayName();
+        return grandParentName;
     }
 
     private final static Set<String> HARDWARE_PROPERTIES = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);

@@ -266,7 +266,7 @@ static void setCommonMazdaNB() {
 
 	// Cranking
 	engineConfiguration->ignitionDwellForCrankingMs = 4;
-	engineConfiguration->cranking.baseFuel = 27.5; // this value for return-less NB miata fuel system, higher pressure
+	setTable(config->crankingCycleBaseFuel, 27.5); // this value for return-less NB miata fuel system, higher pressure
 	engineConfiguration->cranking.rpm = 400;
 	setArrayValues(config->cltCrankingCorr, 60);
 	setArrayValues(config->afterCrankingIACtaperDuration, 250);

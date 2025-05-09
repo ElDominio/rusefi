@@ -16,6 +16,7 @@
 #include "can_msg_tx.h"
 #include "can_bmw.h"
 #include "can_vag.h"
+#include "can_dash_honda.h"
 
 #include "rusefi_types.h"
 #include "rtc_helper.h"
@@ -46,9 +47,6 @@
 #define E90_FUEL             0x349
 #define E90_EBRAKE           0x34F
 #define E90_TIME             0x39E
-
-#define HONDA_SPEED_158 0x158
-#define HONDA_TACH_1DC 0x1DC
 
 static time_msecs_t mph_timer;
 static time_msecs_t mph_ctr;
@@ -1206,6 +1204,9 @@ void updateDash(CanCycle cycle) {
 		break;
 	case CAN_BUS_GENESIS_COUPE:
 		canDashboardGenesisCoupe(cycle);
+		break;
+    case CAN_BUS_HONDA_K:
+		canDashboardHondaK(cycle);
 		break;
 	case CAN_AIM_DASH:
 		canDashboardAim(cycle);
