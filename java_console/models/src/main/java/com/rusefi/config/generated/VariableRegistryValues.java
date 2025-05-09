@@ -191,7 +191,7 @@ public class VariableRegistryValues {
 	public static final int CLT_IDLE_TABLE_RPM_SIZE = 2;
 	public static final int CLT_LIMITER_CURVE_SIZE = 4;
 	public static final int CLT_TIMING_CURVE_SIZE = 5;
-	public static final int CLT_UPPER_LIMIT = 250;
+	public static final int CLT_UPPER_LIMIT = 125;
 	public static final String CMD_AC_RELAY_BENCH = "acrelaybench";
 	public static final String CMD_ALTERNATOR_PIN = "set_alternator_pin";
 	public static final String CMD_BOOST_PIN = "set_boost_pin";
@@ -1211,7 +1211,7 @@ public class VariableRegistryValues {
 	public static final int maf_sensor_type_e_Bosch0280218037 = 1;
 	public static final int maf_sensor_type_e_CUSTOM = 0;
 	public static final int maf_sensor_type_e_DensoTODO = 3;
-	public static final String MAIN_HELP_URL = "http://www.rusefi.com/";
+	public static final String MAIN_HELP_URL = "https://rusefi.com/s/hellen154hyuindai";
 	public static final int MAP_ANGLE_SIZE = 8;
 	public static final int MAP_EST_LOAD_COUNT = 16;
 	public static final int MAP_EST_RPM_COUNT = 16;
@@ -1219,7 +1219,7 @@ public class VariableRegistryValues {
 	public static final int MAP_UPPER_LIMIT = 650;
 	public static final int MAP_WINDOW_SIZE = 8;
 	public static final int MAX_CYLINDER_COUNT = 12;
-	public static final int MAX_TPS_PPS_DISCREPANCY = 10;
+	public static final int MAX_TPS_PPS_DISCREPANCY = 5;
 	public static final int mc33810maxDwellTimer_e_DWELL_16MS = 3;
 	public static final int mc33810maxDwellTimer_e_DWELL_2MS = 0;
 	public static final int mc33810maxDwellTimer_e_DWELL_32MS = 4;
@@ -1333,7 +1333,7 @@ public class VariableRegistryValues {
 	public static final int SentInput_INPUT6 = 6;
 	public static final int SentInput_INPUT7 = 7;
 	public static final int SentInput_NONE = 0;
-	public static final int SIGNATURE_HASH = 1675872862;
+	public static final int SIGNATURE_HASH = 930898772;
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME = "generated/simulator_tune_image.bin";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX = "generated/simulator_tune_image";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX = ".bin";
@@ -1614,7 +1614,7 @@ public class VariableRegistryValues {
 	public static final int TS_RESPONSE_UNDERRUN = 0x80;
 	public static final int TS_RESPONSE_UNRECOGNIZED_COMMAND = 0x83;
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
-	public static final String TS_SIGNATURE = "rusEFI master.2025.05.05.mega100.1675872862";
+	public static final String TS_SIGNATURE = "rusEFI master.2025.05.09.hellen154hyundai.930898772";
 	public static final char TS_SIMULATE_CAN = '>';
 	public static final char TS_SINGLE_WRITE_COMMAND = 'W';
 	public static final char TS_TEST_COMMAND = 't';
