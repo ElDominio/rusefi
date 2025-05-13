@@ -34,7 +34,7 @@ static void setupDefaultSensorInputs() {
 
     engineConfiguration->vehicleSpeedSensorInputPin = Gpio::H144_IN_VSS;
 
-	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1);
+	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1_ANALOG);
 
 	setPPSInputs(EFI_ADC_3, EFI_ADC_14);
 
@@ -49,7 +49,7 @@ static void setupDefaultSensorInputs() {
 
 
 
-static bool isFirstInvocation = true;
+//static bool isFirstInvocation = true;
 
 /*PUBLIC_API_WEAK*/ int hackHellenBoardId(int detectedId) {
   if (detectedId == BOARD_ID_VAG121_D) {
@@ -58,7 +58,7 @@ static bool isFirstInvocation = true;
   }
   return detectedId;
 }
-
+/*
 void setBoardConfigOverrides() {
 	setHellenVbatt();
 
@@ -124,7 +124,7 @@ void setBoardConfigOverrides() {
 	   	// Disable pin
 	   	engineConfiguration->etbIo[1].disablePin = Gpio::H144_OUT_IO13;
     }
-}
+}*/
 
 /**
  * @brief   Board-specific configuration defaults.
@@ -154,7 +154,7 @@ void setBoardDefaultConfiguration() {
 	setupDefaultSensorInputs();
 
 	engineConfiguration->etbFunctions[1] = DC_Wastegate;
-}
+}/*
 
 static Gpio OUTPUTS[] = {
 	Gpio::H144_LS_1, // 0: INJ_1 k25
@@ -176,8 +176,8 @@ static Gpio OUTPUTS[] = {
 	Gpio::H144_OUT_PWM8, // MIL
 //	QC procedure seems to not work for that one Gpio::H144_OUT_PWM7, // low side? Tacho unused CAN tachometer right?
 //	Gpio::H_SPI1_SCK, // X8 AuxLS1
-};
-
+};*/
+/*
 int getBoardMetaOutputsCount() {
     return efi::size(OUTPUTS);
 }
@@ -193,3 +193,4 @@ int getBoardMetaDcOutputsCount() {
 Gpio* getBoardMetaOutputs() {
     return OUTPUTS;
 }
+*/
