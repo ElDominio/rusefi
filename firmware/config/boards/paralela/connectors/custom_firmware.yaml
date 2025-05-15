@@ -170,8 +170,8 @@ pins:
     class: [outputs, switch_inputs, event_inputs]
     ts_name: Injector 8 (PD13)
 
-  - id: [D14, D14]
-    class: [outputs, switch_inputs]
+  - id: [D14, D14, D14]
+    class: [outputs, switch_inputs, event_inputs]
     ts_name: Threshold (PD14)
 
   - id: [E11, E11, E11]
