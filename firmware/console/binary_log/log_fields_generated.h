@@ -429,6 +429,7 @@ static const LogField fields[] = {
 	{engine->outputChannels.fastAdcLastError, "ECU: Fast ADC error type", "", 0},
 	{engine->outputChannels.fastAdcPeriod, "ECU: Fast ADC period", "ticks", 0},
 	{engine->outputChannels.fastAdcConversionCount, "ECU: Fast ADC conversions", "N", 0},
+	{engine->outputChannels, 836, 0, "isMapAveraging", ""},
 #if EFI_ENGINE_CONTROL
 	{engine->fuelComputer.totalFuelCorrection, "Fuel: Total correction", "mult", 2, "Fuel: math"},
 #endif
@@ -794,6 +795,15 @@ static const LogField fields[] = {
 	{engine->triggerCentral.mapVvt_sync_counter, "Instant MAP sync counter", "counter", 0},
 #endif
 #if EFI_SHAFT_POSITION_INPUT
+	{engine->triggerCentral.mapVvt_min_point_counter, "mapVvt_min_point_counter", "", 0},
+#endif
+#if EFI_SHAFT_POSITION_INPUT
+	{engine->triggerCentral.temp_mapVvt_index, "temp_mapVvt_index", "", 0},
+#endif
+#if EFI_SHAFT_POSITION_INPUT
+	{engine->triggerCentral.mapVvt_CycleDelta, "mapVvt_CycleDelta", "", 0},
+#endif
+#if EFI_SHAFT_POSITION_INPUT
 	{engine->triggerCentral.currentEngineDecodedPhase, "Sync: Engine Phase", "deg", 0, "Sync"},
 #endif
 #if EFI_SHAFT_POSITION_INPUT
@@ -806,7 +816,7 @@ static const LogField fields[] = {
 	{engine->triggerCentral.mapCamPrevToothAngle, "Sync: MAP: prev angle", "deg", 2},
 #endif
 #if EFI_SHAFT_POSITION_INPUT
-	{engine->triggerCentral, 40, 0, "isDecodingMapCam", ""},
+	{engine->triggerCentral, 48, 0, "isDecodingMapCam", ""},
 #endif
 #if EFI_SHAFT_POSITION_INPUT
 	{engine->triggerCentral.triggerElapsedUs, "triggerElapsedUs", "", 0},
@@ -839,6 +849,9 @@ static const LogField fields[] = {
 	{engine->triggerCentral.triggerState.triggerStateIndex, "trgtriggerStateIndex", "", 0},
 #endif
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+	{engine->triggerCentral.triggerState.triggerCountersError, "trgtriggerCountersError", "", 0},
+#endif
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 	{engine->triggerCentral.vvtState[0][0].synchronizationCounter, "vvt1isync: wheel sync counter", "", 0},
 #endif
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
@@ -864,6 +877,9 @@ static const LogField fields[] = {
 #endif
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 	{engine->triggerCentral.vvtState[0][0].triggerStateIndex, "vvt1itriggerStateIndex", "", 0},
+#endif
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+	{engine->triggerCentral.vvtState[0][0].triggerCountersError, "vvt1itriggerCountersError", "", 0},
 #endif
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 	{engine->triggerCentral.vvtState[0][1].synchronizationCounter, "vvt1esync: wheel sync counter", "", 0},
@@ -893,6 +909,9 @@ static const LogField fields[] = {
 	{engine->triggerCentral.vvtState[0][1].triggerStateIndex, "vvt1etriggerStateIndex", "", 0},
 #endif
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+	{engine->triggerCentral.vvtState[0][1].triggerCountersError, "vvt1etriggerCountersError", "", 0},
+#endif
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 	{engine->triggerCentral.vvtState[1][0].synchronizationCounter, "vvt2isync: wheel sync counter", "", 0},
 #endif
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
@@ -920,6 +939,9 @@ static const LogField fields[] = {
 	{engine->triggerCentral.vvtState[1][0].triggerStateIndex, "vvt2itriggerStateIndex", "", 0},
 #endif
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+	{engine->triggerCentral.vvtState[1][0].triggerCountersError, "vvt2itriggerCountersError", "", 0},
+#endif
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 	{engine->triggerCentral.vvtState[1][1].synchronizationCounter, "vvt2esync: wheel sync counter", "", 0},
 #endif
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
@@ -945,6 +967,9 @@ static const LogField fields[] = {
 #endif
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 	{engine->triggerCentral.vvtState[1][1].triggerStateIndex, "vvt2etriggerStateIndex", "", 0},
+#endif
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+	{engine->triggerCentral.vvtState[1][1].triggerCountersError, "vvt2etriggerCountersError", "", 0},
 #endif
 #if EFI_PROD_CODE && EFI_IDLE_CONTROL
 	{engine->module<IdleController>().unmock().baseIdlePosition, "idle: base value", "", 0},
@@ -1037,6 +1062,9 @@ static const LogField fields[] = {
 	{getLiveData<electronic_throttle_s>(0)->trim, "etb1ETB: trim", "", 0},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+	{getLiveData<electronic_throttle_s>(0)->boardEtbAdjustment, "etb1boardEtbAdjustment", "", 0},
+#endif
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(0)->luaAdjustment, "etb1ETB: luaAdjustment", "%", 2, "ETB more"},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
@@ -1058,13 +1086,13 @@ static const LogField fields[] = {
 	{getLiveData<electronic_throttle_s>(0)->m_adjustedTarget, "etb1Adjusted target", "%", 2},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(0), 36, 0, "etb1etbRevLimitActive", ""},
+	{*getLiveData<electronic_throttle_s>(0), 40, 0, "etb1etbRevLimitActive", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(0), 36, 1, "etb1jamDetected", ""},
+	{*getLiveData<electronic_throttle_s>(0), 40, 1, "etb1jamDetected", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(0), 36, 2, "etb1validPlantPosition", ""},
+	{*getLiveData<electronic_throttle_s>(0), 40, 2, "etb1validPlantPosition", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(0)->etbTpsErrorCounter, "etb1ETB TPS error counter", "count", 0, "ETB more"},
@@ -1097,6 +1125,9 @@ static const LogField fields[] = {
 	{getLiveData<electronic_throttle_s>(1)->trim, "etb2ETB: trim", "", 0},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+	{getLiveData<electronic_throttle_s>(1)->boardEtbAdjustment, "etb2boardEtbAdjustment", "", 0},
+#endif
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(1)->luaAdjustment, "etb2ETB: luaAdjustment", "%", 2, "ETB more"},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
@@ -1118,13 +1149,13 @@ static const LogField fields[] = {
 	{getLiveData<electronic_throttle_s>(1)->m_adjustedTarget, "etb2Adjusted target", "%", 2},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(1), 36, 0, "etb2etbRevLimitActive", ""},
+	{*getLiveData<electronic_throttle_s>(1), 40, 0, "etb2etbRevLimitActive", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(1), 36, 1, "etb2jamDetected", ""},
+	{*getLiveData<electronic_throttle_s>(1), 40, 1, "etb2jamDetected", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
-	{*getLiveData<electronic_throttle_s>(1), 36, 2, "etb2validPlantPosition", ""},
+	{*getLiveData<electronic_throttle_s>(1), 40, 2, "etb2validPlantPosition", ""},
 #endif
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 	{getLiveData<electronic_throttle_s>(1)->etbTpsErrorCounter, "etb2ETB TPS error counter", "count", 0, "ETB more"},

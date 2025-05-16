@@ -480,9 +480,9 @@ void commonInitEngineController() {
 #endif /* EFI_ELECTRONIC_THROTTLE_BODY */
 
 #if EFI_MAP_AVERAGING && defined (MODULE_MAP_AVERAGING)
-	if (engineConfiguration->isMapAveragingEnabled) {
-		initMapAveraging();
-	}
+	engine->module<MapAveragingModule>()->init();
+#else
+	efiPrintf("No MapAveraging support!");
 #endif /* EFI_MAP_AVERAGING */
 
 #if EFI_BOOST_CONTROL

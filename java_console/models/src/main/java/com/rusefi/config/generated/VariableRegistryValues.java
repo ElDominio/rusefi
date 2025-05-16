@@ -318,6 +318,7 @@ public class VariableRegistryValues {
 	public static final int DEFAULT_SOLENOID_FREQUENCY = 300;
 	public static final int DIGIPOT_COUNT = 4;
 	public static final int DISPLACEMENT_DIGITS = 3;
+	public static final int DISPLACEMENT_MAX = 65;
 	public static final int DISPLACEMENT_MULTIPLIER = 1;
 	public static final String DISPLACEMENT_TOOLTIP = "Engine displacement in litres";
 	public static final String DISPLACEMENT_UNITS = "L";
@@ -1616,11 +1617,19 @@ public class VariableRegistryValues {
 	public static final int TS_RESPONSE_UNDERRUN = 0x80;
 	public static final int TS_RESPONSE_UNRECOGNIZED_COMMAND = 0x83;
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
+<<<<<<< HEAD
 	public static final String TS_SIGNATURE = "rusEFI master.2025.05.13.hellen154hyundai.701172752";
 	public static final char TS_SIMULATE_CAN = '>';
 	public static final char TS_SINGLE_WRITE_COMMAND = 'W';
 	public static final char TS_TEST_COMMAND = 't';
 	public static final int TS_TOTAL_OUTPUT_SIZE = 1876;
+=======
+	public static final String TS_SIGNATURE = "rusEFI master.2025.05.16.frankenso_na6.2779973844";
+	public static final char TS_SIMULATE_CAN = '>';
+	public static final char TS_SINGLE_WRITE_COMMAND = 'W';
+	public static final char TS_TEST_COMMAND = 't';
+	public static final int TS_TOTAL_OUTPUT_SIZE = 1868;
+>>>>>>> upstream/master
 	public static final String TS_TRIGGER_SCOPE_CHANNEL_1_NAME = "Channel 1";
 	public static final String TS_TRIGGER_SCOPE_CHANNEL_2_NAME = "Channel 2";
 	public static final int TS_TRIGGER_SCOPE_DISABLE = 5;

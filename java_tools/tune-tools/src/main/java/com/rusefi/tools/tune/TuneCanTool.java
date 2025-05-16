@@ -50,11 +50,11 @@ public class TuneCanTool {
     public static final String TUNE_FILE_SUFFIX = ".msq";
     public static final String DEFAULT_TUNE = SIMULATED_PREFIX + TUNE_FILE_SUFFIX;
     private static final String workingFolder = "downloaded_tunes";
-    public static final String MD_FIXED_FORMATTING = "```\n";
+    public static final String MD_FIXED_FORMATTING = ""; // in reality we do not care for .md? "```\n";
     // IDE and GHA run from different working folders :(
     // see write_tune.sh for env variable to property mapping
     static final String ENGINE_TUNE_OUTPUT_FOLDER = System.getProperty("ENGINE_TUNE_OUTPUT_FOLDER", "../simulator/generated/");
-    private static String boardPath = "config/boards/hellen/uaefi/";
+    public static String boardPath = "config/boards/hellen/uaefi/";
 
     protected static IniFileModel ini;
 
@@ -147,11 +147,13 @@ public class TuneCanTool {
         log.info("Writing to " + outputFile.getAbsolutePath());
 
         try (FileWriter w = new FileWriter(outputFile)) {
-            w.append("# " + vehicleName + "\n\n");
+            w.append("static void defaults" + methodNamePrefix + "() {\n");
             w.append("// canned tune " + cannedComment + "\n\n");
+            w.append("// canned tune " + vehicleName + "\n\n");
 
             w.append(MD_FIXED_FORMATTING);
             w.append(sb);
+            w.append("}\n");
             w.append(MD_FIXED_FORMATTING);
         }
         log.info("Done writing to " + outputFile.getAbsolutePath() + "!");
@@ -257,6 +259,10 @@ public class TuneCanTool {
             String cName = context + cf.getOriginalArrayName();
             String parentReference = getParentReference(cf, new StringBuffer());
 
+            if (cf.getIterateOriginalName() != null && TuneCanToolHelper.IGNORE_LIST.contains(cf.getIterateOriginalName())) {
+                log.info("Ignoring " + cName);
+                continue;
+            }
             if (TuneCanToolHelper.IGNORE_LIST.contains(cName)) {
                 log.info("Ignoring " + cName);
                 continue;

@@ -201,6 +201,7 @@ struct_no_prefix engine_configuration_s
 #define VVT_OFFSET_1_1_NAME "VVT offset bank 1 intake"
 #define GEAR_DETECTION_DIALOG_NAME "Gear Detection"
 #define ts_show_final_ratio true
+#define ts_show_gasoline_scale true
 #define ts_show_crankingTpsCurve true
 #define ts_show_etb_frequency true
 #define ENGINE_TYPES_DIALOG_NAME "Popular vehicles"
@@ -572,7 +573,8 @@ ThermistorConf iat;
 #define DISPLACEMENT_TOOLTIP "Engine displacement in litres"
 #define DISPLACEMENT_MULTIPLIER 1
 #define DISPLACEMENT_DIGITS 3
-float displacement;@@DISPLACEMENT_TOOLTIP@@;@@DISPLACEMENT_UNITS@@, @@DISPLACEMENT_MULTIPLIER@@, 0, 0, 65, @@DISPLACEMENT_DIGITS@@
+#define DISPLACEMENT_MAX 65
+float displacement;@@DISPLACEMENT_TOOLTIP@@;@@DISPLACEMENT_UNITS@@, @@DISPLACEMENT_MULTIPLIER@@, 0, 0, @@DISPLACEMENT_MAX@@, @@DISPLACEMENT_DIGITS@@
 
 uint16_t triggerSimulatorRpm;;"RPM", 1, 0, 0, 30000, 0
 
@@ -609,6 +611,7 @@ uint32_t cylindersCount;Number of cylinder the engine has.;"", 1, 0, 1, @@MAX_CY
 #define ts_show_tsp_pps_limits true
 #define ts_show_sent true
 #define ts_show_oil_sensors true
+#define ts_show_analog_o2 true
 
 custom firing_order_e 1 bits, U08, @OFFSET@, [0:6], "One Cylinder", "1-3-4-2", "1-2-4-3", "1-3-2-4", "1-5-3-6-2-4", "1-8-4-3-6-5-7-2", "1-2-4-5-3", "1-4-2-5-3-6", "1-2", "1-2-3-4-5-6", "1-2-3", "1-8-7-2-6-5-4-3", "1-5-4-2-6-3-7-8 Mustang", "1-6-3-2-5-4", "1-10-9-4-3-6-5-8-7_2", "1-7-5-11-3-9-6-12-2-8-4-10", "1-7-4-10-2-8-6-12-3-9-5-11", "1-4-3-2", "1-12-5-8-3-10-6-7-2-11-4-9", "1-2-7-8-4-5-6-3", "1-3-7-2-6-5-4-8 HO", "1-2-3-4-5-6-7-8-9", "INVALID", "1-2-3-4-5-6-7-8-9-10-11-12", "1-3-2", "1-2-3-4-5-6-7-8", "1-5-4-8-6-3-7-2", "1-4-3-6-2-5", "1-8-7-3-6-5-4-2", "1-6-2-4-3-5", "1-6-5-4-3-2", "1-4-5-2-3-6", "1-5-4-8-3-7-2-6 Voodoo", "1-6-5-10-2-7-3-8-4-9", "1-8-6-2-7-3-4-5 F136", "fo35", "fo36", "fo37"
 firing_order_e firingOrder;
@@ -1118,7 +1121,7 @@ custom idle_mode_e 1 bits, U08, @OFFSET@, [0:0], "Open Loop + Closed Loop", "Ope
 	bit isWaveAnalyzerEnabled
 	bit useSeparateVeForIdle;This activates a separate fuel table for Idle, this allows fine tuning of the idle fuelling.
 	bit verboseTriggerSynchDetails;Verbose info in console below engineSnifferRpmThreshold
-	bit etbUsePreciseTiming;Measure actual dt for PID instead of pre-defined
+	bit unusedBitsd23413421
 	bit hondaK
 	bit twoWireBatchIgnition;This is needed if your coils are individually wired (COP) and you wish to use batch ignition (Wasted Spark).
 bit useFixedBaroCorrFromMap;Read MAP sensor on ECU start-up to use as baro value.
@@ -2322,6 +2325,8 @@ end_struct
 #define pedalSensor_NAME "Accelerator pedal"
 #define ts_show_charge_estimation true
 #define ts_show_ve_blend true
+#define ts_show_engine_make true
+#define ts_show_engine_code true
 #define ts_show_veBlends2 true
 #define ts_show_veBlends3 true
 #define ts_show_veBlends4 true
@@ -2336,6 +2341,7 @@ end_struct
 #define IGNITION_ADVANCE_TABLE_NAME "Ignition Table"
 #define CAM_1_MODE_NAME "Cam mode (intake)"
 #define CAM_2_MODE_NAME "Cam mode (exhaust)"
+#define ts_show_cam1 true
 #define ts_show_cam2 true
 #define ts_show_gdi_low_level true
 #define ts_show_reboot_to_dfu true

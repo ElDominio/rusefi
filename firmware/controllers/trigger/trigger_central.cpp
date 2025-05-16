@@ -696,10 +696,31 @@ bool TriggerCentral::isMapCamSync(efitick_t timestamp, float currentPhase) {
 		return result;
 }
 
-void TriggerCentral::decodeMapCam(efitick_t timestamp, float currentPhase) {
+#ifdef TEMP_V_TWIN
+
+float mapAtAngle[200];
+
+#endif
+
+void TriggerCentral::decodeMapCam(int toothIndexForListeners, efitick_t timestamp, float currentPhase) {
     isDecodingMapCam = engineConfiguration->vvtMode[0] == VVT_MAP_V_TWIN &&
                        			Sensor::getOrZero(SensorType::Rpm) < engineConfiguration->cranking.rpm;
 	if (isDecodingMapCam) {
+
+
+#ifdef TEMP_V_TWIN
+  mapAtAngle[toothIndexForListeners] = engine->outputChannels.instantMAPValue;
+
+  if (toothIndexForListeners > 2) {
+    if (mapAtAngle[toothIndexForListeners - 2] > mapAtAngle[toothIndexForListeners - 1] &&
+      mapAtAngle[toothIndexForListeners - 1] < mapAtAngle[toothIndexForListeners - 0]) {
+        mapVvt_min_point_counter++;
+      }
+
+  }
+#endif
+
+
 	  if (isMapCamSync(timestamp, currentPhase)) {
 				hwHandleVvtCamSignal(TriggerValue::RISE, timestamp, /*index*/0);
 				hwHandleVvtCamSignal(TriggerValue::FALL, timestamp, /*index*/0);
@@ -882,6 +903,9 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 		// Schedule the TDC mark
 		tdcMarkCallback(triggerIndexForListeners, timestamp);
 
+#if EFI_MAP_AVERAGING
+		engine->module<MapAveragingModule>()->triggerCallback(triggerIndexForListeners, timestamp);
+#endif /* EFI_MAP_AVERAGING */
 
 #if EFI_LOGIC_ANALYZER
 		waTriggerEventListener(signal, triggerIndexForListeners, timestamp);
@@ -907,8 +931,10 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 		// Handle ignition and injection
 		mainTriggerCallback(triggerIndexForListeners, timestamp, currentEngineDecodedPhase, nextPhase);
 
+    temp_mapVvt_index = triggerIndexForListeners / 2;
+
 		// Decode the MAP based "cam" sensor
-		decodeMapCam(timestamp, currentEngineDecodedPhase);
+		decodeMapCam(temp_mapVvt_index, timestamp, currentEngineDecodedPhase);
 
 		boardTriggerCallback(timestamp, currentEngineDecodedPhase);
 	} else {

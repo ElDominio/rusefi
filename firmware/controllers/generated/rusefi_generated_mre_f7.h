@@ -137,6 +137,7 @@
 #define BOARD_DIAG_PANEL1_FROM_FILE 
 #define BOARD_DIAG_PANEL2_FROM_FILE 
 #define BOARD_ENGINE_CONFIGURATION_FROM_FILE 
+#define BOARD_ENGINE_METADATA_FILE 
 #define BOARD_GAUGES_FROM_FILE 
 #define BOARD_IGNITION_ADVANCE_MENU_FROM_FILE 
 #define BOARD_IGNITION_SETTINGS_FROM_FILE 
@@ -351,6 +352,7 @@
 #define DEFAULT_SOLENOID_FREQUENCY 300
 #define DIGIPOT_COUNT 4
 #define DISPLACEMENT_DIGITS 3
+#define DISPLACEMENT_MAX 65
 #define DISPLACEMENT_MULTIPLIER 1
 #define DISPLACEMENT_TOOLTIP "Engine displacement in litres"
 #define DISPLACEMENT_UNITS "L"
@@ -1428,7 +1430,7 @@
 #define SentInput_NONE 0
 #define show_tcu_gauges false
 #define show_vvt_output_pin true
-#define SIGNATURE_HASH 3525374911
+#define SIGNATURE_HASH 1392340864
 #define SIMULATOR_TUNE_BIN_FILE_NAME "generated/simulator_tune_image.bin"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX "generated/simulator_tune_image"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX ".bin"
@@ -1759,6 +1761,7 @@
 #define ts_show_analog_divider false
 #define ts_show_analog_ego true
 #define ts_show_analog_input_settings true
+#define ts_show_analog_o2 true
 #define ts_show_aux_connections true
 #define ts_show_aux_sensors true
 #define ts_show_auxserial_pins true
@@ -1766,6 +1769,7 @@
 #define ts_show_bank2_cam2 true
 #define ts_show_brake_pedal_indicator true
 #define ts_show_brake_pedal_pin true
+#define ts_show_cam1 true
 #define ts_show_cam2 true
 #define ts_show_can2 false
 #define ts_show_can_bitrate true
@@ -1799,6 +1803,8 @@
 #define ts_show_debug_mode false
 #define ts_show_ego2 true
 #define ts_show_egt true
+#define ts_show_engine_code true
+#define ts_show_engine_make true
 #define ts_show_etb true
 #define ts_show_etb_bias_curve true
 #define ts_show_etb_extra_monitoring 
@@ -1836,6 +1842,7 @@
 #define ts_show_fuel_trim_cylinder_9 true
 #define ts_show_fuel_trims true
 #define ts_show_full_pinout true
+#define ts_show_gasoline_scale true
 #define ts_show_gdi true
 #define ts_show_gdi_low_level true
 #define ts_show_globalTriggerAngleOffset true
@@ -1938,14 +1945,14 @@
 #define ts_show_wastegate_sensor true
 #define ts_show_wbo_canbus_index true
 #define ts_show_wbo_canbus_set_index true
-#define TS_SIGNATURE "rusEFI master.2025.05.09.mre_f7.3525374911"
+#define TS_SIGNATURE "rusEFI master.2025.05.16.mre_f7.1392340864"
 #define TS_SIMULATE_CAN '>'
 #define TS_SIMULATE_CAN_char >
 #define TS_SINGLE_WRITE_COMMAND 'W'
 #define TS_SINGLE_WRITE_COMMAND_char W
 #define TS_TEST_COMMAND 't'
 #define TS_TEST_COMMAND_char t
-#define TS_TOTAL_OUTPUT_SIZE 1852
+#define TS_TOTAL_OUTPUT_SIZE 1868
 #define TS_TRIGGER_SCOPE_CHANNEL_1_NAME "Channel 1"
 #define TS_TRIGGER_SCOPE_CHANNEL_2_NAME "Channel 2"
 #define TS_TRIGGER_SCOPE_DISABLE 5

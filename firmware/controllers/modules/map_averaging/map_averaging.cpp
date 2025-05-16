@@ -48,22 +48,12 @@ static float averagedMapRunningBuffer[MAX_MAP_BUFFER_LENGTH];
 static int mapMinBufferLength = 0;
 static int averagedMapBufIdx = 0;
 
-/**
- * here we have averaging start and averaging end points for each cylinder
- */
-struct sampler {
-	scheduling_s startTimer;
-	scheduling_s endTimer;
-};
 
-static sampler samplers[MAX_CYLINDER_COUNT][2];
-
-#if EFI_ENGINE_CONTROL && EFI_PROD_CODE
 static void endAveraging(MapAverager* arg);
 
 static size_t currentMapAverager = 0;
 
-static void startAveraging(sampler* s) {
+void startMapAveraging(mapSampler* s) {
 	efiAssertVoid(ObdCode::CUSTOM_ERR_6649, hasLotsOfRemainingStack(), "lowstck#9");
 
 	// TODO: set currentMapAverager based on cylinder bank
@@ -71,11 +61,11 @@ static void startAveraging(sampler* s) {
 	averager.start();
 
 	mapAveragingPin.setHigh();
+	engine->outputChannels.isMapAveraging = true;
 
 	scheduleByAngle(&s->endTimer, getTimeNowNt(), engine->engineState.mapAveragingDuration,
 		{ endAveraging, &averager });
 }
-#endif // EFI_ENGINE_CONTROL && EFI_PROD_CODE
 
 void MapAverager::start() {
 	chibios_rt::CriticalSectionLocker csl;
@@ -161,13 +151,12 @@ void mapAveragingAdcCallback(float instantVoltage) {
 }
 #endif
 
-#if EFI_ENGINE_CONTROL && EFI_PROD_CODE
 static void endAveraging(MapAverager* arg) {
 	arg->stop();
 
+	engine->outputChannels.isMapAveraging = false;
 	mapAveragingPin.setLow();
 }
-#endif
 
 static void applyMapMinBufferLength() {
 	// check range
@@ -182,6 +171,7 @@ static void applyMapMinBufferLength() {
 
 void MapAveragingModule::onFastCallback() {
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
+	if (isValidRpm(rpm)) {
 		MAP_sensor_config_s * c = &engineConfiguration->map;
 		angle_t start = interpolate2d(rpm, c->samplingAngleBins, c->samplingAngle);
 		efiAssertVoid(ObdCode::CUSTOM_ERR_MAP_START_ASSERT, !std::isnan(start), "start");
@@ -201,39 +191,67 @@ void MapAveragingModule::onFastCallback() {
 			engine->engineState.mapAveragingStart[i] = cylinderStart;
 		}
 		engine->engineState.mapAveragingDuration = interpolate2d(rpm, c->samplingWindowBins, c->samplingWindow);
+	} else {
+		for (size_t i = 0; i < engineConfiguration->cylindersCount; i++) {
+			engine->engineState.mapAveragingStart[i] = NAN;
+		}
+		engine->engineState.mapAveragingDuration = NAN;
+	}
+}
 
-	angle_t duration = interpolate2d(rpm, c->samplingWindowBins, c->samplingWindow);
-	assertAngleRange(duration, "samplingDuration", ObdCode::CUSTOM_ERR_6563);
+void MapAveragingModule::onConfigurationChange(engine_configuration_s const * previousConfig) {
+	if (!previousConfig || engineConfiguration->mapMinBufferLength != previousConfig->mapMinBufferLength) {
+		applyMapMinBufferLength();
+	}
+}
 
-	// Clamp the duration to slightly less than one cylinder period
-	float cylinderPeriod = engine->engineState.engineCycle / engineConfiguration->cylindersCount;
-	engine->engineState.mapAveragingDuration = clampF(10, duration, cylinderPeriod - 10);
+void MapAveragingModule::init() {
+	if (engineConfiguration->isMapAveragingEnabled) {
+		efiPrintf("initMapAveraging...");
+		applyMapMinBufferLength();
+	} else {
+		efiPrintf("Running without MapAveraging...");
+	}
 }
 
 /**
  * Shaft Position callback used to schedule start and end of MAP averaging
  */
-void MapAveragingModule::onEnginePhase(float /*rpm*/,
-						efitick_t edgeTimestamp,
-						float currentPhase,
-						float nextPhase) {
-#if EFI_ENGINE_CONTROL && EFI_PROD_CODE
-	if (!engineConfiguration->isMapAveragingEnabled) {
+void MapAveragingModule::triggerCallback(uint32_t index, efitick_t edgeTimestamp) {
+  	if (!engineConfiguration->isMapAveragingEnabled){
+    	return;
+  	}
+	// update only once per engine cycle
+	if (index != 0) {
+		return;
+	}
+
+	float rpm = Sensor::getOrZero(SensorType::Rpm);
+	if (!isValidRpm(rpm)) {
 		return;
 	}
 
 	ScopePerf perf(PE::MapAveragingTriggerCallback);
 
+	if (engineConfiguration->mapMinBufferLength != mapMinBufferLength) {
+		applyMapMinBufferLength();
+	}
+
+	// todo: this could be pre-calculated
 	int samplingCount = engineConfiguration->measureMapOnlyInOneCylinder ? 1 : engineConfiguration->cylindersCount;
 
 	for (int i = 0; i < samplingCount; i++) {
 		angle_t samplingStart = engine->engineState.mapAveragingStart[i];
 
-		if (!isPhaseInRange(samplingStart, currentPhase, nextPhase)) {
-			continue;
+		angle_t samplingDuration = engine->engineState.mapAveragingDuration;
+		// todo: this assertion could be moved out of trigger handler
+		assertAngleRange(samplingDuration, "samplingDuration", ObdCode::CUSTOM_ERR_6563);
+		if (samplingDuration <= 0) {
+			warning(ObdCode::CUSTOM_MAP_ANGLE_PARAM, "map sampling angle should be positive");
+			return;
 		}
 
-		angle_t samplingEnd = samplingStart + engine->engineState.mapAveragingDuration;
+		angle_t samplingEnd = samplingStart + samplingDuration;
 
 		if (std::isnan(samplingEnd)) {
 			// todo: when would this happen?
@@ -246,29 +264,20 @@ void MapAveragingModule::onEnginePhase(float /*rpm*/,
 		// only if value is already prepared
 		int structIndex = getRevolutionCounter() % 2;
 
-		sampler* s = &samplers[i][structIndex];
+		auto & mapAveraging = *engine->module<MapAveragingModule>();
+		mapSampler* s = &mapAveraging.samplers[i][structIndex];
 
 		// at the moment we schedule based on time prediction based on current RPM and angle
 		// we are loosing precision in case of changing RPM - the further away is the event the worse is precision
 		// todo: schedule this based on closest trigger event, same as ignition works
 		scheduleByAngle(&s->startTimer, edgeTimestamp, samplingStart,
-				{ startAveraging, s });
+				{ startMapAveraging, s });
 	}
-#endif // EFI_ENGINE_CONTROL && EFI_PROD_CODE
-}
-
-void MapAveragingModule::onConfigurationChange(engine_configuration_s const * previousConfig) {
-	if (!previousConfig || engineConfiguration->mapMinBufferLength != previousConfig->mapMinBufferLength) {
-		applyMapMinBufferLength();
-	}
-}
-
-void initMapAveraging() {
-	applyMapMinBufferLength();
 }
 
 #else
 void MapAveragingModule::onFastCallback(){}
 void MapAveragingModule::onConfigurationChange(engine_configuration_s const *){}
-void MapAveragingModule::onEnginePhase(float, efitick_t, float, float) {}
+void MapAveragingModule::init() {}
+void MapAveragingModule::triggerCallback(uint32_t, efitick_t){}
 #endif /* EFI_MAP_AVERAGING */

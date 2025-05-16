@@ -9,35 +9,6 @@
 #include "hellen_mm64_meta.h"
 #include "hellen_mm100_meta.h"
 #include "hellen_mm176_meta.h"
-#include "../../board_id/boards_id.h"
-
-void hellenWbo();
-
-void setHellenMegaEnPin(bool enableBoardOnStartUp = true);
-void setHellenEnPin(Gpio pin, bool enableBoardOnStartUp = true);
-void setHellen64MegaEnPin();
-bool isBoardWithPowerManagement();
-bool getHellenBoardEnabled();
-void hellenEnableEn(const char *msg = "");
-void hellenDisableEn(const char *msg = "");
-void hellenDisableEnSilently(); // this version is called by fatal error handler meaning no OS access
-
-void hellenBoardStandBy();
-void hellenMegaSdWithAccelerometer();
-void hellenMegaModule();
-void hellenMegaAccelerometerPreInitCS2Pin();
-void configureHellenCanTerminator();
-
-void setHellenCan();
-void setHellen64Can();
-
-void setHellenAnalogDividers();
-void setHellenVbatt();
-
-int detectHellenBoardId();
-void detectHellenBoardType();
-
-int boardGetAnalogDiagnostic();
 
 // stm32 UART8
 #define H144_UART8_RX Gpio::E0
@@ -54,7 +25,6 @@ int boardGetAnalogDiagnostic();
 
 #define H144_USB1ID Gpio::A10
 
-#define H176_MCU_NOT_MEGA_LED1_RED Gpio::H8
 #define H176_MCU_MEGA_LED1_RED Gpio::G0
 
 #define H144_LS_1 G7
@@ -183,7 +153,7 @@ int boardGetAnalogDiagnostic();
 // AIN20 PA7
 #define H144_IN_AUX3_ANALOG EFI_ADC_7
 #define H144_IN_AUX3_DIGITAL A7
-// it's a mess see also H144_IN_D_AUX4
+// mega-mcu aux3/4 is flipped comparing to H144_ORIGINAL_MCU_IN_D_AUX4
 // AIN22 PC5
 #define H144_IN_AUX4_ANALOG EFI_ADC_15
 #define H144_IN_AUX4_DIGITAL C5
@@ -204,41 +174,25 @@ int boardGetAnalogDiagnostic();
 #define H144_IN_O2S2 EFI_ADC_1
 #define H144_IN_O2S2_DIGITAL A1
 
-// IN_D1(old) or IN_DIG8(new/mega-module)
+// same pin was used by IN_DIG8 before mega-mcu
 #define H144_IN_D_1 E12
-// IN_D2(old) or IN_DIG9(new/mm)
+// same pin was used by IN_DIG9 before mega-mcu
 #define H144_IN_D_2 E13
-// IN_D3(old) or IN_DIG10(new)
+// same pin was used by IN_DIG10 before mega-mcu
 #define H144_IN_D_3 E14
-// IN_D4(old) or IN_DIG11(new)
+// same pin was used by IN_DIG11 before mega-mcu
 #define H144_IN_D_4 E15
 
 // A22
-#define H144_IN_D_AUX3 C5
-// it's a MESS see also H144_IN_D_AUX4_DIGITAL
+#define H144_ORIGINAL_MCU_IN_D_AUX3 C5
+#define H144_ORIGINAL_MCU_IN_D_AUX3_ANALOG EFI_ADC_15
+// it's a MESS see also H144_IN_AUX4_DIGITAL
 // A20 AIN20
-#define H144_IN_D_AUX4 A7
+#define H144_ORIGINAL_MCU_IN_D_AUX4 A7
 
 // CAN
 #define H144_CAN_RX Gpio::D0
 #define H144_CAN_TX Gpio::D1
-
-#define H176_LS_1 Gpio::G7
-#define H176_LS_2 Gpio::G8
-#define H176_LS_3 Gpio::D11
-#define H176_LS_4 Gpio::D10
-#define H176_LS_5 Gpio::D9
-#define H176_LS_6 Gpio::F12
-#define H176_LS_7 Gpio::F13
-#define H176_LS_8 Gpio::F14
-
-#define H176_OUT_PWM1 Gpio::D13
-#define H176_OUT_PWM2 Gpio::C6
-#define H176_OUT_PWM3 Gpio::C7
-
-#define H176_OUT_IO6 Gpio::H15
-#define H176_OUT_IO9 Gpio::I1
-#define H176_OUT_IO10 Gpio::I0
 
 // same pins 144 and 176
 #define H176_CAN_RX H144_CAN_RX
@@ -263,80 +217,4 @@ int boardGetAnalogDiagnostic();
 #define H_SPI3_SCK Gpio::C10
 #define H_SPI3_CS Gpio::A15
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-static void enableHellenSpi1() {
-	engineConfiguration->spi1mosiPin = Gpio::H_SPI1_MOSI;
-	engineConfiguration->spi1misoPin = Gpio::H_SPI1_MISO;
-	engineConfiguration->spi1sckPin = Gpio::H_SPI1_SCK;
-	engineConfiguration->is_enabled_spi_1 = true;
-}
-
-static void setHellenSdCardSpi1Hardware() {
-  engineConfiguration->sdCardCsPin = Gpio::H_SPI1_CS1;
-  engineConfiguration->sdCardSpiDevice = SPI_DEVICE_1;
-	enableHellenSpi1();
-}
-
-static void enableHellenSpi3() {
-	engineConfiguration->spi3mosiPin = H_SPI3_MOSI;
-	engineConfiguration->spi3misoPin = H_SPI3_MISO;
-	engineConfiguration->spi3sckPin = H_SPI3_SCK;
-	engineConfiguration->is_enabled_spi_3 = true;
-}
-
-static void setHellenSdCardSpi3NoCS() {
-    engineConfiguration->isSdCardEnabled = true;
-	engineConfiguration->sdCardSpiDevice = SPI_DEVICE_3;
-	enableHellenSpi3();
-}
-
-static void setAccelerometerSpi() {
-	/* accelerometer SPI is shared with SD card SPI on mm144 */
-	engineConfiguration->accelerometerSpiDevice = SPI_DEVICE_1;
-	engineConfiguration->accelerometerCsPin = Gpio::H_SPI1_CS2;
-}
-
-static void setHellen64SdCardSpi() {
-    engineConfiguration->isSdCardEnabled = true;
-	engineConfiguration->sdCardSpiDevice = SPI_DEVICE_3;
-	engineConfiguration->spi3mosiPin = Gpio::MM64_SPI3_MOSI;
-	engineConfiguration->spi3misoPin = Gpio::MM64_SPI3_MISO;
-	engineConfiguration->spi3sckPin = Gpio::MM64_SPI3_SCK;
-	engineConfiguration->is_enabled_spi_3 = true;
-	engineConfiguration->sdCardCsPin = Gpio::MM64_SPI3_CS;
-}
-
-static void enableHellenSpi2() {
-	engineConfiguration->is_enabled_spi_2 = true;
-	engineConfiguration->spi2mosiPin = H_SPI2_MOSI;
-	engineConfiguration->spi2misoPin = H_SPI2_MISO;
-	engineConfiguration->spi2sckPin = H_SPI2_SCK;
-}
-
-inline void setHellenSdCardSpi2() {
-  enableHellenSpi2();
-	engineConfiguration->sdCardSpiDevice = SPI_DEVICE_2;
-	engineConfiguration->sdCardCsPin = H_SPI2_CS;
-}
-
-inline void setHellenSdCardSpi3() {
-    setHellenSdCardSpi3NoCS();
-	engineConfiguration->sdCardCsPin = H_SPI3_CS;
-}
-
-// *pullups* files CLT R211 IAT R213
-#define HELLEN_DEFAULT_AT_PULLUP 4700
-
-inline void setDefaultHellenAtPullUps(float pullup = HELLEN_DEFAULT_AT_PULLUP) {
-	engineConfiguration->clt.config.bias_resistor = pullup;
-	engineConfiguration->iat.config.bias_resistor = pullup;
-	engineConfiguration->auxTempSensor1.config.bias_resistor = pullup;
-	engineConfiguration->auxTempSensor2.config.bias_resistor = pullup;
-}
-
-inline void setHellenMMbaro() {
-	engineConfiguration->lps25BaroSensorScl = Gpio::B10;
-	engineConfiguration->lps25BaroSensorSda = Gpio::B11;
-}
-#pragma GCC diagnostic pop
+#include "hellen_logic.h"

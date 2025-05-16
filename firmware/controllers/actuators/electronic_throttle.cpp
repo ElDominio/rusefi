@@ -318,7 +318,9 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// 100% target from table -> 100% target position
 	targetWithIdlePosition = interpolateClamped(0, etbIdleAddition, 100, 100, etbCurrentTarget);
 
-	percent_t targetPosition = boardAdjustEtbTarget(targetWithIdlePosition + getLuaAdjustment());
+  percent_t preBoard = targetWithIdlePosition + getLuaAdjustment();
+	percent_t targetPosition = boardAdjustEtbTarget(preBoard);
+	boardEtbAdjustment = preBoard - targetPosition;
 	// just an additional logging data point
 	adjustedEtbTarget = targetPosition;
 
@@ -529,10 +531,6 @@ expected<percent_t> EtbController::getClosedLoop(percent_t target, percent_t obs
 
 		float dt = m_cycleTimer.getElapsedSecondsAndReset(getTimeNowNt());
 		m_lastPidDtMs = dt * 1000.0;
-
-		if (!engineConfiguration->etbUsePreciseTiming) {
-			dt = etbPeriodSeconds;
-		}
 
 		// Normal case - use PID to compute closed loop part
 		return m_pid.getOutput(target, observation, dt);
@@ -986,7 +984,6 @@ void setBoschVAGETB() {
 	engineConfiguration->etb.iFactor = 47;
 	engineConfiguration->etb.dFactor = 0.088;
 	engineConfiguration->etb.offset = 0;
-	engineConfiguration->etbUsePreciseTiming = true;
 }
 
 void setBoschVNH2SP30Curve() {

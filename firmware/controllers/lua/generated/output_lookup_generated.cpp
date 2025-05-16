@@ -866,6 +866,9 @@ float getOutputValueByName(const char *name) {
 // fastAdcConversionCount
 		case 1749059722:
 			return engine->outputChannels.fastAdcConversionCount;
+// isMapAveraging
+		case -1626840525:
+			return engine->outputChannels.isMapAveraging;
 // totalFuelCorrection
 #if EFI_ENGINE_CONTROL
 		case -1779658835:
@@ -1621,6 +1624,21 @@ float getOutputValueByName(const char *name) {
 		case 1921134430:
 			return engine->triggerCentral.mapVvt_sync_counter;
 #endif
+// mapVvt_min_point_counter
+#if EFI_SHAFT_POSITION_INPUT
+		case -983339026:
+			return engine->triggerCentral.mapVvt_min_point_counter;
+#endif
+// temp_mapVvt_index
+#if EFI_SHAFT_POSITION_INPUT
+		case 997197711:
+			return engine->triggerCentral.temp_mapVvt_index;
+#endif
+// mapVvt_CycleDelta
+#if EFI_SHAFT_POSITION_INPUT
+		case 122475036:
+			return engine->triggerCentral.mapVvt_CycleDelta;
+#endif
 // currentEngineDecodedPhase
 #if EFI_SHAFT_POSITION_INPUT
 		case 162105111:
@@ -1676,6 +1694,11 @@ float getOutputValueByName(const char *name) {
 		case 310661471:
 			return engine->triggerCentral.triggerState.triggerStateIndex;
 #endif
+// trgtriggerCountersError
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+		case 1108896195:
+			return engine->triggerCentral.triggerState.triggerCountersError;
+#endif
 // vvt1isynchronizationCounter
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 		case -608535663:
@@ -1700,6 +1723,11 @@ float getOutputValueByName(const char *name) {
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 		case -404295156:
 			return engine->triggerCentral.vvtState[0][0].triggerStateIndex;
+#endif
+// vvt1itriggerCountersError
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+		case 206956368:
+			return engine->triggerCentral.vvtState[0][0].triggerCountersError;
 #endif
 // vvt1esynchronizationCounter
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
@@ -1726,6 +1754,11 @@ float getOutputValueByName(const char *name) {
 		case 797862280:
 			return engine->triggerCentral.vvtState[0][1].triggerStateIndex;
 #endif
+// vvt1etriggerCountersError
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+		case -937296564:
+			return engine->triggerCentral.vvtState[0][1].triggerCountersError;
+#endif
 // vvt2isynchronizationCounter
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 		case -1432096142:
@@ -1751,6 +1784,11 @@ float getOutputValueByName(const char *name) {
 		case -1732159411:
 			return engine->triggerCentral.vvtState[1][0].triggerStateIndex;
 #endif
+// vvt2itriggerCountersError
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+		case 2130850289:
+			return engine->triggerCentral.vvtState[1][0].triggerCountersError;
+#endif
 // vvt2esynchronizationCounter
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 		case -1983023250:
@@ -1775,6 +1813,11 @@ float getOutputValueByName(const char *name) {
 #if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
 		case -530001975:
 			return engine->triggerCentral.vvtState[1][1].triggerStateIndex;
+#endif
+// vvt2etriggerCountersError
+#if EFI_SHAFT_POSITION_INPUT && FULL_SD_LOGS
+		case 986597357:
+			return engine->triggerCentral.vvtState[1][1].triggerCountersError;
 #endif
 // idleState
 #if EFI_PROD_CODE && EFI_IDLE_CONTROL
@@ -1931,6 +1974,11 @@ float getOutputValueByName(const char *name) {
 		case 2069994349:
 			return getLiveData<electronic_throttle_s>(0)->trim;
 #endif
+// etb1boardEtbAdjustment
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+		case 1055284435:
+			return getLiveData<electronic_throttle_s>(0)->boardEtbAdjustment;
+#endif
 // etb1luaAdjustment
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 		case 1246430386:
@@ -2030,6 +2078,11 @@ float getOutputValueByName(const char *name) {
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
 		case 2071180270:
 			return getLiveData<electronic_throttle_s>(1)->trim;
+#endif
+// etb2boardEtbAdjustment
+#if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
+		case -272579820:
+			return getLiveData<electronic_throttle_s>(1)->boardEtbAdjustment;
 #endif
 // etb2luaAdjustment
 #if EFI_PROD_CODE && EFI_ELECTRONIC_THROTTLE_BODY && FULL_SD_LOGS
