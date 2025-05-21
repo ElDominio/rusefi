@@ -74,9 +74,7 @@ static void cannedcltIdleCorr() {
 #endif // CLT_IDLE_TABLE_CLT_SIZE
 }
 
-#if FULL_SD_LOGS
 static void cannedcltCrankingCorr() {
 	static const float hardCodedcltCrankingCorr[8] = {1.0, 1.0, 1.0, 0.8, 0.8, 0.8, 0.8, 0.8};
 	copyArray(config->cltCrankingCorr, hardCodedcltCrankingCorr);
 }
-#endif
