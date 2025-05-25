@@ -793,8 +793,13 @@ struct engine_configuration_s {
 	offset 144 bit 16 */
 	bool launchControlEnabled : 1 {};
 	/**
+<<<<<<< HEAD
 	offset 144 bit 17 */
 	bool tempPumpLimitCheck : 1 {};
+=======
+	offset 168 bit 17 */
+	bool unusedBit42423 : 1 {};
+>>>>>>> upstream/master
 	/**
 	offset 144 bit 18 */
 	bool antiLagEnabled : 1 {};
@@ -2014,8 +2019,13 @@ struct engine_configuration_s {
 	offset 836 bit 7 */
 	bool enableCanVss : 1 {};
 	/**
+<<<<<<< HEAD
 	offset 836 bit 8 */
 	bool suppressWboWorkaround7048 : 1 {};
+=======
+	offset 892 bit 8 */
+	bool unusedSuppressWboWorkaround7048 : 1 {};
+>>>>>>> upstream/master
 	/**
 	 * If enabled, adjust at a constant rate instead of a rate proportional to the current lambda error. This mode may be easier to tune, and more tolerant of sensor noise.
 	offset 836 bit 9 */
@@ -4936,8 +4946,21 @@ struct engine_configuration_s {
 	 */
 	float wastegatePositionClosedVoltage;
 	/**
+<<<<<<< HEAD
 	 * units: units
 	 * offset 3744
+=======
+	 * offset 3928
+>>>>>>> upstream/master
+	 */
+	can_wbo_type_e wboType1;
+	/**
+	 * offset 3930
+	 */
+	can_wbo_type_e wboType2;
+	/**
+	 * units: units
+	 * offset 3932
 	 */
 	uint8_t unusedOftenChangesDuringFirmwareUpdate[END_OF_CALIBRATION_PADDING] = {};
 };

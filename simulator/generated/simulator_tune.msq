@@ -560,8 +560,8 @@
         <constant digits="0" name="brakeMeanEffectivePressureDifferential" units="">0.0</constant>
         <constant name="brakePedalPin">"NONE"</constant>
         <constant name="brakePedalPinMode">"PULLUP"</constant>
-        <constant digits="0" name="byFirmwareVersion" units="index">2.0250516E7</constant>
-        <constant digits="0" name="calibrationBirthday" units="">2.0250516E7</constant>
+        <constant digits="0" name="byFirmwareVersion" units="index">2.0250525E7</constant>
+        <constant digits="0" name="calibrationBirthday" units="">2.0250525E7</constant>
         <constant digits="0" name="camDecoder2jzPosition" units="angle">95.0</constant>
         <constant digits="0" name="camDecoder2jzPrecision" units="">40.0</constant>
         <constant name="camInputs1">"NONE"</constant>
@@ -3456,7 +3456,6 @@ end</constant>
         <constant name="stftIgnoreErrorMagnitude">"false"</constant>
         <constant digits="1" name="stoichRatioPrimary" units=":1">14.7</constant>
         <constant digits="1" name="stoichRatioSecondary" units=":1">9.0</constant>
-        <constant name="suppressWboWorkaround7048">"false"</constant>
         <constant name="tachOutputPin">"NONE"</constant>
         <constant name="tachOutputPinMode">"default"</constant>
         <constant digits="2" name="tachPulseDuractionMs" units="">0.5</constant>
@@ -4010,7 +4009,6 @@ end</constant>
         <constant name="tcuUpshiftButtonPin">"NONE"</constant>
         <constant name="tcuUpshiftButtonPinMode">"DEFAULT"</constant>
         <constant digits="0" name="technicalDebt7738" units="">0.0</constant>
-        <constant name="tempPumpLimitCheck">"false"</constant>
         <constant cols="1" digits="0" name="throttle2TrimRpmBins" rows="6">
          0.0
          0.0
@@ -4416,6 +4414,7 @@ end</constant>
         <constant name="unused1308_24">"false"</constant>
         <constant name="unused1320_28">"false"</constant>
         <constant digits="0" name="unusedafterCrankingIACtaperDuration" units="">0.0</constant>
+        <constant name="unusedBit42423">"false"</constant>
         <constant name="unusedBitsd23413421">"false"</constant>
         <constant digits="0" name="unusedcrankingIACposition" units="">0.0</constant>
         <constant name="unusedFancy10">"false"</constant>
@@ -4449,11 +4448,7 @@ end</constant>
         <constant name="unusedFancy7">"false"</constant>
         <constant name="unusedFancy8">"false"</constant>
         <constant name="unusedFancy9">"false"</constant>
-        <constant cols="1" digits="0" name="unusedOftenChangesDuringFirmwareUpdate" rows="44">
-         0.0
-         0.0
-         0.0
-         0.0
+        <constant cols="1" digits="0" name="unusedOftenChangesDuringFirmwareUpdate" rows="40">
          0.0
          0.0
          0.0
@@ -4496,6 +4491,7 @@ end</constant>
          0.0
 </constant>
         <constant name="unusedOverrideCrankingIacSetting">"false"</constant>
+        <constant name="unusedSuppressWboWorkaround7048">"false"</constant>
         <constant digits="0" name="unusedWastgate0" units="">0.0</constant>
         <constant digits="0" name="unusedWastgate1" units="">0.0</constant>
         <constant name="useAdvanceCorrectionsForCranking">"false"</constant>
@@ -4920,7 +4916,9 @@ end</constant>
         <constant digits="2" name="wastegatePositionOpenedVoltage" units="v">5.0</constant>
         <constant name="wastegatePositionSensor">"Disabled"</constant>
         <constant name="watchOutForLinearTime">"true"</constant>
-        <constant name="widebandOnSecondBus">"1"</constant>
+        <constant name="wboType1">"RusEFI"</constant>
+        <constant name="wboType2">"RusEFI"</constant>
+        <constant name="widebandOnSecondBus">"CAN1"</constant>
         <constant digits="2" name="wwaeBeta" units="Fraction">0.3</constant>
         <constant digits="2" name="wwaeTau" units="Seconds">0.3</constant>
         <constant cols="1" digits="2" name="wwBetaCltValues" rows="8">
@@ -4985,8 +4983,8 @@ end</constant>
 </constant>
         <constant name="yesUnderstandLocking">"no"</constant>
     </page>
-    <versionInfo firmwareInfo="20250424" nPages="1" signature="rusEFI master.2025.05.16.f407-discovery.2436784103" version="5.0"/>
-    <bibliography author="rusEFI 20250424" writeDate="date"/>
+    <versionInfo firmwareInfo="20250523" nPages="1" signature="rusEFI master.2025.05.25.f407-discovery.4195508450" version="5.0"/>
+    <bibliography author="rusEFI 20250523" writeDate="date"/>
     <settings/>
     <userComments/>
 </msq>

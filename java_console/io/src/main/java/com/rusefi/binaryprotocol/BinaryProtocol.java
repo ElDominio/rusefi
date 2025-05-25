@@ -352,10 +352,12 @@ public class BinaryProtocol {
                     (ConnectionAndMeta.saveSettingsToFile() ? BinaryProtocolLocalCache.CONFIGURATION_RUSEFI_BINARY : null),
                     BinaryProtocolLocalCache.CONFIGURATION_RUSEFI_XML
                 );
-            } catch (IOException | JAXBException e) {
-                log.info("Ignoring " + e);
-            } catch (final Exception e) {
-                log.error("Unexpected exception:" + e);
+            } catch (JAXBException e) {
+                log.error("JAXBException", e);
+            } catch (IOException e) {
+                log.info("Ignoring " + e, e);
+            } catch (Exception e) {
+                log.error("Unexpected exception:" + e, e);
                 throw e;
             }
         }
@@ -372,7 +374,12 @@ public class BinaryProtocol {
             ConfigurationImageFile.saveToFile(imageWithMeta, binaryFileName);
         }
         if (xmlFileName != null) {
-            final Msq tune = MsqFactory.valueOf(imageWithMeta.getConfigurationImage(), ini);
+            ConfigurationImage image = imageWithMeta.getConfigurationImage();
+            if (image == null) {
+                log.warn("No image for saveConfigurationImageToFiles");
+                return;
+            }
+            final Msq tune = MsqFactory.valueOf(image, ini);
             tune.writeXmlFile(xmlFileName);
         }
     }

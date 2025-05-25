@@ -1,6 +1,6 @@
 #include "global.h"
 #include "engine_type_e.h"
-// was generated automatically by rusEFI tool  from engine_type_e.h // by enum_to_string.jar tool on Wed Mar 26 22:40:59 UTC 2025
+// was generated automatically by rusEFI tool  from engine_type_e.h // by enum_to_string.jar tool on Sat May 24 21:02:04 BOT 2025
 // see also gen_config_and_enums.bat
 
 
@@ -31,12 +31,12 @@ case engine_type_e::ET_BOSCH_QUICK_START:
   return "ET_BOSCH_QUICK_START";
 case engine_type_e::ET_TEST_WITH_BOSCH_QUICK_START:
   return "ET_TEST_WITH_BOSCH_QUICK_START";
-case engine_type_e::FERRARI_F136:
-  return "FERRARI_F136";
 case engine_type_e::FORD_ASPIRE_1996:
   return "FORD_ASPIRE_1996";
 case engine_type_e::FORD_COYOTE:
   return "FORD_COYOTE";
+case engine_type_e::FORD_ECOBOOST:
+  return "FORD_ECOBOOST";
 case engine_type_e::FORD_ESCORT_GT:
   return "FORD_ESCORT_GT";
 case engine_type_e::FORD_INLINE_6_1995:
@@ -207,10 +207,10 @@ case engine_type_e::TOYOTA_2JZ_GTE_VVTi:
   return "TOYOTA_2JZ_GTE_VVTi";
 case engine_type_e::UNUSED102:
   return "UNUSED102";
-case engine_type_e::UNUSED67:
-  return "UNUSED67";
 case engine_type_e::UNUSED94:
   return "UNUSED94";
+case engine_type_e::UNUSED_105:
+  return "UNUSED_105";
 case engine_type_e::UNUSED_97:
   return "UNUSED_97";
 case engine_type_e::VAG_5_CYL:

@@ -1,3 +1,5 @@
+# todo: reduce copy-paste with update-wideband-reference.yaml
+
 name: Update libfirmware Reference
 
 on:

@@ -1,6 +1,7 @@
 package com.rusefi.ui.basic;
 
 import com.devexperts.logging.Logging;
+import com.opensr5.ini.IniFileModel;
 import com.rusefi.*;
 import com.rusefi.core.FindFileHelper;
 import com.rusefi.core.net.ConnectionAndMeta;
@@ -25,6 +26,7 @@ import static com.devexperts.logging.Logging.getLogging;
 import static com.rusefi.FileLog.isWindows;
 import static com.rusefi.StartupFrame.newReleaseAnnounce;
 import static com.rusefi.core.net.ConnectionAndMeta.getProperties;
+import static com.rusefi.ui.basic.UnitLabelPrinter.UNIT_IDENTIFIER_FIELD_NAMES;
 
 public class BasicUpdaterPanel {
     private static final Logging log = getLogging(BasicUpdaterPanel.class);
@@ -45,20 +47,20 @@ public class BasicUpdaterPanel {
     private LogoLabelPopupMenu logoLabelPopupMenu = null;
 
     private final SingleAsyncJobExecutor singleAsyncJobExecutor;
+    private final UpdateOperationCallbacks updateOperationCallbacks;
     private final UpdateCalibrations updateCalibrations;
     private volatile Optional<AsyncJob> updateFirmwareJob = Optional.empty();
-    private volatile Optional<SerialPortScanner.PortResult> ecuPortToUse = Optional.empty();
+    private volatile Optional<PortResult> ecuPortToUse = Optional.empty();
 
     BasicUpdaterPanel(
         final boolean showUrlLabel,
-        final UpdateOperationCallbacks updateOperationCallbacks,
-        final boolean doNotUseStatusWindow
+        final UpdateOperationCallbacks updateOperationCallbacks
     ) {
         singleAsyncJobExecutor = new SingleAsyncJobExecutor(
             updateOperationCallbacks,
-            doNotUseStatusWindow,
             () -> SwingUtilities.invokeLater(this::refreshButtons)
         );
+        this.updateOperationCallbacks = updateOperationCallbacks;
         updateCalibrations = new UpdateCalibrations(singleAsyncJobExecutor);
 
         if (isWindows()) {
@@ -71,6 +73,7 @@ public class BasicUpdaterPanel {
                 content.add(newReleaseNotification.get());
             }
             content.add(ToolButtons.createShowDeviceManagerButton());
+
             content.add(StartupFrame.binaryModificationControl());
 
             updateFirmwareButton.addActionListener(this::onUpdateFirmwareButtonClicked);
@@ -121,17 +124,17 @@ public class BasicUpdaterPanel {
         if (currentHardware.isDfuFound()) {
             setUpdateFirmwareJob(new DfuManualJob());
         } else {
-            final Set<SerialPortScanner.SerialPortType> portTypesToUpdateFirmware = (isObfuscated ?
+            final Set<SerialPortType> portTypesToUpdateFirmware = (isObfuscated ?
                 CompatibilitySet.of(
-                    SerialPortScanner.SerialPortType.EcuWithOpenblt,
-                    SerialPortScanner.SerialPortType.OpenBlt
+                    SerialPortType.EcuWithOpenblt,
+                    SerialPortType.OpenBlt
                 ) :
                 CompatibilitySet.of(
-                    SerialPortScanner.SerialPortType.Ecu,
-                    SerialPortScanner.SerialPortType.EcuWithOpenblt
+                    SerialPortType.Ecu,
+                    SerialPortType.EcuWithOpenblt
                 )
             );
-            final List<SerialPortScanner.PortResult> portsToUpdateFirmware = currentHardware.getKnownPorts(
+            final List<PortResult> portsToUpdateFirmware = currentHardware.getKnownPorts(
                 portTypesToUpdateFirmware
             );
 
@@ -141,9 +144,9 @@ public class BasicUpdaterPanel {
                     break;
                 }
                 case 1: {
-                    final SerialPortScanner.PortResult portToUpdateFirmware = portsToUpdateFirmware.get(0);
+                    final PortResult portToUpdateFirmware = portsToUpdateFirmware.get(0);
                     AsyncJob job = null;
-                    final SerialPortScanner.SerialPortType portType = portToUpdateFirmware.type;
+                    final SerialPortType portType = portToUpdateFirmware.type;
                     switch (portType) {
                         case Ecu: {
                             job = new DfuAutoJob(portToUpdateFirmware, updateFirmwareButton);
@@ -204,9 +207,9 @@ public class BasicUpdaterPanel {
     }
 
     private void updateEcuPortToUse(final AvailableHardware currentHardware) {
-        final List<SerialPortScanner.PortResult> ecuPortsToUse = currentHardware.getKnownPorts(CompatibilitySet.of(
-            SerialPortScanner.SerialPortType.Ecu,
-            SerialPortScanner.SerialPortType.EcuWithOpenblt
+        final List<PortResult> ecuPortsToUse = currentHardware.getKnownPorts(CompatibilitySet.of(
+            SerialPortType.Ecu,
+            SerialPortType.EcuWithOpenblt
         ));
 
         switch (ecuPortsToUse.size()) {
@@ -232,17 +235,25 @@ public class BasicUpdaterPanel {
         }
     }
 
-    private void setEcuPortToUse(final SerialPortScanner.PortResult port) {
+    private void setEcuPortToUse(final PortResult port) {
         ecuPortToUse = Optional.of(port);
-        refreshButtons();
+
+        SwingUtilities.invokeLater(() -> {
+            refreshButtons();
+            if (port.getFirmwareHash().isPresent()) {
+                updateOperationCallbacks.logLine("Detected " + port.getFirmwareHash().get());
+            }
+        });
     }
 
     private void resetEcuPortToUse() {
         ecuPortToUse = Optional.empty();
-        updateCalibrationsButton.setEnabled(false);
-        if (logoLabelPopupMenu != null) {
-            logoLabelPopupMenu.refreshUploadTuneAndPrintUnitLabelsMenuItems(false);
-        }
+        SwingUtilities.invokeLater(() -> {
+            updateCalibrationsButton.setEnabled(false);
+            if (logoLabelPopupMenu != null) {
+                logoLabelPopupMenu.refreshUploadTuneAndPrintUnitLabelsMenuItems(false, false);
+            }
+        });
     }
 
     private void onUpdateFirmwareButtonClicked(final ActionEvent actionEvent) {
@@ -275,18 +286,31 @@ public class BasicUpdaterPanel {
 
     private void refreshButtons() {
         updateFirmwareButton.setEnabled(updateFirmwareJob.isPresent() && singleAsyncJobExecutor.isNotInProgress());
-        final boolean isEcuPortJobPossible = ecuPortToUse.isPresent() && singleAsyncJobExecutor.isNotInProgress();
+        final Optional<PortResult> ecuPort = ecuPortToUse;
+        final boolean isEcuPortJobPossible = ecuPort.isPresent() && singleAsyncJobExecutor.isNotInProgress();
         updateCalibrationsButton.setEnabled(isEcuPortJobPossible);
         if (logoLabelPopupMenu != null) {
-            logoLabelPopupMenu.refreshUploadTuneAndPrintUnitLabelsMenuItems(isEcuPortJobPossible);
+            logoLabelPopupMenu.refreshUploadTuneAndPrintUnitLabelsMenuItems(
+                isEcuPortJobPossible,
+                ecuPort.map(port -> existsAnyOfUnitIdentifierFields(port.calibrations.getIniFile())).orElse(false)
+            );
         }
+    }
+
+    private boolean existsAnyOfUnitIdentifierFields(final IniFileModel iniFile) {
+        for (final String fieldName: UNIT_IDENTIFIER_FIELD_NAMES) {
+            if (iniFile.findIniField(fieldName).isPresent()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void disableButtons() {
         updateFirmwareButton.setEnabled(false);
         updateCalibrationsButton.setEnabled(false);
         if (logoLabelPopupMenu != null) {
-            logoLabelPopupMenu.refreshUploadTuneAndPrintUnitLabelsMenuItems(false);
+            logoLabelPopupMenu.refreshUploadTuneAndPrintUnitLabelsMenuItems(false, false);
         }
     }
 
