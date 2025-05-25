@@ -1,6 +1,9 @@
 package com.rusefi.maintenance;
 
-import com.rusefi.*;
+import com.rusefi.FileLog;
+import com.rusefi.Launcher;
+import com.rusefi.SerialPortScanner;
+import com.rusefi.Timeouts;
 import com.rusefi.autodetect.PortDetector;
 import com.rusefi.autodetect.SerialAutoChecker;
 import com.rusefi.config.generated.Integration;
@@ -41,7 +44,7 @@ public class DfuFlasher {
 
     public static boolean doAutoDfu(
         final JComponent parent,
-        final PortResult port,
+        final SerialPortScanner.PortResult port,
         final UpdateOperationCallbacks callbacks
     ) {
         return CalibrationsHelper.updateFirmwareAndRestorePreviousCalibrations(

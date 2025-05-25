@@ -61,9 +61,6 @@ struct mc33810_config {
 
 int mc33810_add(brain_pin_e base, unsigned int index, const mc33810_config *cfg);
 
-struct mc33810_state_s;
-const mc33810_state_s* mc33810getLiveData(size_t idx);
-
 /* debug */
 void mc33810_req_init();
 int getMc33810maxDwellTimer(mc33810maxDwellTimer_e value);

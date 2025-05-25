@@ -307,9 +307,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	float sanitizedPedal = getSanitizedPedal();
 
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
-  percent_t preBoard = m_pedalProvider->getValue(rpm, sanitizedPedal);
-	etbCurrentTarget = boardAdjustEtbTarget(preBoard);
-	boardEtbAdjustment = preBoard - etbCurrentTarget;
+	etbCurrentTarget = m_pedalProvider->getValue(rpm, sanitizedPedal);
 
 	percent_t etbIdlePosition = clampPercentValue(m_idlePosition);
 	percent_t etbIdleAddition = PERCENT_DIV * engineConfiguration->etbIdleThrottleRange * etbIdlePosition;
@@ -320,7 +318,9 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// 100% target from table -> 100% target position
 	targetWithIdlePosition = interpolateClamped(0, etbIdleAddition, 100, 100, etbCurrentTarget);
 
-	percent_t targetPosition = targetWithIdlePosition + getLuaAdjustment();
+  percent_t preBoard = targetWithIdlePosition + getLuaAdjustment();
+	percent_t targetPosition = boardAdjustEtbTarget(preBoard);
+	boardEtbAdjustment = preBoard - targetPosition;
 	// just an additional logging data point
 	adjustedEtbTarget = targetPosition;
 

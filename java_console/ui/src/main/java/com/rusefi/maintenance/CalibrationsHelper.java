@@ -6,7 +6,7 @@ import com.opensr5.ConfigurationImageMetaVersion0_0;
 import com.opensr5.ConfigurationImageWithMeta;
 import com.opensr5.ini.IniFileModel;
 import com.opensr5.ini.field.*;
-import com.rusefi.PortResult;
+import com.rusefi.SerialPortScanner.PortResult;
 import com.rusefi.binaryprotocol.BinaryProtocol;
 import com.rusefi.binaryprotocol.BinaryProtocolLocalCache;
 import com.rusefi.core.ui.AutoupdateUtil;
@@ -177,32 +177,11 @@ public class CalibrationsHelper {
     }
 
     public static Optional<CalibrationsInfo> readCurrentCalibrations(
-        final String port,
+        final PortResult ecuPort,
         final UpdateOperationCallbacks callbacks
     ) {
         return BinaryProtocolExecutor.executeWithSuspendedPortScanner(
-            port,
-            callbacks,
-            (binaryProtocol) -> {
-                try {
-                    return readCalibrationsInfo(binaryProtocol, callbacks);
-                } catch (final Exception e) {
-                    log.error("Failed to read current calibrations:", e);
-                    callbacks.logLine("Failed to read current calibrations");
-                    return Optional.empty();
-                }
-            },
-            Optional.empty(),
-            false
-        );
-    }
-
-    public static Optional<CalibrationsInfo> readCurrentCalibrationsWithoutSuspendingPortScanner(
-        final String port,
-        final UpdateOperationCallbacks callbacks
-    ) {
-        return BinaryProtocolExecutor.execute(
-            port,
+            ecuPort.port,
             callbacks,
             (binaryProtocol) -> {
                 try {

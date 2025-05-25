@@ -16,11 +16,7 @@ AemXSeriesWideband::AemXSeriesWideband(uint8_t sensorIndex, SensorType type)
 	, m_sensorIndex(sensorIndex)
 {
     faultCode = m_faultCode = HACK_SILENT_VALUE;// silent, initial state is "no one has spoken to us so far"
-    m_isValid = m_isFault = false;
-}
-
-can_wbo_type_e AemXSeriesWideband::sensorType() const {
-	return m_sensorIndex ? engineConfiguration->wboType2 : engineConfiguration->wboType1;
+    m_isValid = m_isFault = m_isAem = false;
 }
 
 bool AemXSeriesWideband::acceptFrame(const CANRxFrame& frame) const {
@@ -28,31 +24,22 @@ bool AemXSeriesWideband::acceptFrame(const CANRxFrame& frame) const {
 		return false;
 	}
 
-	can_wbo_type_e type = sensorType();
-
-	if (type == DISABLED) {
-		return false;
-	}
-
 	uint32_t id = CAN_ID(frame);
 
-	if (type == RUSEFI) {
-		// 0th sensor is 0x190 and 0x191, 1st sensor is 0x192 and 0x193
-		uint32_t rusefiBaseId = rusefi_base + 2 * (engineConfiguration->flipWboChannels ? (1 - m_sensorIndex) : m_sensorIndex);
-		return ((id == rusefiBaseId) || (id == rusefiBaseId + 1));
-	}
+	// 0th sensor is 0x180, 1st sensor is 0x181, etc
+	uint32_t aemXSeriesId = aem_base + m_sensorIndex;
 
-	if (type == AEM) {
-		// 0th sensor is 0x180, 1st sensor is 0x181, etc
-		uint32_t aemXSeriesId = aem_base + m_sensorIndex;
-		return (id == aemXSeriesId);
-	}
+	// 0th sensor is 0x190 and 0x191, 1st sensor is 0x192 and 0x193
+	uint32_t rusefiBaseId = rusefi_base + 2 * (engineConfiguration->flipWboChannels ? (1 - m_sensorIndex) : m_sensorIndex);
 
-	return false;
+	return
+		id == aemXSeriesId ||
+		id == rusefiBaseId ||
+		id == rusefiBaseId + 1;
 }
 
 bool AemXSeriesWideband::isHeaterAllowed() {
-	return ((sensorType() == AEM) || (engine->engineState.heaterControlEnabled));
+	return ((m_isAem) || (engine->engineState.heaterControlEnabled));
 }
 
 void AemXSeriesWideband::refreshState() {
@@ -62,8 +49,7 @@ void AemXSeriesWideband::refreshState() {
 		return;
 	}
 
-	can_wbo_type_e type = sensorType();
-	if (type == RUSEFI) {
+	if (!m_isAem) {
 		// This is RE WBO
 		if (m_faultCode != static_cast<uint8_t>(wbo::Fault::None)) {
 			// Report error code from WBO
@@ -80,38 +66,32 @@ void AemXSeriesWideband::refreshState() {
 				faultCode = static_cast<uint8_t>(wbo::Fault::None);
 			}
 		}
-	} else if (type == AEM) {
-		// This is AEM with two flags only
+	} else {
+		// This is AEM with two flags
 		if (m_isFault) {
 			// TODO:
 			faultCode = HACK_INVALID_AEM;
-		} else if (!m_isValid) {
-			faultCode = HACK_INVALID_AEM;
-		} else {
-			faultCode = HACK_VALID_AEM;
+			return;
 		}
-
-		// .. and no debug fields
-		heaterDuty = 0;
-		pumpDuty = 0;
-		tempC = 0;
-		nernstVoltage = 0;
-	} else {
-		// disabled
-		// clear all livedata
-		heaterDuty = 0;
-		pumpDuty = 0;
-		tempC = 0;
-		nernstVoltage = 0;
+		if (!m_isValid) {
+			faultCode = HACK_INVALID_AEM;
+			return;
+		}
+		faultCode = HACK_VALID_AEM;
 	}
 }
 
 void AemXSeriesWideband::decodeFrame(const CANRxFrame& frame, efitick_t nowNt) {
+	uint32_t id = CAN_ID(frame);
+
 	// accept frame has already guaranteed that this message belongs to us
 	// We just have to check if it's AEM or rusEFI
-	if (sensorType() == RUSEFI){
-		uint32_t id = CAN_ID(frame);
-
+	if (id < rusefi_base) {
+		m_isAem = true;
+		decodeAemXSeries(frame, nowNt);
+		//faultCode = isValidAemX ? HACK_VALID_AEM : HACK_INVALID_AEM;
+	} else {
+		m_isAem = false;
 		// rusEFI custom format
 		if ((id & 0x1) != 0) {
 			// low bit is set, this is the "diag" frame
@@ -120,8 +100,6 @@ void AemXSeriesWideband::decodeFrame(const CANRxFrame& frame, efitick_t nowNt) {
 			// low bit not set, this is standard frame
 			decodeRusefiStandard(frame, nowNt);
 		}
-	} else /* if (sensorType() == AEM) */ {
-		decodeAemXSeries(frame, nowNt);
 	}
 
 	// Do refresh on each CAN packet

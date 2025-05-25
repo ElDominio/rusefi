@@ -8,14 +8,7 @@ public class RusEfiSignature {
     private final String bundleTarget;
     private final String hash;
 
-    public RusEfiSignature(
-        final String branch,
-        final String year,
-        final String month,
-        final String day,
-        final String bundleTarget,
-        final String hash
-    ) {
+    public RusEfiSignature(String branch, String year, String month, String day, String bundleTarget, String hash) {
         this.branch = branch;
         this.year = year;
         this.month = month;

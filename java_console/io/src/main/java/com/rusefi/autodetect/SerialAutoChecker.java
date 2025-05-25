@@ -14,7 +14,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-import static com.rusefi.io.commands.HelloCommand.getStringResponse;
+import static com.rusefi.binaryprotocol.IoHelper.checkResponseCode;
 
 public class SerialAutoChecker {
     private final static Logging log = Logging.getLogging(SerialAutoChecker.class);
@@ -42,8 +42,11 @@ public class SerialAutoChecker {
         IncomingDataBuffer incomingData = stream.getDataBuffer();
         try {
             HelloCommand.send(stream);
-            final String signature = getStringResponse("auto detect", incomingData);
-            if ((signature == null) || !isSignatureWithValidPrefix(signature)) {
+            byte[] response = incomingData.getPacket("auto detect");
+            if (!checkResponseCode(response))
+                return null;
+            String signature = new String(response, 1, response.length - 1);
+            if (!isSignatureWithValidPrefix(signature)) {
                 return null;
             }
             log.info("Got signature=" + signature + " from " + stream);

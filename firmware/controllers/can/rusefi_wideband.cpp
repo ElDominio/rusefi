@@ -9,7 +9,7 @@
 // do we use some sort of a custom bootloader protocol in rusEFI WBO?
 // todo: should we move to any widely used protocol like OpenBLT or else?
 
-#if EFI_CAN_SUPPORT
+#if EFI_WIDEBAND_FIRMWARE_UPDATE && EFI_CAN_SUPPORT
 
 #include "ch.h"
 #include "can_msg_tx.h"
@@ -19,171 +19,31 @@
 #include "wideband_firmware/for_rusefi/wideband_can.h"
 #pragma GCC diagnostic pop
 
-static size_t getWidebandBus() {
-	return engineConfiguration->widebandOnSecondBus ? 1 : 0;
-}
+// This file contains an array called build_wideband_noboot_bin
+// This array contains the firmware image for the wideband contoller
+#include "wideband_firmware/for_rusefi/wideband_image.h"
 
 #define EVT_BOOTLOADER_ACK EVENT_MASK(0)
 
 static thread_t* waitingBootloaderThread = nullptr;
 
-#if (RUSEFI_WIDEBAND_VERSION <= 0xA0)
-namespace wbo
-{
-
-// TODO: move to rusefi_wideband.h
-struct PongData
-{
-    uint8_t hwId;
-    uint8_t Version;
-
-    // FW build date
-    uint8_t year; // starting from 2000
-    uint8_t month;
-    uint8_t day;
-
-    uint8_t reserved[3];
-};
-
-} // namespace wbo
-#endif
-
-void handleWidebandCan(const CANRxFrame& frame) {
-	// Bootloader acks with address 0x727573 aka ascii "rus"
-	if (CAN_EID(frame) != WB_ACK) {
-		return;
-	}
-
-	if (frame.DLC == 0)
-	{
-		// Ack reply
-		// Nop
-	} else if (frame.DLC == 8)
-	{
-		// Ping reply
-		#if EFI_TUNER_STUDIO
-			auto data = reinterpret_cast<const wbo::PongData*>(&frame.data8[0]);
-
-			engine->outputChannels.canReWidebandVersion = data->Version;
-			engine->outputChannels.canReWidebandFwDay = data->day;
-			engine->outputChannels.canReWidebandFwMon = data->month;
-			engine->outputChannels.canReWidebandFwYear = data->year;
-		#endif
-	} else {
-		// Unknown
-		return;
-	}
-
-	// Wake thread in any case
+void handleWidebandBootloaderAck() {
 	auto t = waitingBootloaderThread;
 	if (t) {
 		chEvtSignal(t, EVT_BOOTLOADER_ACK);
 	}
 }
 
-bool waitAck(int timeout = 1000) {
-	return chEvtWaitAnyTimeout(EVT_BOOTLOADER_ACK, TIME_MS2I(timeout)) != 0;
+bool waitAck() {
+	return chEvtWaitAnyTimeout(EVT_BOOTLOADER_ACK, TIME_MS2I(1000)) != 0;
 }
 
-static void setStatus(can_wbo_re_status_e status)
-{
-#if EFI_TUNER_STUDIO
-	engine->outputChannels.canReWidebandCmdStatus = static_cast<uint8_t>(status);
-#endif
+static size_t getWidebandBus() {
+	return engineConfiguration->widebandOnSecondBus ? 1 : 0;
 }
-
-void setWidebandOffset(uint8_t hwIndex, uint8_t index) {
-	size_t bus = getWidebandBus();
-
-	setStatus(WBO_RE_BUSY);
-
-	// Clear any pending acks for this thread
-	chEvtGetAndClearEvents(EVT_BOOTLOADER_ACK);
-
-	// Send messages to the current thread when acks come in
-	waitingBootloaderThread = chThdGetSelfX();
-
-	efiPrintf("***************************************");
-	efiPrintf("          WIDEBAND INDEX SET");
-	efiPrintf("***************************************");
-
-	if (hwIndex == 0xff) {
-		efiPrintf("Setting all connected widebands to index %d...", index);
-		CanTxMessage m(CanCategory::WBO_SERVICE, WB_MSG_SET_INDEX, 1, bus, true);
-		m[0] = index;
-	} else {
-		efiPrintf("Setting wideband with hwIndex %d to CAN index %d...", hwIndex, index);
-		CanTxMessage m(CanCategory::WBO_SERVICE, WB_MSG_SET_INDEX, 2, bus, true);
-		m[0] = index;
-		m[1] = hwIndex;
-	}
-
-	if (!waitAck()) {
-		efiPrintf("Wideband index set failed: no controller detected!");
-		setStatus(WBO_RE_FAILED);
-	} else {
-		setStatus(WBO_RE_DONE);
-	}
-
-	waitingBootloaderThread = nullptr;
-}
-
-void pingWideband(uint8_t hwIndex) {
-	size_t bus = getWidebandBus();
-
-	setStatus(WBO_RE_BUSY);
-
-#if EFI_TUNER_STUDIO
-	engine->outputChannels.canReWidebandVersion = 0;
-	engine->outputChannels.canReWidebandFwDay = 0;
-	engine->outputChannels.canReWidebandFwMon = 0;
-	engine->outputChannels.canReWidebandFwYear = 0;
-#endif
-
-	// Clear any pending acks for this thread
-	chEvtGetAndClearEvents(EVT_BOOTLOADER_ACK);
-
-	// Send messages to the current thread when acks come in
-	waitingBootloaderThread = chThdGetSelfX();
-
-	{
-		// TODO: replace magic number with WB_MSG_PING after updating Wideband submodule
-		CanTxMessage m(CanCategory::WBO_SERVICE, 0xEF6'0000, 1, bus, true);
-		m[0] = hwIndex;
-	}
-
-	if (!waitAck()) {
-		efiPrintf("Wideband ping failed: no controller detected!");
-		setStatus(WBO_RE_FAILED);
-	} else {
-		setStatus(WBO_RE_DONE);
-	}
-
-	waitingBootloaderThread = nullptr;
-}
-
-void sendWidebandInfo() {
-	CanTxMessage m(CanCategory::WBO_SERVICE, WB_MGS_ECU_STATUS, 2, getWidebandBus(), true);
-
-	float vbatt = Sensor::getOrZero(SensorType::BatteryVoltage) * 10;
-
-	m[0] = vbatt;
-
-	// Offset 1 bit 0 = heater enable
-	m[1] = engine->engineState.heaterControlEnabled ? 0x01 : 0x00;
-}
-
-#if EFI_WIDEBAND_FIRMWARE_UPDATE
-
-// This file contains an array called build_wideband_noboot_bin
-// This array contains the firmware image for the wideband contoller
-#include "wideband_firmware/for_rusefi/wideband_image.h"
 
 void updateWidebandFirmware() {
 	size_t bus = getWidebandBus();
-	size_t totalSize = sizeof(build_wideband_image_bin);
-
-	setStatus(WBO_RE_BUSY);
 
 	// Clear any pending acks for this thread
 	chEvtGetAndClearEvents(EVT_BOOTLOADER_ACK);
@@ -207,8 +67,7 @@ void updateWidebandFirmware() {
 
 		if (!waitAck()) {
 			efiPrintf("Wideband Update ERROR: Expected ACK from entry to bootloader, didn't get one.");
-			setStatus(WBO_RE_FAILED);
-			goto exit;
+			return;
 		}
 
 		// Let the controller reboot (and show blinky lights for a second before the update begins)
@@ -219,30 +78,28 @@ void updateWidebandFirmware() {
 
 	{
 		// Erase flash - opcode 1, magic value 0x5A5A
-		// TODO: replace magic numer with WB_BL_ERASE when define is fixed in wideband_can.h, currently mess with shift and addition precedence
-		//CanTxMessage m(CanCategory::WBO_SERVICE, WB_BL_ERASE, 0, bus, true);
 		CanTxMessage m(CanCategory::WBO_SERVICE, 0xEF1'5A5A, 0, bus, true);
 	}
 
 	if (!waitAck()) {
 		efiPrintf("Wideband Update ERROR: Expected ACK from flash erase command, didn't get one.");
-		setStatus(WBO_RE_FAILED);
-		goto exit;
+		return;
 	}
+
+	size_t totalSize = sizeof(build_wideband_image_bin);
 
 	efiPrintf("Wideband Update: Flash erased! Sending %d bytes...", totalSize);
 
 	// Send flash data 8 bytes at a time
 	for (size_t i = 0; i < totalSize; i += 8) {
 		{
-			CanTxMessage m(CanCategory::WBO_SERVICE, WB_BL_DATA_BASE | i, 8, bus, true);
+			CanTxMessage m(CanCategory::WBO_SERVICE, 0xEF2'0000 + i, 8, bus, true);
 			memcpy(&m[0], build_wideband_image_bin + i, 8);
 		}
 
 		if (!waitAck()) {
 			efiPrintf("Wideband Update ERROR: Expected ACK from data write, didn't get one.");
-			setStatus(WBO_RE_FAILED);
-			goto exit;
+			return;
 		}
 	}
 
@@ -250,17 +107,48 @@ void updateWidebandFirmware() {
 
 	{
 		// Reboot to firmware!
-		CanTxMessage m(CanCategory::WBO_SERVICE, WB_BL_REBOOT, 0, bus, true);
+		CanTxMessage m(CanCategory::WBO_SERVICE, 0xEF3'0000, 0, bus, true);
 	}
 
-	// TODO:
 	waitAck();
 
-	setStatus(WBO_RE_DONE);
-
-exit:
 	waitingBootloaderThread = nullptr;
 }
 
-#endif // EFI_WIDEBAND_FIRMWARE_UPDATE
-#endif // HAL_USE_CAN
+void setWidebandOffset(uint8_t index) {
+	// Clear any pending acks for this thread
+	chEvtGetAndClearEvents(EVT_BOOTLOADER_ACK);
+
+	// Send messages to the current thread when acks come in
+	waitingBootloaderThread = chThdGetSelfX();
+
+	efiPrintf("***************************************");
+	efiPrintf("          WIDEBAND INDEX SET");
+	efiPrintf("***************************************");
+	efiPrintf("Setting all connected widebands to index %d...", index);
+
+	{
+		CanTxMessage m(CanCategory::WBO_SERVICE, WB_MSG_SET_INDEX, 1, getWidebandBus(), true);
+		m[0] = index;
+	}
+
+	if (!waitAck()) {
+		criticalError("Wideband index set failed: no controller detected!");
+	}
+
+	waitingBootloaderThread = nullptr;
+}
+
+// huh? this code here should not be hidden under 'EFI_WIDEBAND_FIRMWARE_UPDATE' condition?!
+void sendWidebandInfo() {
+	CanTxMessage m(CanCategory::WBO_SERVICE, WB_MGS_ECU_STATUS, 2, getWidebandBus(), true);
+
+	float vbatt = Sensor::getOrZero(SensorType::BatteryVoltage) * 10;
+
+	m[0] = vbatt;
+
+	// Offset 1 bit 0 = heater enable
+	m[1] = engine->engineState.heaterControlEnabled ? 0x01 : 0x00;
+}
+
+#endif // EFI_WIDEBAND_FIRMWARE_UPDATE && HAL_USE_CAN

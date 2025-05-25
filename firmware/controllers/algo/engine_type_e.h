@@ -40,7 +40,6 @@ enum class engine_type_e : uint16_t {
 	TOYOTA_1NZ_FE = 13,
 
 	FORD_ESCORT_GT = 14,
-	// this is pretty close to body control module/BCM use-case!
 	FUEL_BENCH = 15,
 	MITSUBISHI_4G93 = 16,
 	TCU_4R70W = 17,
@@ -126,7 +125,6 @@ enum class engine_type_e : uint16_t {
 	MAVERICK_X3 = 54,
 	GM_LTG = 55,
 	SUBARU_2011 = 56,
-	// see also 'FUEL_BENCH'
 	HELLEN_HONDA_BCM = 57,
 	ETB_BENCH_ENGINE = 58,
 	FRANKENSO_TEST_33810 = 59,
@@ -138,7 +136,7 @@ enum class engine_type_e : uint16_t {
 	DODGE_RAM = 64,
 	GM_LNF = 65,
 	HONDA_OBD1 = 66,
-	FORD_ECOBOOST = 67,
+	UNUSED67 = 67,
 	MERCEDES_M111 = 68,
 
 	MAZDA_MIATA_NB2 = 69,
@@ -205,7 +203,7 @@ enum class engine_type_e : uint16_t {
 
     // both Proteus and 4chan/8chan
 	HYUNDAI_PB = 104,
-  UNUSED_105 = 105,
+  FERRARI_F136 = 105,
 
 // board_engine_types_tag
 

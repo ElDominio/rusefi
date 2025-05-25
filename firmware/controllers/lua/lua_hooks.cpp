@@ -835,12 +835,6 @@ extern int luaCommandCounters[LUA_BUTTON_COUNT];
 		return 0;
 	});
 
-	lua_register(lState, "enableCanRxWorkaround", [](lua_State* l) {
-		// that's about global_can_data
-		engineConfiguration->luaCanRxWorkaround = true;
-		return 0;
-	});
-
 #if EFI_ELECTRONIC_THROTTLE_BODY && EFI_PROD_CODE
   lua_register(lState, "getEtbTarget", [](lua_State* l) {
     auto controller = engine->etbControllers[0];

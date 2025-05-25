@@ -1,5 +1,3 @@
-// file can_dash_honda.h
-
 #pragma once
 
 #include "can.h"

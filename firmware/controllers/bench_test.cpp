@@ -46,7 +46,10 @@ const OutputPin *getOutputOnTheBenchTest() {
 #include "trigger_emulator_algo.h"
 #include "vvt.h"
 #include "microsecond_timer.h"
+
+#if EFI_WIDEBAND_FIRMWARE_UPDATE
 #include "rusefi_wideband.h"
+#endif // EFI_WIDEBAND_FIRMWARE_UPDATE
 
 #if EFI_PROD_CODE
 #include "rusefi.h"
@@ -612,25 +615,11 @@ void executeTSCommand(uint16_t subsystem, uint16_t index) {
 	case TS_X14:
 		handleCommandX14(index);
 		break;
-#if EFI_CAN_SUPPORT
+#if defined(EFI_WIDEBAND_FIRMWARE_UPDATE) && EFI_CAN_SUPPORT
 	case TS_WIDEBAND:
-		setWidebandOffset(0xff, index);
+		setWidebandOffset(index);
 		break;
-	case TS_WIDEBAND_SET_IDX_BY_ID:
-		{
-			uint8_t hwIndex = index >> 8;
-			uint8_t canIndex = index & 0xff;
-
-			// Hack until we fix canReWidebandHwIndex and set "Broadcast" to 0xff
-			// TODO:
-			hwIndex = hwIndex < 8 ? hwIndex : 0xff;
-			setWidebandOffset(hwIndex, canIndex);
-		}
-		break;
-	case TS_WIDEBAND_PING_BY_ID:
-		pingWideband(index >> 8);
-		break;
-#endif // EFI_CAN_SUPPORT
+#endif // EFI_WIDEBAND_FIRMWARE_UPDATE && EFI_CAN_SUPPORT
 	case TS_BENCH_CATEGORY:
 		handleBenchCategory(index);
 		break;
@@ -710,12 +699,10 @@ void initBenchTest() {
 
 	addConsoleAction("mainrelaybench", mainRelayBench);
 
-#if EFI_CAN_SUPPORT
-#if EFI_WIDEBAND_FIRMWARE_UPDATE
+#if EFI_WIDEBAND_FIRMWARE_UPDATE && EFI_CAN_SUPPORT
 	addConsoleAction("update_wideband", []() { widebandUpdatePending = true; });
-#endif // EFI_WIDEBAND_FIRMWARE_UPDATE
-	addConsoleActionII("set_wideband_index", [](int hwIndex, int index) { setWidebandOffset(hwIndex, index); });
-#endif // EFI_CAN_SUPPORT
+	addConsoleActionI("set_wideband_index", [](int index) { setWidebandOffset(index); });
+#endif // EFI_WIDEBAND_FIRMWARE_UPDATE && EFI_CAN_SUPPORT
 
 	addConsoleAction(CMD_STARTER_BENCH, starterRelayBench);
 	addConsoleAction(CMD_MIL_BENCH, milBench);

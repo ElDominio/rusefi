@@ -106,6 +106,9 @@ This uses separate ignition timing and VE tables not only for idle conditions, a
 ### launchControlEnabled
 
 
+### tempPumpLimitCheck
+
+
 ### antiLagEnabled
 
 
@@ -149,10 +152,10 @@ If enabled - use onboard SPI Accelerometer, otherwise listen for CAN messages
 
 
 ### tpsMin
-Closed throttle, 1 volt = 200 units.\nSee also tps1_1AdcChannel
+Closed throttle, 1 volt = 200 units.\nSee also tps1_1AdcChannel\nset tps_min X
 
 ### tpsMax
-Full throttle.\nSee also tps1_1AdcChannel
+Full throttle.\nSee also tps1_1AdcChannel\nset tps_max X
 
 ### tpsErrorDetectionTooLow
 TPS error detection: what throttle % is unrealistically low?\nAlso used for accelerator pedal error detection if so equipped.
@@ -576,6 +579,9 @@ This property is useful if using rusEFI as TCM or BCM only
 
 ### enableCanVss
 Read VSS from OEM CAN bus according to selected CAN vehicle configuration.
+
+### suppressWboWorkaround7048
+
 
 ### stftIgnoreErrorMagnitude
 If enabled, adjust at a constant rate instead of a rate proportional to the current lambda error. This mode may be easier to tune, and more tolerant of sensor noise.

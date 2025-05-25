@@ -11,23 +11,34 @@ import java.util.Optional;
 public class SingleAsyncJobExecutor {
     private final UpdateOperationCallbacks updateOperationCallbacks;
 
-    private final Runnable onJobInProgressFinished;
+    // Temporary feature flag for testing #7199
+    // TODO: get rid of this feature flag after #7199 is completed
+    private final boolean doNotUseStatusWindow;
 
     private volatile Optional<AsyncJob> jobInProgress = Optional.empty();
 
     SingleAsyncJobExecutor(
         final UpdateOperationCallbacks updateOperationCallbacks,
+        final boolean doNotUseStatusWindow,
         final Runnable onJobInProgressFinished
     ) {
         this.updateOperationCallbacks = updateOperationCallbacks;
-        this.onJobInProgressFinished = onJobInProgressFinished;
+        this.doNotUseStatusWindow = doNotUseStatusWindow;
     }
 
     void startJob(final AsyncJob job, final Component parent) {
         final Optional<AsyncJob> prevJobInProgress = setJobInProgressIfEmpty(job);
         if (!prevJobInProgress.isPresent()) {
             updateOperationCallbacks.clear();
-            AsyncJobExecutor.INSTANCE.executeJob(job, updateOperationCallbacks, this::handleJobInProgressFinished);
+            if (doNotUseStatusWindow) {
+                AsyncJobExecutor.INSTANCE.executeJob(job, updateOperationCallbacks, this::handleJobInProgressFinished);
+            } else {
+                AsyncJobExecutor.INSTANCE.executeJobWithStatusWindow(
+                    job,
+                    updateOperationCallbacks,
+                    this::handleJobInProgressFinished
+                );
+            }
         } else {
             JOptionPane.showMessageDialog(
                 parent,
@@ -56,6 +67,5 @@ public class SingleAsyncJobExecutor {
 
     private void handleJobInProgressFinished() {
         resetJobInProgress();
-        onJobInProgressFinished.run();
     }
 }

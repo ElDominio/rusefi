@@ -2,7 +2,7 @@ package com.rusefi.ui.basic;
 
 import com.devexperts.logging.Logging;
 import com.opensr5.ini.field.IniField;
-import com.rusefi.PortResult;
+import com.rusefi.SerialPortScanner;
 import com.rusefi.io.UpdateOperationCallbacks;
 import com.rusefi.maintenance.CalibrationsHelper;
 import com.rusefi.maintenance.CalibrationsInfo;
@@ -15,8 +15,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
 
 import static com.devexperts.logging.Logging.getLogging;
 
@@ -25,20 +26,14 @@ public enum UnitLabelPrinter {
 
     private static final Logging log = getLogging(UnitLabelPrinter.class);
 
-    public static final Set<String> UNIT_IDENTIFIER_FIELD_NAMES = Arrays.stream(new String[] {
-        UnitIdentifiers.UID_SUM_FIELD_NAME,
-        UnitIdentifiers.SHORT_UID_FIELD_NAME,
-        UnitIdentifiers.HW_REVISION_FIELD_NAME
-    }).collect(Collectors.toSet());
-
     public boolean printUnitLabel(
         final JComponent parent,
-        final PortResult ecuPort,
+        final SerialPortScanner.PortResult ecuPort,
         final UpdateOperationCallbacks callbacks
     ) {
         boolean result = false;
         final Optional<CalibrationsInfo> currentCalibrations = CalibrationsHelper.readCurrentCalibrations(
-            ecuPort.port,
+            ecuPort,
             callbacks
         );
 

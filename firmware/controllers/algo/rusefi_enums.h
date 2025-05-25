@@ -109,8 +109,7 @@ typedef enum  __attribute__ ((__packed__)) {
 	 */
 	VVT_HONDA_K_EXHAUST = 16,
 
-	VVT_UNUSED_17 = 17,
-	// also 4G92/93/94
+	VVT_MITSUBISHI_4G9x = 17,
 	VVT_MITSUBISHI_4G63 = 18,
 
 	VVT_FORD_COYOTE = 19,
@@ -675,19 +674,6 @@ typedef enum __attribute__ ((__packed__)) {
 	B500KBPS = 5, // 500kbps
 	B1MBPS = 6, // 1Mbps
 } can_baudrate_e;
-
-typedef enum __attribute__ ((__packed__)) {
-	RUSEFI = 0,
-	AEM = 1,
-	DISABLED = 2
-} can_wbo_type_e;
-
-typedef enum __attribute__ ((__packed__)) {
-	WBO_RE_IDLE	= 0,
-	WBO_RE_DONE = 1,
-	WBO_RE_BUSY = 2,
-	WBO_RE_FAILED = 3
-} can_wbo_re_status_e;
 
 typedef enum __attribute__ ((__packed__)) {
 	GPPWM_GreaterThan = 0,

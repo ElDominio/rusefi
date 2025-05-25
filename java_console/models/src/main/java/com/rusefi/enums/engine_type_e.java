@@ -72,7 +72,7 @@ public enum engine_type_e {
 	DODGE_RAM,
 	GM_LNF,
 	HONDA_OBD1,
-	FORD_ECOBOOST,
+	UNUSED67,
 	MERCEDES_M111,
 	MAZDA_MIATA_NB2,
 	SUBARU_EG33,
@@ -110,5 +110,5 @@ public enum engine_type_e {
 	UNUSED102,
 	PROTEUS_NISSAN_VQ35,
 	HYUNDAI_PB,
-	UNUSED_105,
+	FERRARI_F136,
 }

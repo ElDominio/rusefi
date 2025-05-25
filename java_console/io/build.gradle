@@ -11,12 +11,7 @@ tasks.withType(Test) {
 
 dependencies {
     implementation global_libs.javaxJson
-
     api global_libs.jcip
-
-    // attempt to fix xml binding drama (see #7878, #7430)
-    api global_libs.jaxb
-
     api project(':models')
     api project(':peak-can-basic')
     api project(':core_io')

@@ -794,7 +794,7 @@ struct engine_configuration_s {
 	bool launchControlEnabled : 1 {};
 	/**
 	offset 168 bit 17 */
-	bool unusedBit42423 : 1 {};
+	bool tempPumpLimitCheck : 1 {};
 	/**
 	offset 168 bit 18 */
 	bool antiLagEnabled : 1 {};
@@ -848,6 +848,7 @@ struct engine_configuration_s {
 	/**
 	 * Closed throttle, 1 volt = 200 units.
 	 * See also tps1_1AdcChannel
+	 * set tps_min X
 	 * units: ADC
 	 * offset 172
 	 */
@@ -855,6 +856,7 @@ struct engine_configuration_s {
 	/**
 	 * Full throttle.
 	 * See also tps1_1AdcChannel
+	 * set tps_max X
 	 * units: ADC
 	 * offset 174
 	 */
@@ -1162,7 +1164,6 @@ struct engine_configuration_s {
 	int byFirmwareVersion;
 	/**
 	 * First throttle body, first sensor. See also pedalPositionAdcChannel
-	 * Analog TPS inputs have 200Hz low-pass cutoff.
 	 * offset 492
 	 */
 	adc_channel_e tps1_1AdcChannel;
@@ -2014,7 +2015,7 @@ struct engine_configuration_s {
 	bool enableCanVss : 1 {};
 	/**
 	offset 892 bit 8 */
-	bool unusedSuppressWboWorkaround7048 : 1 {};
+	bool suppressWboWorkaround7048 : 1 {};
 	/**
 	 * If enabled, adjust at a constant rate instead of a rate proportional to the current lambda error. This mode may be easier to tune, and more tolerant of sensor noise.
 	offset 892 bit 9 */
@@ -4941,16 +4942,8 @@ struct engine_configuration_s {
 	 */
 	float wastegatePositionClosedVoltage;
 	/**
-	 * offset 3768
-	 */
-	can_wbo_type_e wboType1;
-	/**
-	 * offset 3770
-	 */
-	can_wbo_type_e wboType2;
-	/**
 	 * units: units
-	 * offset 3772
+	 * offset 3768
 	 */
 	uint8_t unusedOftenChangesDuringFirmwareUpdate[END_OF_CALIBRATION_PADDING] = {};
 };

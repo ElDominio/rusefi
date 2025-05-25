@@ -8,7 +8,7 @@ static void runCoyoteIntakeCam(bool invertPrimaryTriggerSignal, int warningCount
 	reader.open("tests/trigger/resources/ford-coyote-intake-cam.csv");
 
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	eth.setTriggerType(trigger_type_e::TT_VVT_FORD_COYOTE);
+	eth.setTriggerType(invertPrimaryTriggerSignal ? trigger_type_e::TT_DEV : trigger_type_e::TT_VVT_FORD_COYOTE);
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
 	engineConfiguration->alwaysInstantRpm = true;
 	reader.flipOnRead = invertPrimaryTriggerSignal;
@@ -27,13 +27,19 @@ TEST(fordCoyote, intakeCam) {
   runCoyoteIntakeCam(false, 1, 1093);
 }
 
+TEST(fordCoyote, intakeCamInverted) {
+	extern bool unitTestTaskPrecisionHack;
+	unitTestTaskPrecisionHack = true;
+  	runCoyoteIntakeCam(true, 3, 1018);
+}
+
 static void runCoyoteExhaustCam(bool invertPrimaryTriggerSignal, int warningCount, int rpm) {
 	CsvReader reader(1, /* vvtCount */ 0);
 
 	reader.open("tests/trigger/resources/ford-coyote-exhaust-cam.csv");
 
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	eth.setTriggerType(trigger_type_e::TT_VVT_FORD_COYOTE);
+	eth.setTriggerType(invertPrimaryTriggerSignal ? trigger_type_e::TT_DEV : trigger_type_e::TT_VVT_FORD_COYOTE);
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
 	reader.flipOnRead = invertPrimaryTriggerSignal;
 	engineConfiguration->alwaysInstantRpm = true;

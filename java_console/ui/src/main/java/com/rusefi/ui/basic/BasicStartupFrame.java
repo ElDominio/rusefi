@@ -21,10 +21,15 @@ import java.lang.reflect.InvocationTargetException;
 public class BasicStartupFrame {
     private final String whiteLabel = ConnectionAndMeta.getWhiteLabel(ConnectionAndMeta.getProperties());
 
+    // Temporary feature flag for testing #7199
+    // TODO: get rid of this feature flag after #7199 is completed
+    private final boolean doNotUseStatusWindow = true;
+
     private final StatusPanel statusPanel = new StatusPanel();
     private final BasicUpdaterPanel basicUpdaterPanel = new BasicUpdaterPanel(
         ConnectionAndMeta.isDefaultWhitelabel(whiteLabel),
-        statusPanel
+        statusPanel,
+        doNotUseStatusWindow
     );
     private final FrameHelper frame = FrameHelper.createFrame(
         whiteLabel + " basic console " + Launcher.CONSOLE_VERSION
@@ -44,7 +49,9 @@ public class BasicStartupFrame {
     public BasicStartupFrame() {
         final JPanel panel = new JPanel();
         panel.add(basicUpdaterPanel.getContent());
-        panel.add(statusPanel);
+        if (doNotUseStatusWindow) {
+            panel.add(statusPanel);
+        }
         TunerStudioHelper.maybeCloseTs();
 
         SerialPortScanner.INSTANCE.addListener(currentHardware -> SwingUtilities.invokeLater(() -> {

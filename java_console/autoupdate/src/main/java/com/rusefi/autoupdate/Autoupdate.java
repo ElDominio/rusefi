@@ -6,7 +6,6 @@ import com.rusefi.core.FindFileHelper;
 import com.rusefi.core.io.BundleUtil;
 import com.rusefi.core.net.ConnectionAndMeta;
 import com.rusefi.core.FileUtil;
-import com.rusefi.core.net.JarFileUtil;
 import com.rusefi.core.rusEFIVersion;
 import com.rusefi.core.ui.AutoupdateUtil;
 import org.jetbrains.annotations.NotNull;
@@ -17,14 +16,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URLClassLoader;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 
 import static com.devexperts.logging.Logging.getLogging;
@@ -32,7 +28,7 @@ import static com.rusefi.core.FindFileHelper.findSrecFile;
 
 public class Autoupdate {
     private static final Logging log = getLogging(Autoupdate.class);
-    private static final int AUTOUPDATE_VERSION = 20250519; // separate from rusEFIVersion#CONSOLE_VERSION
+    private static final int AUTOUPDATE_VERSION = 20250426; // separate from rusEFIVersion#CONSOLE_VERSION
 
     private static final String TITLE = getTitle();
 
@@ -79,29 +75,25 @@ public class Autoupdate {
     private static void autoupdate(String[] args) {
         BundleUtil.BundleInfo bundleInfo = BundleUtil.readBundleFullNameNotNull();
         if (BundleUtil.BundleInfo.isUndefined(bundleInfo)) {
-            log.error("ERROR: Autoupdate: unable to perform without bundleFullName");
+            log.error("ERROR: Autoupdate: unable to perform without bundleFullName (check parent folder name)");
             System.exit(-1);
         }
 
         @NotNull String firstArgument = args.length > 0 ? args[0] : "";
 
-        final Optional<DownloadedAutoupdateFileInfo> downloadedAutoupdateFile = downloadFreshZipFile(firstArgument, bundleInfo);
+        final Optional<DownloadedAutoupdateFileInfo> downloadedAutoupdateFile = downloadFreshZipFile(args, firstArgument, bundleInfo);
         downloadedAutoupdateFile.ifPresent(downloadedFile -> ObsoleteFilesArchiver.INSTANCE.archiveObsoleteFiles());
         URLClassLoader jarClassLoader = safeUnzipMakingSureClassloaderIsHappy(downloadedAutoupdateFile);
         log.info("extremely dark magic: XML binding seems to depend on this");
         Thread.currentThread().setContextClassLoader(jarClassLoader);
-        if (ConnectionAndMeta.startConsoleInAutoupdateProcess()) {
-            //TODO: Afterwards we need to decide if we really want to support this option.
-            //  I would prefer to forget about it as about a nightmare :)
-            startConsole(args, jarClassLoader);
-        } else {
-            startConsoleAsANewProcess(args);
-        }
+        startConsole(args, jarClassLoader);
     }
 
-    private static Optional<DownloadedAutoupdateFileInfo> downloadFreshZipFile(String firstArgument, BundleUtil.BundleInfo bundleInfo) {
+    private static Optional<DownloadedAutoupdateFileInfo> downloadFreshZipFile(String[] args, String firstArgument, BundleUtil.BundleInfo bundleInfo) {
         Optional<DownloadedAutoupdateFileInfo> downloadedAutoupdateFile;
-        if (firstArgument.equalsIgnoreCase("release")) {
+        if (firstArgument.equalsIgnoreCase("basic-ui")) {
+            downloadedAutoupdateFile = doDownload(bundleInfo);
+        } else if (args.length > 0 && args[0].equalsIgnoreCase("release")) {
             // this branch needs progress for custom boards!
             log.info("Release update requested");
             downloadedAutoupdateFile = downloadAutoupdateZipFile(
@@ -239,45 +231,6 @@ public class Autoupdate {
                  NoSuchMethodException e) {
             log.error("Failed to start", e);
             throw new IllegalStateException("Invoking console: " + e, e);
-        }
-    }
-
-    private static void startConsoleAsANewProcess(final String[] args) {
-        final String consoleExeFileName = JarFileUtil.getJarFileNamePrefix() + "_console.exe";
-        if (!Files.exists(Paths.get(consoleExeFileName))) {
-            log.error(String.format("File `%s` to launch isn't found", consoleExeFileName));
-            if (!AutoupdateUtil.runHeadless) {
-                JOptionPane.showMessageDialog(
-                    null,
-                    String.format("File `%s` to launch isn't found.", consoleExeFileName),
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-                );
-            }
-            return;
-        }
-        log.info(String.format("File `%s` to launch is found", consoleExeFileName));
-        final String[] processBuilderArgs = new String[args.length + 1];
-        processBuilderArgs[0] = consoleExeFileName;
-        System.arraycopy(args, 0, processBuilderArgs, 1, args.length);
-        try {
-            log.info(String.format("We're starting `%s` process", consoleExeFileName));
-            new ProcessBuilder(processBuilderArgs).start();
-            log.info(String.format("Process `%s` is started", consoleExeFileName));
-        } catch (final IOException e) {
-            final String command = String.join(" ", processBuilderArgs);
-            log.error(String.format("Failed to run `$s` command", command), e);
-            if (!AutoupdateUtil.runHeadless) {
-                JOptionPane.showMessageDialog(
-                    null,
-                    String.format(
-                        "Error running `%s` command.\nPlease try to run it manually again.",
-                        command
-                    ),
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-                );
-            }
         }
     }
 

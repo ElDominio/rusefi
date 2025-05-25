@@ -67,11 +67,11 @@ public class SignatureHelper {
         }
     }
 
-    public static RusEfiSignature parse(final String signature) {
+    public static RusEfiSignature parse(String signature) {
         if (signature == null || !signature.startsWith(PREFIX))
             return null;
-        final String signatureWithoutPrefix = signature.substring(PREFIX.length()).trim();
-        final String[] elements = signatureWithoutPrefix.split("\\.");
+        signature = signature.substring(PREFIX.length()).trim();
+        String[] elements = signature.split("\\.");
         if (elements.length != 6)
             return null;
 

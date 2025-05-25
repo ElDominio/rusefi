@@ -315,7 +315,7 @@ public class StartupFrame {
     }
 
     private void applyKnownPorts(AvailableHardware currentHardware) {
-        List<PortResult> ports = currentHardware.getKnownPorts();
+        List<SerialPortScanner.PortResult> ports = currentHardware.getKnownPorts();
         log.info("Rendering available ports: " + ports);
         connectPanel.setVisible(!ports.isEmpty());
 
@@ -340,7 +340,7 @@ public class StartupFrame {
 
     private void connectButtonAction(JComboBox<String> comboSpeeds) {
         BaudRateHolder.INSTANCE.baudRate = Integer.parseInt((String) comboSpeeds.getSelectedItem());
-        PortResult selectedPort = ((PortResult)portsComboBox.getComboPorts().getSelectedItem());
+        SerialPortScanner.PortResult selectedPort = ((SerialPortScanner.PortResult)portsComboBox.getComboPorts().getSelectedItem());
         disposeFrameAndProceed();
         new ConsoleUI(selectedPort.port);
     }
@@ -382,14 +382,14 @@ public class StartupFrame {
         SerialPortScanner.INSTANCE.stopTimer();
     }
 
-    private static boolean applyPortSelectionToUIcontrol(JComboBox<PortResult> comboPorts, List<PortResult> ports) {
+    private static boolean applyPortSelectionToUIcontrol(JComboBox<SerialPortScanner.PortResult> comboPorts, List<SerialPortScanner.PortResult> ports) {
         comboPorts.removeAllItems();
         boolean hasEcuOrBootloader = false;
-        for (final PortResult port : ports) {
+        for (final SerialPortScanner.PortResult port : ports) {
             comboPorts.addItem(port);
-            if (port.type == SerialPortType.Ecu ||
-                port.type == SerialPortType.EcuWithOpenblt ||
-                port.type == SerialPortType.OpenBlt) {
+            if (port.type == SerialPortScanner.SerialPortType.Ecu ||
+                port.type == SerialPortScanner.SerialPortType.EcuWithOpenblt ||
+                port.type == SerialPortScanner.SerialPortType.OpenBlt) {
                 hasEcuOrBootloader = true;
             }
         }
