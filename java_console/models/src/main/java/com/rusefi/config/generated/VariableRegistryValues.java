@@ -183,11 +183,11 @@ public class VariableRegistryValues {
 	public static final int CanGpioType_DRT = 1;
 	public static final int CanGpioType_MS = 2;
 	public static final int CanGpioType_NONE = 0;
-	public static final int CLT_CRANKING_CURVE_SIZE = 6;
+	public static final int CLT_CRANKING_CURVE_SIZE = 8;
 	public static final int CLT_CRANKING_TAPER_CURVE_SIZE = 5;
-	public static final int CLT_CURVE_SIZE = 6;
-	public static final int CLT_FUEL_CURVE_SIZE = 6;
-	public static final int CLT_IDLE_TABLE_CLT_SIZE = 6;
+	public static final int CLT_CURVE_SIZE = 8;
+	public static final int CLT_FUEL_CURVE_SIZE = 8;
+	public static final int CLT_IDLE_TABLE_CLT_SIZE = 8;
 	public static final int CLT_IDLE_TABLE_RPM_SIZE = 2;
 	public static final int CLT_LIMITER_CURVE_SIZE = 4;
 	public static final int CLT_TIMING_CURVE_SIZE = 5;
@@ -245,7 +245,7 @@ public class VariableRegistryValues {
 	public static final int COMPOSITE_PACKET_SIZE = 5;
 	public static final String CONSOLE_DATA_PROTOCOL_TAG = " @";
 	public static final int CRANKING_ADVANCE_CURVE_SIZE = 4;
-	public static final int CRANKING_CLT_IDLE_CURVE_SIZE = 5;
+	public static final int CRANKING_CLT_IDLE_CURVE_SIZE = 8;
 	public static final int CRANKING_CURVE_SIZE = 5;
 	public static final int CRANKING_CYCLE_CLT_SIZE = 4;
 	public static final int CRANKING_ENRICH_COUNT = 6;
@@ -325,7 +325,7 @@ public class VariableRegistryValues {
 	public static final int display_mode_e_DM_HD44780 = 1;
 	public static final int display_mode_e_DM_HD44780_OVER_PCF8574 = 2;
 	public static final int display_mode_e_DM_NONE = 0;
-	public static final int DWELL_CURVE_SIZE = 2;
+	public static final int DWELL_CURVE_SIZE = 5;
 	public static final String DYNO_CAR_CAR_MASS_TOOLTIP = "Full car mass";
 	public static final String DYNO_CAR_CAR_MASS_UNITS = "Kg";
 	public static final String DYNO_CAR_CARGO_MASS_TOOLTIP = "Mass of passengers and cargo";
@@ -362,7 +362,7 @@ public class VariableRegistryValues {
 	public static final int ego_sensor_e_ES_PLX = 4;
 	public static final int EGT_CHANNEL_COUNT = 8;
 	public static final int END_OF_CALIBRATION_PADDING = 44;
-	public static final int engine_configuration_s_size = 3788;
+	public static final int engine_configuration_s_size = 3848;
 	public static final int engine_load_mode_e_LM_ALPHA_N = 2;
 	public static final int engine_load_mode_e_LM_LUA = 3;
 	public static final int engine_load_mode_e_LM_MOCK = 100;
@@ -379,7 +379,7 @@ public class VariableRegistryValues {
 	public static final String ENGINE_MAKE_SUBARU = "Subaru";
 	public static final String ENGINE_MAKE_TOYOTA = "Toyota";
 	public static final String ENGINE_MAKE_VAG = "VAG";
-	public static final int ENGINE_NOISE_CURVE_SIZE = 2;
+	public static final int ENGINE_NOISE_CURVE_SIZE = 10;
 	public static final int ENGINE_SNIFFER_UNIT_US = 10;
 	public static final int engine_type_e_BMW_M52 = 22;
 	public static final int engine_type_e_BMW_M73_MRE = 50;
@@ -1208,7 +1208,7 @@ public class VariableRegistryValues {
 	public static final int lua_gauge_meaning_e_LUA_GAUGE_LOWER_BOUND = 0;
 	public static final int lua_gauge_meaning_e_LUA_GAUGE_UPPER_BOUND = 1;
 	public static final int LUA_PWM_COUNT = 8;
-	public static final int LUA_SCRIPT_SIZE = 8000;
+	public static final int LUA_SCRIPT_SIZE = 20000;
 	public static final int MAF_DECODING_COUNT = 32;
 	public static final int maf_sensor_type_e_Bosch0280218004 = 2;
 	public static final int maf_sensor_type_e_Bosch0280218037 = 1;
@@ -1273,7 +1273,7 @@ public class VariableRegistryValues {
 	public static final int PEDAL_TO_TPS_SIZE = 8;
 	public static final String pedalSensor_NAME = "Accelerator pedal";
 	public static final String pedalToTpsTbl_NAME = "ETB pedal target";
-	public static final int persistent_config_s_size = 21384;
+	public static final int persistent_config_s_size = 33552;
 	public static final int pid_s_size = 20;
 	public static final int pin_input_mode_e_PI_DEFAULT = 0;
 	public static final int pin_input_mode_e_PI_INVERTED_DEFAULT = 4;
@@ -1366,8 +1366,8 @@ public class VariableRegistryValues {
 	public static final int tChargeMode_e_TCHARGE_MODE_AIR_INTERP = 1;
 	public static final int tChargeMode_e_TCHARGE_MODE_AIR_INTERP_TABLE = 2;
 	public static final int tChargeMode_e_TCHARGE_MODE_RPM_TPS = 0;
-	public static final int TCU_GEAR_COUNT = 2;
-	public static final int TCU_RANGE_COUNT = 2;
+	public static final int TCU_GEAR_COUNT = 6;
+	public static final int TCU_RANGE_COUNT = 6;
 	public static final int TCU_SOLENOID_COUNT = 2;
 	public static final int TCU_TABLE_WIDTH = 2;
 	public static final int thermistor_conf_s_size = 28;
@@ -1391,7 +1391,7 @@ public class VariableRegistryValues {
 	public static final int torqueReductionActivationMode_e_TORQUE_REDUCTION_BUTTON = 0;
 	public static final int torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_DOWN_SWITCH = 2;
 	public static final int torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_UP_SWITCH = 3;
-	public static final int TOTAL_CONFIG_SIZE = 21384;
+	public static final int TOTAL_CONFIG_SIZE = 33552;
 	public static final int TPS_2_BYTE_PACKING_MULT = 100;
 	public static final int TPS_PPS_TOO_HIGH_THRESHOLD = 110;
 	public static final int TPS_PPS_TOO_LOW_THRESHOLD = -10;
@@ -1616,7 +1616,7 @@ public class VariableRegistryValues {
 	public static final int TS_RESPONSE_UNDERRUN = 0x80;
 	public static final int TS_RESPONSE_UNRECOGNIZED_COMMAND = 0x83;
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
-	public static final String TS_SIGNATURE = "rusEFI master.2025.05.20.f407-discovery.4118876485";
+	public static final String TS_SIGNATURE = "rusEFI master.2025.05.25.paralela.3542770632";
 	public static final char TS_SIMULATE_CAN = '>';
 	public static final char TS_SINGLE_WRITE_COMMAND = 'W';
 	public static final char TS_TEST_COMMAND = 't';
@@ -1663,7 +1663,7 @@ public class VariableRegistryValues {
 	public static final int ve_override_e_VE_TPS = 2;
 	public static final int VE_RPM_COUNT = 16;
 	public static final String VE_TABLE_NAME = "VE Table";
-	public static final int VEHICLE_INFO_SIZE = 2;
+	public static final int VEHICLE_INFO_SIZE = 17;
 	public static final int VIN_NUMBER_SIZE = 17;
 	public static final int VR_THRESHOLD_COUNT = 2;
 	public static final int vr_threshold_s_size = 16;
