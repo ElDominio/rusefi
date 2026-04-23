@@ -65,7 +65,7 @@ static void setupDefaultSensorInputs() {
 
 static void alphax_8chan_boardInitHardware() {
   // technically same thing as setHellenMegaEnPin() since underlying pin E10 is same as H144_GP8
-	setHellenEnPin(Gpio::MM176_EN_PIN);
+	setHellenEnPin(Gpio::D13);
 
 }
 
