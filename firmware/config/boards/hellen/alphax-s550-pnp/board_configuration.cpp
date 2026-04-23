@@ -91,8 +91,6 @@ static void alphax_8chan_defaultConfiguration() {
 //	engineConfiguration->vvtPins[0] = Gpio::H144_OUT_PWM7;
 //	engineConfiguration->vvtPins[1] = Gpio::H144_OUT_PWM8;
 
-    config->boardUseTempPullUp = true;
-
     setHellenMMbaro();
 
 	engineConfiguration->mainRelayPin = Gpio::MM176_GP1;
@@ -111,7 +109,9 @@ static void alphax_8chan_defaultConfiguration() {
 
 	engineConfiguration->launchActivationMode = CLUTCH_INPUT_LAUNCH;
 
-	//engineConfiguration->vrThreshold[2].pin = Gpio::MM176_OUT_PWM13;
+	// S550 has no VR threshold circuits; explicitly unassign so flash resets don't carry stale pins
+	engineConfiguration->vrThreshold[0].pin = Gpio::Unassigned;
+	engineConfiguration->vrThreshold[1].pin = Gpio::Unassigned;
 
 	hellenWbo();
 }
