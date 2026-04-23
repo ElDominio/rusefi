@@ -13,15 +13,7 @@
 #include "defaults.h"
 #include "board_overrides.h"
 
-static OutputPin alphaCrankPPullUp;
 
-static OutputPin alphaHall1PullDown;
-static OutputPin alphaHall2PullDown;
-static OutputPin alphaHall3PullDown;
-static OutputPin alphaHall4PullDown;
-static OutputPin alphaHall5PullDown;
-static OutputPin alphaFlexPullDown;
-static OutputPin tempPullUp;
 
 static void setInjectorPins() {
 	engineConfiguration->injectionPins[0] = Gpio::MM176_INJ1;
@@ -30,8 +22,6 @@ static void setInjectorPins() {
 	engineConfiguration->injectionPins[3] = Gpio::MM176_INJ4;
 
 	engineConfiguration->clutchDownPin = Gpio::Unassigned;
-	engineConfiguration->clutchDownPinMode = PI_PULLDOWN;
-	engineConfiguration->launchActivationMode = CLUTCH_INPUT_LAUNCH;
 	engineConfiguration->malfunctionIndicatorPin = Gpio::Unassigned;
 }
 
@@ -77,25 +67,10 @@ static void alphax_8chan_boardInitHardware() {
   // technically same thing as setHellenMegaEnPin() since underlying pin E10 is same as H144_GP8
 	setHellenEnPin(Gpio::MM176_EN_PIN);
 
-	alphaCrankPPullUp.initPin("Crank-PullUp", Gpio::MM176_GP16);
-	alphaHall1PullDown.initPin("PullDown-Hall1", Gpio::MM176_OUT_IO10);
-	alphaHall2PullDown.initPin("PullDown-Hall2", Gpio::MM176_GP21);
-	alphaHall3PullDown.initPin("PullDown-Hall3", Gpio::MM176_GP22);
-	alphaHall4PullDown.initPin("PullDown-Hall4", Gpio::MM176_GP23);
-	alphaHall5PullDown.initPin("PullDown-Hall5", Gpio::MM176_GP24);
-	alphaFlexPullDown.initPin("PullDown-Flex",   Gpio::MM176_GP25);
-	tempPullUp.initPin("Temp PullUp", Gpio::MM176_OUT_IO12);
 }
 
 static void customBoardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
-	alphaCrankPPullUp.setValue(config->boardUseCrankPullUp);
-	alphaHall1PullDown.setValue(config->boardUseH1PullDown);
-	alphaHall2PullDown.setValue(config->boardUseH2PullDown);
-	alphaHall3PullDown.setValue(config->boardUseH3PullDown);
-	alphaHall4PullDown.setValue(config->boardUseH4PullDown);
-	alphaHall5PullDown.setValue(config->boardUseH5PullDown);
-	alphaFlexPullDown.setValue(config->boardUseFlexPullDown);
-	tempPullUp.setValue(config->boardUseTempPullUp);
+
 }
 
 static void alphax_8chan_boardConfigOverrides() {
@@ -136,8 +111,6 @@ static void alphax_8chan_defaultConfiguration() {
 
 	engineConfiguration->launchActivationMode = CLUTCH_INPUT_LAUNCH;
 
-	engineConfiguration->vrThreshold[0].pin = Gpio::MM176_OUT_PWM11;
-	engineConfiguration->vrThreshold[1].pin = Gpio::MM176_OUT_PWM12;
 	//engineConfiguration->vrThreshold[2].pin = Gpio::MM176_OUT_PWM13;
 
 	hellenWbo();
