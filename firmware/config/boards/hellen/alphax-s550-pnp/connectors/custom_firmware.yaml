@@ -3,103 +3,103 @@ meta: config/boards/hellen_mm176_meta.h
 pins:
   # --- Ignition Outputs ---
   # S550 PNP: ignition uses INJ driver channels and GP outputs
-  - meta: MM176_INJ8
+  - id: F14
     class: outputs
     ts_name: Ignition 1
 
-  - meta: MM176_INJ6
+  - id: F12
     class: outputs
     ts_name: Ignition 2
 
-  - meta: MM176_INJ7
+  - id: F13
     class: outputs
     ts_name: Ignition 3
 
-  - meta: MM176_GP7
+  - id: F15
     class: outputs
     ts_name: Ignition 4
 
-  - meta: MM176_GP3
+  - id: G10
     class: outputs
     ts_name: Ignition 5
 
-  - meta: MM176_GP4
+  - id: G9
     class: outputs
     ts_name: Ignition 6
 
-  - meta: MM176_GP2
+  - id: D7
     class: outputs
     ts_name: Ignition 7
 
-  - meta: MM176_OUT_IO6
+  - id: G11
     class: outputs
     ts_name: Ignition 8
 
   # --- Injector Outputs ---
   # S550 PNP: injectors use IGN driver channels
-  - meta: MM176_IGN6
+  - id: B8
     class: outputs
     ts_name: Injector 1
 
-  - meta: MM176_IGN5
+  - id: E2
     class: outputs
     ts_name: Injector 2
 
-  - meta: MM176_IGN3
+  - id: E4
     class: outputs
     ts_name: Injector 3
 
-  - meta: MM176_IGN1
+  - id: C13
     class: outputs
     ts_name: Injector 4
 
-  - meta: MM176_IGN7
+  - id: B9
     class: outputs
     ts_name: Injector 5
 
-  - meta: MM176_IGN2
+  - id: E5
     class: outputs
     ts_name: Injector 6
 
-  - meta: MM176_IGN4
+  - id: E3
     class: outputs
     ts_name: Injector 7
 
-  - meta: MM176_IGN8
+  - id: E6
     class: outputs
     ts_name: Injector 8
 
   # --- VVT Outputs ---
-  - meta: MM176_OUT_PWM4
+  - id: C8
     class: outputs
     ts_name: VVT 1 (Bank1 Exhaust)
 
-  - meta: MM176_OUT_PWM5
+  - id: C9
     class: outputs
     ts_name: VVT 2 (Bank1 Intake)
 
-  - meta: MM176_OUT_PWM2
+  - id: C6
     class: outputs
     ts_name: VVT 3 (Bank2 Exhaust)
 
-  - meta: MM176_OUT_PWM3
+  - id: C7
     class: outputs
     ts_name: VVT 4 (Bank2 Intake)
 
   # --- Electronic Throttle Body (Dual ETB) ---
-  - meta: MM176_OUT_PWM14
+  - id: I7
     class: outputs
     ts_name: ETB1 PWM
 
-  - meta: MM176_OUT_PWM16
+  - id: I5
     class: outputs
     ts_name: ETB1 Direction
 
-  - meta: MM176_GP25
+  - id: I4
     class: outputs
     ts_name: ETB1 Disable
 
-  - meta: MM176_OUT_PWM15
+  - id: I6
     class: outputs
     ts_name: ETB2 PWM
 
@@ -116,11 +116,11 @@ pins:
     class: outputs
     ts_name: Main Relay
 
-  - meta: MM176_IN_D1
+  - id: E12
     class: outputs
     ts_name: Fuel Pump Relay
 
-  - meta: MM176_IN_D3
+  - id: E14
     class: outputs
     ts_name: Fan 1 Relay
 
@@ -128,43 +128,43 @@ pins:
     class: outputs
     ts_name: Fan 2
 
-  - meta: MM176_IN_D2
+  - id: E13
     class: outputs
     ts_name: AC Clutch Relay
 
-  - meta: MM176_IN_AUX6
+  - id: E11
     class: outputs
     ts_name: Alternator Control
 
-  - meta: MM176_OUT_PWM9
+  - id: H12
     class: outputs
     ts_name: Boost Solenoid
 
-  - meta: MM176_INJ5
+  - id: D9
     class: outputs
     ts_name: Tachometer Output
 
-  - meta: MM176_OUT_IO11
+  - id: G2
     class: outputs
     ts_name: Purge Solenoid
 
-  - meta: MM176_OUT_IO7
+  - id: G3
     class: outputs
     ts_name: Cutout Control
 
-  - meta: MM176_OUT_IO8
+  - id: G4
     class: outputs
     ts_name: Diff Pump Speed
 
-  - meta: MM176_OUT_IO4
+  - id: G5
     class: outputs
     ts_name: Vent Solenoid
 
-  - meta: MM176_INJ1
+  - id: G7
     class: outputs
     ts_name: GENLI
 
-  - meta: MM176_IN_CRANK
+  - id: B1
     class: outputs
     ts_name: Starter Relay
 
@@ -176,21 +176,21 @@ pins:
     class: outputs
     ts_name: IMRC 2
 
-  - meta: MM176_GP6
+  - id: D8
     class: outputs
     ts_name: DPO 1
 
-  - meta: MM176_INJ4
+  - id: D10
     class: outputs
     ts_name: DPO 2
 
-  - meta: MM176_GP8
+  - id: E10
     class: outputs
     ts_name: Fuel FSO / PWR EN
 
   # --- Analog Inputs (MUX-based via ADC3, PF3-PF10) ---
   # Each channel has two signals: MUX=0 reads "A", MUX=1 reads "B"
-  # MUX select pin: PF2 (MM176_GP9)
+  # MUX select pin: PF2
   - id: EFI_ADC_37
     class: analog_inputs
     ts_name: PPSA / PPSB (MUX PF3)
@@ -237,89 +237,89 @@ pins:
     ts_name: Onboard MAP Sensor (PC0)
 
   # --- Event Inputs (Trigger / Cam) ---
-  - id: [MM176_GP16, MM176_GP16]
+  - id: [H7, H7]
     class: [event_inputs, switch_inputs]
     ts_name: Crankshaft Sensor (PH7, via MAX9924)
 
-  - id: [MM176_OUT_PWM10, MM176_OUT_PWM10]
+  - id: [H11, H11]
     class: [event_inputs, switch_inputs]
     ts_name: CAM1 Bank1 Exhaust (PH11, Hall)
 
-  - id: [MM176_OUT_PWM11, MM176_OUT_PWM11]
+  - id: [H10, H10]
     class: [event_inputs, switch_inputs]
     ts_name: CAM2 Bank1 Intake (PH10, Hall)
 
-  - id: [MM176_OUT_PWM13, MM176_OUT_PWM13]
+  - id: [H6, H6]
     class: [event_inputs, switch_inputs]
     ts_name: CAM3 Bank2 Exhaust (PH6, via MAX9924)
 
-  - id: [MM176_SPI2_MISO, MM176_SPI2_MISO]
+  - id: [B14, B14]
     class: [event_inputs, switch_inputs]
     ts_name: CAM4 Bank2 Intake (PB14, via MAX9924)
 
-  - id: [MM176_OUT_PWM12, MM176_OUT_PWM12]
+  - id: [H9, H9]
     class: [event_inputs, switch_inputs]
     ts_name: VSS Vehicle Speed (PH9)
 
-  - id: [MM176_GP15, MM176_GP15]
+  - id: [H8, H8]
     class: [event_inputs, switch_inputs]
     ts_name: Flex Fuel Sensor (PH8)
 
   # --- Digital / Switch Inputs ---
-  - meta: MM176_IN_AUX5
+  - id: E9
     class: switch_inputs
     ts_name: Brake Switch 1
 
-  - meta: MM176_GP1
+  - id: D4
     class: switch_inputs
     ts_name: Brake Switch 2
 
-  - meta: MM176_OUT_PWM6
+  - id: D14
     class: switch_inputs
     ts_name: Clutch Down Switch
 
-  - meta: MM176_OUT_IO10
+  - id: G12
     class: switch_inputs
     ts_name: Clutch Up Switch
 
-  - meta: MM176_OUT_IO9
+  - id: G13
     class: switch_inputs
     ts_name: Oil Level Switch
 
-  - meta: MM176_OUT_IO5
+  - id: D2
     class: switch_inputs
     ts_name: Start Autostart
 
-  - meta: MM176_OUT_IO1
+  - id: D3
     class: switch_inputs
     ts_name: Shift Progress
 
-  - meta: MM176_UART2_TX
+  - id: D5
     class: switch_inputs
     ts_name: Start Request
 
-  - meta: MM176_UART2_RX
+  - id: D6
     class: switch_inputs
     ts_name: Reverse Switch
 
   # --- MUX Select ---
-  - meta: MM176_GP9
+  - id: F2
     class: outputs
     ts_name: ADC MUX Select (PF2)
 
   # --- LEDs ---
-  - meta: MM176_LED1_RED
+  - id: G0
     class: outputs
     ts_name: Comms LED
 
-  - meta: MM176_LED2
+  - id: G1
     class: outputs
     ts_name: Run LED
 
-  - meta: MM176_LED3
+  - id: E7
     class: outputs
     ts_name: Warn LED
 
-  - meta: MM176_LED4
+  - id: E8
     class: outputs
     ts_name: Error LED
