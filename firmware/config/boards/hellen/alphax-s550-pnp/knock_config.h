@@ -12,6 +12,6 @@
 #define KNOCK_SAMPLE_RATE (STM32_PCLK2 / (4 * (84 + 12)))
 
 // Knock 2 - PA0
-#define KNOCK_HAS_CH2
+#define KNOCK_HAS_CH2 1
 #define KNOCK_ADC_CH2 ADC_CHANNEL_IN0
 #define KNOCK_PIN_CH2 Gpio::A0
