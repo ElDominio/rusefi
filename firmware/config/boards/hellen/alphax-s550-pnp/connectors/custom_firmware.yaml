@@ -193,35 +193,67 @@ pins:
   # MUX select pin: PF2
   - id: EFI_ADC_37
     class: analog_inputs
-    ts_name: PPSA / PPSB (MUX PF3)
+    ts_name: PPSA (PF3 mux=0)
+
+  - id: EFI_ADC_45
+    class: analog_inputs
+    ts_name: PPSB (PF3 mux=1)
 
   - id: EFI_ADC_38
     class: analog_inputs
-    ts_name: TPSA / TPSB (MUX PF4)
+    ts_name: TPSA (PF4 mux=0)
+
+  - id: EFI_ADC_46
+    class: analog_inputs
+    ts_name: TPSB (PF4 mux=1)
 
   - id: EFI_ADC_39
     class: analog_inputs
-    ts_name: CLT / IAT (MUX PF5)
+    ts_name: CLT (PF5 mux=0)
+
+  - id: EFI_ADC_47
+    class: analog_inputs
+    ts_name: IAT (PF5 mux=1)
 
   - id: EFI_ADC_32
     class: analog_inputs
-    ts_name: IMRC Sensor 1 / 2 (MUX PF6)
+    ts_name: IMRC Position 1 (PF6 mux=0)
+
+  - id: EFI_ADC_40
+    class: analog_inputs
+    ts_name: IMRC Position 2 (PF6 mux=1)
 
   - id: EFI_ADC_33
     class: analog_inputs
-    ts_name: Oil Pressure / Fuel Rail Temp (MUX PF7)
+    ts_name: Oil Pressure (PF7 mux=0)
+
+  - id: EFI_ADC_41
+    class: analog_inputs
+    ts_name: Fuel Rail Temp (PF7 mux=1)
 
   - id: EFI_ADC_34
     class: analog_inputs
-    ts_name: Diff Temp / Trans Temp (MUX PF8)
+    ts_name: Diff Temp (PF8 mux=0)
+
+  - id: EFI_ADC_42
+    class: analog_inputs
+    ts_name: Trans Temp (PF8 mux=1)
 
   - id: EFI_ADC_35
     class: analog_inputs
-    ts_name: AC Pressure / Fuel Rail Pressure (MUX PF9)
+    ts_name: AC Pressure (PF9 mux=0)
+
+  - id: EFI_ADC_43
+    class: analog_inputs
+    ts_name: Fuel Rail Pressure (PF9 mux=1)
 
   - id: EFI_ADC_36
     class: analog_inputs
-    ts_name: Fuel Tank Pressure / Ambient Air Temp (MUX PF10)
+    ts_name: Fuel Tank Pressure (PF10 mux=0)
+
+  - id: EFI_ADC_44
+    class: analog_inputs
+    ts_name: Ambient Air Temp (PF10 mux=1)
 
   # --- Analog Inputs (Direct ADC1/ADC2) ---
   - id: EFI_ADC_1

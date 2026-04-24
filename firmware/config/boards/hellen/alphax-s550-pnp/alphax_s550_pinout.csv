@@ -44,14 +44,22 @@ PA7,A7,STM32__IMRC_2,IMRC 2,output
 PD8,D8,STM32__DPO1,DPO 1,output
 PD10,D10,STM32__DPO2,DPO 2,output
 PE10,E10,STM32__FUEL_FSO,Fuel FSO / PWR EN,output
-PF3,EFI_ADC_37,STM32__PPSA/B,PPSA / PPSB (MUX),analog_input
-PF4,EFI_ADC_38,STM32__TPSA/B,TPSA / TPSB (MUX),analog_input
-PF5,EFI_ADC_39,STM32__CLT/IAT,CLT / IAT (MUX),analog_input
-PF6,EFI_ADC_32,STM32__IMRC1/2,IMRC Sensor 1 / 2 (MUX),analog_input
-PF7,EFI_ADC_33,STM32__OILP/FRT,Oil Pressure / Fuel Rail Temp (MUX),analog_input
-PF8,EFI_ADC_34,STM32__DIFFT/TRANST,Diff Temp / Trans Temp (MUX),analog_input
-PF9,EFI_ADC_35,STM32__ACP/FRP,AC Pressure / Fuel Rail Pressure (MUX),analog_input
-PF10,EFI_ADC_36,STM32__FTPS/AAT,Fuel Tank Pressure / Ambient Air Temp (MUX),analog_input
+PF3,EFI_ADC_37,STM32__PPSA,PPSA (mux=0),analog_input
+PF3,EFI_ADC_45,STM32__PPSB,PPSB (mux=1),analog_input
+PF4,EFI_ADC_38,STM32__TPSA,TPSA (mux=0),analog_input
+PF4,EFI_ADC_46,STM32__TPSB,TPSB (mux=1),analog_input
+PF5,EFI_ADC_39,STM32__CLT,CLT (mux=0),analog_input
+PF5,EFI_ADC_47,STM32__IAT,IAT (mux=1),analog_input
+PF6,EFI_ADC_32,STM32__IMRC1,IMRC Position 1 (mux=0),analog_input
+PF6,EFI_ADC_40,STM32__IMRC2,IMRC Position 2 (mux=1),analog_input
+PF7,EFI_ADC_33,STM32__OILP,Oil Pressure (mux=0),analog_input
+PF7,EFI_ADC_41,STM32__FRT,Fuel Rail Temp (mux=1),analog_input
+PF8,EFI_ADC_34,STM32__DIFFT,Diff Temp (mux=0),analog_input
+PF8,EFI_ADC_42,STM32__TRANST,Trans Temp (mux=1),analog_input
+PF9,EFI_ADC_35,STM32__ACP,AC Pressure (mux=0),analog_input
+PF9,EFI_ADC_43,STM32__FRP,Fuel Rail Pressure (mux=1),analog_input
+PF10,EFI_ADC_36,STM32__FTPS,Fuel Tank Pressure (mux=0),analog_input
+PF10,EFI_ADC_44,STM32__AAT,Ambient Air Temp (mux=1),analog_input
 PA1,EFI_ADC_1,STM32__KNOCK_1,Knock 1,analog_input
 PA0,EFI_ADC_0,STM32__KNOCK_2,Knock 2,analog_input
 PC0,EFI_ADC_10,STM32__OMAP_SENSOR,Onboard MAP Sensor,analog_input
