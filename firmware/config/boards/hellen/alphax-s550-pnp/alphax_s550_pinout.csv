@@ -55,6 +55,7 @@ PF10,EFI_ADC_36,STM32__FTPS/AAT,Fuel Tank Pressure / Ambient Air Temp (MUX),anal
 PA1,EFI_ADC_1,STM32__KNOCK_1,Knock 1,analog_input
 PA0,EFI_ADC_0,STM32__KNOCK_2,Knock 2,analog_input
 PC0,EFI_ADC_10,STM32__OMAP_SENSOR,Onboard MAP Sensor,analog_input
+PC1,EFI_ADC_11,STM32__VIGN,Ignition Voltage,analog_input
 PH7,H7,STM32_CRANK,Crankshaft Sensor (via MAX9924),event_input
 PH11,H11,STM32_CAM1,CAM1 Bank1 Exhaust (Hall),event_input
 PH10,H10,STM32_CAM2,CAM2 Bank1 Intake (Hall),event_input

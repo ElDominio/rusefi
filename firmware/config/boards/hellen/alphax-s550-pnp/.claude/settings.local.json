@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(bash *)",
-      "Bash(xargs cat *)"
+      "Bash(xargs cat *)",
+      "Bash(xargs ls *)"
     ]
   }
 }

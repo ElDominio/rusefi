@@ -236,6 +236,10 @@ pins:
     class: analog_inputs
     ts_name: Onboard MAP Sensor (PC0)
 
+  - id: EFI_ADC_11
+    class: analog_inputs
+    ts_name: Ignition Voltage (PC1)
+
   # --- Event Inputs (Trigger / Cam) ---
   - id: [H7, H7]
     class: [event_inputs, switch_inputs]

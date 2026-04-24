@@ -58,9 +58,8 @@ static void setupDefaultSensorInputs() {
 
 	engineConfiguration->afr.hwChannel = EFI_ADC_NONE;
 
-	engineConfiguration->clt.adcChannel = MM176_IN_CLT_ANALOG;
-
-	engineConfiguration->iat.adcChannel = MM176_IN_IAT_ANALOG;
+	engineConfiguration->clt.adcChannel = EFI_ADC_39;  // PF5, mux=0
+	engineConfiguration->iat.adcChannel = EFI_ADC_47;  // PF5, mux=1
 }
 
 static void alphax_8chan_boardInitHardware() {
@@ -75,6 +74,7 @@ static void customBoardOnConfigurationChange(engine_configuration_s * /*previous
 
 static void alphax_8chan_boardConfigOverrides() {
 	hellenMegaModule();
+	engineConfiguration->vbattAdcChannel = EFI_ADC_11; // PC1, overrides MM176 default PA5
 	setHellenCan();
 	setHellenCan2();
 }
