@@ -58,8 +58,8 @@
 #define adc_channel_e_EFI_ADC_ERROR 50
 #define adc_channel_e_EFI_ADC_NONE 0
 #define adc_channel_e_EFI_ADC_TOTAL_CHANNELS 49
-#define adc_channel_e_enum 0="NONE",36="AC Pressure / Fuel Rail Pressure (MUX PF9)",40="CLT / IAT (MUX PF5)",35="Diff Temp / Trans Temp (MUX PF8)",37="Fuel Tank Pressure / Ambient Air Temp (MUX PF10)",33="IMRC Sensor 1 / 2 (MUX PF6)",2="Knock 1 (PA1)",1="Knock 2 (PA0)",34="Oil Pressure / Fuel Rail Temp (MUX PF7)",11="Onboard MAP Sensor (PC0)",38="PPSA / PPSB (MUX PF3)",39="TPSA / TPSB (MUX PF4)"
-#define adc_channel_e_fullenum "NONE","Knock 2 (PA0)","Knock 1 (PA1)","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","Onboard MAP Sensor (PC0)","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","IMRC Sensor 1 / 2 (MUX PF6)","Oil Pressure / Fuel Rail Temp (MUX PF7)","Diff Temp / Trans Temp (MUX PF8)","AC Pressure / Fuel Rail Pressure (MUX PF9)","Fuel Tank Pressure / Ambient Air Temp (MUX PF10)","PPSA / PPSB (MUX PF3)","TPSA / TPSB (MUX PF4)","CLT / IAT (MUX PF5)","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID"
+#define adc_channel_e_enum 0="NONE",36="AC Pressure (PF9 mux=0)",45="Ambient Air Temp (PF10 mux=1)",40="CLT (PF5 mux=0)",35="Diff Temp (PF8 mux=0)",44="Fuel Rail Pressure (PF9 mux=1)",42="Fuel Rail Temp (PF7 mux=1)",37="Fuel Tank Pressure (PF10 mux=0)",48="IAT (PF5 mux=1)",33="IMRC Position 1 (PF6 mux=0)",41="IMRC Position 2 (PF6 mux=1)",12="Ignition Voltage (PC1)",2="Knock 1 (PA1)",1="Knock 2 (PA0)",34="Oil Pressure (PF7 mux=0)",11="Onboard MAP Sensor (PC0)",38="PPSA (PF3 mux=0)",46="PPSB (PF3 mux=1)",39="TPSA (PF4 mux=0)",47="TPSB (PF4 mux=1)",43="Trans Temp (PF8 mux=1)"
+#define adc_channel_e_fullenum "NONE","Knock 2 (PA0)","Knock 1 (PA1)","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","Onboard MAP Sensor (PC0)","Ignition Voltage (PC1)","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","IMRC Position 1 (PF6 mux=0)","Oil Pressure (PF7 mux=0)","Diff Temp (PF8 mux=0)","AC Pressure (PF9 mux=0)","Fuel Tank Pressure (PF10 mux=0)","PPSA (PF3 mux=0)","TPSA (PF4 mux=0)","CLT (PF5 mux=0)","IMRC Position 2 (PF6 mux=1)","Fuel Rail Temp (PF7 mux=1)","Trans Temp (PF8 mux=1)","Fuel Rail Pressure (PF9 mux=1)","Ambient Air Temp (PF10 mux=1)","PPSB (PF3 mux=1)","TPSB (PF4 mux=1)","IAT (PF5 mux=1)","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID","INVALID"
 #define ADC_CHANNEL_NONE 0
 #define afr_sensor_s_size 20
 #define air_pressure_sensor_config_s_size 12
@@ -149,6 +149,7 @@
 #define BOARD_ACTION_INJECTOR_PRESET 0x302
 #define BOARD_CAM_SETTINGS_FILE
 #define BOARD_CAN_BUS_FROM_FILE
+#define BOARD_CONFIG_FROM_FILE
 #define BOARD_CONSTANTS_EXTENSIONS_FROM_FILE
 #define BOARD_CURVES_FROM_FILE
 #define BOARD_DIAG_PANEL1_FROM_FILE
@@ -296,8 +297,8 @@
 #define CLT_CRANKING_TAPER_CURVE_SIZE 6
 #define CLT_CURVE_SIZE 16
 #define CLT_FUEL_CURVE_SIZE 16
-#define CLT_IDLE_TABLE_CLT_SIZE 6
-#define CLT_IDLE_TABLE_RPM_SIZE 4
+#define CLT_IDLE_TABLE_CLT_SIZE 8
+#define CLT_IDLE_TABLE_RPM_SIZE 6
 #define CLT_LIMITER_CURVE_SIZE 4
 #define CLT_TIMING_LOAD_AXIS_SIZE 5
 #define CLT_TIMING_TEMP_AXIS_SIZE 5
@@ -488,7 +489,7 @@
 #define ego_sensor_e_ES_PLX 4
 #define egoSettings_NAME "CAN O2 sensors"
 #define EGT_CHANNEL_COUNT 8
-#define engine_configuration_s_size 4096
+#define engine_configuration_s_size 4176
 #define engine_load_mode_e_auto_enum 0="LM_SPEED_DENSITY",2="LM_ALPHA_N",3="LM_LUA",1="LM_REAL_MAF",4="UNSUPPORTED_ENUM_VALUE"
 #define engine_load_mode_e_LM_ALPHA_N 2
 #define engine_load_mode_e_LM_LUA 3
@@ -1347,7 +1348,7 @@
 #define injector_pressure_type_e_auto_enum 0="IPT_Low",1="IPT_High"
 #define injector_pressure_type_e_IPT_High 1
 #define injector_pressure_type_e_IPT_Low 0
-#define injector_s_size 60
+#define injector_s_size 100
 #define InjectorNonlinearMode_auto_enum 0="INJ_None",2="INJ_FordModel",1="INJ_PolynomialAdder"
 #define InjectorNonlinearMode_INJ_FordModel 2
 #define InjectorNonlinearMode_INJ_None 0
@@ -1396,7 +1397,7 @@
 #define lua_gauge_meaning_e_LUA_GAUGE_LOWER_BOUND 0
 #define lua_gauge_meaning_e_LUA_GAUGE_UPPER_BOUND 1
 #define LUA_PWM_COUNT 8
-#define LUA_SCRIPT_SIZE 8000
+#define LUA_SCRIPT_SIZE 40000
 #define MAF_DECODING_COUNT 32
 #define MAIN_HELP_URL "https://rusefi.com/s/8chan"
 #define MAIN_PAGE_GAUGES_FILE "tunerstudio/main_page_gauges.ini"
@@ -1475,7 +1476,7 @@
 #define pedalSensor_NAME "Accelerator pedal"
 #define pedalToTpsTbl_NAME "ETB pedal target"
 #define PERCENT_TRIM_BYTE_PACKING_DIV 0.02
-#define persistent_config_s_size 24356
+#define persistent_config_s_size 56548
 #define pid_s_size 20
 #define pin_input_mode_e_auto_enum 0="PI_DEFAULT",4="PI_INVERTED_DEFAULT",6="PI_INVERTED_PULLDOWN",5="PI_INVERTED_PULLUP",2="PI_PULLDOWN",1="PI_PULLUP"
 #define pin_input_mode_e_PI_DEFAULT 0
@@ -1565,7 +1566,7 @@
 #define SentInput_NONE 0
 #define show_tcu_gauges false
 #define show_vvt_output_pin true
-#define SIGNATURE_HASH 1405198717
+#define SIGNATURE_HASH 1236403831
 #define SIMULATOR_TUNE_BIN_FILE_NAME "generated/simulator_tune_image.bin"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX "generated/simulator_tune_image"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX ".bin"
@@ -1645,7 +1646,7 @@
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_BUTTON 0
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_DOWN_SWITCH 2
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_UP_SWITCH 3
-#define TOTAL_CONFIG_SIZE 24356
+#define TOTAL_CONFIG_SIZE 56548
 #define TPS_2_BYTE_PACKING_MULT 100
 #define TPS_PPS_TOO_HIGH_THRESHOLD 110
 #define TPS_PPS_TOO_LOW_THRESHOLD -10
@@ -2132,13 +2133,13 @@
 #define ts_show_strokes true
 #define ts_show_sync_cam true
 #define ts_show_tachometer true
-#define ts_show_tcu true
+#define ts_show_tcu false
 #define ts_show_throttle_switch true
 #define ts_show_tle8888 false
 #define ts_show_top_level_can_menu true
 #define ts_show_torque_model true
 #define ts_show_tps2 true
-#define ts_show_tps_sent true
+#define ts_show_tps_sent false
 #define ts_show_traction_control true
 #define ts_show_trigger_advanced true
 #define ts_show_trigger_console true
@@ -2174,7 +2175,7 @@
 #define ts_show_wbo_canbus_index true
 #define ts_show_wbo_canbus_set_index true
 #define ts_show_wbo_canbus_set_type false
-#define TS_SIGNATURE "rusEFI s550-test.2026.04.23.alphax-s550.1405198717"
+#define TS_SIGNATURE "rusEFI s550-test.2026.05.01.alphax-s550.1236403831"
 #define TS_SIMULATE_CAN '>'
 #define TS_SIMULATE_CAN_char >
 #define TS_TEST_COMMAND 't'
@@ -2221,7 +2222,7 @@
 #define UNITS_KPA_TO_PSI 0.145038
 #define UNITS_MPH "mph"
 #define UNITS_PSI "psi"
-#define VBAT_INJECTOR_CURVE_PRESSURE_SIZE 2
+#define VBAT_INJECTOR_CURVE_PRESSURE_SIZE 4
 #define VBAT_INJECTOR_CURVE_SIZE 8
 #define VE_BLEND1_TABLE_NAME "VE blend 1"
 #define VE_BLEND_COUNT 4

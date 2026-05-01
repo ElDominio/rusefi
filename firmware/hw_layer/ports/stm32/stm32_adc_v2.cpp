@@ -354,11 +354,11 @@ static bool readBatch(adcsample_t* convertedSamples, adcsample_t* b) {
 	}
 
 	// Temperature sensor is only physically wired to ADC1
-	adcConvert(&ADCD1, &auxConvGroup, (adcsample_t *)auxSensorSamples, auxSensorOversample);
+	adcConvert(&ADCD1, &aux1ConvGroup, (adcsample_t *)aux1SensorSamples, auxSensorOversample);
 
 	// Switch IN18 input to Vbat
 	adcSTM32EnableVBATE();
-	adcConvert(adcp, &aux2ConvGroup, (adcsample_t *)aux2SensorSamples, auxSensorOversample);
+	adcConvert(&ADCD1, &aux2ConvGroup, (adcsample_t *)aux2SensorSamples, auxSensorOversample);
 	adcSTM32DisableVBATE();
 #endif
 

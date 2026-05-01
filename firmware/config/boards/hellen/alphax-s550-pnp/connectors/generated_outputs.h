@@ -4,56 +4,56 @@
 #pragma once
 
 Gpio GENERATED_OUTPUTS[] = {
-	Gpio::MM176_INJ8, // Ignition 1
-	Gpio::MM176_INJ6, // Ignition 2
-	Gpio::MM176_INJ7, // Ignition 3
-	Gpio::MM176_GP7, // Ignition 4
-	Gpio::MM176_GP3, // Ignition 5
-	Gpio::MM176_GP4, // Ignition 6
-	Gpio::MM176_GP2, // Ignition 7
-	Gpio::MM176_OUT_IO6, // Ignition 8
-	Gpio::MM176_IGN6, // Injector 1
-	Gpio::MM176_IGN5, // Injector 2
-	Gpio::MM176_IGN3, // Injector 3
-	Gpio::MM176_IGN1, // Injector 4
-	Gpio::MM176_IGN7, // Injector 5
-	Gpio::MM176_IGN2, // Injector 6
-	Gpio::MM176_IGN4, // Injector 7
-	Gpio::MM176_IGN8, // Injector 8
-	Gpio::MM176_OUT_PWM4, // VVT 1 (Bank1 Exhaust)
-	Gpio::MM176_OUT_PWM5, // VVT 2 (Bank1 Intake)
-	Gpio::MM176_OUT_PWM2, // VVT 3 (Bank2 Exhaust)
-	Gpio::MM176_OUT_PWM3, // VVT 4 (Bank2 Intake)
-	Gpio::MM176_OUT_PWM14, // ETB1 PWM
-	Gpio::MM176_OUT_PWM16, // ETB1 Direction
-	Gpio::MM176_GP25, // ETB1 Disable
-	Gpio::MM176_OUT_PWM15, // ETB2 PWM
+	Gpio::F14, // Ignition 1
+	Gpio::F12, // Ignition 2
+	Gpio::F13, // Ignition 3
+	Gpio::F15, // Ignition 4
+	Gpio::G10, // Ignition 5
+	Gpio::G9, // Ignition 6
+	Gpio::D7, // Ignition 7
+	Gpio::G11, // Ignition 8
+	Gpio::B8, // Injector 1
+	Gpio::E2, // Injector 2
+	Gpio::E4, // Injector 3
+	Gpio::C13, // Injector 4
+	Gpio::B9, // Injector 5
+	Gpio::E5, // Injector 6
+	Gpio::E3, // Injector 7
+	Gpio::E6, // Injector 8
+	Gpio::C8, // VVT 1 (Bank1 Exhaust)
+	Gpio::C9, // VVT 2 (Bank1 Intake)
+	Gpio::C6, // VVT 3 (Bank2 Exhaust)
+	Gpio::C7, // VVT 4 (Bank2 Intake)
+	Gpio::I7, // ETB1 PWM
+	Gpio::I5, // ETB1 Direction
+	Gpio::I4, // ETB1 Disable
+	Gpio::I6, // ETB2 PWM
 	Gpio::E1, // ETB2 Direction
 	Gpio::E0, // ETB2 Disable
 	Gpio::C4, // Main Relay
-	Gpio::MM176_IN_D1, // Fuel Pump Relay
-	Gpio::MM176_IN_D3, // Fan 1 Relay
+	Gpio::E12, // Fuel Pump Relay
+	Gpio::E14, // Fan 1 Relay
 	Gpio::B0, // Fan 2
-	Gpio::MM176_IN_D2, // AC Clutch Relay
-	Gpio::MM176_IN_AUX6, // Alternator Control
-	Gpio::MM176_OUT_PWM9, // Boost Solenoid
-	Gpio::MM176_INJ5, // Tachometer Output
-	Gpio::MM176_OUT_IO11, // Purge Solenoid
-	Gpio::MM176_OUT_IO7, // Cutout Control
-	Gpio::MM176_OUT_IO8, // Diff Pump Speed
-	Gpio::MM176_OUT_IO4, // Vent Solenoid
-	Gpio::MM176_INJ1, // GENLI
-	Gpio::MM176_IN_CRANK, // Starter Relay
+	Gpio::E13, // AC Clutch Relay
+	Gpio::E11, // Alternator Control
+	Gpio::H12, // Boost Solenoid
+	Gpio::D9, // Tachometer Output
+	Gpio::G2, // Purge Solenoid
+	Gpio::G3, // Cutout Control
+	Gpio::G4, // Diff Pump Speed
+	Gpio::G5, // Vent Solenoid
+	Gpio::G7, // GENLI
+	Gpio::B1, // Starter Relay
 	Gpio::C5, // IMRC 1
 	Gpio::A7, // IMRC 2
-	Gpio::MM176_GP6, // DPO 1
-	Gpio::MM176_INJ4, // DPO 2
-	Gpio::MM176_GP8, // Fuel FSO / PWR EN
-	Gpio::MM176_GP9, // ADC MUX Select (PF2)
-	Gpio::MM176_LED1_RED, // Comms LED
-	Gpio::MM176_LED2, // Run LED
-	Gpio::MM176_LED3, // Warn LED
-	Gpio::MM176_LED4, // Error LED
+	Gpio::D8, // DPO 1
+	Gpio::D10, // DPO 2
+	Gpio::E10, // Fuel FSO / PWR EN
+	Gpio::F2, // ADC MUX Select (PF2)
+	Gpio::G0, // Comms LED
+	Gpio::G1, // Run LED
+	Gpio::E7, // Warn LED
+	Gpio::E8, // Error LED
 // "Ignition 1",
 // "Ignition 2",
 // "Ignition 3",
