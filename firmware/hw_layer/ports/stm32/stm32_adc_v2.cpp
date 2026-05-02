@@ -29,6 +29,11 @@ constexpr size_t adcAux2ChannelCount = 1;
 #ifdef ADC_MUX_PIN
 // https://github.com/rusefi/alphax-4chan is the reference board with ADC mux
 static OutputPin muxControl;
+#ifndef ADC_MUX_PIN_INVERTED
+#define ADC_MUX_PIN_INVERTED 0
+#endif
+#define ADC_MUX_PRIMARY_VALUE (ADC_MUX_PIN_INVERTED ? 1 : 0)
+#define ADC_MUX_MUXED_VALUE   (ADC_MUX_PIN_INVERTED ? 0 : 1)
 #endif // ADC_MUX_PIN
 
 #if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == TRUE)
@@ -349,7 +354,7 @@ static void slowAdcEndCB(ADCDriver *adcp) {
 		switch (slowAdcState) {
 		case convertPrimary:
 			#ifdef ADC_MUX_PIN
-			muxControl.setValue(0, /*force*/true);
+			muxControl.setValue(ADC_MUX_PRIMARY_VALUE, /*force*/true);
 			#endif
 			adcStartConversionI(adcp, &convGroupSlow, (adcsample_t *)slowSampleBuffer, SLOW_ADC_OVERSAMPLE);
 			break;
@@ -361,7 +366,7 @@ static void slowAdcEndCB(ADCDriver *adcp) {
 		#endif
 		#ifdef ADC_MUX_PIN
 		case convertMuxed:
-			muxControl.setValue(1, /*force*/true);
+			muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
 			adcStartConversionI(adcp, &convGroupSlow, (adcsample_t *)slowSampleBufferMuxed, SLOW_ADC_OVERSAMPLE);
 			break;
 		#endif
@@ -393,7 +398,7 @@ static void slowAdc3EndCB(ADCDriver *adcp) {
 		switch (slowAdcState) {
 		#ifdef ADC_MUX_PIN
 		case convertMuxed:
-			muxControl.setValue(1, /*force*/true);
+			muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
 			adcStartConversionI(&ADCD1, &convGroupSlow, (adcsample_t *)slowSampleBufferMuxed, SLOW_ADC_OVERSAMPLE);
 			break;
 		#endif
@@ -456,7 +461,7 @@ bool readSlowAnalogInputs(adcsample_t* convertedSamples) {
 
 #ifdef ADC_MUX_PIN
 	#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
-		muxControl.setValue(1, /*force*/true);
+		muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
 	#endif
 	// mux=1: ADC1 muxed channels (EFI_ADC_16-31)
 	result &= readBatch(&convertedSamples[adcChannelCount], (adcsample_t *)slowSampleBufferMuxed);
@@ -465,7 +470,7 @@ bool readSlowAnalogInputs(adcsample_t* convertedSamples) {
 	result &= readBatchAdc3(&convertedSamples[EFI_ADC_40 - EFI_ADC_0], (adcsample_t *)slowSampleBufferAdc3Muxed);
 #endif
 	#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
-		muxControl.setValue(0, /*force*/true);
+		muxControl.setValue(ADC_MUX_PRIMARY_VALUE, /*force*/true);
 	#endif
 #endif
 

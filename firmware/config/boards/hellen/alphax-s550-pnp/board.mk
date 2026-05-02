@@ -11,6 +11,8 @@ DDEFS += -DDIAG_5VP_PIN=Gpio::D12
 
 # ADC3 slow sampling for PF3-PF10 mux channels (EFI_ADC_32-39 primary, EFI_ADC_40-47 muxed)
 DDEFS += -DADC3_SLOW_CHANNEL_COUNT=8
+# S550 mux select pin is active-low (inverted vs. the ADC1 mux boards)
+DDEFS += -DADC_MUX_PIN_INVERTED=1
 
 LED_CRITICAL_ERROR_BRAIN_PIN = -DLED_CRITICAL_ERROR_BRAIN_PIN=H176_MCU_MEGA_LED1_RED
 include $(BOARDS_DIR)/hellen/hellen-common-mega176.mk
