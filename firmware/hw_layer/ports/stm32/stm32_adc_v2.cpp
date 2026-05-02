@@ -34,6 +34,9 @@ static OutputPin muxControl;
 #if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == TRUE)
 static void slowAdcEndCB(ADCDriver *adcp);
 #endif
+#if defined(ADC3_SLOW_CHANNEL_COUNT) && (EFI_INTERNAL_SLOW_ADC_BACKGROUND == TRUE)
+static void slowAdc3EndCB(ADCDriver *adcp);
+#endif
 static void slowAdcErrorCB(ADCDriver *, adcerror_t);
 
 /*
@@ -182,7 +185,11 @@ static volatile NO_CACHE adcsample_t slowSampleBufferAdc3Muxed[SLOW_ADC_OVERSAMP
 static const ADCConversionGroup convGroupSlowAdc3 = {
 	.circular        = FALSE,
 	.num_channels    = ADC3_SLOW_CHANNEL_COUNT,
+#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == TRUE)
+	.end_cb          = slowAdc3EndCB,
+#else
 	.end_cb          = nullptr,
+#endif
 	.error_cb        = slowAdcErrorCB,
 	.cr1             = 0,
 	.cr2             = ADC_CR2_SWSTART,
@@ -206,10 +213,12 @@ static const ADCConversionGroup convGroupSlowAdc3 = {
 };
 
 static bool readBatchAdc3(adcsample_t* convertedSamples, adcsample_t* b) {
+#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
 	msg_t result = adcConvert(&ADCD3, &convGroupSlowAdc3, b, SLOW_ADC_OVERSAMPLE);
 	if (result != MSG_OK) {
 		return false;
 	}
+#endif
 	for (size_t i = 0; i < ADC3_SLOW_CHANNEL_COUNT; i++) {
 		uint32_t sum = 0;
 		size_t index = i;
@@ -276,8 +285,14 @@ static /* constexpr */ ADCConversionGroup convGroupSlow = {
 
 typedef enum {
 	convertPrimary,
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+	convertAdc3Primary,
+#endif
 #ifdef ADC_MUX_PIN
 	convertMuxed,
+#endif
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+	convertAdc3Muxed,
 #endif
 	convertAux,
 	convertAux2,
@@ -287,22 +302,37 @@ static slowAdcState_t slowAdcGetNextState(slowAdcState_t state)
 {
 	switch (state) {
 	case convertPrimary:
-		#ifdef ADC_MUX_PIN
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+		return convertAdc3Primary;
+#elif defined(ADC_MUX_PIN)
 		return convertMuxed;
-		#else
+#else
 		return convertAux;
-		#endif
-	break;
+#endif
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+	case convertAdc3Primary:
+#ifdef ADC_MUX_PIN
+		return convertMuxed;
+#else
+		return convertAux;
+#endif
+#endif
 #ifdef ADC_MUX_PIN
 	case convertMuxed:
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+		return convertAdc3Muxed;
+#else
 		return convertAux;
-	break;
+#endif
+#endif
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+	case convertAdc3Muxed:
+		return convertAux;
 #endif
 	case convertAux:
 		return convertAux2;
 	case convertAux2:
 		return convertPrimary;
-	break;
 	}
 	return convertPrimary;
 }
@@ -323,11 +353,22 @@ static void slowAdcEndCB(ADCDriver *adcp) {
 			#endif
 			adcStartConversionI(adcp, &convGroupSlow, (adcsample_t *)slowSampleBuffer, SLOW_ADC_OVERSAMPLE);
 			break;
+		#ifdef ADC3_SLOW_CHANNEL_COUNT
+		case convertAdc3Primary:
+			// mux already 0; start ADC3 primary
+			adcStartConversionI(&ADCD3, &convGroupSlowAdc3, (adcsample_t *)slowSampleBufferAdc3, SLOW_ADC_OVERSAMPLE);
+			break;
+		#endif
 		#ifdef ADC_MUX_PIN
 		case convertMuxed:
 			muxControl.setValue(1, /*force*/true);
-			// convert second half
 			adcStartConversionI(adcp, &convGroupSlow, (adcsample_t *)slowSampleBufferMuxed, SLOW_ADC_OVERSAMPLE);
+			break;
+		#endif
+		#ifdef ADC3_SLOW_CHANNEL_COUNT
+		case convertAdc3Muxed:
+			// mux already 1; start ADC3 muxed
+			adcStartConversionI(&ADCD3, &convGroupSlowAdc3, (adcsample_t *)slowSampleBufferAdc3Muxed, SLOW_ADC_OVERSAMPLE);
 			break;
 		#endif
 		case convertAux:
@@ -342,7 +383,32 @@ static void slowAdcEndCB(ADCDriver *adcp) {
 		chSysUnlockFromISR();
 	}
 }
-#endif
+
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+static void slowAdc3EndCB(ADCDriver *adcp) {
+	if (adcIsBufferComplete(adcp)) {
+		chSysLockFromISR();
+		adcp->state = ADC_READY;
+		slowAdcState = slowAdcGetNextState(slowAdcState);
+		switch (slowAdcState) {
+		#ifdef ADC_MUX_PIN
+		case convertMuxed:
+			muxControl.setValue(1, /*force*/true);
+			adcStartConversionI(&ADCD1, &convGroupSlow, (adcsample_t *)slowSampleBufferMuxed, SLOW_ADC_OVERSAMPLE);
+			break;
+		#endif
+		case convertAux:
+			adcSTM32DisableVBATE();
+			adcStartConversionI(&ADCD1, &aux1ConvGroup, (adcsample_t *)aux1SensorSamples, auxSensorOversample);
+			break;
+		default:
+			break;
+		}
+		chSysUnlockFromISR();
+	}
+}
+#endif // ADC3_SLOW_CHANNEL_COUNT
+#endif // EFI_INTERNAL_SLOW_ADC_BACKGROUND
 
 static bool readBatch(adcsample_t* convertedSamples, adcsample_t* b) {
 #if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
