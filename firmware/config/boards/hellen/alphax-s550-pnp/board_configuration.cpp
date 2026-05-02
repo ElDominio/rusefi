@@ -43,9 +43,9 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
 	engineConfiguration->vvtMode[1] = VVT_SINGLE_TOOTH;
 
-	setTPS1Inputs(MM176_IN_TPS_ANALOG, MM176_IN_TPS2_ANALOG);
+	setTPS1Inputs(EFI_ADC_38, EFI_ADC_46);   // PF4, mux=0/mux=1
 
-	setPPSInputs(MM176_IN_PPS1_ANALOG, MM176_IN_PPS2_ANALOG);
+	setPPSInputs(EFI_ADC_37, EFI_ADC_45);    // PF3, mux=0/mux=1
 
 	// random values to have valid config
 	engineConfiguration->tps1SecondaryMin = 1000;
@@ -238,14 +238,12 @@ int boardGetAnalogInputDiagnostic(adc_channel_e hwChannel, float voltage) {
 
 	switch (hwChannel) {
 		/* inputs that may be affected by incorrect reference voltage */
-		case MM176_IN_TPS_ANALOG:
-		case MM176_IN_TPS2_ANALOG:
-		case MM176_IN_PPS1_ANALOG:
-		case MM176_IN_PPS2_ANALOG:
-		case MM176_IN_IAT_ANALOG:
-		case MM176_IN_AT1_ANALOG:
-		case MM176_IN_CLT_ANALOG:
-		case MM176_IN_AT2_ANALOG:
+		case EFI_ADC_38:  // TPSA PF4 mux=0
+		case EFI_ADC_46:  // TPSB PF4 mux=1
+		case EFI_ADC_37:  // PPSA PF3 mux=0
+		case EFI_ADC_45:  // PPSB PF3 mux=1
+		case EFI_ADC_47:  // IAT  PF5 mux=1
+		case EFI_ADC_39:  // CLT  PF5 mux=0
 		//case MM176_IN_O2S_ANALOG:
 		//case MM176_IN_O2S2_ANALOG:
 		case MM176_IN_MAP1_ANALOG:
