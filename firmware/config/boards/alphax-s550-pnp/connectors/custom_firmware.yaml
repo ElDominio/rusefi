@@ -188,6 +188,10 @@ pins:
     class: outputs
     ts_name: Fuel FSO / PWR EN
 
+  - id: B10
+    class: outputs
+    ts_name: SMCS High
+
   # --- Analog Inputs (MUX-based via ADC3, PF3-PF10) ---
   # Each channel has two signals: MUX=0 reads "A", MUX=1 reads "B"
   # MUX select pin: PF2
