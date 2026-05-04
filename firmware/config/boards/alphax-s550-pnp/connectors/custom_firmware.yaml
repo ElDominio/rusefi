@@ -7,11 +7,11 @@ pins:
     class: outputs
     ts_name: Ignition 1
 
-  - id: F12
+  - id: D7
     class: outputs
     ts_name: Ignition 2
 
-  - id: F13
+  - id: G9
     class: outputs
     ts_name: Ignition 3
 
@@ -23,11 +23,11 @@ pins:
     class: outputs
     ts_name: Ignition 5
 
-  - id: G9
+  - id: F12
     class: outputs
     ts_name: Ignition 6
 
-  - id: D7
+  - id: F13
     class: outputs
     ts_name: Ignition 7
 
@@ -41,11 +41,11 @@ pins:
     class: outputs
     ts_name: Injector 1
 
-  - id: E2
+  - id: E3
     class: outputs
     ts_name: Injector 2
 
-  - id: E4
+  - id: E5
     class: outputs
     ts_name: Injector 3
 
@@ -57,11 +57,11 @@ pins:
     class: outputs
     ts_name: Injector 5
 
-  - id: E5
+  - id: E2
     class: outputs
     ts_name: Injector 6
 
-  - id: E3
+  - id: E4
     class: outputs
     ts_name: Injector 7
 
