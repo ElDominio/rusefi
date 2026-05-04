@@ -36,3 +36,6 @@ DDEFS += -DLUA_STM32_STANDBY=1
 
 # watchdog suddenly i see it #8699
 DDEFS += -DHAL_USE_WDG=FALSE
+
+# PB10/PB11 are not wired for I2C on this board; disable I2C2 to free PB10 for SMCS_HIGH output
+DDEFS += -DSTM32_I2C_USE_I2C2=FALSE
