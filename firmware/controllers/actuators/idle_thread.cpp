@@ -456,12 +456,12 @@ float IdleController::getIdlePosition(float rpm) {
 
 		m_lastPhase = phase;
 
-		// RPM mode: treat cltCrankingCorr values as RPM targets and blend toward normal idle RPM
-		// via the existing crank taper fraction. This shifts the 3D open-loop table lookup to a
-		// higher RPM row at startup and naturally tapers it down as the engine warms into idle.
+		// RPM mode: add the CLT-based RPM adder on top of the normal idle RPM target during
+		// cranking, then taper the adder to zero as crankingTaper approaches 1.
 		if (engineConfiguration->crankingIdleMode == CRANKING_IDLE_RPM &&
 		    (phase == Phase::Cranking || phase == Phase::CrankToIdleTaper)) {
-			float crankingRpmTarget = interpolate2d(clt, config->cltCrankingCorrBins, config->cltCrankingCorr);
+			float rpmAdder = interpolate2d(clt, config->cltCrankingCorrBins, config->cltCrankingRpmAdder);
+			float crankingRpmTarget = m_lastTargetRpm + rpmAdder;
 			m_lastTargetRpm = interpolateClamped(0, crankingRpmTarget, 1, m_lastTargetRpm, crankingTaper);
 			targetRpm.ClosedLoopTarget = m_lastTargetRpm;
 			idleTarget = m_lastTargetRpm;

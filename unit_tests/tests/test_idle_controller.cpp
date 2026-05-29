@@ -372,31 +372,30 @@ TEST(idle_v2, crankingRpmMode_openLoopNoTaperBlend) {
 }
 
 TEST(idle_v2, crankingRpmMode_targetRpmTaper) {
-	// In RPM mode, m_lastTargetRpm blends from cranking RPM target to normal idle RPM
-	// via the crank taper fraction, driving the open-loop 3D table lookup point.
+	// In RPM mode, m_lastTargetRpm = (base idle RPM + adder) at crank, tapering to base idle RPM.
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	engineConfiguration->crankingIdleMode = cranking_idle_mode_e::CRANKING_IDLE_RPM;
 
-	const float crankingRpmTarget = 1500;
-	const float normalIdleRpm = 800;
-	const float clt = 30;
+	const float crankingRpmAdder = 700;  // +700 RPM during cranking
+	const float normalIdleRpm = 800;     // base idle RPM from CLT table
+	const float crankingRpmTarget = normalIdleRpm + crankingRpmAdder;  // 1500
 
-	// Flat cranking RPM curve: all CLT bins → 1500 RPM
-	setArrayValues(config->cltCrankingCorr, crankingRpmTarget);
+	// Flat RPM adder: all CLT bins → +700 RPM
+	setArrayValues(config->cltCrankingRpmAdder, crankingRpmAdder);
 	// Normal idle RPM target: flat at 800 RPM
 	setArrayValues(config->cltIdleRpm, (uint8_t)(normalIdleRpm / 20)); // cltIdleRpm is scaled x20
 
-	// At taper = 0: m_lastTargetRpm should equal cranking RPM target
+	// At taper = 0: base + adder = 1500
 	float blended0 = interpolateClamped(0, crankingRpmTarget, 1, normalIdleRpm, 0.0f);
-	EXPECT_FLOAT_EQ(crankingRpmTarget, blended0);
+	EXPECT_FLOAT_EQ(1500, blended0);
 
-	// At taper = 0.5: midpoint
+	// At taper = 0.5: midpoint between 1500 and 800 = 1150
 	float blended05 = interpolateClamped(0, crankingRpmTarget, 1, normalIdleRpm, 0.5f);
 	EXPECT_FLOAT_EQ(1150, blended05);
 
-	// At taper = 1.0: normal idle RPM
+	// At taper = 1.0: back to normal idle RPM
 	float blended1 = interpolateClamped(0, crankingRpmTarget, 1, normalIdleRpm, 1.0f);
 	EXPECT_FLOAT_EQ(normalIdleRpm, blended1);
 }
