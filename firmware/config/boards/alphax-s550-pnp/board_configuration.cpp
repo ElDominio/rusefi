@@ -68,7 +68,7 @@ static void alphax_8chan_boardInitHardware() {
 
 }
 
-static void customBoardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
+static void customBoardOnConfigurationChange(const engine_configuration_s * /*previousConfiguration*/) {
 
 }
 
