@@ -18,6 +18,7 @@ decl_frag<fan_control_s, 0>{},	// fan1
 decl_frag<fan_control_s, 1>{},	// fan2
 decl_frag<fuel_pump_control_s>{},
 decl_frag<main_relay_s>{},
+decl_frag<exhaust_cutout_s>{},
 decl_frag<engine_state_s>{},
 decl_frag<tps_accel_state_s>{},
 decl_frag<trigger_central_s>{},

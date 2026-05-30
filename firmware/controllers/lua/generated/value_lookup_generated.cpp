@@ -1948,6 +1948,27 @@ float getConfigValueByHash(const int hash) {
 // vvlControlEnabled
 		case -708922423:
 			return engineConfiguration->vvlControlEnabled;
+// exhaustCutoutEnabled
+		case 743685910:
+			return engineConfiguration->exhaustCutoutEnabled;
+// exhaustCutoutShowOpenState
+		case -619458017:
+			return engineConfiguration->exhaustCutoutShowOpenState;
+// exhaustCutoutIsHBridge
+		case 448873596:
+			return engineConfiguration->exhaustCutoutIsHBridge;
+// exhaustCutoutInvertedOutput
+		case -1837381539:
+			return engineConfiguration->exhaustCutoutInvertedOutput;
+// exhaustCutoutKeyOnTestEnabled
+		case 351760956:
+			return engineConfiguration->exhaustCutoutKeyOnTestEnabled;
+// exhaustCutoutEngineOnTestEnabled
+		case 1210561033:
+			return engineConfiguration->exhaustCutoutEngineOnTestEnabled;
+// exhaustCutoutIsPwm
+		case -893598501:
+			return engineConfiguration->exhaustCutoutIsPwm;
 // nitrousLuaGaugeArmingValue
 		case -1760115393:
 			return engineConfiguration->nitrousLuaGaugeArmingValue;
@@ -2059,6 +2080,36 @@ float getConfigValueByHash(const int hash) {
 // rotationalIdleController.auto_engage_clt
 		case 602046867:
 			return engineConfiguration->rotationalIdleController.auto_engage_clt;
+// exhaustCutoutLuaGaugeThreshold
+		case -539496861:
+			return engineConfiguration->exhaustCutoutLuaGaugeThreshold;
+// exhaustCutoutOpenRpm
+		case 856916332:
+			return engineConfiguration->exhaustCutoutOpenRpm;
+// exhaustCutoutOpenTps
+		case 856918516:
+			return engineConfiguration->exhaustCutoutOpenTps;
+// exhaustCutoutTpsDelayS
+		case -1445598556:
+			return engineConfiguration->exhaustCutoutTpsDelayS;
+// exhaustCutoutOpenMapKpa
+		case -126526889:
+			return engineConfiguration->exhaustCutoutOpenMapKpa;
+// exhaustCutoutClosingDelayS
+		case -2030615268:
+			return engineConfiguration->exhaustCutoutClosingDelayS;
+// exhaustCutoutMoveDurationS
+		case 413828443:
+			return engineConfiguration->exhaustCutoutMoveDurationS;
+// exhaustCutoutPwmFrequency
+		case 307827889:
+			return engineConfiguration->exhaustCutoutPwmFrequency;
+// exhaustCutoutPwmOpenDuty
+		case 688396439:
+			return engineConfiguration->exhaustCutoutPwmOpenDuty;
+// exhaustCutoutPwmClosedDuty
+		case 1166952895:
+			return engineConfiguration->exhaustCutoutPwmClosedDuty;
 // tcu_shiftTime
 		case -1658957891:
 			return config->tcu_shiftTime;
@@ -5396,6 +5447,41 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->vvlControlEnabled = (int)value;
 		return 1;
 	}
+		case 743685910:
+	{
+		engineConfiguration->exhaustCutoutEnabled = (int)value;
+		return 1;
+	}
+		case -619458017:
+	{
+		engineConfiguration->exhaustCutoutShowOpenState = (int)value;
+		return 1;
+	}
+		case 448873596:
+	{
+		engineConfiguration->exhaustCutoutIsHBridge = (int)value;
+		return 1;
+	}
+		case -1837381539:
+	{
+		engineConfiguration->exhaustCutoutInvertedOutput = (int)value;
+		return 1;
+	}
+		case 351760956:
+	{
+		engineConfiguration->exhaustCutoutKeyOnTestEnabled = (int)value;
+		return 1;
+	}
+		case 1210561033:
+	{
+		engineConfiguration->exhaustCutoutEngineOnTestEnabled = (int)value;
+		return 1;
+	}
+		case -893598501:
+	{
+		engineConfiguration->exhaustCutoutIsPwm = (int)value;
+		return 1;
+	}
 		case -1760115393:
 	{
 		engineConfiguration->nitrousLuaGaugeArmingValue = value;
@@ -5579,6 +5665,56 @@ bool setConfigValueByName(const char *name, float value) {
 		case 602046867:
 	{
 		engineConfiguration->rotationalIdleController.auto_engage_clt = (int)value;
+		return 1;
+	}
+		case -539496861:
+	{
+		engineConfiguration->exhaustCutoutLuaGaugeThreshold = value;
+		return 1;
+	}
+		case 856916332:
+	{
+		engineConfiguration->exhaustCutoutOpenRpm = (int)value;
+		return 1;
+	}
+		case 856918516:
+	{
+		engineConfiguration->exhaustCutoutOpenTps = (int)value;
+		return 1;
+	}
+		case -1445598556:
+	{
+		engineConfiguration->exhaustCutoutTpsDelayS = (int)value;
+		return 1;
+	}
+		case -126526889:
+	{
+		engineConfiguration->exhaustCutoutOpenMapKpa = value;
+		return 1;
+	}
+		case -2030615268:
+	{
+		engineConfiguration->exhaustCutoutClosingDelayS = (int)value;
+		return 1;
+	}
+		case 413828443:
+	{
+		engineConfiguration->exhaustCutoutMoveDurationS = (int)value;
+		return 1;
+	}
+		case 307827889:
+	{
+		engineConfiguration->exhaustCutoutPwmFrequency = (int)value;
+		return 1;
+	}
+		case 688396439:
+	{
+		engineConfiguration->exhaustCutoutPwmOpenDuty = (int)value;
+		return 1;
+	}
+		case 1166952895:
+	{
+		engineConfiguration->exhaustCutoutPwmClosedDuty = (int)value;
 		return 1;
 	}
 		case -1658957891:

@@ -1942,6 +1942,27 @@ This is the pressure at which your injector flow is known.\nFor example if your 
 ### vvlControlEnabled
 
 
+### exhaustCutoutEnabled
+
+
+### exhaustCutoutShowOpenState
+
+
+### exhaustCutoutIsHBridge
+
+
+### exhaustCutoutInvertedOutput
+
+
+### exhaustCutoutKeyOnTestEnabled
+
+
+### exhaustCutoutEngineOnTestEnabled
+
+
+### exhaustCutoutIsPwm
+
+
 ### nitrousLuaGaugeArmingValue
 
 
@@ -2052,6 +2073,36 @@ Rotational Idle Auto engage CLT
 
 ### rotationalIdleController.auto_engage_clt
 Rotational Idle Auto engage CLT.
+
+### exhaustCutoutLuaGaugeThreshold
+Lua gauge activation threshold
+
+### exhaustCutoutOpenRpm
+RPM threshold to open cutout (0 to disable)
+
+### exhaustCutoutOpenTps
+TPS threshold to open cutout (0 to disable)
+
+### exhaustCutoutTpsDelayS
+Anti-blip: TPS must exceed threshold for this long before opening
+
+### exhaustCutoutOpenMapKpa
+MAP/Boost threshold to open cutout (0 to disable)
+
+### exhaustCutoutClosingDelayS
+Hold-open time after triggers clear
+
+### exhaustCutoutMoveDurationS
+H-Bridge motor drive time (de-energizes after). Also controls LED blink duration and actuator test step duration.
+
+### exhaustCutoutPwmFrequency
+PWM output frequency (PWM mode only)
+
+### exhaustCutoutPwmOpenDuty
+PWM duty when cutout is OPEN (PWM mode only)
+
+### exhaustCutoutPwmClosedDuty
+PWM duty when cutout is CLOSED (PWM mode only)
 
 ### tcu_shiftTime
 

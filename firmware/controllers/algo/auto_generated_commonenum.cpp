@@ -1,6 +1,6 @@
 #include "global.h"
 #include "rusefi_enums.h"
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Fri May 15 12:26:08 UTC 2026
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat May 30 17:31:23 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -562,6 +562,28 @@ const char *getEgo_sensor_e(ego_sensor_e value) {
 			return "ES_Innovate_MTX_L";
 		case ES_PLX:
 			return "ES_PLX";
+	}
+	return NULL;
+}
+const char *getExhaust_cutout_activation_e(exhaust_cutout_activation_e value) {
+	switch (value) {
+		case EXHAUST_CUTOUT_LUA_GAUGE:
+			return "EXHAUST_CUTOUT_LUA_GAUGE";
+		case EXHAUST_CUTOUT_OFF:
+			return "EXHAUST_CUTOUT_OFF";
+		case EXHAUST_CUTOUT_SWITCH:
+			return "EXHAUST_CUTOUT_SWITCH";
+	}
+	return NULL;
+}
+const char *getExhaust_cutout_behavior_e(exhaust_cutout_behavior_e value) {
+	switch (value) {
+		case EXHAUST_CUTOUT_ALWAYS_CLOSED:
+			return "EXHAUST_CUTOUT_ALWAYS_CLOSED";
+		case EXHAUST_CUTOUT_ALWAYS_OPEN:
+			return "EXHAUST_CUTOUT_ALWAYS_OPEN";
+		case EXHAUST_CUTOUT_AUTO:
+			return "EXHAUST_CUTOUT_AUTO";
 	}
 	return NULL;
 }

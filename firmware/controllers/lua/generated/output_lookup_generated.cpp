@@ -1105,6 +1105,30 @@ float getOutputValueByHash(const int hash) {
 // ignitionOn
 		case -381519965:
 			return engine->module<FuelPumpController>()->ignitionOn;
+// isTriggerRpm
+		case -526135420:
+			return engine->module<ExhaustCutoutController>()->isTriggerRpm;
+// isTriggerTps
+		case -526133236:
+			return engine->module<ExhaustCutoutController>()->isTriggerTps;
+// isTriggerMap
+		case -526141357:
+			return engine->module<ExhaustCutoutController>()->isTriggerMap;
+// isInputHigh
+		case -2124990543:
+			return engine->module<ExhaustCutoutController>()->isInputHigh;
+// targetOpen
+		case 1336449886:
+			return engine->module<ExhaustCutoutController>()->targetOpen;
+// isCutoutOpen
+		case -1446935465:
+			return engine->module<ExhaustCutoutController>()->isCutoutOpen;
+// isCutoutMoving
+		case 461428757:
+			return engine->module<ExhaustCutoutController>()->isCutoutMoving;
+// isTestActive
+		case 192366461:
+			return engine->module<ExhaustCutoutController>()->isTestActive;
 // lua.fuelAdd
 		case 1649801578:
 			return engine->engineState.lua.fuelAdd;
