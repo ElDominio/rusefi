@@ -151,6 +151,12 @@ float getConfigValueByHash(const int hash) {
 // useRunningMathForCranking
 		case -54973711:
 			return engineConfiguration->useRunningMathForCranking;
+// crankingAirAmountEnabled
+		case 584176973:
+			return engineConfiguration->crankingAirAmountEnabled;
+// crankingIdleRpmFlareEnabled
+		case 781350644:
+			return engineConfiguration->crankingIdleRpmFlareEnabled;
 // displayLogicLevelsInEngineSniffer
 		case 1616873838:
 			return engineConfiguration->displayLogicLevelsInEngineSniffer;
@@ -2393,6 +2399,16 @@ bool setConfigValueByName(const char *name, float value) {
 		case -54973711:
 	{
 		engineConfiguration->useRunningMathForCranking = (int)value;
+		return 1;
+	}
+		case 584176973:
+	{
+		engineConfiguration->crankingAirAmountEnabled = (int)value;
+		return 1;
+	}
+		case 781350644:
+	{
+		engineConfiguration->crankingIdleRpmFlareEnabled = (int)value;
 		return 1;
 	}
 		case 1616873838:

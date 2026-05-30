@@ -23,7 +23,6 @@
 #endif
 
 using enum idle_mode_e;
-using enum cranking_idle_mode_e;
 
 /**
  * Computes the desired idle RPM target as a function of coolant temperature (CLT),
@@ -233,11 +232,7 @@ percent_t IdleController::getOpenLoop(Phase phase, float rpm, float clt, SensorR
 	isCranking = phase == Phase::Cranking;
 	isIdleCoasting = phase == Phase::Coasting || (phase == Phase::Running && engineConfiguration->modeledFlowIdle);
 
-	bool rpmMode = engineConfiguration->crankingIdleMode == CRANKING_IDLE_RPM;
-
-	// Duty mode only: return cranking position directly during cranking.
-	// RPM mode falls through to running open-loop; m_lastTargetRpm shifts the 3D table lookup.
-	if (isCranking && !rpmMode) {
+	if (isCranking && engineConfiguration->crankingAirAmountEnabled) {
 		return getCrankingOpenLoop(clt);
 	}
 
@@ -258,12 +253,12 @@ percent_t IdleController::getOpenLoop(Phase phase, float rpm, float clt, SensorR
 
 	percent_t running = getRunningOpenLoop(phase, rpm, clt, tps);
 
-	// RPM mode: taper is handled via m_lastTargetRpm driving the 3D table; just return running.
-	if (rpmMode) {
+	// No air amount table: taper is handled via m_lastTargetRpm driving the 3D table; just return running.
+	if (!engineConfiguration->crankingAirAmountEnabled) {
 		return running;
 	}
 
-	// Duty mode: interpolate between cranking duty and running over the crank taper.
+	// Air amount table enabled: interpolate between cranking duty and running over the crank taper.
 	// This clamps once you fall off the end, so no explicit check for >1 required.
 	return interpolateClamped(0, getCrankingOpenLoop(clt), 1, running, crankingTaperFraction);
 }
@@ -458,7 +453,7 @@ float IdleController::getIdlePosition(float rpm) {
 
 		// RPM mode: add the CLT-based RPM adder on top of the normal idle RPM target during
 		// cranking, then taper the adder to zero as crankingTaper approaches 1.
-		if (engineConfiguration->crankingIdleMode == CRANKING_IDLE_RPM &&
+		if (engineConfiguration->crankingIdleRpmFlareEnabled &&
 		    (phase == Phase::Cranking || phase == Phase::CrankToIdleTaper)) {
 			float rpmAdder = interpolate2d(clt, config->cltCrankingCorrBins, config->cltCrankingRpmAdder);
 			float crankingRpmTarget = m_lastTargetRpm + rpmAdder;

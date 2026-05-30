@@ -145,6 +145,12 @@ This uses separate ignition timing and VE tables not only for idle conditions, a
 ### useRunningMathForCranking
 For cranking either use the specified fixed base fuel mass, or use the normal running math (VE table).
 
+### crankingAirAmountEnabled
+Enable CLT-based cranking air amount table. During cranking, open-loop valve position is taken from this table instead of the running idle tables.
+
+### crankingIdleRpmFlareEnabled
+Enable CLT-based cranking idle RPM flare. An RPM adder from the table is applied during cranking, tapering to zero as the engine transitions to idle.
+
 ### displayLogicLevelsInEngineSniffer
 Shall we display real life signal or just the part consumed by trigger decoder.\nApplies to both trigger and cam/vvt input.
 
