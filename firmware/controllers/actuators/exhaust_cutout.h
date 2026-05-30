@@ -37,10 +37,11 @@ private:
 	void deEnergize();
 	bool runTestSequence();
 
-	OutputPin m_outputPin;    // Digital output, PWM pin, or H-Bridge IN1 (Open direction)
-	OutputPin m_hbridgePin2;  // H-Bridge IN2 (Close direction)
+	OutputPin m_outputPin;    // Digital output, single PWM output, or H-Bridge IN1
+	OutputPin m_hbridgePin2;  // H-Bridge IN2
 	OutputPin m_ledPin;
-	SimplePwm m_pwmOutput{"cutout"};
+	SimplePwm m_pwmOutput{"cutout"};     // used in PWM mode or H-Bridge IN1
+	SimplePwm m_hbridgePwm{"cutout-in2"}; // H-Bridge IN2 PWM
 
 	Timer m_tpsHoldTimer;
 	Timer m_closeDelayTimer;

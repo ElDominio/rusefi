@@ -4,8 +4,8 @@
 static constexpr float ENGINE_RUNNING_RPM_THRESHOLD = 400.0f;
 
 void ExhaustCutoutController::deEnergize() {
-	m_outputPin.setValue(0);
-	m_hbridgePin2.setValue(0);
+	m_pwmOutput.setSimplePwmDutyCycle(0);
+	m_hbridgePwm.setSimplePwmDutyCycle(0);
 }
 
 void ExhaustCutoutController::initPins() {
@@ -19,9 +19,20 @@ void ExhaustCutoutController::initPins() {
 		return;
 	}
 
-	bool isPwm = cfg.exhaustCutoutIsPwm && !cfg.exhaustCutoutIsHBridge;
+	bool isHBridge = cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_HBRIDGE;
+	bool isPwm = cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_PWM;
 
-	if (isBrainPinValid(cfg.exhaustCutoutOutputPin)) {
+	if (isHBridge) {
+		float freq = cfg.exhaustCutoutHBridgePwmFrequency > 0 ? cfg.exhaustCutoutHBridgePwmFrequency : 1000.0f;
+		if (isBrainPinValid(cfg.exhaustCutoutOutputPin)) {
+			m_outputPin.initPin("cutout-in1", cfg.exhaustCutoutOutputPin, cfg.exhaustCutoutOutputPinMode);
+			startSimplePwm(&m_pwmOutput, "cutout-in1", &engine->scheduler, &m_outputPin, freq, 0);
+		}
+		if (isBrainPinValid(cfg.exhaustCutoutHBridgePin2)) {
+			m_hbridgePin2.initPin("cutout-in2", cfg.exhaustCutoutHBridgePin2, cfg.exhaustCutoutHBridgePin2Mode);
+			startSimplePwm(&m_hbridgePwm, "cutout-in2", &engine->scheduler, &m_hbridgePin2, freq, 0);
+		}
+	} else if (isBrainPinValid(cfg.exhaustCutoutOutputPin)) {
 		m_outputPin.initPin("cutout", cfg.exhaustCutoutOutputPin, cfg.exhaustCutoutOutputPinMode);
 
 		if (isPwm) {
@@ -34,10 +45,6 @@ void ExhaustCutoutController::initPins() {
 		}
 	}
 
-	if (cfg.exhaustCutoutIsHBridge && isBrainPinValid(cfg.exhaustCutoutHBridgePin2)) {
-		m_hbridgePin2.initPin("cutout hb2", cfg.exhaustCutoutHBridgePin2, cfg.exhaustCutoutHBridgePin2Mode);
-	}
-
 	if (isBrainPinValid(cfg.exhaustCutoutLedPin)) {
 		m_ledPin.initPin("cutout led", cfg.exhaustCutoutLedPin, cfg.exhaustCutoutLedPinMode);
 	}
@@ -46,7 +53,7 @@ void ExhaustCutoutController::initPins() {
 	m_state = ExhaustCutoutState::CLOSED;
 
 	// Safe initial output state
-	if (cfg.exhaustCutoutIsHBridge) {
+	if (isHBridge) {
 		deEnergize();
 	} else if (isPwm) {
 		m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutPwmClosedDuty));
@@ -142,8 +149,8 @@ void ExhaustCutoutController::setState(ExhaustCutoutState newState) {
 	m_ledTimer.reset();
 
 	auto& cfg = *engineConfiguration;
-	bool isHBridge = cfg.exhaustCutoutIsHBridge;
-	bool isPwm = cfg.exhaustCutoutIsPwm && !isHBridge;
+	bool isHBridge = cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_HBRIDGE;
+	bool isPwm = cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_PWM;
 
 	switch (newState) {
 		case ExhaustCutoutState::CLOSED:
@@ -158,8 +165,9 @@ void ExhaustCutoutController::setState(ExhaustCutoutState newState) {
 			break;
 		case ExhaustCutoutState::OPENING:
 			if (isHBridge) {
-				m_hbridgePin2.setValue(0);
-				m_outputPin.setValue(1);
+				// IN1 = drive duty, IN2 = 0 (open direction)
+				m_hbridgePwm.setSimplePwmDutyCycle(0);
+				m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutHBridgeDutyCycle));
 			} else if (isPwm) {
 				m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutPwmOpenDuty));
 			} else {
@@ -175,8 +183,9 @@ void ExhaustCutoutController::setState(ExhaustCutoutState newState) {
 			break;
 		case ExhaustCutoutState::CLOSING:
 			if (isHBridge) {
-				m_outputPin.setValue(0);
-				m_hbridgePin2.setValue(1);
+				// IN1 = 0, IN2 = drive duty (close direction)
+				m_pwmOutput.setSimplePwmDutyCycle(0);
+				m_hbridgePwm.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutHBridgeDutyCycle));
 			} else if (isPwm) {
 				m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutPwmClosedDuty));
 			} else {
@@ -257,9 +266,9 @@ void ExhaustCutoutController::onSlowCallback() {
 
 	if (!cfg.exhaustCutoutEnabled || cfg.exhaustCutoutActivationMode == EXHAUST_CUTOUT_OFF) {
 		if (m_state != ExhaustCutoutState::CLOSED) {
-			if (cfg.exhaustCutoutIsHBridge) {
+			if (cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_HBRIDGE) {
 				deEnergize();
-			} else if (cfg.exhaustCutoutIsPwm) {
+			} else if (cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_PWM) {
 				m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutPwmClosedDuty));
 			} else {
 				m_outputPin.setValue(cfg.exhaustCutoutInvertedOutput ? 1 : 0);

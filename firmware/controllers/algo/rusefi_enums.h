@@ -623,6 +623,12 @@ typedef enum __attribute__ ((__packed__)) {
 	EXHAUST_CUTOUT_AUTO = 2,
 } exhaust_cutout_behavior_e;
 
+typedef enum __attribute__ ((__packed__)) {
+	EXHAUST_CUTOUT_OUTPUT_DIGITAL = 0,
+	EXHAUST_CUTOUT_OUTPUT_PWM = 1,
+	EXHAUST_CUTOUT_OUTPUT_HBRIDGE = 2,
+} exhaust_cutout_output_mode_e;
+
 // this one is "Rotational Idle", it's a naming mess https://github.com/rusefi/rusefi/issues/8435
 typedef enum __attribute__ ((__packed__)) {
 	SWITCH_INPUT_ANTILAG = 0,
