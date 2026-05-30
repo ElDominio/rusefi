@@ -53,6 +53,7 @@ private:
 
 	ExhaustCutoutTestPhase m_testPhase = ExhaustCutoutTestPhase::IDLE;
 	bool m_bootTestDone = false;
+	bool m_keyOnTestPending = false;
 	bool m_engineOnTestArmed = false;
 	bool m_lastEngineRunning = false;
 };

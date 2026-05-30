@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "exhaust_cutout.h"
 
-static constexpr float ENGINE_RUNNING_RPM_THRESHOLD = 400.0f;
+static constexpr float VBATT_KEY_ON_TEST_THRESHOLD = 10.0f;
 
 void ExhaustCutoutController::deEnergize() {
 	m_pwmOutput.setSimplePwmDutyCycle(0);
@@ -63,10 +63,9 @@ void ExhaustCutoutController::initPins() {
 
 	m_ledPin.setValue(0);
 
-	// Start key-on test sequence on fresh boot (not on config changes)
+	// Arm key-on test; actual start is deferred until 12V is present (onSlowCallback)
 	if (cfg.exhaustCutoutKeyOnTestEnabled && !m_bootTestDone) {
-		m_testPhase = ExhaustCutoutTestPhase::KEY_ON_OPEN_1;
-		m_testStepTimer.reset();
+		m_keyOnTestPending = true;
 	}
 }
 
@@ -284,12 +283,21 @@ void ExhaustCutoutController::onSlowCallback() {
 		isCutoutOpen = false;
 		isCutoutMoving = false;
 		isTestActive = false;
+		m_keyOnTestPending = false;
 		return;
 	}
 
-	// Detect engine start for engine-on test
-	float rpm = Sensor::getOrZero(SensorType::Rpm);
-	bool engineRunning = (rpm > ENGINE_RUNNING_RPM_THRESHOLD);
+	float vbatt = Sensor::getOrZero(SensorType::BatteryVoltage);
+
+	// Start key-on test once 12V is present (deferred from initPins)
+	if (m_keyOnTestPending && vbatt >= VBATT_KEY_ON_TEST_THRESHOLD) {
+		m_keyOnTestPending = false;
+		m_testPhase = ExhaustCutoutTestPhase::KEY_ON_OPEN_1;
+		m_testStepTimer.reset();
+	}
+
+	// Engine-on test: fire on first transition from cranking to running
+	bool engineRunning = engine->rpmCalculator.isRunning();
 	if (engineRunning && !m_lastEngineRunning && m_engineOnTestArmed) {
 		m_testPhase = ExhaustCutoutTestPhase::ENGINE_ON_OPEN;
 		m_testStepTimer.reset();
