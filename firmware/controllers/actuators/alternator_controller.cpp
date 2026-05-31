@@ -62,10 +62,9 @@ expected<float> AlternatorController::observePlant() {
 }
 
 expected<percent_t> AlternatorController::getOpenLoop(float target) {
-	percent_t baseDuty = 0;
 	if (engineConfiguration->alternatorBaseDutyUseTable) {
 		const float rpm = Sensor::getOrZero(SensorType::Rpm);
-		baseDuty = interpolate3d(
+		engineConfiguration->alternatorControl.offset = (int16_t)interpolate3d(
 			config->alternatorBaseDutyTable,
 			config->alternatorBaseDutyVoltageBins, target,
 			config->alternatorBaseDutyRpmBins, rpm
@@ -76,7 +75,7 @@ expected<percent_t> AlternatorController::getOpenLoop(float target) {
 	const percent_t acAdder = engine->module<AcController>().unmock().acButtonState
 		? engineConfiguration->acRelayAlternatorDutyAdder : 0;
 
-	return baseDuty + acAdder;
+	return acAdder;
 }
 
 expected<percent_t> AlternatorController::getClosedLoop(float setpoint, float observation) {
