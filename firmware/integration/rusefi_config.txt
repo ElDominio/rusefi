@@ -1036,7 +1036,7 @@ custom script_setting_t 4 scalar, F32, @OFFSET@, 		"",	   1,	   0, 0, 18000,	  2
 	custom vehicle_info_t @@VEHICLE_INFO_SIZE@@ string, ASCII, @OFFSET@, @@VEHICLE_INFO_SIZE@@
 	custom gppwm_note_t @@GPPWM_NOTE_SIZE@@ string, ASCII, @OFFSET@, @@GPPWM_NOTE_SIZE@@
 
-	bit unusedBit_idleReturnTargetRamp,"yes","no"
+	bit offIdleEnabled,"enabled","disabled";Enable off-idle RPM adder: adds RPM to idle target when returning from off-throttle to prevent stalling
 	bit useInjectorFlowLinearizationTable,"yes","no"
 	bit useHbridgesToDriveIdleStepper,"yes","no";If enabled we use two H-bridges to drive stepper idle air valve
 	bit multisparkEnable,"yes","no"
@@ -1315,7 +1315,7 @@ tps_limit_t tps2Max;Fully opened voltage for primary throttle position sensor
 	bit enableKnockSpectrogram,"yes","no";"Available via TS Plugin see https://rusefi.com/s/knock"
 	bit enableKnockSpectrogramFilter,"yes","no"
 
-	int16_t unusedIacByTpsTaper
+	int16_t offIdleRpmAdder;RPM added to closed-loop idle target when returning from off-idle (Running/Coasting) conditions. PID chases this elevated target to prevent stalling.;"RPM", 1, 0, 0, 1000, 0
 
 	Gpio accelerometerCsPin;
 	uint8_t coastingFuelCutVssLow;Below this speed, disable DFCO. Use this to prevent jerkiness from fuel enable/disable in low gears.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
@@ -1694,7 +1694,8 @@ pin_input_mode_e[LUA_DIGITAL_INPUT_COUNT iterate] luaDigitalInputPinModes;
 	int8_t[TCU_GEAR_COUNT] autoscale gearBasedOpenLoopBoostAdder;Boost duty cycle modified by gear;"%", 0.5, 0, -63, 63, 1
 
 	uint32_t benchTestCount;How many test bench pulses do you want;"", 1, 0, 1, 10000000, 0
-	uint8_t[2] unusedIacByTpsHoldDecay
+	uint8_t autoscale offIdleWaitTime;Time to wait after RPM stabilizes before starting the off-idle adder decay.;"sec", 0.1, 0, 0, 10, 1
+	uint8_t autoscale offIdleRpmAdderDecayTime;Time over which the off-idle RPM adder linearly decays from max to zero after the wait expires.;"sec", 0.1, 0, 0, 10, 1
 
 	switch_input_pin_e[RANGE_INPUT_COUNT iterate] tcu_rangeInput;
 	pin_input_mode_e[RANGE_INPUT_COUNT iterate] tcu_rangeInputMode;
@@ -1895,7 +1896,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 
 	int8_t[8] airmassToTimingBins;;"mg", 1, 0, -100, 100, 0
 	int8_t[8] airmassToTimingValues;;"deg", 1, 0, -30, 30, 0
-	uint8_t unusedIdleReturnTargetRampDuration
+	uint8_t autoscale offIdleRpmStabilityThreshold;RPM rate-of-change (RPM/s) below which RPM is considered stable when returning to idle. Transition from Stabilizing to Waiting occurs when dRPM/s falls below this value.;"RPM/s", 10, 0, 0, 2550, 0
 
 	float wastegatePositionOpenedVoltage;Voltage when the wastegate is fully open;"v", 1, 0, 0, 10, 2
 	float wastegatePositionClosedVoltage;Voltage when the wastegate is closed;"v", 1, 0, 0, 10, 2

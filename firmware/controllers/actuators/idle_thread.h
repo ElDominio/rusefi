@@ -80,6 +80,8 @@ public:
 	// CLOSED LOOP CORRECTION
 	float getClosedLoop(IIdleController::Phase phase, float tpsPos, float rpm, float targetRpm) override;
 
+	float getOffIdleAdder(Phase phase, float rpm);
+
 	void onConfigurationChange(engine_configuration_s const * previousConfig) override final;
 	void onFastCallback() override final;
 	void onEngineStop() override final;
@@ -125,7 +127,17 @@ private:
 	float m_crankTaperEndTime = 0.0f;
 	float m_idleTimingSoftEntryEndTime = 0.0f;
 
-  Timer m_timeInIdlePhase;
+	Timer m_timeInIdlePhase;
+
+	// Off-idle RPM adder state machine
+	enum class OffIdleAdderPhase : uint8_t {
+		Inactive, Armed, Stabilizing, Waiting, Decaying
+	};
+	OffIdleAdderPhase m_offIdlePhase = OffIdleAdderPhase::Inactive;
+	Timer m_offIdleWaitTimer;
+	Timer m_offIdleDecayTimer;
+	float m_offIdleAdderRpm = 0;
+	float m_lastRpmForStability = 0;
 
 	// This is stored by getClosedLoop and used in case we want to "do nothing"
 	float m_lastAutomaticPosition = 0;

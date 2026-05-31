@@ -603,3 +603,149 @@ TEST(idle_v2, IntegrationClamping) {
 	// Result would be 75 + 75 = 150, but it should clamp to 100
 	EXPECT_EQ(100, dut.getIdlePosition(950));
 }
+
+// ---- Off-idle RPM adder tests ----
+
+static void setupOffIdleAdder(int adderRpm = 200, float stabilityThreshold = 100, float waitTime = 0.5f, float decayTime = 2.0f) {
+	engineConfiguration->offIdleEnabled = true;
+	engineConfiguration->offIdleRpmAdder = adderRpm;
+	engineConfiguration->offIdleRpmStabilityThreshold = stabilityThreshold;
+	engineConfiguration->offIdleWaitTime = waitTime;
+	engineConfiguration->offIdleRpmAdderDecayTime = decayTime;
+}
+
+TEST(idle_v2, offIdleAdder_disabled) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+
+	engineConfiguration->offIdleEnabled = false;
+	engineConfiguration->offIdleRpmAdder = 200;
+
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Running, 2000));
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Idling, 900));
+}
+
+TEST(idle_v2, offIdleAdder_armedByRunning) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder();
+
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Running, 2000));
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Running, 2000));
+}
+
+TEST(idle_v2, offIdleAdder_armedByCoasting) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder();
+
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Coasting, 1500));
+}
+
+TEST(idle_v2, offIdleAdder_stabilizingHoldsMax) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	// stability threshold = 100 RPM/s, FAST_CALLBACK_PERIOD_MS = 10ms
+	// so dRPM between calls must be < 100 * 0.01 = 1 RPM to pass
+	setupOffIdleAdder(200, 100);
+
+	// Arm the adder
+	dut.getOffIdleAdder(ICP::Running, 2000);
+
+	// Enter idle phase: transitions to Stabilizing
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+
+	// RPM still changing fast (delta = 50 RPM in 10ms = 5000 RPM/s > 100) → stays Stabilizing
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 950));
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 920));
+}
+
+TEST(idle_v2, offIdleAdder_stabilizingTransitionsToWaiting) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder(200, 100, 0.5f, 2.0f);
+
+	// Arm → Stabilizing
+	dut.getOffIdleAdder(ICP::Running, 2000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+
+	// RPM stable (delta = 0 RPM → 0 RPM/s < 100) → transitions to Waiting
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+	// State should now be Waiting (adder still at max)
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+}
+
+TEST(idle_v2, offIdleAdder_waitTimerBeforeDecay) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder(200, 100, 0.5f, 2.0f);
+
+	// Arm → Stabilizing → Waiting (stable RPM)
+	dut.getOffIdleAdder(ICP::Running, 2000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+	dut.getOffIdleAdder(ICP::Idling, 1000); // transitions to Waiting here
+
+	// Not yet expired - still max
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+
+	// Advance past the wait time
+	advanceTimeUs(600'000); // 0.6s > 0.5s wait time
+
+	// Should now be Decaying - first call returns max (transitions on this call)
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+}
+
+TEST(idle_v2, offIdleAdder_linearDecay) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder(200, 100, 0.0f, 2.0f); // no wait time
+
+	// Arm → Stabilizing → Waiting (stable RPM, 0 wait) → Decaying
+	dut.getOffIdleAdder(ICP::Running, 2000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+	dut.getOffIdleAdder(ICP::Idling, 1000); // transitions to Waiting
+	dut.getOffIdleAdder(ICP::Idling, 1000); // wait=0 → transitions to Decaying, returns max
+
+	// At start of decay: full adder
+	EXPECT_NEAR(200, dut.getOffIdleAdder(ICP::Idling, 1000), 5);
+
+	// At ~1s: half adder
+	advanceTimeUs(1'000'000);
+	EXPECT_NEAR(100, dut.getOffIdleAdder(ICP::Idling, 1000), 5);
+
+	// At 2s: zero, transitions to Inactive
+	advanceTimeUs(1'000'000);
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Idling, 1000));
+}
+
+TEST(idle_v2, offIdleAdder_rearmDuringDecay) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder(200, 100, 0.0f, 2.0f);
+
+	// Get into Decaying state (same path as linearDecay)
+	dut.getOffIdleAdder(ICP::Running, 2000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+	dut.getOffIdleAdder(ICP::Idling, 1000); // now Decaying
+	advanceTimeUs(1'000'000); // decay is half-way
+
+	// Mid-decay value should be ~100
+	EXPECT_NEAR(100, dut.getOffIdleAdder(ICP::Idling, 1000), 10);
+
+	// Re-arm by going off-idle again
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Running, 3000));
+	// Back to Armed - full max
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Coasting, 1500));
+}
+
+TEST(idle_v2, offIdleAdder_inactiveWhenCranking) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder();
+
+	// Cranking is neither Running nor Coasting - adder stays Inactive
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Cranking, 400));
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Cranking, 400));
+}

@@ -133,6 +133,61 @@ float IdleController::getCrankingTaperFraction(float clt) const {
 	return (float)engine->rpmCalculator.getRevolutionCounterSinceStart() / taperDuration;
 }
 
+float IdleController::getOffIdleAdder(Phase phase, float rpm) {
+	float dRpmPerSec = std::abs(rpm - m_lastRpmForStability) / (FAST_CALLBACK_PERIOD_MS / 1000.0f);
+	m_lastRpmForStability = rpm;
+
+	if (!engineConfiguration->offIdleEnabled || engineConfiguration->offIdleRpmAdder <= 0) {
+		m_offIdlePhase = OffIdleAdderPhase::Inactive;
+		return m_offIdleAdderRpm = 0;
+	}
+
+	const float maxAdder  = engineConfiguration->offIdleRpmAdder;
+	const float stability = engineConfiguration->offIdleRpmStabilityThreshold;
+	const float waitTime  = engineConfiguration->offIdleWaitTime;
+	const float decayTime = engineConfiguration->offIdleRpmAdderDecayTime;
+
+	bool isOffIdle = (phase == Phase::Running || phase == Phase::Coasting);
+
+	if (isOffIdle) {
+		m_offIdlePhase = OffIdleAdderPhase::Armed;
+		return m_offIdleAdderRpm = maxAdder;
+	}
+
+	switch (m_offIdlePhase) {
+		case OffIdleAdderPhase::Inactive:
+			return m_offIdleAdderRpm = 0;
+
+		case OffIdleAdderPhase::Armed:
+			m_offIdlePhase = OffIdleAdderPhase::Stabilizing;
+			return m_offIdleAdderRpm = maxAdder;
+
+		case OffIdleAdderPhase::Stabilizing:
+			if (dRpmPerSec < stability) {
+				m_offIdlePhase = OffIdleAdderPhase::Waiting;
+				m_offIdleWaitTimer.reset();
+			}
+			return m_offIdleAdderRpm = maxAdder;
+
+		case OffIdleAdderPhase::Waiting:
+			if (m_offIdleWaitTimer.hasElapsedSec(waitTime)) {
+				m_offIdlePhase = OffIdleAdderPhase::Decaying;
+				m_offIdleDecayTimer.reset();
+			}
+			return m_offIdleAdderRpm = maxAdder;
+
+		case OffIdleAdderPhase::Decaying: {
+			float elapsed = m_offIdleDecayTimer.getElapsedSeconds();
+			if (decayTime <= 0 || elapsed >= decayTime) {
+				m_offIdlePhase = OffIdleAdderPhase::Inactive;
+				return m_offIdleAdderRpm = 0;
+			}
+			return m_offIdleAdderRpm = interpolateClamped(0, maxAdder, decayTime, 0.0f, elapsed);
+		}
+	}
+	return m_offIdleAdderRpm = 0;
+}
+
 /**
  * Open-loop IAC position while cranking - purely a function of coolant temperature.
  */
@@ -396,7 +451,6 @@ float IdleController::getIdlePosition(float rpm) {
 
 		// Compute the target we're shooting for
 		auto targetRpm = getTargetRpm(clt);
-		m_lastTargetRpm = targetRpm.ClosedLoopTarget;
 
 		// Determine cranking taper (modeled flow does no taper of open loop)
 		float crankingTaper = useModeledFlow ? 1 : getCrankingTaperFraction(clt);
@@ -415,16 +469,22 @@ float IdleController::getIdlePosition(float rpm) {
 
 		m_lastPhase = phase;
 
-		// RPM mode: add the CLT-based RPM adder on top of the normal idle RPM target during
-		// cranking, then taper the adder to zero as crankingTaper approaches 1.
+		// CLT-based RPM adder during cranking, tapered to zero as crankingTaper → 1
 		if (engineConfiguration->crankingIdleRpmFlareEnabled &&
 		    (phase == Phase::Cranking || phase == Phase::CrankToIdleTaper)) {
 			float rpmAdder = interpolate2d(clt, config->cltCrankingCorrBins, config->cltCrankingRpmAdder);
 			float crankingRpmTarget = m_lastTargetRpm + rpmAdder;
 			m_lastTargetRpm = interpolateClamped(0, crankingRpmTarget, 1, m_lastTargetRpm, crankingTaper);
 			targetRpm.ClosedLoopTarget = m_lastTargetRpm;
-			idleTarget = m_lastTargetRpm;
 		}
+
+		// Apply off-idle RPM adder to the closed-loop target
+		float offIdleAdder = getOffIdleAdder(phase, rpm);
+		targetRpm.ClosedLoopTarget += offIdleAdder;
+		m_lastTargetRpm = targetRpm.ClosedLoopTarget;
+		idleTarget = static_cast<uint16_t>(targetRpm.ClosedLoopTarget);
+		offIdleAdderCurrentRpm = static_cast<int16_t>(offIdleAdder);
+		offIdleAdderStateIndex = static_cast<uint8_t>(m_offIdlePhase);
 
 		finishIdleTestIfNeeded();
 
