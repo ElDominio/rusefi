@@ -13,6 +13,10 @@
 static void setDefaultAlternatorParameters() {
 	setTable(config->alternatorVoltageTargetTable, 14);
 
+	setTable(config->alternatorBaseDutyTable, 0);
+	setLinearCurve(config->alternatorBaseDutyVoltageBins, 11, 15, 1);
+	setRpmTableBin(config->alternatorBaseDutyRpmBins);
+
 	engineConfiguration->alternatorControl.offset = 0;
 	engineConfiguration->alternatorControl.pFactor = 30;
 	engineConfiguration->alternatorControl.periodMs = 100;

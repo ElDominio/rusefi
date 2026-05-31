@@ -59,9 +59,22 @@ expected<float> AlternatorController::observePlant() {
 	return Sensor::get(SensorType::BatteryVoltage);
 }
 
-expected<percent_t> AlternatorController::getOpenLoop(float /*target*/) {
+expected<percent_t> AlternatorController::getOpenLoop(float target) {
+	percent_t baseDuty = 0;
+	if (engineConfiguration->alternatorBaseDutyUseTable) {
+		const float rpm = Sensor::getOrZero(SensorType::Rpm);
+		baseDuty = interpolate3d(
+			config->alternatorBaseDutyTable,
+			config->alternatorBaseDutyVoltageBins, target,
+			config->alternatorBaseDutyRpmBins, rpm
+		);
+	}
+
 	// see "idle air Bump for AC" comment
-	return engine->module<AcController>().unmock().acButtonState ? engineConfiguration->acRelayAlternatorDutyAdder : 0;
+	const percent_t acAdder = engine->module<AcController>().unmock().acButtonState
+		? engineConfiguration->acRelayAlternatorDutyAdder : 0;
+
+	return baseDuty + acAdder;
 }
 
 expected<percent_t> AlternatorController::getClosedLoop(float setpoint, float observation) {
