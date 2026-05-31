@@ -137,7 +137,7 @@ float IdleController::getOffIdleAdder(Phase phase, float rpm) {
 	float dRpmPerSec = std::abs(rpm - m_lastRpmForStability) / (FAST_CALLBACK_PERIOD_MS / 1000.0f);
 	m_lastRpmForStability = rpm;
 
-	if (!engineConfiguration->offIdleEnabled || engineConfiguration->offIdleRpmAdder <= 0) {
+	if (engineConfiguration->offIdleRpmAdder <= 0) {
 		m_offIdlePhase = OffIdleAdderPhase::Inactive;
 		return m_offIdleAdderRpm = 0;
 	}

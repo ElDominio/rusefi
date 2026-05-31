@@ -607,7 +607,6 @@ TEST(idle_v2, IntegrationClamping) {
 // ---- Off-idle RPM adder tests ----
 
 static void setupOffIdleAdder(int adderRpm = 200, float stabilityThreshold = 100, float waitTime = 0.5f, float decayTime = 2.0f) {
-	engineConfiguration->offIdleEnabled = true;
 	engineConfiguration->offIdleRpmAdder = adderRpm;
 	engineConfiguration->offIdleRpmStabilityThreshold = stabilityThreshold;
 	engineConfiguration->offIdleWaitTime = waitTime;
@@ -618,8 +617,8 @@ TEST(idle_v2, offIdleAdder_disabled) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
-	engineConfiguration->offIdleEnabled = false;
-	engineConfiguration->offIdleRpmAdder = 200;
+	// Feature is disabled when adder is zero
+	engineConfiguration->offIdleRpmAdder = 0;
 
 	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Running, 2000));
 	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Idling, 900));
