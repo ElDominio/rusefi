@@ -48,11 +48,13 @@ expected<float> AlternatorController::getSetpoint() {
 	}
 
 	const float load = getEngineState()->fuelingLoad;
-	return interpolate3d(
+	float targetVoltage = interpolate3d(
 		config->alternatorVoltageTargetTable,
 		config->alternatorVoltageTargetLoadBins, load,
 		config->alternatorVoltageTargetRpmBins, rpm
 	);
+	engine->outputChannels.alternatorVoltageTarget = targetVoltage;
+	return targetVoltage;
 }
 
 expected<float> AlternatorController::observePlant() {

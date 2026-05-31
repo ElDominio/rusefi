@@ -293,6 +293,7 @@ int16_t rpmAcceleration;dRPM;"RPM acceleration/Rate of Change/ROC",1, 0, 0, 5, 2
 
 	uint8_t extiOverflowCount;;"", 1, 0, 0, 255, 0
 
+	float alternatorVoltageTarget;;"V", 1, 0, 0, 20, 2
 	pid_status_s alternatorStatus
 	pid_status_s idleStatus
 	pid_status_s etbStatus
