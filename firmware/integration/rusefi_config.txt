@@ -2797,6 +2797,7 @@ end_struct
 #define ts_show_speedo_settings true
 #define ts_show_injection_phase true
 #define ts_show_fuel_pump true
+#define ts_show_advanced_fuel_pump false
 #define ts_show_status_leds true
 #define ts_show_fuel_relay_pin true
 #define ts_show_cylinder_bank true
