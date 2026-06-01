@@ -2435,7 +2435,7 @@ uint16_t[ALTERNATOR_VOLTAGE_RPM_SIZE] alternatorBaseDutyRpmBins;;"RPM", 1, 0, 0,
 #define FP_PRESSURE_TABLE_SIZE 4
 #define FP_PRESSURE_RPM_SIZE 4
 int16_t[FP_PRESSURE_TABLE_SIZE x FP_PRESSURE_RPM_SIZE] autoscale fuelPressureTargetTable;Target fuel pressure vs RPM and MAP load (PWM mode);"kPa", 0.1, 0, 0, 700, 1
-uint16_t[FP_PRESSURE_TABLE_SIZE] fuelPressureTargetLoadBins;MAP load bins for target FP pressure table;"load%", 1, 0, 0, 100, 0
+uint16_t[FP_PRESSURE_TABLE_SIZE] fuelPressureTargetLoadBins;MAP load bins for target FP pressure table;{bitStringValue(pressureUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KPA_TO_PSI@@}, 0, 0, {useMetricOnInterface ? @@MAP_UPPER_LIMIT@@ : @@MAP_UPPER_LIMIT@@ * @@UNITS_KPA_TO_PSI@@}, 0
 uint16_t[FP_PRESSURE_RPM_SIZE] fuelPressureTargetRpmBins;RPM bins for target FP pressure table;"rpm", 1, 0, 0, 18000, 0
 
 ! Fuel pump PWM - base duty table (RPM x target FP pressure -> duty %)
