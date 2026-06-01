@@ -469,12 +469,15 @@ float IdleController::getIdlePosition(float rpm) {
 
 		m_lastPhase = phase;
 
-		// CLT-based RPM adder during cranking, tapered to zero as crankingTaper → 1
+		// CLT-based RPM adder during cranking, tapered to zero as crankingTaper → 1.
+		// Use targetRpm.ClosedLoopTarget (fresh from getTargetRpm() this call) as the base so
+		// the adder is not accumulated across iterations via m_lastTargetRpm.
 		if (engineConfiguration->crankingIdleRpmFlareEnabled &&
 		    (phase == Phase::Cranking || phase == Phase::CrankToIdleTaper)) {
 			float rpmAdder = interpolate2d(clt, config->cltCrankingCorrBins, config->cltCrankingRpmAdder);
-			float crankingRpmTarget = m_lastTargetRpm + rpmAdder;
-			m_lastTargetRpm = interpolateClamped(0, crankingRpmTarget, 1, m_lastTargetRpm, crankingTaper);
+			float baseIdle = targetRpm.ClosedLoopTarget;
+			float crankingRpmTarget = baseIdle + rpmAdder;
+			m_lastTargetRpm = interpolateClamped(0, crankingRpmTarget, 1, baseIdle, crankingTaper);
 			targetRpm.ClosedLoopTarget = m_lastTargetRpm;
 		}
 
