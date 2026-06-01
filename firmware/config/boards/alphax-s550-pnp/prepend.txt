@@ -29,3 +29,6 @@
 
 !                                             1                                        5
 #define canReWidebandHwIndex_enum "INVALID", "First", "INVALID", "INVALID", "INVALID", "Second", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID"
+
+#define ts_show_vvt_compensation true
+#define ts_show_advanced_fuel_pump true
