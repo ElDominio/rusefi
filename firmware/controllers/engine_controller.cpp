@@ -428,7 +428,9 @@ void commonInitEngineController() {
 	initAlternatorCtrl();
 #endif /* EFI_ALTERNATOR_CONTROL */
 
+#if EFI_ADVANCED_FUEL_PUMP
 	initFuelPumpPwm();
+#endif
 
 #if EFI_VVT_PID
 	initVvtActuators();

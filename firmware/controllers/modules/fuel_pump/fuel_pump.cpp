@@ -7,6 +7,7 @@
 #include "fuel_pump.h"
 #include "bench_test.h"
 
+#if EFI_ADVANCED_FUEL_PUMP
 #if EFI_PROD_CODE || EFI_SIMULATOR
 static SimplePwm fuelPumpPwm("fp_pwm");
 #endif
@@ -14,6 +15,7 @@ static SimplePwm fuelPumpPwm("fp_pwm");
 FuelPumpController::FuelPumpController() {
 	m_fuelPumpPid.initPidClass(&engineConfiguration->fuelPumpControl);
 }
+#endif // EFI_ADVANCED_FUEL_PUMP
 
 void FuelPumpController::onSlowCallback() {
 	auto timeSinceIgn = m_ignOnTimer.getElapsedSeconds();
@@ -26,6 +28,7 @@ void FuelPumpController::onSlowCallback() {
 
 	isFuelPumpOn = isPrime || engineTurnedRecently;
 
+#if EFI_ADVANCED_FUEL_PUMP
 	fuel_pump_mode_e mode = engineConfiguration->fuelPumpMode;
 
 	if (mode == FP_MODE_SINGLE) {
@@ -39,11 +42,16 @@ void FuelPumpController::onSlowCallback() {
 		updateDualRelay();
 	}
 	// PWM mode: relay is not used; onFastCallback drives the duty via PID
+#else
+	if (!isRunningBenchTest()) {
+		enginePins.fuelPumpRelay.setValue("FP", isFuelPumpOn);
+	}
+#endif // EFI_ADVANCED_FUEL_PUMP
 }
 
+#if EFI_ADVANCED_FUEL_PUMP
 void FuelPumpController::updateDualRelay() {
 	if (!isFuelPumpOn) {
-		// Primary pump off — secondary must also be off
 		m_secondaryPumpOn = false;
 		enginePins.fuelPumpRelay2.setValue("FP2", false);
 		isSecondaryPumpOn = false;
@@ -102,7 +110,6 @@ expected<float> FuelPumpController::getSetpoint() {
 		config->fuelPressureTargetRpmBins,  rpm
 	);
 
-	// Clamp to uint8 range for live data (kPa, saturates at 255)
 	fuelPressureTarget = static_cast<uint8_t>(clampF(0, target, 255));
 
 	return target;
@@ -133,7 +140,6 @@ void FuelPumpController::setOutput(expected<percent_t> output) {
 	percent_t duty;
 
 	if (isPrime) {
-		// Hold at max duty during prime regardless of PID
 		duty = engineConfiguration->fuelPumpMaxDuty;
 		m_fuelPumpPid.reset();
 	} else if (output) {
@@ -141,7 +147,6 @@ void FuelPumpController::setOutput(expected<percent_t> output) {
 		              output.Value,
 		              engineConfiguration->fuelPumpMaxDuty);
 	} else {
-		// No valid output (sensor missing, pump off, etc.) — hold at min duty
 		duty = engineConfiguration->fuelPumpMinDuty;
 		isFpPidActive = false;
 		m_fuelPumpPid.reset();
@@ -152,13 +157,6 @@ void FuelPumpController::setOutput(expected<percent_t> output) {
 #if EFI_PROD_CODE || EFI_SIMULATOR
 	fuelPumpPwm.setSimplePwmDutyCycle(PERCENT_TO_DUTY(duty));
 #endif
-}
-
-void FuelPumpController::onIgnitionStateChanged(bool ignitionOnParam) {
-	ignitionOn = ignitionOnParam;
-	if (ignitionOn) {
-		m_ignOnTimer.reset();
-	}
 }
 
 void FuelPumpController::onConfigurationChange(engine_configuration_s const* prev) {
@@ -184,4 +182,12 @@ void initFuelPumpPwm() {
 	               engineConfiguration->fuelPumpPwmFrequency,
 	               PERCENT_TO_DUTY(engineConfiguration->fuelPumpMinDuty));
 #endif
+}
+#endif // EFI_ADVANCED_FUEL_PUMP
+
+void FuelPumpController::onIgnitionStateChanged(bool ignitionOnParam) {
+	ignitionOn = ignitionOnParam;
+	if (ignitionOn) {
+		m_ignOnTimer.reset();
+	}
 }
