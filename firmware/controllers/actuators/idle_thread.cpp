@@ -482,7 +482,13 @@ float IdleController::getIdlePosition(float rpm) {
 		float offIdleAdder = getOffIdleAdder(phase, rpm);
 		targetRpm.ClosedLoopTarget += offIdleAdder;
 		m_lastTargetRpm = targetRpm.ClosedLoopTarget;
-		idleTarget = static_cast<uint16_t>(targetRpm.ClosedLoopTarget);
+		// Only update the displayed idleTarget when the engine is running. During key-off
+		// (Phase::Cranking) the flare block may have set targetRpm.ClosedLoopTarget to a
+		// garbage value from an uninitialised cltCrankingRpmAdder table, so we leave
+		// idleTarget at the base value written by getTargetRpm() instead.
+		if (phase != Phase::Cranking) {
+			idleTarget = static_cast<uint16_t>(targetRpm.ClosedLoopTarget);
+		}
 		offIdleAdderCurrentRpm = static_cast<int16_t>(offIdleAdder);
 		offIdleAdderStateIndex = static_cast<uint8_t>(m_offIdlePhase);
 
