@@ -16,6 +16,10 @@
 #define EFI_ADVANCED_FUEL_PUMP TRUE
 #endif
 
+#ifndef EFI_VVT_COMPENSATION
+#define EFI_VVT_COMPENSATION TRUE
+#endif
+
 // Disable ini ramdisk as a mitigation of https://github.com/rusefi/rusefi/issues/3775
 // See STM32F7.ld for more info
 #ifndef EFI_EMBED_INI_MSD

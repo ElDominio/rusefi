@@ -2558,6 +2558,7 @@ end_struct
 #define pedalToTpsTbl_NAME "ETB pedal target"
 #define pedalSensor_NAME "Accelerator pedal"
 #define egoSettings_NAME "CAN O2 sensors"
+#define ts_show_vvt_compensation false
 #define ts_show_charge_estimation true
 #define ts_show_flow_units true
 #define ts_show_stepper_hbridge true

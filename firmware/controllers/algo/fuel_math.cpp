@@ -108,10 +108,12 @@ float getCrankingFuel3(float baseFuel, uint32_t revolutionCounterSinceStart) {
 	return crankingFuel;
 }
 
+#if EFI_VVT_COMPENSATION
 static float getVvtFuelCorrectionPct(uint8_t bankIndex, uint8_t camIndex,
 	const int8_t (&table)[VVT_TABLE_SIZE][VVT_TABLE_RPM_SIZE],
 	const float (&vvtBins)[VVT_TABLE_SIZE],
 	const uint16_t (&rpmBins)[VVT_TABLE_RPM_SIZE]);
+#endif
 
 float getRunningFuel(float baseFuel) {
 	ScopePerf perf(PE::GetRunningFuel);
@@ -127,6 +129,7 @@ float getRunningFuel(float baseFuel) {
 
 	float correction = baroCorrection * iatCorrection * cltCorrection * postCrankingFuelCorrection;
 
+#if EFI_VVT_COMPENSATION
 	float vvtIntakeFuelCorr = getVvtFuelCorrectionPct(0, 0,
 		config->vvtFuelIntakeCorrTable,
 		config->vvtFuelIntakeCorrVvtBins,
@@ -138,6 +141,7 @@ float getRunningFuel(float baseFuel) {
 	correction *= (1.0f + vvtIntakeFuelCorr / 100.0f) * (1.0f + vvtExhaustFuelCorr / 100.0f);
 	engine->fuelComputer.vvtFuelIntakeCorrection = vvtIntakeFuelCorr;
 	engine->fuelComputer.vvtFuelExhaustCorrection = vvtExhaustFuelCorr;
+#endif // EFI_VVT_COMPENSATION
 
 #if EFI_ANTILAG_SYSTEM
 	correction *= (1 + engine->antilagController.fuelALSCorrection / 100);
@@ -465,6 +469,7 @@ float getBaroCorrection() {
 	}
 }
 
+#if EFI_VVT_COMPENSATION
 static float getVvtFuelCorrectionPct(uint8_t bankIndex, uint8_t camIndex,
 	const int8_t (&table)[VVT_TABLE_SIZE][VVT_TABLE_RPM_SIZE],
 	const float (&vvtBins)[VVT_TABLE_SIZE],
@@ -476,6 +481,7 @@ static float getVvtFuelCorrectionPct(uint8_t bankIndex, uint8_t camIndex,
 	float corr = interpolate3d(table, vvtBins, angle, rpmBins, Sensor::getOrZero(SensorType::Rpm));
 	return std::isnan(corr) ? 0.0f : corr;
 }
+#endif // EFI_VVT_COMPENSATION
 
 percent_t getFuelALSCorrection(float rpm) {
 #if EFI_ANTILAG_SYSTEM

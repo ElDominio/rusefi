@@ -214,6 +214,7 @@ angle_t getAdvanceCorrections(float engineLoad) {
 
 	engine->ignitionState.dfcoTimingRetard = engine->module<DfcoController>()->getTimingRetard();
 
+#if EFI_VVT_COMPENSATION
 	{
 		float intakeAngle = engine->triggerCentral.getVVTPosition(0, 0);
 		engine->ignitionState.vvtIntakeTimingCorrection = std::isnan(intakeAngle) ? 0 :
@@ -227,6 +228,7 @@ angle_t getAdvanceCorrections(float engineLoad) {
 				config->vvtIgnExhaustCorrVvtBins, exhaustAngle,
 				config->vvtIgnExhaustCorrRpmBins, Sensor::getOrZero(SensorType::Rpm));
 	}
+#endif // EFI_VVT_COMPENSATION
 
 #if EFI_TUNER_STUDIO
 	engine->outputChannels.multiSparkCounter = engine->engineState.multispark.count;
@@ -234,8 +236,10 @@ angle_t getAdvanceCorrections(float engineLoad) {
 
 	return engine->ignitionState.timingIatCorrection
 		+ engine->ignitionState.cltTimingCorrection
+#if EFI_VVT_COMPENSATION
 		+ engine->ignitionState.vvtIntakeTimingCorrection
 		+ engine->ignitionState.vvtExhaustTimingCorrection
+#endif
 		+ engine->ignitionState.timingPidCorrection
 		- engine->ignitionState.dfcoTimingRetard;
 }
