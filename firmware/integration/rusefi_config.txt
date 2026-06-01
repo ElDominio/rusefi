@@ -2148,6 +2148,22 @@ int8_t[VVT_TABLE_SIZE x VVT_TABLE_RPM_SIZE] vvtTable2;;"value", 1, 0, -125, 125,
 uint16_t[VVT_TABLE_SIZE] vvtTable2LoadBins;;"L", 1, 0, 0,  @@MAP_UPPER_LIMIT@@, 0
 uint16_t[VVT_TABLE_RPM_SIZE] vvtTable2RpmBins;;"RPM", 1, 0, 0, 18000, 0
 
+int8_t[VVT_TABLE_SIZE x VVT_TABLE_RPM_SIZE] vvtFuelIntakeCorrTable;;"%", 1, 0, -50, 50, 0
+float[VVT_TABLE_SIZE] vvtFuelIntakeCorrVvtBins;;"deg", 1, 0, -90, 90, 1
+uint16_t[VVT_TABLE_RPM_SIZE] vvtFuelIntakeCorrRpmBins;;"RPM", 1, 0, 0, 18000, 0
+
+int8_t[VVT_TABLE_SIZE x VVT_TABLE_RPM_SIZE] vvtFuelExhaustCorrTable;;"%", 1, 0, -50, 50, 0
+float[VVT_TABLE_SIZE] vvtFuelExhaustCorrVvtBins;;"deg", 1, 0, -90, 90, 1
+uint16_t[VVT_TABLE_RPM_SIZE] vvtFuelExhaustCorrRpmBins;;"RPM", 1, 0, 0, 18000, 0
+
+int16_t[VVT_TABLE_SIZE x VVT_TABLE_RPM_SIZE] autoscale vvtIgnIntakeCorrTable;;"deg", 0.1, 0, -25, 25, 1
+float[VVT_TABLE_SIZE] vvtIgnIntakeCorrVvtBins;;"deg", 1, 0, -90, 90, 1
+uint16_t[VVT_TABLE_RPM_SIZE] vvtIgnIntakeCorrRpmBins;;"RPM", 1, 0, 0, 18000, 0
+
+int16_t[VVT_TABLE_SIZE x VVT_TABLE_RPM_SIZE] autoscale vvtIgnExhaustCorrTable;;"deg", 0.1, 0, -25, 25, 1
+float[VVT_TABLE_SIZE] vvtIgnExhaustCorrVvtBins;;"deg", 1, 0, -90, 90, 1
+uint16_t[VVT_TABLE_RPM_SIZE] vvtIgnExhaustCorrRpmBins;;"RPM", 1, 0, 0, 18000, 0
+
 int16_t[IGN_LOAD_COUNT x IGN_RPM_COUNT] autoscale ignitionTable;;"deg", 0.1, 0, -20, 90, 1
 uint16_t[IGN_LOAD_COUNT] ignitionLoadBins;;{bitStringValue(ignLoadUnitLabels, ignLoadUnitIdxPcv)}, {(ignOverrideMode != 0 && ignOverrideMode != 1) || useMetricOnInterface ? 1 : @@UNITS_KPA_TO_PSI@@}, 0, 0, {ignOverrideMode == 0 || ignOverrideMode == 1 ? (useMetricOnInterface ? @@MAP_UPPER_LIMIT@@ : @@MAP_UPPER_LIMIT@@ * @@UNITS_KPA_TO_PSI@@) : 100}, 0
 uint16_t[IGN_RPM_COUNT] ignitionRpmBins;;"RPM",	   1, 0, 0, 18000, 0
