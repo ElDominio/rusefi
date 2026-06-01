@@ -333,3 +333,7 @@
 		chThdSleepMilliseconds(20); \
 	} \
 }
+
+#ifndef EFI_EXHAUST_CUTOUT
+#define EFI_EXHAUST_CUTOUT FALSE
+#endif

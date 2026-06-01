@@ -42,3 +42,5 @@
 #define ts_show_cylinder_12 false
 
 #define CLT_UPPER_LIMIT 125
+#define ts_show_vvt_compensation true
+#define ts_show_advanced_fuel_pump true

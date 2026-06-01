@@ -20,6 +20,10 @@
 #define EFI_VVT_COMPENSATION TRUE
 #endif
 
+#ifndef EFI_EXHAUST_CUTOUT
+#define EFI_EXHAUST_CUTOUT TRUE
+#endif
+
 // Disable ini ramdisk as a mitigation of https://github.com/rusefi/rusefi/issues/3775
 // See STM32F7.ld for more info
 #ifndef EFI_EMBED_INI_MSD

@@ -328,3 +328,7 @@
 		uart_lld_blocking_send(TS_PRIMARY_UxART_PORT, strlen(__debugBuffer), (void *)__debugBuffer); \
 	} \
 }
+
+#ifndef EFI_EXHAUST_CUTOUT
+#define EFI_EXHAUST_CUTOUT FALSE
+#endif
