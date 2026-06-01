@@ -110,7 +110,7 @@ expected<float> FuelPumpController::getSetpoint() {
 		config->fuelPressureTargetRpmBins,  rpm
 	);
 
-	fuelPressureTarget = static_cast<uint8_t>(clampF(0, target / 5, 255));
+	fuelPressureTarget = clampF(0, target, 1275.0f);
 
 	return target;
 }
