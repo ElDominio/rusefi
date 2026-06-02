@@ -1,0 +1,15 @@
+struct_no_prefix engine_state_machine_state_s
+
+	bit engineSmEnabled;Engine SM: enabled
+	bit engineSmIsOff;Engine SM: Off
+	bit engineSmIsCranking;Engine SM: Cranking
+	bit engineSmIsAfterStart;Engine SM: Afterstart
+	bit engineSmIsIdle;Engine SM: Idle
+	bit engineSmIsCoasting;Engine SM: Coasting
+	bit engineSmIsTransient;Engine SM: Transient
+	bit engineSmIsWot;Engine SM: WOT
+	bit engineSmIsCruising;Engine SM: Cruising
+
+	uint8_t engineSmCurrentState;Engine SM: primary state
+
+end_struct

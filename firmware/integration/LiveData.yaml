@@ -283,3 +283,10 @@ Usages:
     prepend: integration/rusefi_config_shared.txt
     output_name: live_data_rotational_idle
     conditional_compilation: "ROTATIONAL_IDLE_CONTROLLER"
+
+  - name: engine_state_machine_state
+    java: EngineStateMachine.java
+    folder: controllers/algo
+    prepend: integration/rusefi_config_shared.txt
+    output_name: esm
+    engineModule: EngineStateMachine

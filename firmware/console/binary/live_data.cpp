@@ -321,6 +321,11 @@ const vvl_controller_state_s* getLiveData(size_t) {
 }
 
 template<>
+const engine_state_machine_state_s* getLiveData(size_t) {
+	return &engine->module<EngineStateMachine>().unmock();
+}
+
+template<>
 const live_data_rotational_idle_s* getLiveData(size_t) {
 #if ROTATIONAL_IDLE_CONTROLLER
 	return &engine->rotationalIdleController;
