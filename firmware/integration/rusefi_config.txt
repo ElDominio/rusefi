@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260528
+#define FLASH_DATA_VERSION 260602
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -1837,7 +1837,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit exhaustCutoutKeyOnTestEnabled,"Key-on test","disabled"
 	bit exhaustCutoutEngineOnTestEnabled,"Engine-on test","disabled"
 	bit unusedBit_CutoutWasPwm
-	bit unusedBit_Fancy10
+	bit useEngineStateMachine,"enabled","disabled";Centralized Engine State Machine. When enabled, state detection is driven by a single priority-ordered evaluator. When disabled, each controller manages its own state detection.
 	bit unusedBit_Fancy11
 	bit unusedBit_Fancy12
 	bit unusedBit_Fancy13
@@ -2012,6 +2012,15 @@ end_struct
 	switch_input_pin_e[IDLE_UP_SWITCH_COUNT iterate] idleUpSwitchPins;Idle-up digital input pins
 	pin_input_mode_e[IDLE_UP_SWITCH_COUNT iterate] idleUpSwitchMode;Idle-up input polarity/pull
 	uint8_t[IDLE_UP_SWITCH_COUNT iterate] idleUpAdder;Idle % to add when this switch is active;"%", 1, 0, 0, 100, 0
+
+! Engine State Machine thresholds (used only when useEngineStateMachine is enabled)
+	uint8_t smIdleTpsThreshold;Engine SM: TPS threshold below which the engine is considered off-throttle (state detection only). Defaults to idlePidDeactivationTpsThreshold value.;"%", 1, 0, 0, 50, 0
+	uint8_t smWotTpsThreshold;Engine SM: TPS threshold above which the engine is at Wide Open Throttle.;"%", 1, 0, 50, 100, 0
+	uint8_t smTransientTpsRateThreshold;Engine SM: TPS rate of change (%/s) above which the engine enters the Transient state.;"%/s", 1, 0, 0, 200, 0
+	uint8_t smAfterStartDuration;Engine SM: Seconds to remain in the Afterstart state after the engine first reaches running RPM.;"s", 1, 0, 0, 30, 0
+	int16_t smIdleExitRpm;Engine SM: Absolute RPM below which the engine is considered at idle. Above this RPM the engine is considered coasting (state detection only).;"RPM", 1, 0, 0, 10000, 0
+	int16_t smCrankingRpmHysteresis;Engine SM: Hysteresis band around the cranking RPM threshold to prevent state flapping.;"RPM", 1, 0, 0, 200, 0
+	int16_t smIdleRpmHysteresis;Engine SM: Hysteresis band around the idle exit RPM threshold.;"RPM", 1, 0, 0, 200, 0
 
 ! end of engine_configuration_s
 end_struct

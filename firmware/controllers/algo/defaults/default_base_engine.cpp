@@ -460,6 +460,16 @@ void setDefaultBaseEngine() {
 
 	engineConfiguration->useMetricOnInterface = true;
 
+	// Engine State Machine defaults
+	engineConfiguration->useEngineStateMachine = false;
+	engineConfiguration->smIdleTpsThreshold = 5;       // 5% TPS — matches idlePidDeactivationTpsThreshold default
+	engineConfiguration->smWotTpsThreshold = 90;        // 90% TPS
+	engineConfiguration->smTransientTpsRateThreshold = 20; // 20 %/s
+	engineConfiguration->smAfterStartDuration = 3;     // 3 seconds post-cranking
+	engineConfiguration->smIdleExitRpm = 1200;          // 1200 RPM absolute idle/coasting boundary
+	engineConfiguration->smCrankingRpmHysteresis = 50; // 50 RPM hysteresis (reserved for future use)
+	engineConfiguration->smIdleRpmHysteresis = 50;     // 50 RPM hysteresis around smIdleExitRpm
+
   // we invoke this last so that we can validate even defaults
   defaultsOrFixOnBurn();
 }
