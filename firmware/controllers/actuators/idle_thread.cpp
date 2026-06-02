@@ -221,6 +221,14 @@ percent_t IdleController::getRunningOpenLoop(IIdleController::Phase phase, float
 	running += enginePins.fanRelay.getLogicValue() ? engineConfiguration->fan1ExtraIdle : 0;
 	running += enginePins.fanRelay2.getLogicValue() ? engineConfiguration->fan2ExtraIdle : 0;
 
+	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
+		if (isBrainPinValid(engineConfiguration->idleUpSwitchPins[i])) {
+			if (efiReadPin(engineConfiguration->idleUpSwitchPins[i], engineConfiguration->idleUpSwitchMode[i])) {
+				running += engineConfiguration->idleUpAdder[i];
+			}
+		}
+	}
+
 	running += luaAdd;
 
 #if EFI_ANTILAG_SYSTEM

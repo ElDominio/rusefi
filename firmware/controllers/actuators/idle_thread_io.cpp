@@ -66,6 +66,9 @@ void startSwitchPins() {
 	startInputPinIfValid("Ignition Switch", engineConfiguration->ignitionKeyDigitalPin, engineConfiguration->ignitionKeyDigitalPinMode);
 	startInputPinIfValid("Torque Reduction Button", engineConfiguration->torqueReductionTriggerPin, engineConfiguration->torqueReductionTriggerPinMode);
 	startInputPinIfValid("Nitrous Button", engineConfiguration->nitrousControlTriggerPin, engineConfiguration->nitrousControlTriggerPinMode);
+	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
+		startInputPinIfValid("Idle Up Switch", engineConfiguration->idleUpSwitchPins[i], engineConfiguration->idleUpSwitchMode[i]);
+	}
 #endif /* EFI_PROD_CODE */
 }
 
@@ -78,6 +81,9 @@ void stopSwitchPins() {
 	brain_pin_markUnused(activeConfiguration.ignitionKeyDigitalPin);
 	brain_pin_markUnused(activeConfiguration.torqueReductionTriggerPin);
 	brain_pin_markUnused(activeConfiguration.nitrousControlTriggerPin);
+	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
+		brain_pin_markUnused(activeConfiguration.idleUpSwitchPins[i]);
+	}
 }
 
 #if ! EFI_UNIT_TEST
