@@ -33,12 +33,13 @@ void efiSetPadUnused(brain_pin_e brainPin);
 
 #if EFI_GPIO_HARDWARE
 bool efiReadPin(brain_pin_e pin);
-bool efiReadPin(brain_pin_e pin, pin_input_mode_e mode);
-bool efiIsInputPinInverted(pin_input_mode_e mode);
 
 iomode_t getInputMode(pin_input_mode_e mode);
 
 #endif /* EFI_GPIO_HARDWARE */
+
+bool efiReadPin(brain_pin_e pin, pin_input_mode_e mode);
+bool efiIsInputPinInverted(pin_input_mode_e mode);
 
 void writePad(const char *msg, brain_pin_e pin, int bit);
 
