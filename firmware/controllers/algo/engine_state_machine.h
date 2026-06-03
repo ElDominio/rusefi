@@ -13,7 +13,8 @@ enum class EngineStateMachineState : uint8_t {
 	Transient  = 5,
 	WOT        = 6,
 	Cruising   = 7,
-	// 8-11 reserved for future overlay states (Warmup, LimpMode, LaunchControl, GearShift)
+	Overrun    = 8,
+	// 9-11 reserved for future overlay states (Warmup, LimpMode, LaunchControl, GearShift)
 };
 
 class EngineStateMachine : public engine_state_machine_state_s, public EngineModule {
@@ -30,6 +31,12 @@ private:
 
 	// RPM hysteresis for the idle/coasting boundary to prevent state flapping
 	Hysteresis m_idleHysteresis;
+
+	// VSS hysteresis for the coasting/idle boundary (2 km/h band)
+	Hysteresis m_vssHysteresis;
+
+	// RPM hysteresis for the coasting/overrun boundary
+	Hysteresis m_overrunHysteresis;
 
 	// Previous TPS value for rate-of-change computation
 	float m_prevTps = 0.0f;

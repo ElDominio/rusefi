@@ -42,6 +42,7 @@ void EngineStateMachine::onSlowCallback() {
 	engineSmIsTransient  = (newState == EngineStateMachineState::Transient);
 	engineSmIsWot        = (newState == EngineStateMachineState::WOT);
 	engineSmIsCruising   = (newState == EngineStateMachineState::Cruising);
+	engineSmIsOverrun    = (newState == EngineStateMachineState::Overrun);
 }
 
 EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps) {
@@ -71,20 +72,35 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		return EngineStateMachineState::Transient;
 	}
 
-	// Priorities 6 & 7: off-throttle (idle or coasting split by RPM)
+	// Priorities 6–8: off-throttle (overrun / coasting / idle split by RPM and VSS)
 	if (tps < engineConfiguration->smIdleTpsThreshold) {
-		float idleExitRpm  = engineConfiguration->smIdleExitRpm;
-		float hysteresisBand = engineConfiguration->smIdleRpmHysteresis;
+		float idleExitRpm    = engineConfiguration->smIdleExitRpm;
+		float idleBand       = engineConfiguration->smIdleRpmHysteresis;
 
 		// Hysteresis: true = rpm is high (coasting), false = rpm is low (idle)
 		bool isHighRpm = m_idleHysteresis.test(
 			rpm,
-			idleExitRpm + hysteresisBand,   // rising threshold: clearly coasting
-			idleExitRpm - hysteresisBand    // falling threshold: clearly idling
+			idleExitRpm + idleBand,   // rising threshold: clearly coasting
+			idleExitRpm - idleBand    // falling threshold: clearly idling
 		);
 
-		return isHighRpm ? EngineStateMachineState::Coasting
-		                 : EngineStateMachineState::Idle;
+		uint8_t vssThreshold = engineConfiguration->smCoastingVssThreshold;
+		bool isHighVss = false;
+		if (vssThreshold > 0) {
+			float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
+			isHighVss = m_vssHysteresis.test(vss, vssThreshold, vssThreshold - 2.0f);
+		}
+
+		if (isHighRpm || isHighVss) {
+			int16_t overrunRpm  = engineConfiguration->smOverrunRpmThreshold;
+			int16_t overrunBand = engineConfiguration->smOverrunRpmHysteresis;
+			if (overrunRpm > 0 && m_overrunHysteresis.test(rpm, overrunRpm + overrunBand, overrunRpm - overrunBand)) {
+				return EngineStateMachineState::Overrun;
+			}
+			return EngineStateMachineState::Coasting;
+		}
+
+		return EngineStateMachineState::Idle;
 	}
 
 	// Default: part-throttle cruising
