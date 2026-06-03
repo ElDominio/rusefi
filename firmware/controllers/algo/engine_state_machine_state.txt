@@ -9,6 +9,7 @@ struct_no_prefix engine_state_machine_state_s
 	bit engineSmIsTransient;Engine SM: Transient
 	bit engineSmIsWot;Engine SM: WOT
 	bit engineSmIsCruising;Engine SM: Cruising
+	bit engineSmIsOverrun;Engine SM: Overrun
 
 	uint8_t engineSmCurrentState;Engine SM: primary state
 
