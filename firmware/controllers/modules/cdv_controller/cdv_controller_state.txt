@@ -1,8 +1,8 @@
 struct_no_prefix cdv_controller_state_s
 
-bit isCdvActive
-bit isCdvTimeExitCondition
-bit isCdvVssExitCondition
-bit isCdvClutchExitCondition
+	bit isCdvActive
+	bit isCdvTimeExitCondition
+	bit isCdvVssExitCondition
+	bit isCdvClutchExitCondition
 
 end_struct
