@@ -41,6 +41,7 @@
 #include "fuel_pump.h"
 #include "main_relay.h"
 #include "exhaust_cutout.h"
+#include "cdv_controller.h"
 #include "ac_control.h"
 #include "type_list.h"
 #include "boost_control.h"
@@ -164,6 +165,7 @@ public:
 #endif /* EFI_ALTERNATOR_CONTROL */
         MainRelayController,
         ExhaustCutoutController,
+        CdvController,
         Mockable<IgnitionController>,
         Mockable<AcController>,
         PrimeController,

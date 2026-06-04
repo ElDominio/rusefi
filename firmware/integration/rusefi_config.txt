@@ -1860,9 +1860,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit unusedBit_Fancy28
 	bit unusedBit_Fancy29
 	bit unusedBit_Fancy30
-	bit unusedBit_Fancy31
-	bit unusedBit_Fancy32
-    ! 'unusedFancy32' is the 32nd bit here, you would need another bit region if more bits are desired
+    ! 'unusedFancy30' is the 32nd bit here, you would need another bit region if more bits are desired
 
 	#define nitrous_arming_method_e_enum "Digital Switch Input", "Lua Gauge"
 	custom nitrous_arming_method_e  1 bits, S08, @OFFSET@, [3:3], @@nitrous_arming_method_e_enum@@

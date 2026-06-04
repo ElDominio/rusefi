@@ -142,7 +142,7 @@ void Pid::setErrorAmplification(float coef) {
 #if EFI_TUNER_STUDIO
 
 void Pid::postState(pid_status_s& pidStatus) const {
-	pidStatus.output = output;
+	pidStatus.pidOutput = output;
 	pidStatus.error = previousError;
 	pidStatus.pTerm = parameters == nullptr ? 0 : parameters->pFactor * previousError;
 	pidStatus.iTerm = iTerm;
