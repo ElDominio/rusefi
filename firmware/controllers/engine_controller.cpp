@@ -39,6 +39,7 @@
 #include "speed_density.h"
 #include "local_version_holder.h"
 #include "alternator_controller.h"
+#include "fuel_pump.h"
 #include "can_bench_test.h"
 #include "engine_emulator.h"
 #include "fuel_math.h"
@@ -426,6 +427,8 @@ void commonInitEngineController() {
 #if EFI_ALTERNATOR_CONTROL
 	initAlternatorCtrl();
 #endif /* EFI_ALTERNATOR_CONTROL */
+
+	initFuelPumpPwm();
 
 #if EFI_VVT_PID
 	initVvtActuators();

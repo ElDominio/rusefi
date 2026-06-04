@@ -434,6 +434,7 @@ custom output_pin_e 2 bits, U16, @OFFSET@, [0:8], $output_pin_e_list
 #define output_pin_e_fullenum @@output_pin_e_enum@@
 
 custom pin_output_mode_e 1 bits, U08, @OFFSET@, [0:1], $pin_output_mode_e_enum
+custom fuel_pump_mode_e 1 bits, U08, @OFFSET@, [0:1], "Single", "Dual", "PWM"
 
 custom pin_input_mode_e 1 bits, U08,	@OFFSET@,	[0:2], $pin_input_mode_e_enum
 
@@ -843,6 +844,24 @@ engineSyncCam_e engineSyncCam;Select which cam is used for engine sync. Other ca
 
 	output_pin_e fuelPumpPin;
 	pin_output_mode_e fuelPumpPinMode;
+	fuel_pump_mode_e fuelPumpMode;Fuel pump output mode: Single relay, Dual relay with secondary activation, or PWM pressure control;"", 1, 0, 0, 2, 0
+
+	output_pin_e fuelPump2Pin;Secondary fuel pump output pin (Dual mode only)
+	pin_output_mode_e fuelPump2PinMode;Secondary fuel pump output mode
+	uint16_t secondaryFpActivationRpm;Secondary pump activates above this RPM (Dual mode);"rpm", 1, 0, 0, 8000, 0
+	uint8_t secondaryFpActivationLoad;Secondary pump activates above this MAP load (Dual mode);"%", 1, 0, 0, 100, 0
+	uint8_t secondaryFpActivationTps;Secondary pump activates above this TPS (Dual mode);"%", 1, 0, 0, 100, 0
+	uint16_t secondaryFpDeactivationRpm;Secondary pump deactivates below this RPM - set lower than activation for hysteresis (Dual mode);"rpm", 1, 0, 0, 8000, 0
+	uint8_t secondaryFpDeactivationLoad;Secondary pump deactivates below this load - set lower than activation for hysteresis (Dual mode);"%", 1, 0, 0, 100, 0
+	uint8_t secondaryFpDeactivationTps;Secondary pump deactivates below this TPS - set lower than activation for hysteresis (Dual mode);"%", 1, 0, 0, 100, 0
+
+	uint16_t fuelPumpPwmFrequency;Fuel pump PWM frequency (PWM mode);"Hz", 1, 0, 10, 3000, 0
+	uint8_t fuelPumpMinDuty;Minimum PWM duty - keeps pump spinning at low demand (PWM mode);"%", 1, 0, 0, 100, 0
+	uint8_t fuelPumpMaxDuty;Maximum PWM duty - also held during prime (PWM mode);"%", 1, 0, 0, 100, 0
+	pid_s fuelPumpControl;PID settings for closed-loop fuel pressure control (PWM mode, requires FP sensor)
+	int16_t fuelPump_iTermMin;PID integrator lower limit (PWM mode);"", 1, 0, -30000, 30000, 0
+	int16_t fuelPump_iTermMax;PID integrator upper limit (PWM mode);"", 1, 0, -30000, 30000, 0
+
 	int8_t gapVvtTrackingLengthOverride;How many consecutive VVT gap rations have to match expected ranges for sync to happen;"count", 1, 0, 1, @@VVT_TRACKING_LENGTH@@, 0
 
 	output_pin_e malfunctionIndicatorPin;Check engine light, also malfunction indicator light. Always blinks once on boot.
@@ -2411,6 +2430,20 @@ uint16_t[ALTERNATOR_VOLTAGE_RPM_SIZE] alternatorVoltageTargetRpmBins;;"RPM", 1, 
 uint8_t[ALTERNATOR_VOLTAGE_TARGET_SIZE x ALTERNATOR_VOLTAGE_RPM_SIZE] alternatorBaseDutyTable;Base duty (open-loop feedforward) for alternator PWM, indexed by target voltage (Y) vs RPM (X).;"%", 1, 0, 0, 100, 0
 uint8_t[ALTERNATOR_VOLTAGE_TARGET_SIZE] autoscale alternatorBaseDutyVoltageBins;;"V", 0.1, 0, 0, 20, 1
 uint16_t[ALTERNATOR_VOLTAGE_RPM_SIZE] alternatorBaseDutyRpmBins;;"RPM", 1, 0, 0, 18000, 0
+
+! Fuel pump PWM - target fuel pressure table (RPM x MAP load -> kPa)
+#define FP_PRESSURE_TABLE_SIZE 4
+#define FP_PRESSURE_RPM_SIZE 4
+int16_t[FP_PRESSURE_TABLE_SIZE x FP_PRESSURE_RPM_SIZE] autoscale fuelPressureTargetTable;Target fuel pressure vs RPM and MAP load (PWM mode);"kPa", 0.1, 0, 0, 700, 1
+uint16_t[FP_PRESSURE_TABLE_SIZE] fuelPressureTargetLoadBins;MAP load bins for target FP pressure table;"load%", 1, 0, 0, 100, 0
+uint16_t[FP_PRESSURE_RPM_SIZE] fuelPressureTargetRpmBins;RPM bins for target FP pressure table;"rpm", 1, 0, 0, 18000, 0
+
+! Fuel pump PWM - base duty table (RPM x target FP pressure -> duty %)
+#define FP_DUTY_TABLE_SIZE 4
+#define FP_DUTY_RPM_SIZE 4
+int16_t[FP_DUTY_TABLE_SIZE x FP_DUTY_RPM_SIZE] autoscale fuelPumpBaseDutyTable;Feedforward base duty vs RPM and target FP pressure (PWM mode);"pct", 0.1, 0, 0, 100, 1
+uint16_t[FP_DUTY_TABLE_SIZE] fuelPumpBaseDutyFpBins;Target FP bins for base duty table;"kPa", 1, 0, 0, 700, 0
+uint16_t[FP_DUTY_RPM_SIZE] fuelPumpBaseDutyRpmBins;RPM bins for base duty table;"rpm", 1, 0, 0, 18000, 0
 
 #define BOOST_CURVE_SIZE 5
 include_file controllers/actuators/boost_control_config.txt

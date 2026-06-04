@@ -913,6 +913,12 @@ typedef enum __attribute__((__packed__)) {
 	ftRegionCruise = 3,
 } ft_region_e;
 
+typedef enum __attribute__ ((__packed__)) {
+	FP_MODE_SINGLE = 0,
+	FP_MODE_DUAL   = 1,
+	FP_MODE_PWM    = 2,
+} fuel_pump_mode_e;
+
 #endif // __cplusplus
 
 #include "generated/enums/rusefi_config_generated_enums.h"

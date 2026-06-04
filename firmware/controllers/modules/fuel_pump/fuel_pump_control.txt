@@ -3,4 +3,8 @@ struct_no_prefix fuel_pump_control_s
 	bit engineTurnedRecently
 	bit isFuelPumpOn
 	bit ignitionOn
+	bit isSecondaryPumpOn
+	bit isFpPidActive
+	uint8_t fuelPumpDuty;FP duty % (PWM mode);"%", 1, 0, 0, 100, 0
+	uint8_t fuelPressureTarget;FP target kPa (PWM mode);"kPa", 1, 0, 0, 255, 0
 end_struct
