@@ -1838,6 +1838,8 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit exhaustCutoutEngineOnTestEnabled,"Engine-on test","disabled"
 	bit unusedBit_CutoutWasPwm
 	bit useEngineStateMachine,"enabled","disabled";Centralized Engine State Machine. When enabled, state detection is driven by a single priority-ordered evaluator. When disabled, each controller manages its own state detection.
+	bit cdvControlEnabled,"enabled","disabled"
+	bit cdvUseClutchExit,"enabled","disabled";Deactivate CDV solenoid when clutch pedal is released
 	bit unusedBit_Fancy11
 	bit unusedBit_Fancy12
 	bit unusedBit_Fancy13
@@ -1939,6 +1941,11 @@ end_struct
 
 	output_pin_e vvlRelayPin;
 	pin_output_mode_e vvlRelayPinMode;
+
+	output_pin_e cdvSolenoidPin;Output pin for clutch delay valve bypass solenoid
+	pin_output_mode_e cdvSolenoidPinMode;
+	uint8_t autoscale cdvExitDelay;Seconds after launch control exits before deactivating CDV solenoid. Set 0 to deactivate immediately.;"s", 0.1, 0, 0, 10, 1
+	uint16_t cdvExitVss;Deactivate CDV above this vehicle speed. Set 0 to disable.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
 
 struct vvl_s
     int8_t fuelAdderPercent;;"%", 1, 0, 0, 100, 0
@@ -2622,6 +2629,7 @@ end_struct
 #define ts_show_can_wbo true
 #define ts_show_vvt_output_pin true
 #define ts_show_vvl_control true
+#define ts_show_cdv_control true
 #define ts_show_hbridge_function true
 #define ts_show_aux_sensors true
 #define ts_show_clutch_up true

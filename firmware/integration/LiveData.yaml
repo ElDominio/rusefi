@@ -284,6 +284,14 @@ Usages:
     engineModule: VvlController
     conditional_compilation: "MODULE_VVL_CONTROLLER"
 
+  - name: cdv_controller_state
+    java: CdvController.java
+    folder: controllers/modules/cdv_controller
+    prepend: integration/rusefi_config_shared.txt
+    output_name: cdv
+    engineModule: CdvController
+    conditional_compilation: "MODULE_CDV_CONTROLLER"
+
   - name: live_data_rotational_idle
     java: RotationalIdle.java
     folder: controllers/engine_cycle

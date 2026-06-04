@@ -154,6 +154,7 @@ EnginePins::EnginePins() :
 #endif
 		nitrousRelay("Nitrous Relay", CONFIG_PIN_OFFSETS(nitrousRelay)),
 		vvlRelay("VVL Relay", CONFIG_PIN_OFFSETS(vvlRelay)),
+		cdvSolenoid("CDV Solenoid", CONFIG_PIN_OFFSETS(cdvSolenoid)),
 #if EFI_HD_ACR
 		harleyAcr("Harley ACR", CONFIG_OFFSET(acrPin)),
 		harleyAcr2("Harley ACR 2", CONFIG_OFFSET(acrPin2)),

@@ -94,6 +94,7 @@ public:
 #endif
 	RegisteredOutputPin nitrousRelay;
 	RegisteredOutputPin vvlRelay;
+	RegisteredOutputPin cdvSolenoid;
 #if EFI_HD_ACR
 	RegisteredNamedOutputPin harleyAcr;
 	RegisteredOutputPin harleyAcr2;
