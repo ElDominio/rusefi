@@ -47,12 +47,6 @@ private:
 	void updateShiftDetection(float tps, float rpm, float vss, efitimems_t nowMs);
 	bool evaluateShiftDirection(bool isUpshift, float currentRpm, float currentVss, efitimems_t nowMs);
 
-	// RPM hysteresis for the idle/coasting boundary to prevent state flapping
-	Hysteresis m_idleHysteresis;
-
-	// VSS hysteresis for the coasting/idle boundary (2 km/h band)
-	Hysteresis m_vssHysteresis;
-
 	// RPM hysteresis for the coasting/overrun boundary
 	Hysteresis m_overrunHysteresis;
 
