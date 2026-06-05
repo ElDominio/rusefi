@@ -464,7 +464,7 @@ void setDefaultBaseEngine() {
 	engineConfiguration->useEngineStateMachine = false;
 	engineConfiguration->smIdleTpsThreshold = 5;       // 5% TPS — matches idlePidDeactivationTpsThreshold default
 	engineConfiguration->smWotTpsThreshold = 90;        // 90% TPS
-	engineConfiguration->smTransientTpsRateThreshold = 20; // 20 %/s
+	engineConfiguration->smTransientHoldoffCallbacks = 4; // 200 ms at 20 Hz
 
 	// Shift detection — disabled by default; requires clutch switch(es) to be configured
 	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::None;

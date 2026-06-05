@@ -17,6 +17,7 @@ enum class EngineStateMachineState : uint8_t {
 	LaunchControl = 9,
 	Upshifting   = 10,
 	Downshifting = 11,
+	Limp         = 12,
 };
 
 // History buffer: 20 samples at 20 Hz = 1000 ms of lookback
@@ -47,14 +48,8 @@ private:
 	void updateShiftDetection(float tps, float rpm, float vss, efitimems_t nowMs);
 	bool evaluateShiftDirection(bool isUpshift, float currentRpm, float currentVss, efitimems_t nowMs);
 
-	// RPM hysteresis for the coasting/overrun boundary
-	Hysteresis m_overrunHysteresis;
-
-	// Previous TPS value for rate-of-change computation
-	float m_prevTps = 0.0f;
-
-	// Cached tps delta rate in %/s (updated each slow callback)
-	float m_tpsDeltaPerSecond = 0.0f;
+	// Remaining slow-callback hold-off periods after AE threshold drops
+	uint8_t m_transientHoldoffRemaining = 0;
 
 	// Current computed state — uint8_t stores are atomic in hardware on Cortex-M
 	EngineStateMachineState m_currentState = EngineStateMachineState::Off;

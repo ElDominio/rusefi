@@ -1,9 +1,6 @@
 #include "pch.h"
 #include "engine_state_machine.h"
 
-// Slow callback runs at 20 Hz; deltaTps is per-callback, multiply by 50 to get %/s
-static constexpr float SLOW_CALLBACKS_PER_SECOND = 1000.0f / SLOW_CALLBACK_PERIOD_MS;
-
 bool EngineStateMachine::isEnabled() const {
 	return engineConfiguration->useEngineStateMachine;
 }
@@ -26,10 +23,6 @@ void EngineStateMachine::onSlowCallback() {
 	float tps = tpsSensor ? tpsSensor.Value : 0.0f;
 
 	float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
-
-	// Compute TPS rate of change (%/s)
-	m_tpsDeltaPerSecond = (tps - m_prevTps) * SLOW_CALLBACKS_PER_SECOND;
-	m_prevTps = tps;
 
 	// Record sensor snapshot into history buffer
 	recordHistory(tps, rpm, vss, nowMs);
@@ -69,8 +62,17 @@ void EngineStateMachine::onSlowCallback() {
 		updateShiftDetection(tps, rpm, vss, nowMs);
 	}
 
-	// Override the display integer for overlay priority: Upshifting > Downshifting > LaunchControl
-	if (engineSmIsUpshifting) {
+	// Overlay: Limp Mode — any active fuel or spark cut from LimpManager
+	{
+		LimpState injState = getLimpManager()->allowInjection();
+		LimpState ignState = getLimpManager()->allowIgnition();
+		engineSmIsLimp = !injState || !ignState;
+	}
+
+	// Override the display integer for overlay priority: Limp > Upshifting > Downshifting > LaunchControl
+	if (engineSmIsLimp) {
+		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Limp);
+	} else if (engineSmIsUpshifting) {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Upshifting);
 	} else if (engineSmIsDownshifting) {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Downshifting);
@@ -95,9 +97,19 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		return EngineStateMachineState::WOT;
 	}
 
-	// Priority 4: rapid throttle movement
-	if (fabsf(m_tpsDeltaPerSecond) > engineConfiguration->smTransientTpsRateThreshold) {
-		return EngineStateMachineState::Transient;
+	// Priority 4: AE-driven transient — active while AE threshold is met, then held
+	//             for smTransientHoldoffCallbacks slow-callback periods after it drops.
+	{
+		bool aeActive = engine->module<TpsAccelEnrichment>()->isAboveAccelThreshold ||
+		                engine->module<TpsAccelEnrichment>()->isBelowDecelThreshold;
+		if (aeActive) {
+			m_transientHoldoffRemaining = engineConfiguration->smTransientHoldoffCallbacks;
+			return EngineStateMachineState::Transient;
+		}
+		if (m_transientHoldoffRemaining > 0) {
+			m_transientHoldoffRemaining--;
+			return EngineStateMachineState::Transient;
+		}
 	}
 
 	// Priorities 5–8: defer to IdleController — it is the single source of truth for the idle corner.
@@ -115,9 +127,7 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		}
 
 		if (idlePhase == IIdleController::Phase::Coasting) {
-			int16_t overrunRpm  = engineConfiguration->smOverrunRpmThreshold;
-			int16_t overrunBand = engineConfiguration->smOverrunRpmHysteresis;
-			if (overrunRpm > 0 && m_overrunHysteresis.test(rpm, overrunRpm + overrunBand, overrunRpm - overrunBand)) {
+			if (engine->module<DfcoController>()->isOverrun()) {
 				return EngineStateMachineState::Overrun;
 			}
 			return EngineStateMachineState::Coasting;

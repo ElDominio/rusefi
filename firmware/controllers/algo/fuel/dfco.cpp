@@ -5,6 +5,24 @@
 #include "dfco.h"
 #include "closed_loop_fuel.h"
 
+// Simple direct check of physical overrun conditions: TPS, RPM, VSS.
+// Does NOT check coastingFuelCutEnabled, CLT, or MAP — those are fuel-cut-only guards.
+// No hysteresis: the SM updates at 20Hz which is fast enough to avoid display flicker.
+bool DfcoController::isOverrun() const {
+	const auto tps = Sensor::get(SensorType::DriverThrottleIntent);
+	if (!tps) {
+		return false;
+	}
+
+	float rpm = Sensor::getOrZero(SensorType::Rpm);
+	float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
+
+	return (tps.Value < engineConfiguration->coastingFuelCutTps) &&
+	       (rpm > engineConfiguration->coastingFuelCutRpmHigh) &&
+	       (vss >= engineConfiguration->coastingFuelCutVssHigh);
+}
+
+// Original fuel-cut state logic — unchanged. Checks all guards including enabled flag and CLT.
 bool DfcoController::getState() const {
 	if (!engineConfiguration->coastingFuelCutEnabled) {
 		return false;

@@ -10,11 +10,9 @@ static void setupSmConfig() {
 	engineConfiguration->useEngineStateMachine = true;
 	engineConfiguration->smIdleTpsThreshold = 10;
 	engineConfiguration->smWotTpsThreshold = 90;
-	engineConfiguration->smTransientTpsRateThreshold = 20; // %/s
-	engineConfiguration->smAfterStartDuration = 3;         // seconds
-	engineConfiguration->smIdleExitRpm = 1200;
-	engineConfiguration->smIdleRpmHysteresis = 50;
-	engineConfiguration->smCrankingRpmHysteresis = 50;
+	engineConfiguration->smTransientHoldoffCallbacks = 0; // no hold-off by default in tests
+	// Lower AE threshold so tests can trigger Transient with small TPS steps on Tps1
+	engineConfiguration->tpsAccelEnrichmentThreshold = 5.0f;
 }
 
 static EngineStateMachine& getSm() {
@@ -72,17 +70,21 @@ TEST(EngineStateMachine, afterStartState) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
 
-	// Transition to RUNNING resets engineStartTimer
-	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
-	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
 
-	// Immediately after reaching running RPM → Afterstart
+	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
+	// Seed stable state; Tps1 not mocked so AE stays quiet
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
+	runAndGetState();
+
+	// Engine in crank-to-idle taper → SM reports Afterstart
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::CrankToIdleTaper));
 	EXPECT_EQ(EngineStateMachineState::Afterstart, runAndGetState());
 
-	// Advance past afterstart duration
-	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
-
-	// Now with same conditions → Cruising (throttle mid-range)
+	// Taper complete → SM reports Cruising (throttle mid-range, above idle RPM)
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
 	EXPECT_EQ(EngineStateMachineState::Cruising, runAndGetState());
 }
 
@@ -92,8 +94,6 @@ TEST(EngineStateMachine, wotState) {
 
 	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
-	// Burn through afterstart
-	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
 
 	// WOT above threshold
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 95.0f);
@@ -105,14 +105,15 @@ TEST(EngineStateMachine, wotPriorityOverTransient) {
 	setupSmConfig();
 
 	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
-	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
 
-	// First callback at low TPS to seed m_prevTps
+	// Seed AE buffer at low TPS so next jump triggers both WOT and Transient
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
+	Sensor::setMockValue(SensorType::Tps1, 0.0f);
 	runAndGetState();
 
-	// Big jump in TPS — both WOT and Transient conditions are true
+	// Big jump — WOT (DTI > 90%) and AE fires (Tps1 delta 95% > 5% threshold)
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 95.0f);
+	Sensor::setMockValue(SensorType::Tps1, 95.0f);
 	// WOT has higher priority than Transient
 	EXPECT_EQ(EngineStateMachineState::WOT, runAndGetState());
 }
@@ -122,28 +123,54 @@ TEST(EngineStateMachine, transientState) {
 	setupSmConfig();
 
 	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
-	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
 
-	// Seed m_prevTps at mid throttle
+	// Seed AE buffer at 30% Tps1 so the buffer has a stable reference
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 30.0f);
+	Sensor::setMockValue(SensorType::Tps1, 30.0f);
 	runAndGetState();
 
-	// Step to 55% — delta = 25%, at 20Hz that's 25 * 50 = 1250 %/s > threshold of 20
-	Sensor::setMockValue(SensorType::DriverThrottleIntent, 55.0f);
+	// Step Tps1 to 40% — delta = 10% > 5% threshold → AE isAboveAccelThreshold = true
+	Sensor::setMockValue(SensorType::Tps1, 40.0f);
 	EXPECT_EQ(EngineStateMachineState::Transient, runAndGetState());
+}
+
+TEST(EngineStateMachine, transientHoldoff) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	engineConfiguration->smTransientHoldoffCallbacks = 2; // hold Transient for 2 callbacks after AE drops
+
+	// Use a 2-entry AE buffer so delta from the step scrolls out on the very next stable callback
+	engine->module<TpsAccelEnrichment>()->setLength(2);
+
+	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
+
+	// Seed: 2 callbacks to fill the 2-entry buffer at stable 30%
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 30.0f);
+	Sensor::setMockValue(SensorType::Tps1, 30.0f);
+	runAndGetState();
+	runAndGetState();
+
+	// Trigger: step Tps1 to 40% → delta=10% > 5% threshold → AE fires → Transient
+	Sensor::setMockValue(SensorType::Tps1, 40.0f);
+	EXPECT_EQ(EngineStateMachineState::Transient, runAndGetState());
+
+	// AE drops on next callback (buffer is [40,40], delta=0); hold-off starts
+	EXPECT_EQ(EngineStateMachineState::Transient, runAndGetState()); // holdoff 2→1
+	EXPECT_EQ(EngineStateMachineState::Transient, runAndGetState()); // holdoff 1→0
+	// Hold-off expired — state falls through to Cruising
+	EXPECT_NE(EngineStateMachineState::Transient, runAndGetState());
 }
 
 TEST(EngineStateMachine, idleState) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
 
-	// Low RPM, closed throttle → Idle
-	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
-	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Idling));
 
+	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
-	// RPM well below smIdleExitRpm (1200); let hysteresis settle
-	runAndGetState(); // seed m_prevTps, hysteresis starts false (idle side)
 
 	EXPECT_EQ(EngineStateMachineState::Idle, runAndGetState());
 }
@@ -151,71 +178,75 @@ TEST(EngineStateMachine, idleState) {
 TEST(EngineStateMachine, coastingState) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
+	// Keep RPM below the DFCO overrun threshold so the state stays Coasting, not Overrun
+	engineConfiguration->coastingFuelCutRpmHigh = 4000;
 
-	// High RPM, closed throttle → Coasting
-	engine->rpmCalculator.setRpmValue(2000.0f); // well above smIdleExitRpm=1200
-	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Coasting));
 
+	engine->rpmCalculator.setRpmValue(2000.0f);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
-	runAndGetState(); // seed
 
 	EXPECT_EQ(EngineStateMachineState::Coasting, runAndGetState());
 }
 
-TEST(EngineStateMachine, idleHysteresis) {
+TEST(EngineStateMachine, overrunWhenDfcoConditionsMet) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	// smIdleExitRpm=1200, smIdleRpmHysteresis=50
-	// Rising threshold (idle→coasting): 1250 RPM
-	// Falling threshold (coasting→idle): 1150 RPM
+	// Configure overrun (DFCO) detection thresholds
+	engineConfiguration->coastingFuelCutTps = 5;        // TPS < 5% → overrun allowed
+	engineConfiguration->coastingFuelCutRpmHigh = 2000; // RPM > 2000 → activate
+	engineConfiguration->coastingFuelCutRpmLow  = 1500; // RPM < 1500 → deactivate
+	engineConfiguration->coastingFuelCutVssHigh = 0;    // VSS always qualifies
+	engineConfiguration->coastingFuelCutVssLow  = 0;
+	engineConfiguration->coastingFuelCutMap = 0;        // MAP check disabled (no MAP sensor)
 
-	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
-	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Coasting));
+
+	// Throttle closed, RPM high → isOverrun() true → Overrun state
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
+	engine->rpmCalculator.setRpmValue(3000.0f);
+	EXPECT_EQ(EngineStateMachineState::Overrun, runAndGetState());
 
-	// Start clearly in idle (RPM below 1150)
+	// Throttle open → isOverrun() false → Coasting
+	// Tps1 not mocked so AE stays quiet; seed a callback to stabilise state
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
+	runAndGetState();
+	EXPECT_EQ(EngineStateMachineState::Coasting, runAndGetState());
+
+	// Throttle closed, RPM too low → not overrun → Coasting
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
 	engine->rpmCalculator.setRpmValue(1000.0f);
-	runAndGetState(); // seed hysteresis
-	EXPECT_EQ(EngineStateMachineState::Idle, runAndGetState());
-
-	// Rise into band (1200) — hysteresis should hold Idle
-	engine->rpmCalculator.setRpmValue(1200.0f);
-	EXPECT_EQ(EngineStateMachineState::Idle, runAndGetState());
-
-	// Rise above rising threshold (1250+) → transitions to Coasting
-	engine->rpmCalculator.setRpmValue(1300.0f);
+	runAndGetState();
 	EXPECT_EQ(EngineStateMachineState::Coasting, runAndGetState());
-
-	// Drop back into band (1200) — hysteresis should hold Coasting
-	engine->rpmCalculator.setRpmValue(1200.0f);
-	EXPECT_EQ(EngineStateMachineState::Coasting, runAndGetState());
-
-	// Drop below falling threshold (1150) → transitions back to Idle
-	engine->rpmCalculator.setRpmValue(1100.0f);
-	EXPECT_EQ(EngineStateMachineState::Idle, runAndGetState());
 }
 
 TEST(EngineStateMachine, cruisingDefault) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
 
-	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
-	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
 
-	// Mid throttle, RPM above idle, no transient → Cruising
+	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
+
+	// Mid throttle, part-throttle, IdleController in Running → Cruising
+	// Tps1 not mocked → AE sees 0, no transient fires
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
-	runAndGetState(); // seed m_prevTps so delta = 0
+	runAndGetState();
 
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
 	EXPECT_EQ(EngineStateMachineState::Cruising, runAndGetState());
 }
 
-// ---- Helper: put the engine into a stable running state past afterstart ----
+// ---- Helper: put the engine into a stable running state ----
 static void enterRunning(float rpmVal = 2000.0f, float tpsVal = 50.0f) {
 	engine->rpmCalculator.setRpmValue(rpmVal);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, tpsVal);
-	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
-	// Seed m_prevTps so rate-of-change starts at zero
 	engine->periodicSlowCallback();
 }
 
@@ -438,4 +469,64 @@ TEST(EngineStateMachine, liveDataFieldsPopulated) {
 	EXPECT_TRUE(sm.engineSmIsOff);
 	EXPECT_FALSE(sm.engineSmIsCranking);
 	EXPECT_FALSE(sm.engineSmIsWot);
+}
+
+// ---- Limp Mode overlay ----
+
+// Sync LimpManager transient state by running its fast-callback logic.
+static void updateLimpManager() {
+	getLimpManager()->updateState(engine->rpmCalculator.getCachedRpm(), getTimeNowNt());
+}
+
+TEST(EngineStateMachine, limpOverlayWhenFuelCut) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning(2000.0f, 50.0f);
+
+	// No cut → Limp bit clear, primary state shown
+	updateLimpManager();
+	engine->periodicSlowCallback();
+	auto& sm = getSm();
+	EXPECT_FALSE(sm.engineSmIsLimp);
+
+	// Cut fuel via Lua → Limp bit set, display overrides to Limp (12)
+	engine->engineState.lua.luaFuelCut = true;
+	updateLimpManager();
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(sm.engineSmIsLimp);
+	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), sm.engineSmCurrentState);
+
+	// Restore fuel → Limp clears
+	engine->engineState.lua.luaFuelCut = false;
+	updateLimpManager();
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(sm.engineSmIsLimp);
+}
+
+TEST(EngineStateMachine, limpOverlayWhenIgnitionCut) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning(2000.0f, 50.0f);
+
+	engine->engineState.lua.luaIgnCut = true;
+	updateLimpManager();
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_TRUE(sm.engineSmIsLimp);
+	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), sm.engineSmCurrentState);
+}
+
+TEST(EngineStateMachine, limpPriorityOverUpshifting) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning(3000.0f, 95.0f);
+
+	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
+	engine->engineState.lua.luaFuelCut = true;
+	updateLimpManager();
+
+	engine->periodicSlowCallback();
+	// Limp (12) must beat Upshifting (10) in the display integer
+	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), getSm().engineSmCurrentState);
 }
