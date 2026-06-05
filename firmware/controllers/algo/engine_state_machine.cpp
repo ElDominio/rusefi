@@ -90,42 +90,31 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		return EngineStateMachineState::Cranking;
 	}
 
-	// Priority 3: initial seconds after first reaching running RPM
-	float secondsSinceStart = engine->rpmCalculator.getSecondsSinceEngineStart(getTimeNowNt());
-	if (secondsSinceStart < engineConfiguration->smAfterStartDuration) {
-		return EngineStateMachineState::Afterstart;
-	}
-
-	// Priority 4: wide open throttle
+	// Priority 3: wide open throttle
 	if (tps > engineConfiguration->smWotTpsThreshold) {
 		return EngineStateMachineState::WOT;
 	}
 
-	// Priority 5: rapid throttle movement
+	// Priority 4: rapid throttle movement
 	if (fabsf(m_tpsDeltaPerSecond) > engineConfiguration->smTransientTpsRateThreshold) {
 		return EngineStateMachineState::Transient;
 	}
 
-	// Priorities 6–8: off-throttle (overrun / coasting / idle split by RPM and VSS)
-	if (tps < engineConfiguration->smIdleTpsThreshold) {
-		float idleExitRpm    = engineConfiguration->smIdleExitRpm;
-		float idleBand       = engineConfiguration->smIdleRpmHysteresis;
+	// Priorities 5–8: defer to IdleController — it is the single source of truth for the idle corner.
+	// CrankToIdleTaper → Afterstart (taper table drives duration, CLT-indexed, same as idle control).
+	// Idling → Idle; Coasting → Coasting or Overrun; Running → fall through to Cruising.
+	{
+		auto idlePhase = engine->module<IdleController>()->getCurrentPhase();
 
-		// Hysteresis: true = rpm is high (coasting), false = rpm is low (idle)
-		bool isHighRpm = m_idleHysteresis.test(
-			rpm,
-			idleExitRpm + idleBand,   // rising threshold: clearly coasting
-			idleExitRpm - idleBand    // falling threshold: clearly idling
-		);
-
-		uint8_t vssThreshold = engineConfiguration->smCoastingVssThreshold;
-		bool isHighVss = false;
-		if (vssThreshold > 0) {
-			float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
-			isHighVss = m_vssHysteresis.test(vss, vssThreshold, vssThreshold - 2.0f);
+		if (idlePhase == IIdleController::Phase::CrankToIdleTaper) {
+			return EngineStateMachineState::Afterstart;
 		}
 
-		if (isHighRpm || isHighVss) {
+		if (idlePhase == IIdleController::Phase::Idling) {
+			return EngineStateMachineState::Idle;
+		}
+
+		if (idlePhase == IIdleController::Phase::Coasting) {
 			int16_t overrunRpm  = engineConfiguration->smOverrunRpmThreshold;
 			int16_t overrunBand = engineConfiguration->smOverrunRpmHysteresis;
 			if (overrunRpm > 0 && m_overrunHysteresis.test(rpm, overrunRpm + overrunBand, overrunRpm - overrunBand)) {
@@ -133,11 +122,9 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 			}
 			return EngineStateMachineState::Coasting;
 		}
-
-		return EngineStateMachineState::Idle;
 	}
 
-	// Default: part-throttle cruising
+	// Default: part-throttle cruising (IdleController phase is Running)
 	return EngineStateMachineState::Cruising;
 }
 

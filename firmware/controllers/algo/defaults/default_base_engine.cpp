@@ -466,10 +466,6 @@ void setDefaultBaseEngine() {
 	engineConfiguration->smIdleTpsThreshold = 5;       // 5% TPS — matches idlePidDeactivationTpsThreshold default
 	engineConfiguration->smWotTpsThreshold = 90;        // 90% TPS
 	engineConfiguration->smTransientTpsRateThreshold = 20; // 20 %/s
-	engineConfiguration->smAfterStartDuration = 3;     // 3 seconds post-cranking
-	engineConfiguration->smIdleExitRpm = 1200;          // 1200 RPM absolute idle/coasting boundary
-	engineConfiguration->smCrankingRpmHysteresis = 50; // 50 RPM hysteresis (reserved for future use)
-	engineConfiguration->smIdleRpmHysteresis = 50;     // 50 RPM hysteresis around smIdleExitRpm
 
 	// Shift detection — disabled by default; requires clutch switch(es) to be configured
 	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
