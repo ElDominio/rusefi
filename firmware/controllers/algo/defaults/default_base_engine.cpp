@@ -471,6 +471,15 @@ void setDefaultBaseEngine() {
 	engineConfiguration->smCrankingRpmHysteresis = 50; // 50 RPM hysteresis (reserved for future use)
 	engineConfiguration->smIdleRpmHysteresis = 50;     // 50 RPM hysteresis around smIdleExitRpm
 
+	// Shift detection — disabled by default; requires clutch switch(es) to be configured
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
+	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::SimpleThrottle;
+	engineConfiguration->smShiftLookbackMs       = 300;
+	engineConfiguration->smClutchUpDisengagementDelayMs = 0;
+	engineConfiguration->smUpshiftRateThreshold   = 0;
+	engineConfiguration->smDownshiftRateThreshold = 0;
+
   // we invoke this last so that we can validate even defaults
   defaultsOrFixOnBurn();
 }

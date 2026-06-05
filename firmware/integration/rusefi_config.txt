@@ -1954,6 +1954,23 @@ end_struct
 	int16_t smOverrunRpmThreshold;Engine SM: RPM above which closed-throttle operation is classified as Overrun rather than Coasting. Set to 0 to disable.;"RPM", 1, 0, 0, 10000, 0
 	int16_t smOverrunRpmHysteresis;Engine SM: Hysteresis band around the overrun RPM threshold.;"RPM", 1, 0, 0, 500, 0
 
+! Engine SM: Shift Detection (requires at least one clutch switch in Inputs -> Switch Inputs)
+! 0=None 1=Clutch Up 2=Clutch Down
+#define sm_clutch_switch_e_enum "None", "Clutch Up", "Clutch Down", "INVALID"
+	custom sm_clutch_switch_e 1 bits, U08, @OFFSET@, [0:1], @@sm_clutch_switch_e_enum@@
+
+! 0=Simple Throttle 1=RPM Rate 2=VSS Rate
+#define sm_shift_detection_mode_e_enum "Simple Throttle", "RPM Rate", "VSS Rate (needs VSS sensor)", "INVALID"
+	custom sm_shift_detection_mode_e 1 bits, U08, @OFFSET@, [0:1], @@sm_shift_detection_mode_e_enum@@
+
+	sm_clutch_switch_e smUpshiftClutchSwitch;Engine SM: Clutch switch that signals an upshift. 'Clutch Up' fires on pedal release; 'Clutch Down' fires on full press. Flat-shift torque reduction always overrides this.
+	sm_clutch_switch_e smDownshiftClutchSwitch;Engine SM: Clutch switch that signals a downshift.
+	sm_shift_detection_mode_e smShiftDetectionMode;Engine SM: Method used to confirm shift direction. RPM Rate: upshift=RPM drops, downshift=RPM rises. VSS Rate: upshift=VSS rises (accel), downshift=VSS falls (decel). Both require configured rate thresholds.
+	uint16_t smShiftLookbackMs;Engine SM: Sensor history window used for shift direction evaluation (100-1000ms).;"ms", 1, 0, 100, 1000, 0
+	uint16_t smClutchUpDisengagementDelayMs;Engine SM: Delay after Clutch-Up switch fires before evaluating shift direction. Compensates for the time between electrical and mechanical clutch disengagement.;"ms", 1, 0, 0, 1000, 0
+	int16_t smUpshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm upshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s drop. VSS mode: km/h/s rise.;"/s", 1, 0, 0, 10000, 0
+	int16_t smDownshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm downshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s rise. VSS mode: km/h/s fall.;"/s", 1, 0, 0, 10000, 0
+
 ! end of engine_configuration_s
 end_struct
 
