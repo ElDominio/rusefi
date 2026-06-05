@@ -920,6 +920,21 @@ typedef enum __attribute__ ((__packed__)) {
 	FP_MODE_PWM    = 2,
 } fuel_pump_mode_e;
 
+// Engine State Machine shift detection enums
+// Values must match sm_clutch_switch_e_enum order in rusefi_config.txt
+enum class sm_clutch_switch_e : uint8_t {
+	None      = 0,
+	ClutchUp  = 1,
+	ClutchDown = 2,
+};
+
+// Values must match sm_shift_detection_mode_e_enum order in rusefi_config.txt
+enum class sm_shift_detection_mode_e : uint8_t {
+	SimpleThrottle = 0,
+	RpmRate        = 1,
+	VssRate        = 2,
+};
+
 #endif // __cplusplus
 
 #include "generated/enums/rusefi_config_generated_enums.h"

@@ -210,6 +210,220 @@ TEST(EngineStateMachine, cruisingDefault) {
 	EXPECT_EQ(EngineStateMachineState::Cruising, runAndGetState());
 }
 
+// ---- Helper: put the engine into a stable running state past afterstart ----
+static void enterRunning(float rpmVal = 2000.0f, float tpsVal = 50.0f) {
+	engine->rpmCalculator.setRpmValue(rpmVal);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, tpsVal);
+	advanceTimeUs(static_cast<int>(engineConfiguration->smAfterStartDuration * 1e6f) + 100000);
+	// Seed m_prevTps so rate-of-change starts at zero
+	engine->periodicSlowCallback();
+}
+
+// ---- Flat-shift torque reduction ----
+
+TEST(EngineStateMachine, flatShiftSetsUpshiftAndTorqueReduction) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning(3000.0f, 95.0f);
+
+	// Simulate flat-shift torque reduction engaging
+	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
+
+	engine->periodicSlowCallback();
+	auto& sm = getSm();
+
+	EXPECT_TRUE(sm.engineSmIsUpshifting);
+	EXPECT_TRUE(sm.engineSmIsTorqueReduction);
+	EXPECT_FALSE(sm.engineSmIsDownshifting);
+	// Primary display state should be overridden to Upshifting (10)
+	EXPECT_EQ(10u, sm.engineSmCurrentState);
+}
+
+TEST(EngineStateMachine, flatShiftClearsWhenInactive) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning(3000.0f, 95.0f);
+
+	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = false;
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsTorqueReduction);
+}
+
+// ---- Launch Control overlay ----
+
+TEST(EngineStateMachine, launchControlOverlay) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning(2000.0f, 50.0f);
+
+	engine->launchController.isLaunchCondition = true;
+
+	engine->periodicSlowCallback();
+	auto& sm = getSm();
+	EXPECT_TRUE(sm.engineSmIsLaunchControl);
+	// Launch overrides primary display (9)
+	EXPECT_EQ(9u, sm.engineSmCurrentState);
+}
+
+TEST(EngineStateMachine, launchControlDoesNotSetShiftBits) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning(2000.0f, 50.0f);
+
+	engine->launchController.isLaunchCondition = true;
+	engine->periodicSlowCallback();
+	auto& sm = getSm();
+
+	EXPECT_FALSE(sm.engineSmIsUpshifting);
+	EXPECT_FALSE(sm.engineSmIsDownshifting);
+}
+
+// ---- Overlay priority: Upshifting > Downshifting > LaunchControl ----
+
+TEST(EngineStateMachine, overlayPriorityUpshiftBeatsLaunch) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning(3000.0f, 95.0f);
+
+	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
+	engine->launchController.isLaunchCondition = true;
+
+	engine->periodicSlowCallback();
+	// Upshifting (10) takes priority over LaunchControl (9)
+	EXPECT_EQ(10u, getSm().engineSmCurrentState);
+}
+
+// ---- Clutch-based shift detection ----
+
+static void setupShiftDetectionConfig() {
+	setupSmConfig();
+	// Both directions mapped to Clutch Down switch, Simple Throttle mode
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::SimpleThrottle;
+	engineConfiguration->smShiftLookbackMs       = 300;
+}
+
+// Seed the history buffer with several callbacks so getHistoryAt has data
+static void seedHistory(int callbacks = 10, float rpm = 2000.0f, float tps = 50.0f) {
+	engine->rpmCalculator.setRpmValue(rpm);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, tps);
+	for (int i = 0; i < callbacks; i++) {
+		engine->periodicSlowCallback();
+		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	}
+}
+
+TEST(EngineStateMachine, upshiftDetectedSimpleThrottle) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupShiftDetectionConfig();
+	enterRunning();
+
+	// Seed history with WOT-level TPS (above idle threshold)
+	seedHistory(10, 3000.0f, 80.0f);
+
+	// Press clutch down (rising edge)
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	// TPS history was above idle threshold → confirmed upshift
+	EXPECT_TRUE(sm.engineSmIsUpshifting);
+	EXPECT_FALSE(sm.engineSmIsDownshifting);
+	EXPECT_EQ(10u, sm.engineSmCurrentState);
+}
+
+TEST(EngineStateMachine, downshiftDetectedSimpleThrottle) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupShiftDetectionConfig();
+	enterRunning();
+
+	// Seed history with closed-throttle TPS (below idle threshold)
+	seedHistory(10, 2000.0f, 2.0f);
+
+	// Press clutch down (rising edge)
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	// TPS history was below idle threshold → confirmed downshift
+	EXPECT_FALSE(sm.engineSmIsUpshifting);
+	EXPECT_TRUE(sm.engineSmIsDownshifting);
+	EXPECT_EQ(11u, sm.engineSmCurrentState);
+}
+
+TEST(EngineStateMachine, shiftClearedOnClutchRelease) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupShiftDetectionConfig();
+	enterRunning();
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	// Release clutch — window should close
+	engine->engineState.lua.clutchDownState = false;
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
+TEST(EngineStateMachine, shiftClearedOnTimeout) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupShiftDetectionConfig();
+	enterRunning();
+	seedHistory(10, 3000.0f, 80.0f);
+
+	// Press clutch and hold for longer than SM_SHIFT_TIMEOUT_MS (3000ms)
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	// Advance past the 3-second timeout
+	advanceTimeUs(3100 * 1000);
+	engine->periodicSlowCallback();
+
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
+TEST(EngineStateMachine, noShiftBitsWithoutClutchSwitch) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	// No clutch switch configured (default = None)
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
+	enterRunning();
+
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
+TEST(EngineStateMachine, flatShiftOverridesClutchDetection) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupShiftDetectionConfig();
+	enterRunning();
+	seedHistory(10, 3000.0f, 2.0f); // History says downshift (low TPS)
+
+	// Flat shift active — must win regardless of history
+	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+	EXPECT_TRUE(getSm().engineSmIsTorqueReduction);
+}
+
 TEST(EngineStateMachine, liveDataFieldsPopulated) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();

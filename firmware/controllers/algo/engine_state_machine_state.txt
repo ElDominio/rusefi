@@ -10,6 +10,10 @@ struct_no_prefix engine_state_machine_state_s
 	bit engineSmIsWot;Engine SM: WOT
 	bit engineSmIsCruising;Engine SM: Cruising
 	bit engineSmIsOverrun;Engine SM: Overrun
+	bit engineSmIsLaunchControl;Engine SM: Launch Control
+	bit engineSmIsTorqueReduction;Engine SM: Torque Reduction
+	bit engineSmIsUpshifting;Engine SM: Upshifting
+	bit engineSmIsDownshifting;Engine SM: Downshifting
 
 	uint8_t engineSmCurrentState;Engine SM: primary state
 
