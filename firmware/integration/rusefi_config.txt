@@ -1945,9 +1945,7 @@ end_struct
 ! Engine State Machine thresholds (used only when useEngineStateMachine is enabled)
 	uint8_t smIdleTpsThreshold;Engine SM: TPS threshold used for shift-direction disambiguation.;"%", 1, 0, 0, 50, 0
 	uint8_t smWotTpsThreshold;Engine SM: TPS threshold above which the engine is at Wide Open Throttle.;"%", 1, 0, 50, 100, 0
-	uint8_t smTransientTpsRateThreshold;Engine SM: TPS rate of change (%/s) above which the engine enters the Transient state.;"%/s", 1, 0, 0, 200, 0
-	int16_t smOverrunRpmThreshold;Engine SM: RPM above which closed-throttle operation is classified as Overrun rather than Coasting. Set to 0 to disable.;"RPM", 1, 0, 0, 10000, 0
-	int16_t smOverrunRpmHysteresis;Engine SM: Hysteresis band around the overrun RPM threshold.;"RPM", 1, 0, 0, 500, 0
+	uint8_t smTransientHoldoffCallbacks;Engine SM: slow-callback periods (50 ms each) to hold the Transient state after the accel-enrichment threshold drops. 0 = no hold-off.;"callbacks", 1, 0, 0, 20, 0
 
 ! Engine SM: Shift Detection (requires at least one clutch switch in Inputs -> Switch Inputs)
 ! 0=None 1=Clutch Up 2=Clutch Down
