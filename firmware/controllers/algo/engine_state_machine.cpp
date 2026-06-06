@@ -209,7 +209,7 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 		if (upRose && dnRose) {
 			// Both directions share the same physical switch. Use current TPS to disambiguate:
 			// above idle threshold = driver was on throttle = upshift.
-			m_shiftIsUpshift = (tps >= (float)engineConfiguration->smIdleTpsThreshold);
+			m_shiftIsUpshift = (tps >= (float)engineConfiguration->smShiftTpsThreshold);
 		} else {
 			m_shiftIsUpshift = upRose;
 		}
@@ -271,7 +271,7 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float currentRpm
 	if (mode == sm_shift_detection_mode_e::SimpleThrottle) {
 		// Simple Throttle: TPS position at lookback time reveals driver intent.
 		// Above idle threshold at shift start → driver was on throttle → upshift.
-		bool tpsWasOpen = hist->tps >= engineConfiguration->smIdleTpsThreshold;
+		bool tpsWasOpen = hist->tps >= engineConfiguration->smShiftTpsThreshold;
 		return isUpshift ? tpsWasOpen : !tpsWasOpen;
 	}
 
@@ -297,7 +297,7 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float currentRpm
 				        "Engine SM: VSS Rate mode selected but no VSS sensor configured — falling back to Simple Throttle");
 				m_vssRateWarningEmitted = true;
 			}
-			bool tpsWasOpen = hist->tps >= engineConfiguration->smIdleTpsThreshold;
+			bool tpsWasOpen = hist->tps >= engineConfiguration->smShiftTpsThreshold;
 			return isUpshift ? tpsWasOpen : !tpsWasOpen;
 		}
 		m_vssRateWarningEmitted = false;
