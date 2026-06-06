@@ -9,8 +9,9 @@ BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 # TLS115_PG (PD12)
 DDEFS += -DDIAG_5VP_PIN=Gpio::D12
 
-# ADC3 slow sampling for PF3-PF10 mux channels (EFI_ADC_32-39 primary, EFI_ADC_40-47 muxed)
-DDEFS += -DADC3_SLOW_CHANNEL_COUNT=8
+# Map ADC3 as the primary slow ADC, and ADC1 as the fast ADC
+DDEFS += -DEFI_SLOW_ADC=ADCD3
+DDEFS += -DADC_FAST_DEVICE=ADCD1
 # S550 mux select pin is active-low (inverted vs. the ADC1 mux boards)
 DDEFS += -DADC_MUX_PIN_INVERTED=1
 
