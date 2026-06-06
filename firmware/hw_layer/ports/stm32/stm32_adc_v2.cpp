@@ -12,6 +12,10 @@
 #define EFI_SLOW_ADC ADCD1
 #endif
 
+#ifndef ADC_FAST_DEVICE
+#define ADC_FAST_DEVICE ADCD2
+#endif
+
 #ifdef EFI_SOFTWARE_KNOCK
 #include "knock_config.h"
 #endif
@@ -639,7 +643,7 @@ void portInitAdc() {
 
 #if EFI_USE_FAST_ADC
 	// Init fast ADC (MAP sensor)
-	adcStart(&ADCD2, NULL);
+	adcStart(&ADC_FAST_DEVICE, NULL);
 #endif
 
 #if defined(STM32F7XX)
