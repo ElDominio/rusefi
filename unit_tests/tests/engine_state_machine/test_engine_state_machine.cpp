@@ -424,6 +424,81 @@ TEST(EngineStateMachine, shiftClearedOnTimeout) {
 	EXPECT_FALSE(getSm().engineSmIsDownshifting);
 }
 
+// ---- RPM-lookback shift detection (RpmRate mode) ----
+
+// Seed the history buffer with linearly ramping RPM.
+static void seedRampedRpm(float startRpm, float rpmPerCallback, int callbacks, float tps) {
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, tps);
+	for (int i = 0; i < callbacks; i++) {
+		engine->rpmCalculator.setRpmValue(startRpm + rpmPerCallback * i);
+		engine->periodicSlowCallback();
+		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	}
+}
+
+static void setupRpmRateModeConfig() {
+	setupSmConfig();
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
+	engineConfiguration->smShiftLookbackMs       = 300;
+	engineConfiguration->smUpshiftRateThreshold  = 500;  // 500 RPM/s
+	engineConfiguration->smDownshiftRateThreshold = 500;
+}
+
+// Rising RPM before the clutch press → upshift confirmed.
+// Rate ≈ 100 RPM/callback × 20 Hz = 2000 RPM/s >> 500 RPM/s threshold.
+TEST(EngineStateMachine, upshiftDetectedRpmMode) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupRpmRateModeConfig();
+	enterRunning();
+
+	// TPS=50% (above 10% threshold) so window opens as expected upshift
+	seedRampedRpm(2000.0f, 100.0f, 20, 50.0f);
+
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_TRUE(sm.engineSmIsUpshifting);
+	EXPECT_FALSE(sm.engineSmIsDownshifting);
+}
+
+// Falling RPM before the clutch press → downshift confirmed.
+// Rate ≈ -100 RPM/callback × 20 Hz = -2000 RPM/s; magnitude >> 500 RPM/s threshold.
+TEST(EngineStateMachine, downshiftDetectedRpmMode) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupRpmRateModeConfig();
+	enterRunning();
+
+	// TPS=2% (below 10% threshold) so window opens as expected downshift
+	seedRampedRpm(4000.0f, -100.0f, 20, 2.0f);
+
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_FALSE(sm.engineSmIsUpshifting);
+	EXPECT_TRUE(sm.engineSmIsDownshifting);
+}
+
+// Flat RPM before the clutch press → rate = 0, below threshold → neither direction confirmed.
+TEST(EngineStateMachine, rpmModeFlatRpmNotConfirmed) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupRpmRateModeConfig();
+	enterRunning();
+
+	// TPS=50% → window opens as expected upshift, but RPM was flat
+	seedHistory(20, 3000.0f, 50.0f);
+
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_FALSE(sm.engineSmIsUpshifting);
+	EXPECT_FALSE(sm.engineSmIsDownshifting);
+}
+
 TEST(EngineStateMachine, noShiftBitsWithoutClutchSwitch) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
