@@ -251,7 +251,7 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 	engineSmIsDownshifting = !m_shiftIsUpshift && confirmed;
 }
 
-bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float currentRpm, float currentVss, efitimems_t /*nowMs*/) {
+bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentRpm*/, float currentVss, efitimems_t /*nowMs*/) {
 	uint16_t lookbackMs = engineConfiguration->smShiftLookbackMs;
 	if (lookbackMs < 100) {
 		lookbackMs = 300; // safe default when not yet configured
@@ -276,13 +276,19 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float currentRpm
 	}
 
 	if (mode == sm_shift_detection_mode_e::RpmRate) {
-		// RPM Rate: upshift = engine RPM drops (higher gear, same speed),
-		//           downshift = engine RPM rises (lower gear or blip).
-		float deltaPer1s = (currentRpm - hist->rpm) / (static_cast<float>(lookbackMs) / 1000.0f);
+		// Use two pre-shift history points, mirroring the TPS lookback approach.
+		// hist  = RPM at ~shift time (lookbackMs ago); hist2 = RPM before the shift trend (2× ago).
+		// Rising RPM going into the shift → upshift; falling RPM → downshift.
+		const SmHistoryEntry* hist2 = getHistoryAt(static_cast<efitimems_t>(lookbackMs) * 2);
+		if (!hist2 || hist2 == hist) {
+			// Not enough history depth — trust the switch direction
+			return true;
+		}
+		float deltaPer1s = (hist->rpm - hist2->rpm) / (static_cast<float>(lookbackMs) / 1000.0f);
 		if (isUpshift) {
-			return deltaPer1s < -(float)engineConfiguration->smUpshiftRateThreshold;
+			return deltaPer1s > (float)engineConfiguration->smUpshiftRateThreshold;
 		} else {
-			return deltaPer1s > (float)engineConfiguration->smDownshiftRateThreshold;
+			return deltaPer1s < -(float)engineConfiguration->smDownshiftRateThreshold;
 		}
 	}
 
