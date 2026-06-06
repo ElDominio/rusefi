@@ -465,12 +465,36 @@ bool readSlowAnalogInputs(adcsample_t* convertedSamples) {
 	result &= readBatchAdc3(&convertedSamples[EFI_ADC_32 - EFI_ADC_0], (adcsample_t *)slowSampleBufferAdc3);
 #endif
 
+#if defined(EFI_SLOW_ADC) && (EFI_SLOW_ADC == ADCD3)
+	// Map ADC3 channels to their standard EFI_ADC_32..39 indices
+	convertedSamples[EFI_ADC_32 - EFI_ADC_0] = convertedSamples[4];  // PF6
+	convertedSamples[EFI_ADC_33 - EFI_ADC_0] = convertedSamples[5];  // PF7
+	convertedSamples[EFI_ADC_34 - EFI_ADC_0] = convertedSamples[6];  // PF8
+	convertedSamples[EFI_ADC_35 - EFI_ADC_0] = convertedSamples[7];  // PF9
+	convertedSamples[EFI_ADC_36 - EFI_ADC_0] = convertedSamples[8];  // PF10
+	convertedSamples[EFI_ADC_37 - EFI_ADC_0] = convertedSamples[9];  // PF3
+	convertedSamples[EFI_ADC_38 - EFI_ADC_0] = convertedSamples[14]; // PF4
+	convertedSamples[EFI_ADC_39 - EFI_ADC_0] = convertedSamples[15]; // PF5
+#endif
+
 #if ADC1_SLOW_MUXED
 	#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
 		muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
 	#endif
 	// mux=1: ADC1 muxed channels (EFI_ADC_16-31)
 	result &= readBatch(&convertedSamples[adcChannelCount], (adcsample_t *)slowSampleBufferMuxed);
+#endif
+
+#if defined(EFI_SLOW_ADC) && (EFI_SLOW_ADC == ADCD3)
+	// Map ADC3 muxed channels to their standard EFI_ADC_40..47 indices
+	convertedSamples[EFI_ADC_40 - EFI_ADC_0] = convertedSamples[16 + 4];  // PF6
+	convertedSamples[EFI_ADC_41 - EFI_ADC_0] = convertedSamples[16 + 5];  // PF7
+	convertedSamples[EFI_ADC_42 - EFI_ADC_0] = convertedSamples[16 + 6];  // PF8
+	convertedSamples[EFI_ADC_43 - EFI_ADC_0] = convertedSamples[16 + 7];  // PF9
+	convertedSamples[EFI_ADC_44 - EFI_ADC_0] = convertedSamples[16 + 8];  // PF10
+	convertedSamples[EFI_ADC_45 - EFI_ADC_0] = convertedSamples[16 + 9];  // PF3
+	convertedSamples[EFI_ADC_46 - EFI_ADC_0] = convertedSamples[16 + 14]; // PF4
+	convertedSamples[EFI_ADC_47 - EFI_ADC_0] = convertedSamples[16 + 15]; // PF5
 #endif
 
 #if ADC3_SLOW_MUXED

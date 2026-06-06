@@ -43,9 +43,9 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
 	engineConfiguration->vvtMode[1] = VVT_SINGLE_TOOTH;
 
-	setTPS1Inputs(EFI_ADC_14, EFI_ADC_30);   // PF4, mux=0/mux=1
+	setTPS1Inputs(EFI_ADC_38, EFI_ADC_46);   // PF4, mux=0/mux=1
 
-	setPPSInputs(EFI_ADC_9, EFI_ADC_25);    // PF3, mux=0/mux=1
+	setPPSInputs(EFI_ADC_37, EFI_ADC_45);    // PF3, mux=0/mux=1
 
 	// random values to have valid config
 	engineConfiguration->tps1SecondaryMin = 1000;
@@ -58,8 +58,8 @@ static void setupDefaultSensorInputs() {
 
 	engineConfiguration->afr.hwChannel = EFI_ADC_NONE;
 
-	engineConfiguration->clt.adcChannel = EFI_ADC_15;  // PF5, mux=0
-	engineConfiguration->iat.adcChannel = EFI_ADC_31;  // PF5, mux=1
+	engineConfiguration->clt.adcChannel = EFI_ADC_39;  // PF5, mux=0
+	engineConfiguration->iat.adcChannel = EFI_ADC_47;  // PF5, mux=1
 }
 
 static void alphax_8chan_boardInitHardware() {
@@ -238,10 +238,10 @@ int boardGetAnalogInputDiagnostic(adc_channel_e hwChannel, float voltage) {
 
 	switch (hwChannel) {
 		/* inputs that may be affected by incorrect reference voltage */
-		case EFI_ADC_14:  // TPSA PF4 mux=0
-		case EFI_ADC_30:  // TPSB PF4 mux=1
-		case EFI_ADC_9:   // PPSA PF3 mux=0
-		case EFI_ADC_25:  // PPSB PF3 mux=1
+		case EFI_ADC_38:  // TPSA PF4 mux=0
+		case EFI_ADC_46:  // TPSB PF4 mux=1
+		case EFI_ADC_37:  // PPSA PF3 mux=0
+		case EFI_ADC_45:  // PPSB PF3 mux=1
 		//case MM176_IN_O2S_ANALOG:
 		//case MM176_IN_O2S2_ANALOG:
 		case MM176_IN_MAP1_ANALOG:

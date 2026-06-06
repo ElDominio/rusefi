@@ -12,6 +12,7 @@ DDEFS += -DDIAG_5VP_PIN=Gpio::D12
 # Map ADC3 as the primary slow ADC, and ADC1 as the fast ADC
 DDEFS += -DEFI_SLOW_ADC=ADCD3
 DDEFS += -DADC_FAST_DEVICE=ADCD1
+DDEFS += -DSLOW_ADC_CHANNEL_COUNT=48
 # S550 mux select pin is active-low (inverted vs. the ADC1 mux boards)
 DDEFS += -DADC_MUX_PIN_INVERTED=1
 

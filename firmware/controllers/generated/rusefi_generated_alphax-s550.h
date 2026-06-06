@@ -2230,7 +2230,7 @@
 #define ts_show_wbo_canbus_index true
 #define ts_show_wbo_canbus_set_index true
 #define ts_show_wbo_canbus_set_type false
-#define TS_SIGNATURE "rusEFI alphax-more-adc-fixes.2026.06.06.alphax-s550.2724553565"
+#define TS_SIGNATURE "rusEFI alphax-more-adc-fixes.2026.06.07.alphax-s550.2724553565"
 #define TS_SIMULATE_CAN '>'
 #define TS_SIMULATE_CAN_char >
 #define TS_TEST_COMMAND 't'
