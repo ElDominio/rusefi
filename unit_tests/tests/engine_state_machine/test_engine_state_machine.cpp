@@ -8,7 +8,7 @@ static constexpr float TEST_RUNNING_RPM  = 800.0f;
 
 static void setupSmConfig() {
 	engineConfiguration->useEngineStateMachine = true;
-	engineConfiguration->smIdleTpsThreshold = 10;
+	engineConfiguration->smShiftTpsThreshold = 10;
 	engineConfiguration->smWotTpsThreshold = 90;
 	engineConfiguration->smTransientHoldoffCallbacks = 0; // no hold-off by default in tests
 	// Lower AE threshold so tests can trigger Transient with small TPS steps on Tps1

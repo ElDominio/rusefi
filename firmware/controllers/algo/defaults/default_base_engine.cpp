@@ -462,7 +462,7 @@ void setDefaultBaseEngine() {
 
 	// Engine State Machine defaults
 	engineConfiguration->useEngineStateMachine = false;
-	engineConfiguration->smIdleTpsThreshold = 5;       // 5% TPS — matches idlePidDeactivationTpsThreshold default
+	engineConfiguration->smShiftTpsThreshold = 5;       // 5% TPS — matches idlePidDeactivationTpsThreshold default
 	engineConfiguration->smWotTpsThreshold = 90;        // 90% TPS
 	engineConfiguration->smTransientHoldoffCallbacks = 4; // 200 ms at 20 Hz
 
