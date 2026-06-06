@@ -50,6 +50,7 @@ public enum live_data_e {
 	LDS_long_term_fuel_trim_state,
 	LDS_short_term_fuel_trim_state,
 	LDS_vvl_controller_state,
+	LDS_cdv_controller_state,
 	LDS_live_data_rotational_idle,
 	LDS_engine_state_machine_state,
 }

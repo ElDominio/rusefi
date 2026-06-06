@@ -1,4 +1,4 @@
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat May 30 17:31:23 AST 2026
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat Jun 06 16:52:02 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -67,8 +67,10 @@ const char *getDisplay_mode_e(display_mode_e value);
 const char *getEgo_sensor_e(ego_sensor_e value);
 const char *getExhaust_cutout_activation_e(exhaust_cutout_activation_e value);
 const char *getExhaust_cutout_behavior_e(exhaust_cutout_behavior_e value);
+const char *getExhaust_cutout_output_mode_e(exhaust_cutout_output_mode_e value);
 const char *getFt_region_e(ft_region_e value);
 const char *getFuel_pressure_sensor_mode_e(fuel_pressure_sensor_mode_e value);
+const char *getFuel_pump_mode_e(fuel_pump_mode_e value);
 const char *getGear_e(gear_e value);
 const char *getGppwm_channel_e(gppwm_channel_e value);
 const char *getGppwm_compare_mode_e(gppwm_compare_mode_e value);
@@ -91,6 +93,12 @@ const char *getNitrous_arming_method_e(nitrous_arming_method_e value);
 const char *getOperation_mode_e(operation_mode_e value);
 const char *getPin_input_mode_e(pin_input_mode_e value);
 const char *getPin_output_mode_e(pin_output_mode_e value);
+#if __cplusplus
+const char *getSm_clutch_switch_e(sm_clutch_switch_e value);
+#endif //__cplusplus
+#if __cplusplus
+const char *getSm_shift_detection_mode_e(sm_shift_detection_mode_e value);
+#endif //__cplusplus
 const char *getSpi_device_e(spi_device_e value);
 const char *getStepper_num_micro_steps_e(stepper_num_micro_steps_e value);
 const char *getStft_state_e(stft_state_e value);

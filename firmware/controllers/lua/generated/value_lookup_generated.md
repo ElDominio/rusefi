@@ -463,6 +463,60 @@ Set this so your vehicle speed signal is responsive, but not noisy. Larger value
 ### vssToothCount
 Number of pulses output per revolution of the shaft where your VSS is mounted. For example, GM applications of the T56 output 17 pulses per revolution of the transmission output shaft.
 
+### secondaryFpActivationRpm
+Secondary pump activates above this RPM (Dual mode)
+
+### secondaryFpActivationLoad
+Secondary pump activates above this MAP load (Dual mode)
+
+### secondaryFpActivationTps
+Secondary pump activates above this TPS (Dual mode)
+
+### secondaryFpDeactivationRpm
+Secondary pump deactivates below this RPM - set lower than activation for hysteresis (Dual mode)
+
+### secondaryFpDeactivationLoad
+Secondary pump deactivates below this load - set lower than activation for hysteresis (Dual mode)
+
+### secondaryFpDeactivationTps
+Secondary pump deactivates below this TPS - set lower than activation for hysteresis (Dual mode)
+
+### fuelPumpPwmFrequency
+Fuel pump PWM frequency (PWM mode)
+
+### fuelPumpMinDuty
+Minimum PWM duty - keeps pump spinning at low demand (PWM mode)
+
+### fuelPumpMaxDuty
+Maximum PWM duty - also held during prime (PWM mode)
+
+### fuelPumpControl.pFactor
+
+
+### fuelPumpControl.iFactor
+
+
+### fuelPumpControl.dFactor
+
+
+### fuelPumpControl.offset
+Linear addition to PID logic\nAlso known as feedforward.
+
+### fuelPumpControl.periodMs
+PID dTime
+
+### fuelPumpControl.minValue
+Output Min Duty Cycle
+
+### fuelPumpControl.maxValue
+Output Max Duty Cycle
+
+### fuelPump_iTermMin
+PID integrator lower limit (PWM mode)
+
+### fuelPump_iTermMax
+PID integrator upper limit (PWM mode)
+
 ### gapVvtTrackingLengthOverride
 How many consecutive VVT gap rations have to match expected ranges for sync to happen
 
@@ -630,9 +684,6 @@ Maximum time to crank starter when start/stop button is pressed
 
 ### lambdaProtectionTimeout
 Only respond once lambda is out of range for this period of time. Use to avoid transients triggering lambda protection when not needed
-
-### idleReturnTargetRamp
-Ramp the idle target down from the entry threshold over N seconds when returning to idle. Helps prevent overshooting (below) the idle target while returning to idle from coasting.
 
 ### useInjectorFlowLinearizationTable
 
@@ -864,6 +915,9 @@ Treat milliseconds value as duty cycle value, i.e. 0.5ms would become 50%
 
 ### isAlternatorControlEnabled
 This enables smart alternator control and activates the extra alternator settings.
+
+### alternatorBaseDutyUseTable
+Select base duty source: a 2D table (indexed by target voltage and RPM) or the legacy scalar offset in the PID settings.
 
 ### invertPrimaryTriggerSignal
 https://wiki.rusefi.com/Trigger-Configuration-Guide\nThis setting flips the signal from the primary engine speed sensor.
@@ -1216,8 +1270,8 @@ AEM X-Series EGT gauge kit or rusEFI EGT sensor from Wideband controller
 ### enableKnockSpectrogramFilter
 
 
-### iacByTpsTaper
-This value is an added for base idle value. Idle Value added when coasting and transitioning into idle.
+### offIdleRpmAdder
+RPM added to closed-loop idle target when returning from off-idle (Running/Coasting) conditions. PID chases this elevated target to prevent stalling.
 
 ### coastingFuelCutVssLow
 Below this speed, disable DFCO. Use this to prevent jerkiness from fuel enable/disable in low gears.
@@ -1738,11 +1792,11 @@ Defines a pressure range below the cut limit at which boost can resume, providin
 ### benchTestCount
 How many test bench pulses do you want
 
-### iacByTpsHoldTime
-How long initial idle adder is held before starting to decay.
+### offIdleWaitTime
+Time to wait after RPM stabilizes before starting the off-idle adder decay.
 
-### iacByTpsDecayTime
-How long it takes to remove initial IAC adder to return to normal idle.
+### offIdleRpmAdderDecayTime
+Time over which the off-idle RPM adder linearly decays from max to zero after the wait expires.
 
 ### canVssScaling
 Scale the reported vehicle speed value from CAN. Example: Parameter set to 1.1, CAN VSS reports 50kph, ECU will report 55kph instead.
@@ -1948,9 +2002,6 @@ This is the pressure at which your injector flow is known.\nFor example if your 
 ### exhaustCutoutShowOpenState
 
 
-### exhaustCutoutIsHBridge
-
-
 ### exhaustCutoutInvertedOutput
 
 
@@ -1960,8 +2011,14 @@ This is the pressure at which your injector flow is known.\nFor example if your 
 ### exhaustCutoutEngineOnTestEnabled
 
 
-### exhaustCutoutIsPwm
+### useEngineStateMachine
+Centralized Engine State Machine. When enabled, state detection is driven by a single priority-ordered evaluator. When disabled, each controller manages its own state detection.
 
+### cdvControlEnabled
+
+
+### cdvUseClutchExit
+Deactivate CDV solenoid when clutch pedal is released
 
 ### nitrousLuaGaugeArmingValue
 
@@ -2023,14 +2080,20 @@ Compensates for trigger delay due to belt stretch, or other electromechanical is
 ### maxOilPressureTimeout
 Delay before cutting fuel due to extra high oil pressure. Use this to ignore short pressure blips and sensor noise.
 
-### idleReturnTargetRampDuration
-idle return target ramp duration
+### offIdleRpmStabilityThreshold
+RPM rate-of-change (RPM/s) below which RPM is considered stable when returning to idle. Transition from Stabilizing to Waiting occurs when dRPM/s falls below this value.
 
 ### wastegatePositionOpenedVoltage
 Voltage when the wastegate is fully open
 
 ### wastegatePositionClosedVoltage
 Voltage when the wastegate is closed
+
+### cdvExitDelay
+Seconds after launch control exits before deactivating CDV solenoid. Set 0 to deactivate immediately.
+
+### cdvExitVss
+Deactivate CDV above this vehicle speed. Set 0 to disable.
 
 ### vvlController.fuelAdderPercent
 
@@ -2103,6 +2166,33 @@ PWM duty when cutout is OPEN (PWM mode only)
 
 ### exhaustCutoutPwmClosedDuty
 PWM duty when cutout is CLOSED (PWM mode only)
+
+### exhaustCutoutHBridgePwmFrequency
+H-Bridge IN1/IN2 PWM frequency (H-Bridge mode only)
+
+### exhaustCutoutHBridgeDutyCycle
+H-Bridge motor drive duty cycle (H-Bridge mode only)
+
+### smShiftTpsThreshold
+Engine SM: TPS threshold used for shift-direction disambiguation (above = driver was on throttle = upshift).
+
+### smWotTpsThreshold
+Engine SM: TPS threshold above which the engine is at Wide Open Throttle.
+
+### smTransientHoldoffCallbacks
+Engine SM: slow-callback periods (50 ms each) to hold the Transient state after the accel-enrichment threshold drops. 0 = no hold-off.
+
+### smShiftLookbackMs
+Engine SM: Sensor history window used for shift direction evaluation (100-1000ms).
+
+### smClutchUpDisengagementDelayMs
+Engine SM: Delay after Clutch-Up switch fires before evaluating shift direction. Compensates for the time between electrical and mechanical clutch disengagement.
+
+### smUpshiftRateThreshold
+Engine SM: Rate-of-change magnitude to confirm upshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s drop. VSS mode: km/h/s rise.
+
+### smDownshiftRateThreshold
+Engine SM: Rate-of-change magnitude to confirm downshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s rise. VSS mode: km/h/s fall.
 
 ### tcu_shiftTime
 

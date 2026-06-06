@@ -469,6 +469,60 @@ float getConfigValueByHash(const int hash) {
 // vssToothCount
 		case -1958312328:
 			return engineConfiguration->vssToothCount;
+// secondaryFpActivationRpm
+		case 503101220:
+			return engineConfiguration->secondaryFpActivationRpm;
+// secondaryFpActivationLoad
+		case -577745931:
+			return engineConfiguration->secondaryFpActivationLoad;
+// secondaryFpActivationTps
+		case 503103404:
+			return engineConfiguration->secondaryFpActivationTps;
+// secondaryFpDeactivationRpm
+		case -131897395:
+			return engineConfiguration->secondaryFpDeactivationRpm;
+// secondaryFpDeactivationLoad
+		case -57863746:
+			return engineConfiguration->secondaryFpDeactivationLoad;
+// secondaryFpDeactivationTps
+		case -131895211:
+			return engineConfiguration->secondaryFpDeactivationTps;
+// fuelPumpPwmFrequency
+		case -847641639:
+			return engineConfiguration->fuelPumpPwmFrequency;
+// fuelPumpMinDuty
+		case -1648021571:
+			return engineConfiguration->fuelPumpMinDuty;
+// fuelPumpMaxDuty
+		case -1949245505:
+			return engineConfiguration->fuelPumpMaxDuty;
+// fuelPumpControl.pFactor
+		case 84173873:
+			return engineConfiguration->fuelPumpControl.pFactor;
+// fuelPumpControl.iFactor
+		case -366167318:
+			return engineConfiguration->fuelPumpControl.iFactor;
+// fuelPumpControl.dFactor
+		case 1766427429:
+			return engineConfiguration->fuelPumpControl.dFactor;
+// fuelPumpControl.offset
+		case -1077592247:
+			return engineConfiguration->fuelPumpControl.offset;
+// fuelPumpControl.periodMs
+		case -2136471963:
+			return engineConfiguration->fuelPumpControl.periodMs;
+// fuelPumpControl.minValue
+		case -413496189:
+			return engineConfiguration->fuelPumpControl.minValue;
+// fuelPumpControl.maxValue
+		case -1763951419:
+			return engineConfiguration->fuelPumpControl.maxValue;
+// fuelPump_iTermMin
+		case -1795541801:
+			return engineConfiguration->fuelPump_iTermMin;
+// fuelPump_iTermMax
+		case -1795542055:
+			return engineConfiguration->fuelPump_iTermMax;
 // gapVvtTrackingLengthOverride
 		case -188591438:
 			return engineConfiguration->gapVvtTrackingLengthOverride;
@@ -637,9 +691,6 @@ float getConfigValueByHash(const int hash) {
 // lambdaProtectionTimeout
 		case -1645106444:
 			return engineConfiguration->lambdaProtectionTimeout;
-// idleReturnTargetRamp
-		case 118504154:
-			return engineConfiguration->idleReturnTargetRamp;
 // useInjectorFlowLinearizationTable
 		case 435614729:
 			return engineConfiguration->useInjectorFlowLinearizationTable;
@@ -871,6 +922,9 @@ float getConfigValueByHash(const int hash) {
 // isAlternatorControlEnabled
 		case -1771449111:
 			return engineConfiguration->isAlternatorControlEnabled;
+// alternatorBaseDutyUseTable
+		case 2041197399:
+			return engineConfiguration->alternatorBaseDutyUseTable;
 // invertPrimaryTriggerSignal
 		case -587700301:
 			return engineConfiguration->invertPrimaryTriggerSignal;
@@ -1222,9 +1276,9 @@ float getConfigValueByHash(const int hash) {
 // enableKnockSpectrogramFilter
 		case -1923222129:
 			return engineConfiguration->enableKnockSpectrogramFilter;
-// iacByTpsTaper
-		case -2065814304:
-			return engineConfiguration->iacByTpsTaper;
+// offIdleRpmAdder
+		case 1581905133:
+			return engineConfiguration->offIdleRpmAdder;
 // coastingFuelCutVssLow
 		case 329016035:
 			return engineConfiguration->coastingFuelCutVssLow;
@@ -1744,12 +1798,12 @@ float getConfigValueByHash(const int hash) {
 // benchTestCount
 		case -204721234:
 			return engineConfiguration->benchTestCount;
-// iacByTpsHoldTime
-		case -235994182:
-			return engineConfiguration->iacByTpsHoldTime;
-// iacByTpsDecayTime
-		case 1742748825:
-			return engineConfiguration->iacByTpsDecayTime;
+// offIdleWaitTime
+		case 1895143778:
+			return engineConfiguration->offIdleWaitTime;
+// offIdleRpmAdderDecayTime
+		case -1225600414:
+			return engineConfiguration->offIdleRpmAdderDecayTime;
 // canVssScaling
 		case -846143628:
 			return engineConfiguration->canVssScaling;
@@ -1954,9 +2008,6 @@ float getConfigValueByHash(const int hash) {
 // exhaustCutoutShowOpenState
 		case -619458017:
 			return engineConfiguration->exhaustCutoutShowOpenState;
-// exhaustCutoutIsHBridge
-		case 448873596:
-			return engineConfiguration->exhaustCutoutIsHBridge;
 // exhaustCutoutInvertedOutput
 		case -1837381539:
 			return engineConfiguration->exhaustCutoutInvertedOutput;
@@ -1966,9 +2017,15 @@ float getConfigValueByHash(const int hash) {
 // exhaustCutoutEngineOnTestEnabled
 		case 1210561033:
 			return engineConfiguration->exhaustCutoutEngineOnTestEnabled;
-// exhaustCutoutIsPwm
-		case -893598501:
-			return engineConfiguration->exhaustCutoutIsPwm;
+// useEngineStateMachine
+		case 940343550:
+			return engineConfiguration->useEngineStateMachine;
+// cdvControlEnabled
+		case 1956679022:
+			return engineConfiguration->cdvControlEnabled;
+// cdvUseClutchExit
+		case -306046548:
+			return engineConfiguration->cdvUseClutchExit;
 // nitrousLuaGaugeArmingValue
 		case -1760115393:
 			return engineConfiguration->nitrousLuaGaugeArmingValue;
@@ -2029,15 +2086,21 @@ float getConfigValueByHash(const int hash) {
 // maxOilPressureTimeout
 		case -1788499857:
 			return engineConfiguration->maxOilPressureTimeout;
-// idleReturnTargetRampDuration
-		case 62925536:
-			return engineConfiguration->idleReturnTargetRampDuration;
+// offIdleRpmStabilityThreshold
+		case 1261457743:
+			return engineConfiguration->offIdleRpmStabilityThreshold;
 // wastegatePositionOpenedVoltage
 		case 866072300:
 			return engineConfiguration->wastegatePositionOpenedVoltage;
 // wastegatePositionClosedVoltage
 		case 20003211:
 			return engineConfiguration->wastegatePositionClosedVoltage;
+// cdvExitDelay
+		case -1739713621:
+			return engineConfiguration->cdvExitDelay;
+// cdvExitVss
+		case -1425345320:
+			return engineConfiguration->cdvExitVss;
 // vvlController.fuelAdderPercent
 		case 666098796:
 			return engineConfiguration->vvlController.fuelAdderPercent;
@@ -2110,6 +2173,33 @@ float getConfigValueByHash(const int hash) {
 // exhaustCutoutPwmClosedDuty
 		case 1166952895:
 			return engineConfiguration->exhaustCutoutPwmClosedDuty;
+// exhaustCutoutHBridgePwmFrequency
+		case -722413018:
+			return engineConfiguration->exhaustCutoutHBridgePwmFrequency;
+// exhaustCutoutHBridgeDutyCycle
+		case -1849082570:
+			return engineConfiguration->exhaustCutoutHBridgeDutyCycle;
+// smShiftTpsThreshold
+		case -744486361:
+			return engineConfiguration->smShiftTpsThreshold;
+// smWotTpsThreshold
+		case -2047550909:
+			return engineConfiguration->smWotTpsThreshold;
+// smTransientHoldoffCallbacks
+		case -151628257:
+			return engineConfiguration->smTransientHoldoffCallbacks;
+// smShiftLookbackMs
+		case 1226365769:
+			return engineConfiguration->smShiftLookbackMs;
+// smClutchUpDisengagementDelayMs
+		case 394909335:
+			return engineConfiguration->smClutchUpDisengagementDelayMs;
+// smUpshiftRateThreshold
+		case 1904232705:
+			return engineConfiguration->smUpshiftRateThreshold;
+// smDownshiftRateThreshold
+		case -804834476:
+			return engineConfiguration->smDownshiftRateThreshold;
 // tcu_shiftTime
 		case -1658957891:
 			return config->tcu_shiftTime;
@@ -2982,6 +3072,96 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->vssToothCount = (int)value;
 		return 1;
 	}
+		case 503101220:
+	{
+		engineConfiguration->secondaryFpActivationRpm = (int)value;
+		return 1;
+	}
+		case -577745931:
+	{
+		engineConfiguration->secondaryFpActivationLoad = (int)value;
+		return 1;
+	}
+		case 503103404:
+	{
+		engineConfiguration->secondaryFpActivationTps = (int)value;
+		return 1;
+	}
+		case -131897395:
+	{
+		engineConfiguration->secondaryFpDeactivationRpm = (int)value;
+		return 1;
+	}
+		case -57863746:
+	{
+		engineConfiguration->secondaryFpDeactivationLoad = (int)value;
+		return 1;
+	}
+		case -131895211:
+	{
+		engineConfiguration->secondaryFpDeactivationTps = (int)value;
+		return 1;
+	}
+		case -847641639:
+	{
+		engineConfiguration->fuelPumpPwmFrequency = (int)value;
+		return 1;
+	}
+		case -1648021571:
+	{
+		engineConfiguration->fuelPumpMinDuty = (int)value;
+		return 1;
+	}
+		case -1949245505:
+	{
+		engineConfiguration->fuelPumpMaxDuty = (int)value;
+		return 1;
+	}
+		case 84173873:
+	{
+		engineConfiguration->fuelPumpControl.pFactor = value;
+		return 1;
+	}
+		case -366167318:
+	{
+		engineConfiguration->fuelPumpControl.iFactor = value;
+		return 1;
+	}
+		case 1766427429:
+	{
+		engineConfiguration->fuelPumpControl.dFactor = value;
+		return 1;
+	}
+		case -1077592247:
+	{
+		engineConfiguration->fuelPumpControl.offset = (int)value;
+		return 1;
+	}
+		case -2136471963:
+	{
+		engineConfiguration->fuelPumpControl.periodMs = (int)value;
+		return 1;
+	}
+		case -413496189:
+	{
+		engineConfiguration->fuelPumpControl.minValue = (int)value;
+		return 1;
+	}
+		case -1763951419:
+	{
+		engineConfiguration->fuelPumpControl.maxValue = (int)value;
+		return 1;
+	}
+		case -1795541801:
+	{
+		engineConfiguration->fuelPump_iTermMin = (int)value;
+		return 1;
+	}
+		case -1795542055:
+	{
+		engineConfiguration->fuelPump_iTermMax = (int)value;
+		return 1;
+	}
 		case -188591438:
 	{
 		engineConfiguration->gapVvtTrackingLengthOverride = (int)value;
@@ -3260,11 +3440,6 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1645106444:
 	{
 		engineConfiguration->lambdaProtectionTimeout = (int)value;
-		return 1;
-	}
-		case 118504154:
-	{
-		engineConfiguration->idleReturnTargetRamp = (int)value;
 		return 1;
 	}
 		case 435614729:
@@ -3650,6 +3825,11 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1771449111:
 	{
 		engineConfiguration->isAlternatorControlEnabled = (int)value;
+		return 1;
+	}
+		case 2041197399:
+	{
+		engineConfiguration->alternatorBaseDutyUseTable = (int)value;
 		return 1;
 	}
 		case -587700301:
@@ -4237,9 +4417,9 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->enableKnockSpectrogramFilter = (int)value;
 		return 1;
 	}
-		case -2065814304:
+		case 1581905133:
 	{
-		engineConfiguration->iacByTpsTaper = (int)value;
+		engineConfiguration->offIdleRpmAdder = (int)value;
 		return 1;
 	}
 		case 329016035:
@@ -5107,14 +5287,14 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->benchTestCount = (int)value;
 		return 1;
 	}
-		case -235994182:
+		case 1895143778:
 	{
-		engineConfiguration->iacByTpsHoldTime = (int)value;
+		engineConfiguration->offIdleWaitTime = (int)value;
 		return 1;
 	}
-		case 1742748825:
+		case -1225600414:
 	{
-		engineConfiguration->iacByTpsDecayTime = (int)value;
+		engineConfiguration->offIdleRpmAdderDecayTime = (int)value;
 		return 1;
 	}
 		case -846143628:
@@ -5457,11 +5637,6 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->exhaustCutoutShowOpenState = (int)value;
 		return 1;
 	}
-		case 448873596:
-	{
-		engineConfiguration->exhaustCutoutIsHBridge = (int)value;
-		return 1;
-	}
 		case -1837381539:
 	{
 		engineConfiguration->exhaustCutoutInvertedOutput = (int)value;
@@ -5477,9 +5652,19 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->exhaustCutoutEngineOnTestEnabled = (int)value;
 		return 1;
 	}
-		case -893598501:
+		case 940343550:
 	{
-		engineConfiguration->exhaustCutoutIsPwm = (int)value;
+		engineConfiguration->useEngineStateMachine = (int)value;
+		return 1;
+	}
+		case 1956679022:
+	{
+		engineConfiguration->cdvControlEnabled = (int)value;
+		return 1;
+	}
+		case -306046548:
+	{
+		engineConfiguration->cdvUseClutchExit = (int)value;
 		return 1;
 	}
 		case -1760115393:
@@ -5582,9 +5767,9 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->maxOilPressureTimeout = (int)value;
 		return 1;
 	}
-		case 62925536:
+		case 1261457743:
 	{
-		engineConfiguration->idleReturnTargetRampDuration = (int)value;
+		engineConfiguration->offIdleRpmStabilityThreshold = (int)value;
 		return 1;
 	}
 		case 866072300:
@@ -5595,6 +5780,16 @@ bool setConfigValueByName(const char *name, float value) {
 		case 20003211:
 	{
 		engineConfiguration->wastegatePositionClosedVoltage = value;
+		return 1;
+	}
+		case -1739713621:
+	{
+		engineConfiguration->cdvExitDelay = (int)value;
+		return 1;
+	}
+		case -1425345320:
+	{
+		engineConfiguration->cdvExitVss = (int)value;
 		return 1;
 	}
 		case 666098796:
@@ -5715,6 +5910,51 @@ bool setConfigValueByName(const char *name, float value) {
 		case 1166952895:
 	{
 		engineConfiguration->exhaustCutoutPwmClosedDuty = (int)value;
+		return 1;
+	}
+		case -722413018:
+	{
+		engineConfiguration->exhaustCutoutHBridgePwmFrequency = (int)value;
+		return 1;
+	}
+		case -1849082570:
+	{
+		engineConfiguration->exhaustCutoutHBridgeDutyCycle = (int)value;
+		return 1;
+	}
+		case -744486361:
+	{
+		engineConfiguration->smShiftTpsThreshold = (int)value;
+		return 1;
+	}
+		case -2047550909:
+	{
+		engineConfiguration->smWotTpsThreshold = (int)value;
+		return 1;
+	}
+		case -151628257:
+	{
+		engineConfiguration->smTransientHoldoffCallbacks = (int)value;
+		return 1;
+	}
+		case 1226365769:
+	{
+		engineConfiguration->smShiftLookbackMs = (int)value;
+		return 1;
+	}
+		case 394909335:
+	{
+		engineConfiguration->smClutchUpDisengagementDelayMs = (int)value;
+		return 1;
+	}
+		case 1904232705:
+	{
+		engineConfiguration->smUpshiftRateThreshold = (int)value;
+		return 1;
+	}
+		case -804834476:
+	{
+		engineConfiguration->smDownshiftRateThreshold = (int)value;
 		return 1;
 	}
 		case -1658957891:
