@@ -483,7 +483,7 @@ void commonInitEngineController() {
 	initLaunchControl();
 #endif
 
-  initIgnitionAdvanceControl();
+  engine->tractionController.init();
 
 #if EFI_UNIT_TEST
 	engine->rpmCalculator.Register();

@@ -66,7 +66,6 @@
 
 static pedal2tps_t pedal2tpsMap{"p2t"};
 static Map3D<ETB2_TRIM_RPM_SIZE, ETB2_TRIM_SIZE, int8_t, uint8_t, uint8_t> throttle2TrimTable{"t2t"};
-static Map3D<TRACTION_CONTROL_ETB_DROP_SLIP_SIZE, TRACTION_CONTROL_ETB_DROP_SPEED_SIZE, int8_t, uint16_t, uint8_t> tcEtbDropTable{"tce"};
 
 constexpr float etbPeriodSeconds = 1.0f / ETB_LOOP_FREQUENCY;
 
@@ -343,9 +342,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	}
 #endif /* EFI_ANTILAG_SYSTEM */
 
-  float vehicleSpeed = Sensor::getOrZero(SensorType::VehicleSpeed);
-  float wheelSlip = Sensor::getOrZero(SensorType::WheelSlipRatio);
-  tcEtbDrop = tcEtbDropTable.getValue(wheelSlip, vehicleSpeed);
+  tcEtbDrop = engine->tractionController.getAppliedEtbDrop();
 
 	// Apply any adjustment that this throttle alone needs
 	// Clamped to +-10 to prevent anything too wild
@@ -986,7 +983,6 @@ void initElectronicThrottle() {
 
 	pedal2tpsMap.initTable(config->pedalToTpsTable, config->pedalToTpsRpmBins, config->pedalToTpsPedalBins);
 	throttle2TrimTable.initTable(config->throttle2TrimTable, config->throttle2TrimRpmBins, config->throttle2TrimTpsBins);
-	tcEtbDropTable.initTable(engineConfiguration->tractionControlEtbDrop, engineConfiguration->tractionControlSlipBins, engineConfiguration->tractionControlSpeedBins);
 
 	doInitElectronicThrottle(/*isStartupInit*/true);
 }

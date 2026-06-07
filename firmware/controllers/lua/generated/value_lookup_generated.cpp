@@ -1897,6 +1897,12 @@ float getConfigValueByHash(const int hash) {
 // ignKeyAdcDivider
 		case -506535813:
 			return engineConfiguration->ignKeyAdcDivider;
+// tractionControlHoldTime
+		case 506560000:
+			return engineConfiguration->tractionControlHoldTime;
+// tractionControlDecayTime
+		case 477233055:
+			return engineConfiguration->tractionControlDecayTime;
 // maxInjectorDutyInstant
 		case 896753456:
 			return engineConfiguration->maxInjectorDutyInstant;
@@ -5450,6 +5456,16 @@ bool setConfigValueByName(const char *name, float value) {
 		case -506535813:
 	{
 		engineConfiguration->ignKeyAdcDivider = value;
+		return 1;
+	}
+		case 506560000:
+	{
+		engineConfiguration->tractionControlHoldTime = (int)value;
+		return 1;
+	}
+		case 477233055:
+	{
+		engineConfiguration->tractionControlDecayTime = (int)value;
 		return 1;
 	}
 		case 896753456:

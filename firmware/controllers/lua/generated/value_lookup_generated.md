@@ -1891,6 +1891,12 @@ Number of speedometer pulses per kilometer travelled.
 ### ignKeyAdcDivider
 null
 
+### tractionControlHoldTime
+Traction control hold time. When traction control is active, the peak drop values are held for this duration.
+
+### tractionControlDecayTime
+Traction control decay time. After the hold time expires, values decay back to the current table value over this duration.
+
 ### maxInjectorDutyInstant
 This sets an immediate limit on injector duty cycle. If this threshold is reached, the system will immediately cut the injectors.
 

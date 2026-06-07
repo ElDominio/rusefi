@@ -1746,6 +1746,9 @@ float ignKeyAdcDivider
 	float[VVT_TRACKING_LENGTH iterate] triggerVVTGapOverrideFrom;;"ratio", 1, 0, 0, 20, 3
 	float[VVT_TRACKING_LENGTH iterate] triggerVVTGapOverrideTo;;"ratio", 1, 0, 0, 20, 3
 
+	uint16_t tractionControlHoldTime;Traction control hold time. When traction control is active, the peak drop values are held for this duration.;"ms", 1, 0, 0, 10000, 0
+	uint16_t tractionControlDecayTime;Traction control decay time. After the hold time expires, values decay back to the current table value over this duration.;"ms", 1, 0, 0, 10000, 0
+
 int8_t[TRACTION_CONTROL_ETB_DROP_SPEED_SIZE x TRACTION_CONTROL_ETB_DROP_SLIP_SIZE] tractionControlEtbDrop;;"%", 1, 0, -100, 0, 0
 
 	uint8_t maxInjectorDutyInstant;This sets an immediate limit on injector duty cycle. If this threshold is reached, the system will immediately cut the injectors.;"%", 1, 0, 50, 200, 0

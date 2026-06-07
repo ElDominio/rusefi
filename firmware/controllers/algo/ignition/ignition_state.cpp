@@ -25,11 +25,7 @@
 #include "gppwm_channel.h"
 
 #if EFI_ENGINE_CONTROL
-
-static Map3D<TRACTION_CONTROL_ETB_DROP_SLIP_SIZE, TRACTION_CONTROL_ETB_DROP_SPEED_SIZE, int8_t, uint16_t, uint8_t> tcTimingDropTable{"tct"};
-static Map3D<TRACTION_CONTROL_ETB_DROP_SLIP_SIZE, TRACTION_CONTROL_ETB_DROP_SPEED_SIZE, int8_t, uint16_t, uint8_t> tcSparkSkipTable{"tcs"};
-
-#if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
+#if EFI_SHAFT_POSITION_INPUT
 
 /**
  * @return ignition timing angle advance before TDC
@@ -77,10 +73,8 @@ angle_t getRunningAdvance(float rpm, float engineLoad) {
 	engine->engineState.isSecondIgnitionTableActive = secondIgnitionTableActive;
 #endif // EFI_PROD_CODE || EFI_UNIT_TEST
 
-  float vehicleSpeed = Sensor::getOrZero(SensorType::VehicleSpeed);
-  float wheelSlip = Sensor::getOrZero(SensorType::WheelSlipRatio);
-  engine->ignitionState.tractionAdvanceDrop = tcTimingDropTable.getValue(wheelSlip, vehicleSpeed);
-  engine->engineState.tractionControlSparkSkip = tcSparkSkipTable.getValue(wheelSlip, vehicleSpeed);
+  engine->ignitionState.tractionAdvanceDrop = engine->tractionController.getAppliedTimingDrop();
+  engine->engineState.tractionControlSparkSkip = engine->tractionController.getAppliedSparkSkip();
   engine->engineState.updateSparkSkip();
 
   advanceAngle += engine->ignitionState.tractionAdvanceDrop;
@@ -355,8 +349,6 @@ size_t getMultiSparkCount(float rpm) {
 }
 
 void initIgnitionAdvanceControl() {
-	tcTimingDropTable.initTable(engineConfiguration->tractionControlTimingDrop, engineConfiguration->tractionControlSlipBins, engineConfiguration->tractionControlSpeedBins);
-	tcSparkSkipTable.initTable(engineConfiguration->tractionControlIgnitionSkip, engineConfiguration->tractionControlSlipBins, engineConfiguration->tractionControlSpeedBins);
 }
 
 /**

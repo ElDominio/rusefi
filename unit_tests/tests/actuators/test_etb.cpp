@@ -895,6 +895,7 @@ TEST(etb, tractionControlEtbDrop) {
 	etb.init(DC_Throttle1, nullptr, nullptr, &pedalMap);
 
 	Sensor::setMockValue(SensorType::AcceleratorPedal, 47, true);
+	engine->tractionController.update();
 	EXPECT_EQ(37, etb.getSetpoint().value_or(-1));
 
 	// test correct X/Y on table
@@ -912,10 +913,97 @@ TEST(etb, tractionControlEtbDrop) {
 
 	// we expect here that the first values are 37, and the last on the rigth side of the table are 62
 
+	engine->tractionController.update();
 	EXPECT_EQ(37, etb.getSetpoint().value_or(-1));
 
 	Sensor::setMockValue(SensorType::VehicleSpeed, 120.0);
 	Sensor::setMockValue(SensorType::WheelSlipRatio, 1.2);
 
+	engine->tractionController.update();
 	EXPECT_EQ(62, etb.getSetpoint().value_or(-1));
 }
+
+TEST(etb, tractionControlHoldAndDecay) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	// Enable traction control hold/decay
+	engineConfiguration->tractionControlHoldTime = 100;  // 100 ms
+	engineConfiguration->tractionControlDecayTime = 200; // 200 ms
+
+	// Set slip bins starting from 0.0 so that 0.0 slip returns 0 drop
+	setLinearCurve(engineConfiguration->tractionControlSlipBins, /*from*/0.0, /*to*/1.0, 0.2);
+	setLinearCurve(engineConfiguration->tractionControlSpeedBins, /*from*/10, /*to*/120, 5);
+
+	// Set drop to 0% for slip bin 0 (slip = 0.0) and -10% for slip bins 1-5
+	for (int i = 0; i < TRACTION_CONTROL_ETB_DROP_SPEED_SIZE; i++) {
+		engineConfiguration->tractionControlEtbDrop[i][0] = 0;
+		for (int j = 1; j < TRACTION_CONTROL_ETB_DROP_SLIP_SIZE; j++) {
+			engineConfiguration->tractionControlEtbDrop[i][j] = -10;
+		}
+	}
+
+	// Mock pedal map
+	StrictMock<MockVp3d> pedalMap;
+	EXPECT_CALL(pedalMap, getValue(_, _))
+		.WillRepeatedly([](float, float y) {
+			return y;
+		});
+
+	Sensor::setMockValue(SensorType::Tps1Primary, 0);
+	Sensor::setMockValue(SensorType::Tps1, 0.0f, true);
+	Sensor::setMockValue(SensorType::AcceleratorPedal, 50.0f, true);
+
+	EtbController1 etb;
+	etb.init(DC_Throttle1, nullptr, nullptr, &pedalMap);
+
+	engine->tractionController.init();
+
+	// Time = 0. No slip.
+	setTimeNowUs(0);
+	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0);
+	Sensor::setMockValue(SensorType::WheelSlipRatio, 0.0);
+	engine->tractionController.update();
+	EXPECT_EQ(50, etb.getSetpoint().value_or(-1)); // pedal only
+
+	// Time = 0. Slip increases to 1.0 (raw drop should be -10)
+	Sensor::setMockValue(SensorType::WheelSlipRatio, 1.0);
+	engine->tractionController.update();
+	EXPECT_EQ(40, etb.getSetpoint().value_or(-1)); // 50 - 10 = 40
+
+	// Time = 50ms. Slip decreases to 0.0. But we hold for 100ms.
+	setTimeNowUs(50000); // 50 ms
+	Sensor::setMockValue(SensorType::WheelSlipRatio, 0.0);
+	engine->tractionController.update();
+	EXPECT_EQ(40, etb.getSetpoint().value_or(-1)); // held at 40
+
+	// Time = 100ms. Slip still 0. Hold timer is exactly at 0 (since 100ms hold time elapsed).
+	// It should start to decay. Since decay is 200ms, and 50ms has elapsed since hold expired (100ms - 50ms),
+	// wait, hold timer started at t=0 when slip was 1.0, and slip decreased at t=50ms.
+	// Wait, does the hold timer reset when slip decreases? No, it only resets when slip increases.
+	// So the hold timer started at t=0. It expires at t=100ms.
+	// At t=120ms (20ms into decay), it should decay.
+	// Let's test at t=150ms (50ms into decay).
+	// Decay progress = 50ms / 200ms = 0.25.
+	// Applied drop = heldDrop * (1 - 0.25) = -10 * 0.75 = -7.5%.
+	// Note: tcEtbDrop is an int8_t, so -7.5% is truncated to -7%.
+	// Setpoint = 50 - 7 = 43.
+	setTimeNowUs(150000); // 150 ms
+	engine->tractionController.update();
+	EXPECT_NEAR(43.0f, etb.getSetpoint().value_or(-1), EPS4D);
+
+	// Time = 250ms (150ms into decay).
+	// Decay progress = 150ms / 200ms = 0.75.
+	// Applied drop = -10 * (1 - 0.75) = -2.5%.
+	// Note: tcEtbDrop is an int8_t, so -2.5% is truncated to -2%.
+	// Setpoint = 50 - 2 = 48.
+	setTimeNowUs(250000); // 250 ms
+	engine->tractionController.update();
+	EXPECT_NEAR(48.0f, etb.getSetpoint().value_or(-1), EPS4D);
+
+	// Time = 300ms (hold expired at 100ms + 200ms decay = 300ms).
+	// Decay should be complete (applied drop = 0).
+	setTimeNowUs(300000); // 300 ms
+	engine->tractionController.update();
+	EXPECT_EQ(50, etb.getSetpoint().value_or(-1));
+}
+

@@ -92,7 +92,7 @@ TEST(ignition_state, getRunningAdvanceTractionDrop) {
   const float load = 50;
 
   setWholeTimingTable(10);
-  initIgnitionAdvanceControl();
+  engine->tractionController.init();
 
   Sensor::setMockValue(SensorType::Clt, 35);
   setTable(engineConfiguration->tractionControlTimingDrop, 0);
@@ -111,10 +111,12 @@ TEST(ignition_state, getRunningAdvanceTractionDrop) {
 
   Sensor::setMockValue(SensorType::VehicleSpeed, 10.0);
   Sensor::setMockValue(SensorType::WheelSlipRatio, 0);
+  engine->tractionController.update();
   EXPECT_NEAR(-5, getRunningAdvance(rpm, load), EPS2D);
 
   Sensor::setMockValue(SensorType::VehicleSpeed, 120.0);
   Sensor::setMockValue(SensorType::WheelSlipRatio, 1.2);
+  engine->tractionController.update();
   EXPECT_NEAR(25, getRunningAdvance(rpm, load), EPS2D);
 }
 
@@ -125,7 +127,7 @@ TEST(ignition_state, getRunningAdvanceTractionSparkSkip) {
   const float load = 50;
 
   setWholeTimingTable(10);
-  initIgnitionAdvanceControl();
+  engine->tractionController.init();
 
   // invalid load, should return NAN
   auto correction = getRunningAdvance(rpm, NAN);
@@ -147,11 +149,13 @@ TEST(ignition_state, getRunningAdvanceTractionSparkSkip) {
   // we expect here that the first values are 0, and the last on the rigth side of the table are 50
   Sensor::setMockValue(SensorType::VehicleSpeed, 10.0);
   Sensor::setMockValue(SensorType::WheelSlipRatio, 0);
+  engine->tractionController.update();
   getRunningAdvance(rpm, load);
   EXPECT_NEAR(0, engine->engineState.tractionControlSparkSkip, EPS2D);
 
   Sensor::setMockValue(SensorType::VehicleSpeed, 120.0);
   Sensor::setMockValue(SensorType::WheelSlipRatio, 1.2);
+  engine->tractionController.update();
   getRunningAdvance(rpm, load);
   EXPECT_NEAR(50, engine->engineState.tractionControlSparkSkip, EPS2D);
 }

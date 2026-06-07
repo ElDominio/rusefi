@@ -52,6 +52,7 @@
 #include "fuel_computer.h"
 #include "advance_map.h"
 #include "ignition_state.h"
+#include "traction_control.h"
 #include "sensor_checker.h"
 #include "fuel_schedule.h"
 #include "prime_injection.h"
@@ -250,6 +251,7 @@ public:
     RotationalIdle rotationalIdleController{};
 #endif // ROTATIONAL_IDLE_CONTROLLER
 
+    TractionControlController tractionController{};
     IgnitionState ignitionState{};
     void resetLua();
     void reset();
