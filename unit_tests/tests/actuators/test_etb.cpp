@@ -1007,3 +1007,59 @@ TEST(etb, tractionControlHoldAndDecay) {
 	EXPECT_EQ(50, etb.getSetpoint().value_or(-1));
 }
 
+TEST(etb, tractionControlLuaMult) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	setTable(engineConfiguration->tractionControlEtbDrop, -10);
+	setLinearCurve(engineConfiguration->tractionControlSlipBins, /*from*/0.9, /*to*/1.2, 0.05);
+	setLinearCurve(engineConfiguration->tractionControlSpeedBins, /*from*/10, /*to*/120, 5);
+
+	// Mock pedal map that's just passthru pedal -> target
+	StrictMock<MockVp3d> pedalMap;
+	EXPECT_CALL(pedalMap, getValue(_, _))
+		.WillRepeatedly([](float xRpm, float y) {
+			return y;
+		});
+
+	// Must have TPS & PPS initialized for ETB setup
+	Sensor::setMockValue(SensorType::Tps1Primary, 0);
+	Sensor::setMockValue(SensorType::Tps1, 0.0f, true);
+	Sensor::setMockValue(SensorType::AcceleratorPedal, 0.0f, true);
+
+	EtbController1 etb;
+	etb.init(DC_Throttle1, nullptr, nullptr, &pedalMap);
+
+	Sensor::setMockValue(SensorType::AcceleratorPedal, 47, true);
+
+	// Test 1: No Lua gauge selected (default) -> drop is 10%
+	engineConfiguration->tractionControlLuaGauge = TC_LUA_GAUGE_NONE;
+	engine->tractionController.update();
+	EXPECT_EQ(37, etb.getSetpoint().value_or(-1)); // 47 - 10 = 37
+
+	// Test 2: Lua gauge 2 selected
+	engineConfiguration->tractionControlLuaGauge = TC_LUA_GAUGE_2;
+	// Setup the curve: X bins 1, 2, 3, 4, 5, 6, 7, 8
+	// Y values: 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5
+	for (int i = 0; i < 8; i++) {
+		engineConfiguration->tractionControlLuaMultBins[i] = i + 1;
+		engineConfiguration->tractionControlLuaMultValues[i] = 0.5f;
+	}
+
+	Sensor::setMockValue(SensorType::LuaGauge2, 3.0f);
+	engine->tractionController.update();
+	EXPECT_EQ(42, etb.getSetpoint().value_or(-1)); // 47 - (10 * 0.5) = 42
+
+	// Test 3: change lua gauge value to 5.0f, curve value is 0.5f -> drop remains 5%
+	Sensor::setMockValue(SensorType::LuaGauge2, 5.0f);
+	engine->tractionController.update();
+	EXPECT_EQ(42, etb.getSetpoint().value_or(-1));
+
+	// Test 4: change curve value to 0.0f, drop becomes 0%
+	for (int i = 0; i < 8; i++) {
+		engineConfiguration->tractionControlLuaMultValues[i] = 0.0f;
+	}
+	engine->tractionController.update();
+	EXPECT_EQ(47, etb.getSetpoint().value_or(-1)); // 47 - 0 = 47
+}
+
+

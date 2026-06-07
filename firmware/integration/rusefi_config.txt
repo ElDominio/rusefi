@@ -1315,6 +1315,7 @@ tps_limit_t tps2Max;Fully opened voltage for primary throttle position sensor
 	bit luaCanRxWorkaround,"enable","disable";global_can_data performance hack
 	bit flexSensorInverted,"Inverted","Normal"
 	bit useHardSkipInTraction,"yes","no"
+	bit tractionControlUseLuaGauge,"enabled","disabled";Use a Lua gauge as a traction control multiplier input
 	bit useAuxSpeedForSlipRatio,"yes","no";Use Aux Speed 1 as one of speeds for wheel slip ratio?
 	bit useVssAsSecondWheelSpeed,"yes","no";VSS and Aux Speed 1 or Aux Speed 1 with Aux Speed 2?
 	bit is_enabled_spi_5,"yes","no"
@@ -1760,6 +1761,9 @@ int8_t[TRACTION_CONTROL_ETB_DROP_SPEED_SIZE x TRACTION_CONTROL_ETB_DROP_SLIP_SIZ
 int8_t[TRACTION_CONTROL_ETB_DROP_SPEED_SIZE x TRACTION_CONTROL_ETB_DROP_SLIP_SIZE] tractionControlTimingDrop;;"Deg", 1, 0, -100, 100, 0
 int8_t[TRACTION_CONTROL_ETB_DROP_SPEED_SIZE x TRACTION_CONTROL_ETB_DROP_SLIP_SIZE] tractionControlIgnitionSkip;;"%", 1, 0, 0, 100, 0
 
+float[8] tractionControlLuaMultBins;;"x", 1, 0, -30000, 30000, 3
+float[8] tractionControlLuaMultValues;;"mult", 1, 0, 0, 10, 3
+
 float auxSpeed1Multiplier
 float brakeMeanEffectivePressureDifferential
 	Gpio spi4mosiPin;
@@ -1876,6 +1880,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	#define lua_gauge_e_enum "Lua Gauge 1", "Lua Gauge 2", "Lua Gauge 3", "Lua Gauge 4", "Lua Gauge 5", "Lua Gauge 6", "Lua Gauge 7", "Lua Gauge 8"
 	custom lua_gauge_e  1 bits, S08, @OFFSET@, [0:2], @@lua_gauge_e_enum@@
 	lua_gauge_e nitrousLuaGauge;
+	lua_gauge_e tractionControlLuaGauge;Lua gauge index used as traction control multiplier input
 
 	#define lua_gauge_meaning_e_enum "greater than", "less than"
 	custom lua_gauge_meaning_e  1 bits, S08, @OFFSET@, [3:3], @@lua_gauge_meaning_e_enum@@

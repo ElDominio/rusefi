@@ -610,6 +610,7 @@ bool validateConfigOnStartUpOrBurn() {
 
 		ensureArrayIsAscendingOrDefault("TC slip", engineConfiguration->tractionControlSlipBins);
 		ensureArrayIsAscendingOrDefault("TC speed", engineConfiguration->tractionControlSpeedBins);
+		ensureArrayIsAscendingOrDefault("TC lua mult", engineConfiguration->tractionControlLuaMultBins);
 
 		ensureArrayIsAscending("TPS/TPS AE from", config->tpsTpsAccelFromRpmBins);
 		ensureArrayIsAscending("TPS/TPS AE to", config->tpsTpsAccelToRpmBins);

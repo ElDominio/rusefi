@@ -23,6 +23,17 @@ void TractionControlController::update() {
 	float rawTimingDrop = tcTimingDropTable.getValue(wheelSlip, vehicleSpeed);
 	float rawSparkSkip = tcSparkSkipTable.getValue(wheelSlip, vehicleSpeed);
 
+	float multiplier = 1.0f;
+	if (engineConfiguration->tractionControlUseLuaGauge) {
+		SensorType luaGaugeSensor = SensorType(int(SensorType::LuaGauge1) + engineConfiguration->tractionControlLuaGauge);
+		float luaValue = Sensor::getOrZero(luaGaugeSensor);
+		multiplier = interpolate2d(luaValue, engineConfiguration->tractionControlLuaMultBins, engineConfiguration->tractionControlLuaMultValues);
+	}
+
+	rawEtbDrop *= multiplier;
+	rawTimingDrop *= multiplier;
+	rawSparkSkip *= multiplier;
+
 	bool isTractionActive = (rawEtbDrop != 0.0f) || (rawTimingDrop != 0.0f) || (rawSparkSkip != 0.0f);
 
 	if (isTractionActive) {
