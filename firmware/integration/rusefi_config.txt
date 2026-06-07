@@ -851,9 +851,9 @@ engineSyncCam_e engineSyncCam;Select which cam is used for engine sync. Other ca
 	uint16_t secondaryFpActivationRpm;Secondary pump activates above this RPM (Dual mode);"rpm", 1, 0, 0, 8000, 0
 	uint8_t secondaryFpActivationLoad;Secondary pump activates above this MAP load (Dual mode);"%", 1, 0, 0, 100, 0
 	uint8_t secondaryFpActivationTps;Secondary pump activates above this TPS (Dual mode);"%", 1, 0, 0, 100, 0
-	uint16_t secondaryFpDeactivationRpm;Secondary pump deactivates below this RPM - set lower than activation for hysteresis (Dual mode);"rpm", 1, 0, 0, 8000, 0
-	uint8_t secondaryFpDeactivationLoad;Secondary pump deactivates below this load - set lower than activation for hysteresis (Dual mode);"%", 1, 0, 0, 100, 0
-	uint8_t secondaryFpDeactivationTps;Secondary pump deactivates below this TPS - set lower than activation for hysteresis (Dual mode);"%", 1, 0, 0, 100, 0
+	uint16_t secondaryFpRpmHysteresis;Secondary pump deactivates when RPM drops this far below activation threshold (Dual mode);"rpm", 1, 0, 0, 2000, 0
+	uint8_t secondaryFpLoadHysteresis;Secondary pump deactivates when load drops this far below activation threshold (Dual mode);"%", 1, 0, 0, 50, 0
+	uint8_t secondaryFpTpsHysteresis;Secondary pump deactivates when TPS drops this far below activation threshold (Dual mode);"%", 1, 0, 0, 50, 0
 
 	uint16_t fuelPumpPwmFrequency;Fuel pump PWM frequency (PWM mode);"Hz", 1, 0, 10, 3000, 0
 	uint8_t fuelPumpMinDuty;Minimum PWM duty - keeps pump spinning at low demand (PWM mode);"%", 1, 0, 0, 100, 0

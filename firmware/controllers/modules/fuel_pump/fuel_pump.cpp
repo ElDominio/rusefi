@@ -70,10 +70,10 @@ void FuelPumpController::updateDualRelay() {
 			m_secondaryPumpOn = true;
 		}
 	} else {
-		// Deactivation: any single axis dropping below its deactivation threshold shuts off secondary
-		if (rpm  < engineConfiguration->secondaryFpDeactivationRpm  ||
-		    load < engineConfiguration->secondaryFpDeactivationLoad ||
-		    tps  < engineConfiguration->secondaryFpDeactivationTps) {
+		// Deactivation: any single axis dropping below (activation - hysteresis) shuts off secondary
+		if (rpm  < (float)engineConfiguration->secondaryFpActivationRpm  - engineConfiguration->secondaryFpRpmHysteresis  ||
+		    load < (float)engineConfiguration->secondaryFpActivationLoad - engineConfiguration->secondaryFpLoadHysteresis ||
+		    tps  < (float)engineConfiguration->secondaryFpActivationTps  - engineConfiguration->secondaryFpTpsHysteresis) {
 			m_secondaryPumpOn = false;
 		}
 	}

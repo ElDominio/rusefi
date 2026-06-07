@@ -7,11 +7,11 @@ static void setDualActivation(uint16_t rpm, uint8_t load, uint8_t tps) {
 	engineConfiguration->secondaryFpActivationTps  = tps;
 }
 
-// Helper: set all three dual-mode deactivation thresholds
-static void setDualDeactivation(uint16_t rpm, uint8_t load, uint8_t tps) {
-	engineConfiguration->secondaryFpDeactivationRpm  = rpm;
-	engineConfiguration->secondaryFpDeactivationLoad = load;
-	engineConfiguration->secondaryFpDeactivationTps  = tps;
+// Helper: set all three dual-mode hysteresis values
+static void setDualHysteresis(uint16_t rpm, uint8_t load, uint8_t tps) {
+	engineConfiguration->secondaryFpRpmHysteresis  = rpm;
+	engineConfiguration->secondaryFpLoadHysteresis = load;
+	engineConfiguration->secondaryFpTpsHysteresis  = tps;
 }
 
 // Helper: configure secondary pump pin and re-init its GPIO
@@ -48,7 +48,7 @@ TEST(FuelPumpPwm, DualModeSecondaryOffBelowThresholds) {
 	setupDualPin();
 
 	setDualActivation(3000, 60, 50);
-	setDualDeactivation(2500, 50, 40);
+	setDualHysteresis(500, 10, 10);
 
 	// Primary priming, but RPM/load/TPS all zero (below thresholds)
 	setTimeNowUs(0.5e6);
@@ -69,7 +69,7 @@ TEST(FuelPumpPwm, DualModeSecondaryOnAboveAllThresholds) {
 	setupDualPin();
 
 	setDualActivation(3000, 60, 50);
-	setDualDeactivation(2500, 50, 40);
+	setDualHysteresis(500, 10, 10);
 
 	Sensor::setMockValue(SensorType::Rpm, 4000);
 	// fuelingLoad is used for "load"; set it via mock
@@ -94,7 +94,7 @@ TEST(FuelPumpPwm, DualModeSecondaryStaysOffIfOnlyOneConditionMet) {
 	setupDualPin();
 
 	setDualActivation(3000, 60, 50);
-	setDualDeactivation(2500, 50, 40);
+	setDualHysteresis(500, 10, 10);
 
 	// RPM above threshold but load and TPS below
 	Sensor::setMockValue(SensorType::Rpm, 4000);
@@ -119,7 +119,7 @@ TEST(FuelPumpPwm, DualHysteresisStaysOnUntilRpmDropsBelow) {
 	setupDualPin();
 
 	setDualActivation(3000, 60, 50);
-	setDualDeactivation(2500, 50, 40);
+	setDualHysteresis(500, 10, 10);
 
 	// All conditions above activation thresholds — secondary turns on
 	Sensor::setMockValue(SensorType::Rpm, 4000);
@@ -131,8 +131,8 @@ TEST(FuelPumpPwm, DualHysteresisStaysOnUntilRpmDropsBelow) {
 	dut.onSlowCallback();
 	EXPECT_TRUE(efiReadPin(Gpio::B0));  // secondary on
 
-	// Drop RPM below deactivation threshold — secondary must turn off
-	Sensor::setMockValue(SensorType::Rpm, 2000);  // below deactivation 2500
+	// Drop RPM below deactivation point (3000 - 500 = 2500) — secondary must turn off
+	Sensor::setMockValue(SensorType::Rpm, 2000);  // below deactivation point 2500
 	dut.onSlowCallback();
 	EXPECT_FALSE(efiReadPin(Gpio::B0));  // secondary off
 
@@ -152,7 +152,7 @@ TEST(FuelPumpPwm, DualHysteresisOrLogicOnDeactivation) {
 	setupDualPin();
 
 	setDualActivation(3000, 60, 50);
-	setDualDeactivation(2500, 50, 40);
+	setDualHysteresis(500, 10, 10);
 
 	// Activate secondary
 	Sensor::setMockValue(SensorType::Rpm, 4000);
@@ -163,8 +163,8 @@ TEST(FuelPumpPwm, DualHysteresisOrLogicOnDeactivation) {
 	dut.onSlowCallback();
 	EXPECT_TRUE(efiReadPin(Gpio::B0));
 
-	// Drop only load below its deactivation threshold; RPM and TPS remain above activation
-	getEngineState()->fuelingLoad = 30.0f;  // below deactivation 50%
+	// Drop only load below its deactivation point (60 - 10 = 50); RPM and TPS remain above activation
+	getEngineState()->fuelingLoad = 30.0f;  // below deactivation point 50%
 	dut.onSlowCallback();
 	// OR logic: secondary must turn off even though RPM and TPS are fine
 	EXPECT_FALSE(efiReadPin(Gpio::B0));
