@@ -76,6 +76,7 @@ struct_no_prefix engine_state_s
 	float ignitionLoad;@@GAUGE_NAME_IGNITION_LOAD@@
 
 	uint16_t autoscale veTableYAxis;;"%",{1/100}, 0, 0, 0, 0
+	uint16_t autoscale tractionControlYAxisValue;;"",{1/100}, 0, 0, 655, 2
 	int16_t autoscale veTableIdleYAxis;;"", 0.1, 0, -1000, 1000, 1
 	uint8_t overDwellCanceledCounter;"Ignition: overcharge canceled";"", 1, 0, 0, 255, 0
 	uint8_t overDwellNotScheduledCounter;"Ignition: overDwellNotScheduled";"", 1, 0, 0, 255, 0

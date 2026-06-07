@@ -1749,6 +1749,8 @@ float ignKeyAdcDivider
 
 	uint16_t tractionControlHoldTime;Traction control hold time. When traction control is active, the peak drop values are held for this duration.;"ms", 1, 0, 0, 10000, 0
 	uint16_t tractionControlDecayTime;Traction control decay time. After the hold time expires, values decay back to the current table value over this duration.;"ms", 1, 0, 0, 10000, 0
+	custom tc_y_axis_e 1 bits, U08, @OFFSET@, [0:0], "Wheel Slip Ratio", "RPM Accel (/100)"
+	tc_y_axis_e tractionControlYAxisSource;Selects the Y axis source for traction control tables. In RPM Accel mode the axis value is RPM/s divided by 100 (e.g. a bin value of 1.0 represents 100 RPM/s).;
 
 int8_t[TRACTION_CONTROL_ETB_DROP_SPEED_SIZE x TRACTION_CONTROL_ETB_DROP_SLIP_SIZE] tractionControlEtbDrop;;"%", 1, 0, -100, 0, 0
 

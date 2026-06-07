@@ -613,6 +613,11 @@ typedef enum __attribute__ ((__packed__)) {
 } lua_gauge_meaning_e;
 
 typedef enum __attribute__ ((__packed__)) {
+	TC_Y_AXIS_WHEEL_SLIP = 0,
+	TC_Y_AXIS_RPM_ACCEL = 1,
+} tc_y_axis_e;
+
+typedef enum __attribute__ ((__packed__)) {
 	EXHAUST_CUTOUT_OFF = 0,
 	EXHAUST_CUTOUT_SWITCH = 1,
 	EXHAUST_CUTOUT_LUA_GAUGE = 2,

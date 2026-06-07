@@ -18,10 +18,18 @@ void TractionControlController::update() {
 	float vehicleSpeed = Sensor::getOrZero(SensorType::VehicleSpeed);
 	float wheelSlip = Sensor::getOrZero(SensorType::WheelSlipRatio);
 
+	float yAxisValue;
+	if (engineConfiguration->tractionControlYAxisSource == 0) {
+		yAxisValue = wheelSlip;
+	} else {
+		yAxisValue = engine->rpmCalculator.getRpmAcceleration() / 100.0f;
+	}
+	engine->engineState.tractionControlYAxisValue = yAxisValue;
+
 	// Get raw table values
-	float rawEtbDrop = tcEtbDropTable.getValue(wheelSlip, vehicleSpeed);
-	float rawTimingDrop = tcTimingDropTable.getValue(wheelSlip, vehicleSpeed);
-	float rawSparkSkip = tcSparkSkipTable.getValue(wheelSlip, vehicleSpeed);
+	float rawEtbDrop = tcEtbDropTable.getValue(yAxisValue, vehicleSpeed);
+	float rawTimingDrop = tcTimingDropTable.getValue(yAxisValue, vehicleSpeed);
+	float rawSparkSkip = tcSparkSkipTable.getValue(yAxisValue, vehicleSpeed);
 
 	float multiplier = 1.0f;
 	if (engineConfiguration->tractionControlUseLuaGauge) {
