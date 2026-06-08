@@ -139,6 +139,9 @@ private:
 	float m_offIdleAdderRpm = 0;
 	float m_lastRpmForStability = 0;
 
+	efitimeus_t lastTimeRunningUs = 0;
+	float iacByTpsTaper = 0;
+
 	// This is stored by getClosedLoop and used in case we want to "do nothing"
 	float m_lastAutomaticPosition = 0;
 

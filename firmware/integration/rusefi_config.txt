@@ -1337,6 +1337,7 @@ tps_limit_t tps2Max;Fully opened voltage for primary throttle position sensor
 	bit enableKnockSpectrogramFilter,"yes","no"
 
 	int16_t offIdleRpmAdder;RPM added to closed-loop idle target when returning from off-idle (Running/Coasting) conditions. PID chases this elevated target to prevent stalling.;"RPM", 1, 0, 0, 1000, 0
+	int16_t iacByTpsTaper;This value is an added for base idle value. Idle Value added when coasting and transitioning into idle.;"percent", 1, 0, 0, 500, 0
 
 	Gpio accelerometerCsPin;
 	uint8_t coastingFuelCutVssLow;Below this speed, disable DFCO. Use this to prevent jerkiness from fuel enable/disable in low gears.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
@@ -1715,6 +1716,8 @@ pin_input_mode_e[LUA_DIGITAL_INPUT_COUNT iterate] luaDigitalInputPinModes;
 	int8_t[TCU_GEAR_COUNT] autoscale gearBasedOpenLoopBoostAdder;Boost duty cycle modified by gear;"%", 0.5, 0, -63, 63, 1
 
 	uint32_t benchTestCount;How many test bench pulses do you want;"", 1, 0, 1, 10000000, 0
+	uint8_t autoscale iacByTpsHoldTime;How long initial idle adder is held before starting to decay.;"seconds", 0.1, 0, 0, 25, 1
+	uint8_t autoscale iacByTpsDecayTime;How long it takes to remove initial IAC adder to return to normal idle.;"seconds", 0.1, 0, 0, 25, 1
 	uint8_t autoscale offIdleWaitTime;Time to wait after RPM stabilizes before starting the off-idle adder decay.;"sec", 0.1, 0, 0, 10, 1
 	uint8_t autoscale offIdleRpmAdderDecayTime;Time over which the off-idle RPM adder linearly decays from max to zero after the wait expires.;"sec", 0.1, 0, 0, 10, 1
 
