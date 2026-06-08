@@ -12,6 +12,8 @@
 #include "closed_loop_idle_generated.h"
 #include "vvt_generated.h"
 #include "mc33810_state_generated.h"
+#include "dfco_state_generated.h"
+#include "dfco.h"
 #include <livedata_board_extra.h>
 
 template<>
@@ -323,6 +325,11 @@ const vvl_controller_state_s* getLiveData(size_t) {
 template<>
 const engine_state_machine_state_s* getLiveData(size_t) {
 	return &engine->module<EngineStateMachine>().unmock();
+}
+
+template<>
+const dfco_state_s* getLiveData(size_t) {
+	return &engine->module<DfcoController>().unmock();
 }
 
 template<>

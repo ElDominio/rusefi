@@ -11,6 +11,7 @@
  */
 
 #include "pch.h"
+#include "engine_state_machine.h"
 
 #if EFI_IDLE_CONTROL
 #include "idle_thread.h"
@@ -468,6 +469,10 @@ float IdleController::getIdlePosition(float rpm) {
 				iacPosition += closedLoop;
 			} else {
 			  isIdleClosedLoop = false;
+			}
+
+			if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+				iacPosition += engineConfiguration->popsAndBangsAirAdd;
 			}
 
 			iacPosition = clampPercentValue(iacPosition);

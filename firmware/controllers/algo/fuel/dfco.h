@@ -6,9 +6,10 @@
 #include "engine_module.h"
 #include <rusefi/timer.h>
 #include "hysteresis.h"
+#include "dfco_state_generated.h"
 
 // DFCO = deceleration fuel cut off, ie, save gas when your foot is off the pedal
-class DfcoController : public EngineModule {
+class DfcoController : public dfco_state_s, public EngineModule {
 public:
 	void update();
 
@@ -24,6 +25,7 @@ public:
 
 private:
 	bool getState() const;
+
 	bool m_isDfco = false;
 
 	mutable Hysteresis m_mapHysteresis;

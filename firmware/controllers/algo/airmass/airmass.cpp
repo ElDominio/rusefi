@@ -2,6 +2,7 @@
 
 #include "airmass.h"
 #include "idle_thread.h"
+#include "engine_state_machine.h"
 
 AirmassVeModelBase::AirmassVeModelBase(const ValueProvider3D& veTable) : m_veTable(&veTable) {}
 
@@ -98,6 +99,10 @@ float AirmassVeModelBase::getVe(float rpm, float load, bool postState) const {
 		// Apply as a multiplier, not as an adder
 		// Value of +5 means add 5%, aka multiply by 1.05
 		ve *= ((100 + result.Value) * 0.01f);
+	}
+
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+		return engineConfiguration->popsAndBangsVeOverride * PERCENT_DIV;
 	}
 
 	if (postState) {

@@ -38,6 +38,7 @@
 #include "pch.h"
 
 #include "electronic_throttle_impl.h"
+#include "engine_state_machine.h"
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
 
@@ -342,6 +343,10 @@ expected<percent_t> EtbController::getSetpointEtb() {
 		targetPosition += engineConfiguration->ALSEtbAdd;
 	}
 #endif /* EFI_ANTILAG_SYSTEM */
+
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+		targetPosition += engineConfiguration->popsAndBangsAirAdd;
+	}
 
   float vehicleSpeed = Sensor::getOrZero(SensorType::VehicleSpeed);
   float wheelSlip = Sensor::getOrZero(SensorType::WheelSlipRatio);

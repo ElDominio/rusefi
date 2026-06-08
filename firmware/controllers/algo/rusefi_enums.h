@@ -611,6 +611,13 @@ typedef enum __attribute__ ((__packed__)) {
 	LUA_GAUGE_UPPER_BOUND = 1,
 } lua_gauge_meaning_e;
 
+typedef enum __attribute__ ((__packed__)) {
+	POPS_AND_BANGS_DISABLE_MODE_NONE              = 0,
+	POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT      = 1,
+	POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE         = 2,
+	POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE = 3,
+} pops_and_bangs_disable_mode_e;
+
 // this one is "Rotational Idle", it's a naming mess https://github.com/rusefi/rusefi/issues/8435
 typedef enum __attribute__ ((__packed__)) {
 	SWITCH_INPUT_ANTILAG = 0,

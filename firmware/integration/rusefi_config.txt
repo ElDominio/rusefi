@@ -1964,6 +1964,34 @@ end_struct
 	int16_t smUpshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm upshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s drop. VSS mode: km/h/s rise.;"/s", 1, 0, 0, 10000, 0
 	int16_t smDownshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm downshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s rise. VSS mode: km/h/s fall.;"/s", 1, 0, 0, 10000, 0
 
+! Pops and Bangs (exhaust crackle on decel — requires Engine State Machine)
+	bit popsAndBangsEnabled,"enabled","disabled";Enable pops and bangs mode. Requires Engine State Machine (useEngineStateMachine). WARNING: will damage catalytic converters and reduce turbocharger life.
+
+	uint8_t autoscale popsAndBangsDelay;Delay after overrun starts before pops and bangs activates.;"sec", 0.1, 0, 0, 10, 1
+	uint8_t autoscale popsAndBangsDuration;Duration of pops and bangs mode. 0 = indefinitely active (DFCO will never engage).;"sec", 0.1, 0, 0, 10, 1
+	uint8_t popsAndBangsAirAdd;Additional idle / ETB % while pops and bangs is active.;"%", 1, 0, 0, 100, 0
+
+	uint16_t popsAndBangsRpmHigh;Activate above this RPM.;"rpm", 1, 0, 0, 15000, 0
+	uint16_t popsAndBangsRpmLow;Deactivate below this RPM.;"rpm", 1, 0, 0, 15000, 0
+	uint16_t popsAndBangsRpmMax;Never activate above this RPM.;"rpm", 1, 0, 0, 15000, 0
+
+	int16_t popsAndBangsCltMin;Do not activate below this coolant temperature (cold engine protection).;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -100 : -148}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
+	int16_t popsAndBangsCltMax;Do not activate above this coolant temperature (overheating protection).;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -100 : -148}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
+
+	float popsAndBangsTimingOverride;Flat ignition timing override when pops and bangs is active.;"deg", 1, 0, -60, 60, 1
+	float popsAndBangsVeOverride;VE override percentage when pops and bangs is active. Replaces the VE table entirely.;"%", 1, 0, 0, 150, 0
+
+	#define pops_and_bangs_disable_mode_e_enum "None", "Switch Input", "Lua Gauge", "Switch or Lua Gauge"
+	custom pops_and_bangs_disable_mode_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_disable_mode_e_enum@@
+	pops_and_bangs_disable_mode_e popsAndBangsDisableMode;Condition that disables pops and bangs while active.
+
+	switch_input_pin_e popsAndBangsDisablePin;Switch pin that disables pops and bangs when active.
+	pin_input_mode_e popsAndBangsDisablePinMode;
+
+	lua_gauge_e popsAndBangsLuaGauge;Lua gauge used to disable pops and bangs.
+	lua_gauge_meaning_e popsAndBangsLuaGaugeMeaning;
+	float popsAndBangsLuaGaugeValue;Lua gauge threshold for disabling pops and bangs.;"", 1, 0, -30000, 30000, 3
+
 ! end of engine_configuration_s
 end_struct
 

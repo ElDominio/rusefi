@@ -23,6 +23,8 @@
 #include "idle_thread.h"
 #include "launch_control.h"
 #include "gppwm_channel.h"
+#include "dfco.h"
+#include "engine_state_machine.h"
 
 #if EFI_ENGINE_CONTROL
 
@@ -280,6 +282,14 @@ angle_t IgnitionState::getAdvance(float rpm, float engineLoad) {
 }
 
 angle_t IgnitionState::getWrappedAdvance(const float rpm, const float engineLoad) {
+	bool isCranking = engine->rpmCalculator.isCranking();
+	if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+		popsAndBangsTimingActive = true;
+		angle_t angle = engineConfiguration->popsAndBangsTimingOverride * luaTimingMult + luaTimingAdd;
+		wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
+		return angle;
+	}
+	popsAndBangsTimingActive = false;
     angle_t angle = getAdvance(rpm, engineLoad) * luaTimingMult + luaTimingAdd;
     wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
     return angle;

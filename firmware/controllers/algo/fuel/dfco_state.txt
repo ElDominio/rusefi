@@ -1,0 +1,5 @@
+struct_no_prefix dfco_state_s
+
+	bit dfcoCutActive;DFCO fuel cut is currently active
+
+end_struct

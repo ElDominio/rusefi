@@ -3,6 +3,13 @@
 #include "engine_module.h"
 #include "hysteresis.h"
 #include "engine_state_machine_state_generated.h"
+#include <rusefi/timer.h>
+
+enum class PopsAndBangsState : uint8_t {
+	Inactive = 0,
+	Active   = 1,
+	Expired  = 2,
+};
 
 enum class EngineStateMachineState : uint8_t {
 	Off          = 0,
@@ -33,6 +40,10 @@ public:
 
 	EngineStateMachineState getCurrentState() const;
 	bool isEnabled() const;
+
+	// Drives the P&B state machine off the given overrun state.
+	// Public so unit tests can call it directly without needing a full slow-callback setup.
+	void updatePopsAndBangs(bool isOverrun);
 
 private:
 	struct SmHistoryEntry {
@@ -69,4 +80,11 @@ private:
 
 	// Suppresses repeated VSS-unavailable warnings once emitted
 	bool m_vssRateWarningEmitted = false;
+
+	// Pops and Bangs state machine
+	bool isPopsAndBangsBlocked() const;
+	PopsAndBangsState m_pnbState  = PopsAndBangsState::Inactive;
+	bool m_wasPnbOverrun          = false;
+	Timer m_pnbOverrunTimer;
+	Timer m_pnbActiveTimer;
 };
