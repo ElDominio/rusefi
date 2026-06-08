@@ -1,173 +1,188 @@
 #include "pch.h"
+#include "engine_state_machine.h"
 #include "dfco.h"
 
 #if FUEL_RPM_COUNT == 16
 
-static void setupOverrunConditions() {
-	// isOverrun() base conditions: TPS < threshold, RPM > RpmHigh, VSS always qualifies
-	engineConfiguration->coastingFuelCutTps = 5;
-	engineConfiguration->coastingFuelCutRpmHigh = 1500;
-	engineConfiguration->coastingFuelCutVssHigh = 0;
-
+static void setupSensors() {
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0);
 	Sensor::setMockValue(SensorType::Rpm, 3000);
 	Sensor::setMockValue(SensorType::Clt, 80.0f);
+	Sensor::setMockValue(SensorType::VehicleSpeed, 0.0f);
 }
 
 static void setupPopsAndBangs() {
-	engineConfiguration->popsAndBangsEnabled = true;
-	engineConfiguration->popsAndBangsDelay = 0.0f;
-	engineConfiguration->popsAndBangsDuration = 2.0f;
-	engineConfiguration->popsAndBangsRpmHigh = 2500;
-	engineConfiguration->popsAndBangsRpmLow = 1800;
-	engineConfiguration->popsAndBangsRpmMax = 6000;
-	engineConfiguration->popsAndBangsCltMin = 40;
-	engineConfiguration->popsAndBangsCltMax = 105;
+	engineConfiguration->popsAndBangsEnabled      = true;
+	engineConfiguration->popsAndBangsDelay        = 0.0f;
+	engineConfiguration->popsAndBangsDuration     = 2.0f;
+	engineConfiguration->popsAndBangsRpmHigh      = 2500;
+	engineConfiguration->popsAndBangsRpmLow       = 1800;
+	engineConfiguration->popsAndBangsRpmMax       = 6000;
+	engineConfiguration->popsAndBangsCltMin       = 40;
+	engineConfiguration->popsAndBangsCltMax       = 105;
 	engineConfiguration->popsAndBangsTimingOverride = -10.0f;
-	engineConfiguration->popsAndBangsVeOverride = 30.0f;
-	engineConfiguration->popsAndBangsDisableMode = POPS_AND_BANGS_DISABLE_MODE_NONE;
+	engineConfiguration->popsAndBangsVeOverride   = 30.0f;
+	engineConfiguration->popsAndBangsDisableMode  = POPS_AND_BANGS_DISABLE_MODE_NONE;
+}
+
+// Helper: run the ESM P&B state machine with overrun=true at the given time
+static void tickPnb(EngineTestHelper& eth, bool overrun = true) {
+	eth.engine.module<EngineStateMachine>().unmock().updatePopsAndBangs(overrun);
 }
 
 TEST(PopsAndBangs, DisabledByDefault) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	EXPECT_FALSE(engineConfiguration->popsAndBangsEnabled);
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_FALSE(dfco.isPopsAndBangsActive());
+	setupSensors();
+	setTimeNowUs(1e6);
+	tickPnb(eth, /*overrun=*/true);
+	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, ActivatesInOverrunWithRpmInWindow) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupOverrunConditions();
+	setupSensors();
 	setupPopsAndBangs();
-
 	setTimeNowUs(1e6);
-	eth.engine.periodicFastCallback();
+	tickPnb(eth);
+	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+}
 
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_TRUE(dfco.isPopsAndBangsActive());
+TEST(PopsAndBangs, DoesNotActivateWhenNotInOverrun) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSensors();
+	setupPopsAndBangs();
+	setTimeNowUs(1e6);
+	tickPnb(eth, /*overrun=*/false);
+	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, DoesNotActivateBelowRpmHigh) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupOverrunConditions();
+	setupSensors();
 	setupPopsAndBangs();
-	// RPM is between coastingFuelCutRpmHigh (1500) and popsAndBangsRpmHigh (2500)
-	// overrun = true, but P&B RPM window not met
-	Sensor::setMockValue(SensorType::Rpm, 2000);
-
+	Sensor::setMockValue(SensorType::Rpm, 2000); // below popsAndBangsRpmHigh (2500)
 	setTimeNowUs(1e6);
-	eth.engine.periodicFastCallback();
-
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_FALSE(dfco.isPopsAndBangsActive());
+	tickPnb(eth);
+	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, DoesNotActivateAboveRpmMax) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupOverrunConditions();
+	setupSensors();
 	setupPopsAndBangs();
 	Sensor::setMockValue(SensorType::Rpm, 7000); // above popsAndBangsRpmMax (6000)
-
 	setTimeNowUs(1e6);
-	eth.engine.periodicFastCallback();
-
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_FALSE(dfco.isPopsAndBangsActive());
+	tickPnb(eth);
+	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, InhibitsDfcoDuringActive) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupOverrunConditions();
+	setupSensors();
 	setupPopsAndBangs();
-	engineConfiguration->coastingFuelCutEnabled = true;
-	engineConfiguration->coastingFuelCutClt = 40.0f;
+	engineConfiguration->coastingFuelCutEnabled  = true;
+	engineConfiguration->coastingFuelCutTps      = 5;
+	engineConfiguration->coastingFuelCutRpmHigh  = 1500;
+	engineConfiguration->coastingFuelCutVssHigh  = 0;
+	engineConfiguration->coastingFuelCutClt      = 40.0f;
 
 	setTimeNowUs(1e6);
-	eth.engine.periodicFastCallback();
+	tickPnb(eth);
+	eth.engine.periodicFastCallback(); // runs DfcoController::update()
 
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_TRUE(dfco.isPopsAndBangsActive());
-	EXPECT_FALSE(dfco.cutFuel());
+	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_FALSE(eth.engine.module<DfcoController>().unmock().cutFuel());
 }
 
 TEST(PopsAndBangs, DeactivatesWhenRpmFallsBelowRpmLow) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupOverrunConditions();
+	setupSensors();
 	setupPopsAndBangs();
-
 	setTimeNowUs(1e6);
-	eth.engine.periodicFastCallback();
+	tickPnb(eth);
 
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_TRUE(dfco.isPopsAndBangsActive());
+	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	EXPECT_TRUE(esm.engineSmIsPopsAndBangs);
 
-	// Drop to 1600: still in overrun (> coastingFuelCutRpmHigh 1500) but below popsAndBangsRpmLow (1800)
-	Sensor::setMockValue(SensorType::Rpm, 1600);
-	eth.engine.periodicFastCallback();
-
-	EXPECT_FALSE(dfco.isPopsAndBangsActive());
+	Sensor::setMockValue(SensorType::Rpm, 1600); // below popsAndBangsRpmLow (1800)
+	tickPnb(eth);
+	EXPECT_FALSE(esm.engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, DeactivatesAfterTimeout) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupOverrunConditions();
+	setupSensors();
 	setupPopsAndBangs();
-
 	setTimeNowUs(1e6);
-	eth.engine.periodicFastCallback();
+	tickPnb(eth);
 
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_TRUE(dfco.isPopsAndBangsActive());
+	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	EXPECT_TRUE(esm.engineSmIsPopsAndBangs);
 
-	// Advance past duration (2.0 seconds)
 	advanceTimeUs(2.1e6);
-	eth.engine.periodicFastCallback();
-
-	EXPECT_FALSE(dfco.isPopsAndBangsActive());
+	tickPnb(eth);
+	EXPECT_FALSE(esm.engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, DelayBeforeActivation) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupOverrunConditions();
+	setupSensors();
 	setupPopsAndBangs();
 	engineConfiguration->popsAndBangsDelay = 0.5f;
 
 	setTimeNowUs(1e6);
-	eth.engine.periodicFastCallback();
+	tickPnb(eth);
 
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_FALSE(dfco.isPopsAndBangsActive()); // delay not yet elapsed
+	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	EXPECT_FALSE(esm.engineSmIsPopsAndBangs); // delay not yet elapsed
 
 	advanceTimeUs(0.6e6);
-	eth.engine.periodicFastCallback();
-
-	EXPECT_TRUE(dfco.isPopsAndBangsActive());
+	tickPnb(eth);
+	EXPECT_TRUE(esm.engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, ColdEnginePreventsActivation) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupOverrunConditions();
+	setupSensors();
 	setupPopsAndBangs();
 	Sensor::setMockValue(SensorType::Clt, 20.0f); // below popsAndBangsCltMin (40)
-
 	setTimeNowUs(1e6);
-	eth.engine.periodicFastCallback();
-
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_FALSE(dfco.isPopsAndBangsActive());
+	tickPnb(eth);
+	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, InactiveWhenFeatureDisabled) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupOverrunConditions();
+	setupSensors();
 	setupPopsAndBangs();
 	engineConfiguration->popsAndBangsEnabled = false;
-
 	setTimeNowUs(1e6);
+	tickPnb(eth);
+	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+}
+
+// VSS irrelevant: overrun is determined by the ESM (which ignores VSS), so P&B works at zero speed
+TEST(PopsAndBangs, VssIsIrrelevant) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSensors();
+	setupPopsAndBangs();
+	engineConfiguration->coastingFuelCutVssHigh = 20; // DFCO needs speed — P&B doesn't
+	Sensor::setMockValue(SensorType::VehicleSpeed, 0.0f);
+	setTimeNowUs(1e6);
+	tickPnb(eth, /*overrun=*/true); // ESM overrun doesn't check VSS
+	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+}
+
+TEST(PopsAndBangs, DfcoLiveDataReflectsCutState) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSensors();
+	setupPopsAndBangs();
+	setTimeNowUs(1e6);
+	tickPnb(eth);
 	eth.engine.periodicFastCallback();
 
-	auto& dfco = engine->module<DfcoController>().unmock();
-	EXPECT_FALSE(dfco.isPopsAndBangsActive());
+	auto& dfco = eth.engine.module<DfcoController>().unmock();
+	EXPECT_FALSE(dfco.dfcoCutActive); // cut inhibited while P&B active
 }
 
 #endif // FUEL_RPM_COUNT == 16

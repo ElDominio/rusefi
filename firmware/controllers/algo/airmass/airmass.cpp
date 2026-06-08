@@ -2,6 +2,7 @@
 
 #include "airmass.h"
 #include "idle_thread.h"
+#include "engine_state_machine.h"
 
 AirmassVeModelBase::AirmassVeModelBase(const ValueProvider3D& veTable) : m_veTable(&veTable) {}
 
@@ -100,6 +101,10 @@ float AirmassVeModelBase::getVe(float rpm, float load, bool postState) const {
 		ve *= ((100 + result.Value) * 0.01f);
 	}
 
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+		return engineConfiguration->popsAndBangsVeOverride * PERCENT_DIV;
+	}
+
 	if (postState) {
 		engine->engineState.currentVe = ve;
 		engine->engineState.veTableYAxis = load;
@@ -107,10 +112,6 @@ float AirmassVeModelBase::getVe(float rpm, float load, bool postState) const {
 #if EFI_PROD_CODE
 		engine->engineState.isSecondVeTableActive = switchTableActive;
 #endif
-	}
-
-	if (engine->module<DfcoController>()->isPopsAndBangsActive()) {
-		return engineConfiguration->popsAndBangsVeOverride * PERCENT_DIV;
 	}
 
 	return ve * PERCENT_DIV;

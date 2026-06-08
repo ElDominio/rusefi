@@ -11,6 +11,7 @@
  */
 
 #include "pch.h"
+#include "engine_state_machine.h"
 
 #if EFI_IDLE_CONTROL
 #include "idle_thread.h"
@@ -236,10 +237,6 @@ if (engine->antilagController.isAntilagCondition) {
 	running += engineConfiguration->ALSIdleAdd;
 }
 #endif /* EFI_ANTILAG_SYSTEM */
-
-	if (engine->module<DfcoController>()->isPopsAndBangsActive()) {
-		running += engineConfiguration->popsAndBangsAirAdd;
-	}
 
 	// 'dashpot' (hold+decay) logic for coasting->idle
 	float tpsForTaper = tps.value_or(0);
@@ -552,6 +549,10 @@ float IdleController::getIdlePosition(float rpm) {
 				iacPosition += closedLoop;
 			} else {
 			  isIdleClosedLoop = false;
+			}
+
+			if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+				iacPosition += engineConfiguration->popsAndBangsAirAdd;
 			}
 
 			iacPosition = clampPercentValue(iacPosition);

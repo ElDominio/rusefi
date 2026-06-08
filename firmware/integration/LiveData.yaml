@@ -305,3 +305,10 @@ Usages:
     prepend: integration/rusefi_config_shared.txt
     output_name: esm
     engineModule: EngineStateMachine
+
+  - name: dfco_state
+    java: DfcoState.java
+    folder: controllers/algo/fuel
+    prepend: integration/rusefi_config_shared.txt
+    output_name: dfco
+    engineModule: DfcoController

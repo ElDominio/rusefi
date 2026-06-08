@@ -38,6 +38,7 @@
 #include "pch.h"
 
 #include "electronic_throttle_impl.h"
+#include "engine_state_machine.h"
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
 
@@ -342,7 +343,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	}
 #endif /* EFI_ANTILAG_SYSTEM */
 
-	if (engine->module<DfcoController>()->isPopsAndBangsActive()) {
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
 		targetPosition += engineConfiguration->popsAndBangsAirAdd;
 	}
 

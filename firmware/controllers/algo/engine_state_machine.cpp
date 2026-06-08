@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "engine_state_machine.h"
+#include "dfco.h"
 
 bool EngineStateMachine::isEnabled() const {
 	return engineConfiguration->useEngineStateMachine;
@@ -79,6 +80,109 @@ void EngineStateMachine::onSlowCallback() {
 	} else if (engineSmIsLaunchControl) {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::LaunchControl);
 	}
+
+	updatePopsAndBangs(engineSmIsOverrun);
+}
+
+void EngineStateMachine::updatePopsAndBangs(bool isOverrun) {
+	if (!engineConfiguration->popsAndBangsEnabled) {
+		m_pnbState = PopsAndBangsState::Inactive;
+		engineSmIsPopsAndBangs = false;
+		return;
+	}
+
+	float rpm = Sensor::getOrZero(SensorType::Rpm);
+
+	if (isOverrun) {
+		if (!m_wasPnbOverrun) {
+			m_pnbOverrunTimer.reset();
+			m_pnbState = PopsAndBangsState::Inactive;
+		}
+
+		if (m_pnbState == PopsAndBangsState::Inactive) {
+			if (rpm > engineConfiguration->popsAndBangsRpmHigh &&
+			    rpm < engineConfiguration->popsAndBangsRpmMax &&
+			    m_pnbOverrunTimer.hasElapsedSec(engineConfiguration->popsAndBangsDelay)) {
+				const auto clt = Sensor::get(SensorType::Clt);
+				bool cltOk = clt &&
+					clt.Value >= engineConfiguration->popsAndBangsCltMin &&
+					clt.Value <= engineConfiguration->popsAndBangsCltMax;
+				if (cltOk && !isPopsAndBangsBlocked()) {
+					m_pnbState = PopsAndBangsState::Active;
+					m_pnbActiveTimer.reset();
+				} else {
+					m_pnbState = PopsAndBangsState::Expired;
+				}
+			}
+		} else if (m_pnbState == PopsAndBangsState::Active) {
+			if (rpm < engineConfiguration->popsAndBangsRpmLow ||
+			    rpm > engineConfiguration->popsAndBangsRpmMax) {
+				m_pnbState = PopsAndBangsState::Expired;
+			}
+
+			float duration = engineConfiguration->popsAndBangsDuration;
+			if (duration > 0 && m_pnbActiveTimer.hasElapsedSec(duration)) {
+				m_pnbState = PopsAndBangsState::Expired;
+			}
+
+			if (isPopsAndBangsBlocked()) {
+				m_pnbState = PopsAndBangsState::Expired;
+			}
+		}
+	} else {
+		m_pnbState = PopsAndBangsState::Inactive;
+	}
+
+	m_wasPnbOverrun = isOverrun;
+	engineSmIsPopsAndBangs = (m_pnbState == PopsAndBangsState::Active);
+}
+
+bool EngineStateMachine::isPopsAndBangsBlocked() const {
+	auto mode = engineConfiguration->popsAndBangsDisableMode;
+
+	bool pinBlocked = false;
+	bool gaugeBlocked = false;
+
+#if !EFI_UNIT_TEST
+	if (mode == POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT ||
+	    mode == POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE) {
+		const switch_input_pin_e pin = engineConfiguration->popsAndBangsDisablePin;
+		const pin_input_mode_e pinMode = engineConfiguration->popsAndBangsDisablePinMode;
+		if (isBrainPinValid(pin)) {
+			pinBlocked = efiReadPin(pin, pinMode);
+		}
+	}
+#endif
+
+	if (mode == POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE ||
+	    mode == POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE) {
+		SensorType gaugeType = SensorType::LuaGauge1;
+		switch (engineConfiguration->popsAndBangsLuaGauge) {
+			case LUA_GAUGE_2: gaugeType = SensorType::LuaGauge2; break;
+			case LUA_GAUGE_3: gaugeType = SensorType::LuaGauge3; break;
+			case LUA_GAUGE_4: gaugeType = SensorType::LuaGauge4; break;
+			case LUA_GAUGE_5: gaugeType = SensorType::LuaGauge5; break;
+			case LUA_GAUGE_6: gaugeType = SensorType::LuaGauge6; break;
+			case LUA_GAUGE_7: gaugeType = SensorType::LuaGauge7; break;
+			case LUA_GAUGE_8: gaugeType = SensorType::LuaGauge8; break;
+			default: break;
+		}
+		const auto gaugeResult = Sensor::get(gaugeType);
+		if (gaugeResult.Valid) {
+			const float value = gaugeResult.Value;
+			const float threshold = engineConfiguration->popsAndBangsLuaGaugeValue;
+			switch (engineConfiguration->popsAndBangsLuaGaugeMeaning) {
+				case LUA_GAUGE_LOWER_BOUND:
+					gaugeBlocked = (value >= threshold);
+					break;
+				case LUA_GAUGE_UPPER_BOUND:
+					gaugeBlocked = (value <= threshold);
+					break;
+			}
+		}
+	}
+
+	return pinBlocked || gaugeBlocked;
 }
 
 EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps) {
@@ -127,7 +231,9 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		}
 
 		if (idlePhase == IIdleController::Phase::Coasting) {
-			if (engine->module<DfcoController>()->isOverrun()) {
+			// VSS is intentionally excluded: overrun is foot-off-throttle at high RPM regardless of speed.
+			// DFCO's VSS guard lives in getState() and is a fuel-cut-only constraint.
+			if (rpm > engineConfiguration->coastingFuelCutRpmHigh) {
 				return EngineStateMachineState::Overrun;
 			}
 			return EngineStateMachineState::Coasting;

@@ -13,6 +13,8 @@
 #include "vvt_generated.h"
 #include "mc33810_state_generated.h"
 #include "exhaust_cutout.h"
+#include "dfco_state_generated.h"
+#include "dfco.h"
 #include <livedata_board_extra.h>
 
 template<>
@@ -333,6 +335,11 @@ const cdv_controller_state_s* getLiveData(size_t) {
 #else
 	return nullptr;
 #endif
+}
+
+template<>
+const dfco_state_s* getLiveData(size_t) {
+	return &engine->module<DfcoController>().unmock();
 }
 
 template<>
