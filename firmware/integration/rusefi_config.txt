@@ -2023,11 +2023,6 @@ end_struct
 	uint8_t autoscale exhaustCutoutHBridgeDutyCycle;H-Bridge motor drive duty cycle (H-Bridge mode only);"%", 1, 0, 0, 100, 0
 	uint8_t[3] exhaustCutoutHBridgeAlignmentPad;unused
 
-#define IDLE_UP_SWITCH_COUNT 3
-	switch_input_pin_e[IDLE_UP_SWITCH_COUNT iterate] idleUpSwitchPins;Idle-up digital input pins
-	pin_input_mode_e[IDLE_UP_SWITCH_COUNT iterate] idleUpSwitchMode;Idle-up input polarity/pull
-	uint8_t[IDLE_UP_SWITCH_COUNT iterate] idleUpAdder;Idle % to add when this switch is active;"%", 1, 0, 0, 100, 0
-
 ! Engine State Machine thresholds (used only when useEngineStateMachine is enabled)
 	uint8_t smShiftTpsThreshold;Engine SM: TPS threshold used for shift-direction disambiguation (above = driver was on throttle = upshift).;"%", 1, 0, 0, 50, 0
 	uint8_t smWotTpsThreshold;Engine SM: TPS threshold above which the engine is at Wide Open Throttle.;"%", 1, 0, 50, 100, 0
