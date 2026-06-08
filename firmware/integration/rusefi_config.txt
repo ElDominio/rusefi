@@ -1852,7 +1852,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit useEngineStateMachine,"enabled","disabled";Centralized Engine State Machine. When enabled, state detection is driven by a single priority-ordered evaluator. When disabled, each controller manages its own state detection.
 	bit cdvControlEnabled,"enabled","disabled"
 	bit cdvUseClutchExit,"enabled","disabled";Deactivate CDV solenoid when clutch pedal is released
-	bit unusedBit_Fancy11
+	bit luaLimiterEnabled,"enabled","disabled"
 	bit unusedBit_Fancy12
 	bit unusedBit_Fancy13
 	bit unusedBit_Fancy14
@@ -1886,6 +1886,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	custom lua_gauge_e  1 bits, S08, @OFFSET@, [0:2], @@lua_gauge_e_enum@@
 	lua_gauge_e nitrousLuaGauge;
 	lua_gauge_e tractionControlLuaGauge;Lua gauge index used as traction control multiplier input
+	lua_gauge_e luaLimiterGaugeSelect;
 
 	#define lua_gauge_meaning_e_enum "greater than", "less than"
 	custom lua_gauge_meaning_e  1 bits, S08, @OFFSET@, [3:3], @@lua_gauge_meaning_e_enum@@
@@ -2495,6 +2496,14 @@ float tcu_shiftTime;;"ms", 1, 0, 0, 3000, 0
 
 #define ALTERNATOR_VOLTAGE_TARGET_SIZE 4
 #define ALTERNATOR_VOLTAGE_RPM_SIZE 4
+
+#define LUA_LIMITER_CURVE_SIZE 8
+
+float[LUA_LIMITER_CURVE_SIZE] luaLimiterRpmAddBins;;"value", 1, 0, -10000, 10000, 2
+float[LUA_LIMITER_CURVE_SIZE] luaLimiterRpmAdd;;"RPM", 1, 0, -10000, 10000, 0
+
+float[LUA_LIMITER_CURVE_SIZE] luaLimiterBoostAddBins;;"value", 1, 0, -10000, 10000, 2
+float[LUA_LIMITER_CURVE_SIZE] luaLimiterBoostAdd;;"kPa", 1, 0, -1000, 1000, 1
 
 int16_t[ALTERNATOR_VOLTAGE_TARGET_SIZE x ALTERNATOR_VOLTAGE_RPM_SIZE] autoscale alternatorVoltageTargetTable;;"volts", 0.1, 0, 0, 30, 1
 uint16_t[ALTERNATOR_VOLTAGE_TARGET_SIZE] alternatorVoltageTargetLoadBins;;"Load", 1, 0, 0, 1000, 0
