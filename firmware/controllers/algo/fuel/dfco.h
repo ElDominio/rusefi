@@ -7,6 +7,12 @@
 #include <rusefi/timer.h>
 #include "hysteresis.h"
 
+enum class PopsAndBangsState : uint8_t {
+	Inactive = 0,
+	Active   = 1,
+	Expired  = 2,
+};
+
 // DFCO = deceleration fuel cut off, ie, save gas when your foot is off the pedal
 class DfcoController : public EngineModule {
 public:
@@ -22,12 +28,21 @@ public:
 
 	float getTimeSinceCut() const;
 
+	bool isPopsAndBangsActive() const;
+
 private:
 	bool getState() const;
+	bool isPopsAndBangsBlocked() const;
+
 	bool m_isDfco = false;
 
 	mutable Hysteresis m_mapHysteresis;
 
 	Timer m_timeSinceCut;
 	Timer m_timeSinceNoCut;
+
+	PopsAndBangsState m_popsAndBangsState = PopsAndBangsState::Inactive;
+	bool m_wasOverrun = false;
+	Timer m_overrunTimer;
+	Timer m_popsAndBangsTimer;
 };

@@ -342,6 +342,10 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	}
 #endif /* EFI_ANTILAG_SYSTEM */
 
+	if (engine->module<DfcoController>()->isPopsAndBangsActive()) {
+		targetPosition += engineConfiguration->popsAndBangsAirAdd;
+	}
+
   tcEtbDrop = engine->tractionController.getAppliedEtbDrop();
 
 	// Apply any adjustment that this throttle alone needs

@@ -69,6 +69,7 @@ void startSwitchPins() {
 	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
 		startInputPinIfValid("Idle Up Switch", engineConfiguration->idleUpSwitchPins[i], engineConfiguration->idleUpSwitchMode[i]);
 	}
+	startInputPinIfValid("Pops and Bangs Disable", engineConfiguration->popsAndBangsDisablePin, engineConfiguration->popsAndBangsDisablePinMode);
 #endif /* EFI_PROD_CODE */
 }
 
@@ -84,6 +85,7 @@ void stopSwitchPins() {
 	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
 		brain_pin_markUnused(activeConfiguration.idleUpSwitchPins[i]);
 	}
+	brain_pin_markUnused(activeConfiguration.popsAndBangsDisablePin);
 }
 
 #if ! EFI_UNIT_TEST

@@ -289,6 +289,10 @@ angle_t IgnitionState::getAdvance(float rpm, float engineLoad) {
 		}
 	}
 
+	if (!isCranking && engine->module<DfcoController>()->isPopsAndBangsActive()) {
+		return engineConfiguration->popsAndBangsTimingOverride;
+	}
+
 	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, !std::isnan(angle), "_AngleN5", 0);
 	return angle;
 }

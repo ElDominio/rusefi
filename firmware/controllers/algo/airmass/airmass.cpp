@@ -109,5 +109,9 @@ float AirmassVeModelBase::getVe(float rpm, float load, bool postState) const {
 #endif
 	}
 
+	if (engine->module<DfcoController>()->isPopsAndBangsActive()) {
+		return engineConfiguration->popsAndBangsVeOverride * PERCENT_DIV;
+	}
+
 	return ve * PERCENT_DIV;
 }
