@@ -42,8 +42,10 @@ DDEFS += -DEFI_SENT_SUPPORT=TRUE
 
 ONBOARD_MEMS_TYPE=LIS2DH12
 
-# This board uses the 144-pin MCU module
+# This board uses the 144-pin MCU module, but doesn't have the standard critical LED on PG0
+LED_CRITICAL_ERROR_BRAIN_PIN = -DLED_CRITICAL_ERROR_BRAIN_PIN=Gpio::Unassigned
 include $(BOARDS_DIR)/hellen/hellen-common144.mk
+BOARDCPPSRC := $(filter-out %hellen_leds_144.cpp,$(BOARDCPPSRC))
 
 # Drop some Lua functionality to save RAM
 DDEFS += -DWITH_LUA_CONSUMPTION=FALSE

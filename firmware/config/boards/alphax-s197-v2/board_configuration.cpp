@@ -183,3 +183,15 @@ void setup_custom_board_overrides() {
 	custom_board_DefaultConfiguration = alphax_s197_boardDefaultConfiguration;
 	custom_board_ConfigOverrides = alphax_s197_boardConfigOverrides;
 }
+
+Gpio getCommsLedPin() {
+	return Gpio::Unassigned;
+}
+
+Gpio getRunningLedPin() {
+	return Gpio::Unassigned;
+}
+
+Gpio getWarningLedPin() {
+	return Gpio::Unassigned;
+}

@@ -176,3 +176,15 @@ void setup_custom_board_overrides() {
 	custom_board_DefaultConfiguration = protorico_econoline_boardDefaultConfiguration;
 	custom_board_ConfigOverrides = protorico_econoline_boardConfigOverrides;
 }
+
+Gpio getCommsLedPin() {
+	return Gpio::Unassigned;
+}
+
+Gpio getRunningLedPin() {
+	return Gpio::Unassigned;
+}
+
+Gpio getWarningLedPin() {
+	return Gpio::Unassigned;
+}
