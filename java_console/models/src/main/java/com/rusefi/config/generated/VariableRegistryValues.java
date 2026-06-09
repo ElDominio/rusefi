@@ -256,7 +256,7 @@ public class VariableRegistryValues {
 	public static final int CLT_CURVE_SIZE = 16;
 	public static final int CLT_FUEL_CURVE_SIZE = 16;
 	public static final int CLT_IDLE_TABLE_CLT_SIZE = 8;
-	public static final int CLT_IDLE_TABLE_RPM_SIZE = 2;
+	public static final int CLT_IDLE_TABLE_RPM_SIZE = 6;
 	public static final int CLT_LIMITER_CURVE_SIZE = 4;
 	public static final int CLT_TIMING_LOAD_AXIS_SIZE = 5;
 	public static final int CLT_TIMING_TEMP_AXIS_SIZE = 5;
@@ -439,7 +439,7 @@ public class VariableRegistryValues {
 	public static final int ego_sensor_e_ES_PLX = 4;
 	public static final String egoSettings_NAME = "CAN O2 sensors";
 	public static final int EGT_CHANNEL_COUNT = 8;
-	public static final int engine_configuration_s_size = 4236;
+	public static final int engine_configuration_s_size = 4424;
 	public static final int engine_load_mode_e_LM_ALPHA_N = 2;
 	public static final int engine_load_mode_e_LM_LUA = 3;
 	public static final int engine_load_mode_e_LM_REAL_MAF = 1;
@@ -1276,8 +1276,8 @@ public class VariableRegistryValues {
 	public static final String INDICATOR_NAME_BRAKE_DOWN = "Brake switch";
 	public static final String INDICATOR_NAME_CLUTCH_DOWN = "Clutch: down";
 	public static final String INDICATOR_NAME_CLUTCH_UP = "Clutch: up";
-	public static final int INJ_PHASE_LOAD_COUNT = 6;
-	public static final int INJ_PHASE_RPM_COUNT = 6;
+	public static final int INJ_PHASE_LOAD_COUNT = 16;
+	public static final int INJ_PHASE_RPM_COUNT = 16;
 	public static final int INJ_STAGING_COUNT = 6;
 	public static final int INJ_STAGING_RPM_SIZE = 6;
 	public static final int injection_mode_e_IM_BATCH = 2;
@@ -1295,7 +1295,7 @@ public class VariableRegistryValues {
 	public static final int injector_compensation_mode_e_ICM_SensedRailPressure = 2;
 	public static final int injector_pressure_type_e_IPT_High = 1;
 	public static final int injector_pressure_type_e_IPT_Low = 0;
-	public static final int injector_s_size = 60;
+	public static final int injector_s_size = 100;
 	public static final int InjectorNonlinearMode_INJ_FordModel = 2;
 	public static final int InjectorNonlinearMode_INJ_None = 0;
 	public static final int InjectorNonlinearMode_INJ_PolynomialAdder = 1;
@@ -1333,14 +1333,15 @@ public class VariableRegistryValues {
 	public static final int lua_gauge_e_LUA_GAUGE_8 = 7;
 	public static final int lua_gauge_meaning_e_LUA_GAUGE_LOWER_BOUND = 0;
 	public static final int lua_gauge_meaning_e_LUA_GAUGE_UPPER_BOUND = 1;
+	public static final int LUA_LIMITER_CURVE_SIZE = 8;
 	public static final int LUA_PWM_COUNT = 8;
-	public static final int LUA_SCRIPT_SIZE = 8000;
+	public static final int LUA_SCRIPT_SIZE = 40000;
 	public static final int MAF_DECODING_COUNT = 32;
-	public static final String MAIN_HELP_URL = "http://www.rusefi.com/";
+	public static final String MAIN_HELP_URL = "https://rusefi.com/s/8chan";
 	public static final String MAIN_PAGE_GAUGES_FILE = "tunerstudio/main_page_gauges.ini";
 	public static final int MAP_ANGLE_SIZE = 8;
-	public static final int MAP_EST_LOAD_COUNT = 6;
-	public static final int MAP_EST_RPM_COUNT = 6;
+	public static final int MAP_EST_LOAD_COUNT = 16;
+	public static final int MAP_EST_RPM_COUNT = 16;
 	public static final int MAP_sensor_config_s_size = 140;
 	public static final int MAP_UPPER_LIMIT = 650;
 	public static final int MAP_WINDOW_SIZE = 8;
@@ -1402,7 +1403,7 @@ public class VariableRegistryValues {
 	public static final int PEDAL_TO_TPS_SIZE = 8;
 	public static final String pedalSensor_NAME = "Accelerator pedal";
 	public static final String pedalToTpsTbl_NAME = "ETB pedal target";
-	public static final int persistent_config_s_size = 24252;
+	public static final int persistent_config_s_size = 57656;
 	public static final int pid_s_size = 20;
 	public static final int pin_input_mode_e_PI_DEFAULT = 0;
 	public static final int pin_input_mode_e_PI_INVERTED_DEFAULT = 4;
@@ -1414,6 +1415,10 @@ public class VariableRegistryValues {
 	public static final int pin_output_mode_e_OM_INVERTED = 1;
 	public static final int pin_output_mode_e_OM_OPENDRAIN = 2;
 	public static final int pin_output_mode_e_OM_OPENDRAIN_INVERTED = 3;
+	public static final int pops_and_bangs_disable_mode_e_POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE = 2;
+	public static final int pops_and_bangs_disable_mode_e_POPS_AND_BANGS_DISABLE_MODE_NONE = 0;
+	public static final int pops_and_bangs_disable_mode_e_POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT = 1;
+	public static final int pops_and_bangs_disable_mode_e_POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE = 3;
 	public static final String ppsExpAverageAlpha_NAME = "Accelerator Exp Average";
 	public static final String PRIMARY_CAN_NAME = "Primary CAN";
 	public static final int PRIME_CURVE_COUNT = 8;
@@ -1480,7 +1485,6 @@ public class VariableRegistryValues {
 	public static final int SentInput_INPUT6 = 6;
 	public static final int SentInput_INPUT7 = 7;
 	public static final int SentInput_NONE = 0;
-	public static final int SIGNATURE_HASH = 84812322;
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME = "generated/simulator_tune_image.bin";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX = "generated/simulator_tune_image";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX = ".bin";
@@ -1524,6 +1528,8 @@ public class VariableRegistryValues {
 	public static final int TABLE_4_LOAD_SIZE = 8;
 	public static final int TABLE_4_RPM_SIZE = 10;
 	public static final int TARGET_AFR_BLEND_COUNT = 2;
+	public static final int tc_y_axis_e_TC_Y_AXIS_RPM_ACCEL = 1;
+	public static final int tc_y_axis_e_TC_Y_AXIS_WHEEL_SLIP = 0;
 	public static final int tChargeMode_e_TCHARGE_MODE_AIR_INTERP = 1;
 	public static final int tChargeMode_e_TCHARGE_MODE_AIR_INTERP_TABLE = 2;
 	public static final int tChargeMode_e_TCHARGE_MODE_RPM_TPS = 0;
@@ -1555,7 +1561,7 @@ public class VariableRegistryValues {
 	public static final int torqueReductionActivationMode_e_TORQUE_REDUCTION_BUTTON = 0;
 	public static final int torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_DOWN_SWITCH = 2;
 	public static final int torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_UP_SWITCH = 3;
-	public static final int TOTAL_CONFIG_SIZE = 24252;
+	public static final int TOTAL_CONFIG_SIZE = 57656;
 	public static final int TPS_2_BYTE_PACKING_MULT = 100;
 	public static final int TPS_PPS_TOO_HIGH_THRESHOLD = 110;
 	public static final int TPS_PPS_TOO_LOW_THRESHOLD = -10;
@@ -1810,10 +1816,10 @@ public class VariableRegistryValues {
 	public static final int TS_RESPONSE_UNRECOGNIZED_COMMAND = 0x83;
 	public static final int TS_SCATTER_OFFSETS_COUNT = 128;
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
-	public static final String TS_SIGNATURE = "rusEFI traction-control-hold-decay.2026.06.07.f407-discovery.84812322";
+	public static final String TS_SIGNATURE = "rusEFI alphax-beta-branch.2026.06.09.alphax-s550.2440104611";
 	public static final char TS_SIMULATE_CAN = '>';
 	public static final char TS_TEST_COMMAND = 't';
-	public static final int TS_TOTAL_OUTPUT_SIZE = 2180;
+	public static final int TS_TOTAL_OUTPUT_SIZE = 2188;
 	public static final String TS_TRIGGER_SCOPE_CHANNEL_1_NAME = "Channel 1";
 	public static final String TS_TRIGGER_SCOPE_CHANNEL_2_NAME = "Channel 2";
 	public static final int TS_TRIGGER_SCOPE_DISABLE = 5;
@@ -1850,7 +1856,7 @@ public class VariableRegistryValues {
 	public static final String UNITS_KPA = "kPa";
 	public static final String UNITS_MPH = "mph";
 	public static final String UNITS_PSI = "psi";
-	public static final int VBAT_INJECTOR_CURVE_PRESSURE_SIZE = 2;
+	public static final int VBAT_INJECTOR_CURVE_PRESSURE_SIZE = 4;
 	public static final int VBAT_INJECTOR_CURVE_SIZE = 8;
 	public static final String VE_BLEND1_TABLE_NAME = "VE blend 1";
 	public static final int VE_BLEND_COUNT = 4;

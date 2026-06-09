@@ -952,6 +952,9 @@ float getOutputValueByHash(const int hash) {
 // dfcoTimingRetard
 		case -735105365:
 			return engine->ignitionState.dfcoTimingRetard;
+// popsAndBangsTimingActive
+		case -464450071:
+			return engine->ignitionState.popsAndBangsTimingActive;
 // baseIgnitionAdvance
 		case 493641747:
 			return engine->ignitionState.baseIgnitionAdvance;
@@ -1294,6 +1297,9 @@ float getOutputValueByHash(const int hash) {
 // veTableYAxis
 		case 1568071542:
 			return engine->engineState.veTableYAxis;
+// tractionControlYAxisValue
+		case -386446315:
+			return engine->engineState.tractionControlYAxisValue;
 // veTableIdleYAxis
 		case -860328524:
 			return engine->engineState.veTableIdleYAxis;
@@ -1369,9 +1375,15 @@ float getOutputValueByHash(const int hash) {
 // engineSmIsLimp
 		case -2087659447:
 			return engine->module<EngineStateMachine>()->engineSmIsLimp;
+// engineSmIsPopsAndBangs
+		case 550757271:
+			return engine->module<EngineStateMachine>()->engineSmIsPopsAndBangs;
 // engineSmCurrentState
 		case 919099231:
 			return engine->module<EngineStateMachine>()->engineSmCurrentState;
+// dfcoCutActive
+		case 329258089:
+			return engine->module<DfcoController>()->dfcoCutActive;
 #if EFI_BOOST_CONTROL
 // isTpsInvalid
 		case -575666209:

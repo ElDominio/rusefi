@@ -372,38 +372,42 @@ struct engine_state_s {
 	/**
 	 * offset 138
 	 */
+	scaled_channel<uint16_t, 100, 1> tractionControlYAxisValue = (uint16_t)0;
+	/**
+	 * offset 140
+	 */
 	scaled_channel<int16_t, 10, 1> veTableIdleYAxis = (int16_t)0;
 	/**
 	 * "Ignition: overcharge canceled"
-	 * offset 140
+	 * offset 142
 	 */
 	uint8_t overDwellCanceledCounter = (uint8_t)0;
 	/**
 	 * "Ignition: overDwellNotScheduled"
-	 * offset 141
+	 * offset 143
 	 */
 	uint8_t overDwellNotScheduledCounter = (uint8_t)0;
 	/**
 	 * "Ignition: sparkOutOfOrder"
-	 * offset 142
+	 * offset 144
 	 */
 	uint8_t sparkOutOfOrderCounter = (uint8_t)0;
 	/**
 	 * "Ignition: undecharge warnings"
-	 * offset 143
+	 * offset 145
 	 */
 	uint8_t dwellUnderChargeCounter = (uint8_t)0;
 	/**
 	 * "Ignition: overcharge warnings"
-	 * offset 144
+	 * offset 146
 	 */
 	uint8_t dwellOverChargeCounter = (uint8_t)0;
 	/**
 	 * need 4 byte alignment
 	 * units: units
-	 * offset 145
+	 * offset 147
 	 */
-	uint8_t alignmentFill_at_145[3] = {};
+	uint8_t alignmentFill_at_147[1] = {};
 	/**
 	 * "Ignition: Dwell deviation"
 	 * units: %

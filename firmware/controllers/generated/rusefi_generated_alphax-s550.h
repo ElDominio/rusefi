@@ -493,7 +493,7 @@
 #define ego_sensor_e_ES_PLX 4
 #define egoSettings_NAME "CAN O2 sensors"
 #define EGT_CHANNEL_COUNT 8
-#define engine_configuration_s_size 4312
+#define engine_configuration_s_size 4424
 #define engine_load_mode_e_auto_enum 0="LM_SPEED_DENSITY",2="LM_ALPHA_N",3="LM_LUA",1="LM_REAL_MAF",4="UNSUPPORTED_ENUM_VALUE"
 #define engine_load_mode_e_LM_ALPHA_N 2
 #define engine_load_mode_e_LM_LUA 3
@@ -1427,6 +1427,7 @@
 #define lua_gauge_meaning_e_enum "greater than", "less than"
 #define lua_gauge_meaning_e_LUA_GAUGE_LOWER_BOUND 0
 #define lua_gauge_meaning_e_LUA_GAUGE_UPPER_BOUND 1
+#define LUA_LIMITER_CURVE_SIZE 8
 #define LUA_PWM_COUNT 8
 #define LUA_SCRIPT_SIZE 40000
 #define MAF_DECODING_COUNT 32
@@ -1509,7 +1510,7 @@
 #define pedalSensor_NAME "Accelerator pedal"
 #define pedalToTpsTbl_NAME "ETB pedal target"
 #define PERCENT_TRIM_BYTE_PACKING_DIV 0.02
-#define persistent_config_s_size 57416
+#define persistent_config_s_size 57656
 #define pid_s_size 20
 #define pin_input_mode_e_auto_enum 0="PI_DEFAULT",4="PI_INVERTED_DEFAULT",6="PI_INVERTED_PULLDOWN",5="PI_INVERTED_PULLUP",2="PI_PULLDOWN",1="PI_PULLUP"
 #define pin_input_mode_e_PI_DEFAULT 0
@@ -1524,6 +1525,12 @@
 #define pin_output_mode_e_OM_OPENDRAIN 2
 #define pin_output_mode_e_OM_OPENDRAIN_INVERTED 3
 #define poke false
+#define pops_and_bangs_disable_mode_e_auto_enum 0="POPS_AND_BANGS_DISABLE_MODE_NONE",2="POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE",1="POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT",3="POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE"
+#define pops_and_bangs_disable_mode_e_enum "None", "Switch Input", "Lua Gauge", "Switch or Lua Gauge"
+#define pops_and_bangs_disable_mode_e_POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE 2
+#define pops_and_bangs_disable_mode_e_POPS_AND_BANGS_DISABLE_MODE_NONE 0
+#define pops_and_bangs_disable_mode_e_POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT 1
+#define pops_and_bangs_disable_mode_e_POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE 3
 #define ppsExpAverageAlpha_NAME "Accelerator Exp Average"
 #define PRIMARY_CAN_NAME "Primary CAN"
 #define PRIME_CURVE_COUNT 8
@@ -1601,7 +1608,7 @@
 #define SentInput_NONE 0
 #define show_tcu_gauges false
 #define show_vvt_output_pin true
-#define SIGNATURE_HASH 2724553565
+#define SIGNATURE_HASH 2440104611
 #define SIMULATOR_TUNE_BIN_FILE_NAME "generated/simulator_tune_image.bin"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX "generated/simulator_tune_image"
 #define SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX ".bin"
@@ -1656,6 +1663,9 @@
 #define TABLE_SCALE __TMPL_TABLE_SCALE__
 #define TARGET_AFR_BLEND_COUNT 2
 #define TARGET_AFR_BLEND_PRECISION 0.01
+#define tc_y_axis_e_auto_enum 0="TC_Y_AXIS_WHEEL_SLIP",1="TC_Y_AXIS_RPM_ACCEL"
+#define tc_y_axis_e_TC_Y_AXIS_RPM_ACCEL 1
+#define tc_y_axis_e_TC_Y_AXIS_WHEEL_SLIP 0
 #define tChargeMode_e_auto_enum 0="TCHARGE_MODE_RPM_TPS",1="TCHARGE_MODE_AIR_INTERP",2="TCHARGE_MODE_AIR_INTERP_TABLE"
 #define tChargeMode_e_enum "RPM+TPS (Default)", "Air Mass Interpolation", "Table"
 #define tChargeMode_e_TCHARGE_MODE_AIR_INTERP 1
@@ -1693,7 +1703,7 @@
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_BUTTON 0
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_DOWN_SWITCH 2
 #define torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_UP_SWITCH 3
-#define TOTAL_CONFIG_SIZE 57416
+#define TOTAL_CONFIG_SIZE 57656
 #define TPS_2_BYTE_PACKING_MULT 100
 #define TPS_PPS_TOO_HIGH_THRESHOLD 110
 #define TPS_PPS_TOO_LOW_THRESHOLD -10
@@ -2230,12 +2240,12 @@
 #define ts_show_wbo_canbus_index true
 #define ts_show_wbo_canbus_set_index true
 #define ts_show_wbo_canbus_set_type false
-#define TS_SIGNATURE "rusEFI alphax-more-adc-fixes.2026.06.07.alphax-s550.2724553565"
+#define TS_SIGNATURE "rusEFI alphax-beta-branch.2026.06.09.alphax-s550.2440104611"
 #define TS_SIMULATE_CAN '>'
 #define TS_SIMULATE_CAN_char >
 #define TS_TEST_COMMAND 't'
 #define TS_TEST_COMMAND_char t
-#define TS_TOTAL_OUTPUT_SIZE 2180
+#define TS_TOTAL_OUTPUT_SIZE 2188
 #define TS_TRIGGER_SCOPE_CHANNEL_1_NAME "Channel 1"
 #define TS_TRIGGER_SCOPE_CHANNEL_2_NAME "Channel 2"
 #define TS_TRIGGER_SCOPE_DISABLE 5

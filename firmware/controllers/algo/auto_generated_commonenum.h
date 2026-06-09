@@ -1,4 +1,4 @@
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat Jun 06 16:52:02 AST 2026
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Tue Jun 09 04:55:05 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -93,6 +93,7 @@ const char *getNitrous_arming_method_e(nitrous_arming_method_e value);
 const char *getOperation_mode_e(operation_mode_e value);
 const char *getPin_input_mode_e(pin_input_mode_e value);
 const char *getPin_output_mode_e(pin_output_mode_e value);
+const char *getPops_and_bangs_disable_mode_e(pops_and_bangs_disable_mode_e value);
 #if __cplusplus
 const char *getSm_clutch_switch_e(sm_clutch_switch_e value);
 #endif //__cplusplus
@@ -103,6 +104,7 @@ const char *getSpi_device_e(spi_device_e value);
 const char *getStepper_num_micro_steps_e(stepper_num_micro_steps_e value);
 const char *getStft_state_e(stft_state_e value);
 const char *getTChargeMode_e(tChargeMode_e value);
+const char *getTc_y_axis_e(tc_y_axis_e value);
 const char *getTiming_mode_e(timing_mode_e value);
 const char *getTle8888_mode_e(tle8888_mode_e value);
 const char *getTorqueReductionActivationMode_e(torqueReductionActivationMode_e value);

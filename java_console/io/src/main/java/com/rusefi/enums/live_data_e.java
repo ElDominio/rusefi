@@ -53,4 +53,5 @@ public enum live_data_e {
 	LDS_cdv_controller_state,
 	LDS_live_data_rotational_idle,
 	LDS_engine_state_machine_state,
+	LDS_dfco_state,
 }

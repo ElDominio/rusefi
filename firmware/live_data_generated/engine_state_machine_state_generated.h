@@ -66,56 +66,57 @@ struct engine_state_machine_state_s {
 	offset 0 bit 14 */
 	bool engineSmIsLimp : 1 {};
 	/**
+	 * Engine SM: Pops and Bangs active
 	offset 0 bit 15 */
-	bool unusedBit_15_15 : 1 {};
+	bool engineSmIsPopsAndBangs : 1 {};
 	/**
 	offset 0 bit 16 */
-	bool unusedBit_15_16 : 1 {};
+	bool unusedBit_16_16 : 1 {};
 	/**
 	offset 0 bit 17 */
-	bool unusedBit_15_17 : 1 {};
+	bool unusedBit_16_17 : 1 {};
 	/**
 	offset 0 bit 18 */
-	bool unusedBit_15_18 : 1 {};
+	bool unusedBit_16_18 : 1 {};
 	/**
 	offset 0 bit 19 */
-	bool unusedBit_15_19 : 1 {};
+	bool unusedBit_16_19 : 1 {};
 	/**
 	offset 0 bit 20 */
-	bool unusedBit_15_20 : 1 {};
+	bool unusedBit_16_20 : 1 {};
 	/**
 	offset 0 bit 21 */
-	bool unusedBit_15_21 : 1 {};
+	bool unusedBit_16_21 : 1 {};
 	/**
 	offset 0 bit 22 */
-	bool unusedBit_15_22 : 1 {};
+	bool unusedBit_16_22 : 1 {};
 	/**
 	offset 0 bit 23 */
-	bool unusedBit_15_23 : 1 {};
+	bool unusedBit_16_23 : 1 {};
 	/**
 	offset 0 bit 24 */
-	bool unusedBit_15_24 : 1 {};
+	bool unusedBit_16_24 : 1 {};
 	/**
 	offset 0 bit 25 */
-	bool unusedBit_15_25 : 1 {};
+	bool unusedBit_16_25 : 1 {};
 	/**
 	offset 0 bit 26 */
-	bool unusedBit_15_26 : 1 {};
+	bool unusedBit_16_26 : 1 {};
 	/**
 	offset 0 bit 27 */
-	bool unusedBit_15_27 : 1 {};
+	bool unusedBit_16_27 : 1 {};
 	/**
 	offset 0 bit 28 */
-	bool unusedBit_15_28 : 1 {};
+	bool unusedBit_16_28 : 1 {};
 	/**
 	offset 0 bit 29 */
-	bool unusedBit_15_29 : 1 {};
+	bool unusedBit_16_29 : 1 {};
 	/**
 	offset 0 bit 30 */
-	bool unusedBit_15_30 : 1 {};
+	bool unusedBit_16_30 : 1 {};
 	/**
 	offset 0 bit 31 */
-	bool unusedBit_15_31 : 1 {};
+	bool unusedBit_16_31 : 1 {};
 	/**
 	 * Engine SM: primary state
 	 * offset 4

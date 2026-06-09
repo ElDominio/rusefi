@@ -2,7 +2,7 @@
 null
 
 ### launchRpm
-A secondary Rev limit engaged by the driver to help launch the vehicle faster
+The target engine speed (RPM) to maintain during launch.
 
 ### rpmHardLimit
 set rpm_hard_limit X
@@ -71,7 +71,7 @@ LTIT table regional smoothing intensity (0=no smoothing)
 Minimum threshold of PID integrator for LTIT correction
 
 ### launchFuelAdderPercent
-
+Fuel enrichment adder percentage.
 
 ### etbJamTimeout
 Time after which the throttle is considered jammed.
@@ -257,7 +257,7 @@ Pull-up resistor value on your board
 Pull-up resistor value on your board
 
 ### launchTimingRetard
-
+The target absolute ignition timing value (e.g., -10 means -10 degrees, not 10 degrees of retard relative to base timing).
 
 ### idleMaximumAirmass
 Maximum commanded airmass for the idle controller.
@@ -472,14 +472,14 @@ Secondary pump activates above this MAP load (Dual mode)
 ### secondaryFpActivationTps
 Secondary pump activates above this TPS (Dual mode)
 
-### secondaryFpDeactivationRpm
-Secondary pump deactivates below this RPM - set lower than activation for hysteresis (Dual mode)
+### secondaryFpRpmHysteresis
+Secondary pump deactivates when RPM drops this far below activation threshold (Dual mode)
 
-### secondaryFpDeactivationLoad
-Secondary pump deactivates below this load - set lower than activation for hysteresis (Dual mode)
+### secondaryFpLoadHysteresis
+Secondary pump deactivates when load drops this far below activation threshold (Dual mode)
 
-### secondaryFpDeactivationTps
-Secondary pump deactivates below this TPS - set lower than activation for hysteresis (Dual mode)
+### secondaryFpTpsHysteresis
+Secondary pump deactivates when TPS drops this far below activation threshold (Dual mode)
 
 ### fuelPumpPwmFrequency
 Fuel pump PWM frequency (PWM mode)
@@ -638,10 +638,10 @@ Boost Voltage
 Minimum MAP before closed loop boost is enabled. Use to prevent misbehavior upon entering boost.
 
 ### initialIgnitionCutPercent
-
+The percentage of ignition events to cut when entering the launch control window (e.g., at Launch RPM minus Launch Control Window).
 
 ### finalIgnitionCutPercentBeforeLaunch
-
+The percentage of ignition events to cut when the engine speed reaches the end of the corrections RPM (Launch RPM minus Launch Corrections End RPM). Between the start of the window and the end of corrections RPM, the cut percentage interpolates linearly from initial to final cut percentage.
 
 ### idlePidRpmUpperLimit
 How far above idle speed do we consider idling, i.e. coasting detection threshold.\nFor example, if target = 800, this param = 200, then anything below 1000 RPM is considered idle.
@@ -662,7 +662,7 @@ Maximum allowed ETB position. Some throttles go past fully open, so this allows 
 Rate the ECU will log to the SD card, in hz (log lines per second).
 
 ### launchCorrectionsEndRpm
-
+The RPM difference below the Launch RPM at which corrections (timing retard interpolation and/or ignition cut ramp) reach their final/maximum target. For example, if Launch RPM is 4000, and this is 50, corrections reach their final target at 3950 RPM.
 
 ### lambdaProtectionRestoreRpm
 
@@ -695,7 +695,7 @@ If enabled we use two H-bridges to drive stepper idle air valve
 
 
 ### enableLaunchRetard
-
+Enables absolute ignition timing control during launch (sets timing to the "Absolute Timing at Launch" value).
 
 ### canInputBCM
 
@@ -815,7 +815,7 @@ Pause closed loop fueling after acceleration fuel occurs. Set this to a little l
 Launch disabled above this speed if setting is above zero
 
 ### launchRpmWindow
-Starting Launch RPM window to activate (subtracts from Launch RPM)
+The RPM window before the Launch RPM where launch control strategies (like retard/cut) begin to activate. For example, if Launch RPM is 4000 and Window is 500, activation starts at 3500 RPM.
 
 ### triggerEventsTimeoutMs
 
@@ -935,7 +935,7 @@ When selected, this option cuts the spark to limit RPM. Cutting spark can produc
 
 
 ### launchSparkCutEnable
-This is the Cut Mode normally used
+Enables or disables ignition/spark cut during launch control.
 
 ### torqueReductionEnabled
 
@@ -1016,7 +1016,7 @@ This flag allows to use a special 'PID Multiplier' table (0.0-1.0) to compensate
 
 
 ### launchSmoothRetard
-Interpolates the Ignition Retard from 0 to 100% within the RPM Range
+Gradually interpolates the ignition timing from the base timing table value down to the target "Absolute Timing at Launch" value, starting from the beginning of the launch window.
 
 ### isPhaseSyncRequiredForIgnition
 Some engines are OK running semi-random sequential while other engine require phase synchronization
@@ -1213,6 +1213,9 @@ global_can_data performance hack
 ### useHardSkipInTraction
 
 
+### tractionControlUseLuaGauge
+Use a Lua gauge as a traction control multiplier input
+
 ### useAuxSpeedForSlipRatio
 Use Aux Speed 1 as one of speeds for wheel slip ratio?
 
@@ -1272,6 +1275,9 @@ AEM X-Series EGT gauge kit or rusEFI EGT sensor from Wideband controller
 
 ### offIdleRpmAdder
 RPM added to closed-loop idle target when returning from off-idle (Running/Coasting) conditions. PID chases this elevated target to prevent stalling.
+
+### iacByTpsTaper
+This value is an added for base idle value. Idle Value added when coasting and transitioning into idle.
 
 ### coastingFuelCutVssLow
 Below this speed, disable DFCO. Use this to prevent jerkiness from fuel enable/disable in low gears.
@@ -1792,6 +1798,12 @@ Defines a pressure range below the cut limit at which boost can resume, providin
 ### benchTestCount
 How many test bench pulses do you want
 
+### iacByTpsHoldTime
+How long initial idle adder is held before starting to decay.
+
+### iacByTpsDecayTime
+How long it takes to remove initial IAC adder to return to normal idle.
+
 ### offIdleWaitTime
 Time to wait after RPM stabilizes before starting the off-idle adder decay.
 
@@ -2026,6 +2038,9 @@ Centralized Engine State Machine. When enabled, state detection is driven by a s
 ### cdvUseClutchExit
 Deactivate CDV solenoid when clutch pedal is released
 
+### luaLimiterEnabled
+
+
 ### nitrousLuaGaugeArmingValue
 
 
@@ -2199,6 +2214,42 @@ Engine SM: Rate-of-change magnitude to confirm upshift in RPM Rate or VSS Rate m
 
 ### smDownshiftRateThreshold
 Engine SM: Rate-of-change magnitude to confirm downshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s rise. VSS mode: km/h/s fall.
+
+### popsAndBangsEnabled
+Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce turbocharger life.
+
+### popsAndBangsDelay
+Delay after overrun starts before pops and bangs activates.
+
+### popsAndBangsDuration
+Duration of pops and bangs mode. 0 = indefinitely active (DFCO will never engage).
+
+### popsAndBangsAirAdd
+Additional idle / ETB % while pops and bangs is active.
+
+### popsAndBangsRpmHigh
+Activate above this RPM.
+
+### popsAndBangsRpmLow
+Deactivate below this RPM.
+
+### popsAndBangsRpmMax
+Never activate above this RPM.
+
+### popsAndBangsCltMin
+Do not activate below this coolant temperature (cold engine protection).
+
+### popsAndBangsCltMax
+Do not activate above this coolant temperature (overheating protection).
+
+### popsAndBangsTimingOverride
+Flat ignition timing override when pops and bangs is active.
+
+### popsAndBangsVeOverride
+VE override percentage when pops and bangs is active.
+
+### popsAndBangsLuaGaugeValue
+Lua gauge threshold for disabling pops and bangs.
 
 ### tcu_shiftTime
 

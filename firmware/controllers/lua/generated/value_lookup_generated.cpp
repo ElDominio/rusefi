@@ -478,15 +478,15 @@ float getConfigValueByHash(const int hash) {
 // secondaryFpActivationTps
 		case 503103404:
 			return engineConfiguration->secondaryFpActivationTps;
-// secondaryFpDeactivationRpm
-		case -131897395:
-			return engineConfiguration->secondaryFpDeactivationRpm;
-// secondaryFpDeactivationLoad
-		case -57863746:
-			return engineConfiguration->secondaryFpDeactivationLoad;
-// secondaryFpDeactivationTps
-		case -131895211:
-			return engineConfiguration->secondaryFpDeactivationTps;
+// secondaryFpRpmHysteresis
+		case 654808709:
+			return engineConfiguration->secondaryFpRpmHysteresis;
+// secondaryFpLoadHysteresis
+		case -479316394:
+			return engineConfiguration->secondaryFpLoadHysteresis;
+// secondaryFpTpsHysteresis
+		case -437130995:
+			return engineConfiguration->secondaryFpTpsHysteresis;
 // fuelPumpPwmFrequency
 		case -847641639:
 			return engineConfiguration->fuelPumpPwmFrequency;
@@ -1219,6 +1219,9 @@ float getConfigValueByHash(const int hash) {
 // useHardSkipInTraction
 		case -1495799741:
 			return engineConfiguration->useHardSkipInTraction;
+// tractionControlUseLuaGauge
+		case -1005323934:
+			return engineConfiguration->tractionControlUseLuaGauge;
 // useAuxSpeedForSlipRatio
 		case -723870257:
 			return engineConfiguration->useAuxSpeedForSlipRatio;
@@ -1279,6 +1282,9 @@ float getConfigValueByHash(const int hash) {
 // offIdleRpmAdder
 		case 1581905133:
 			return engineConfiguration->offIdleRpmAdder;
+// iacByTpsTaper
+		case -2065814304:
+			return engineConfiguration->iacByTpsTaper;
 // coastingFuelCutVssLow
 		case 329016035:
 			return engineConfiguration->coastingFuelCutVssLow;
@@ -1798,6 +1804,12 @@ float getConfigValueByHash(const int hash) {
 // benchTestCount
 		case -204721234:
 			return engineConfiguration->benchTestCount;
+// iacByTpsHoldTime
+		case -235994182:
+			return engineConfiguration->iacByTpsHoldTime;
+// iacByTpsDecayTime
+		case 1742748825:
+			return engineConfiguration->iacByTpsDecayTime;
 // offIdleWaitTime
 		case 1895143778:
 			return engineConfiguration->offIdleWaitTime;
@@ -2032,6 +2044,9 @@ float getConfigValueByHash(const int hash) {
 // cdvUseClutchExit
 		case -306046548:
 			return engineConfiguration->cdvUseClutchExit;
+// luaLimiterEnabled
+		case 1523670664:
+			return engineConfiguration->luaLimiterEnabled;
 // nitrousLuaGaugeArmingValue
 		case -1760115393:
 			return engineConfiguration->nitrousLuaGaugeArmingValue;
@@ -2206,6 +2221,42 @@ float getConfigValueByHash(const int hash) {
 // smDownshiftRateThreshold
 		case -804834476:
 			return engineConfiguration->smDownshiftRateThreshold;
+// popsAndBangsEnabled
+		case 1183876976:
+			return engineConfiguration->popsAndBangsEnabled;
+// popsAndBangsDelay
+		case -2110426348:
+			return engineConfiguration->popsAndBangsDelay;
+// popsAndBangsDuration
+		case 1859213803:
+			return engineConfiguration->popsAndBangsDuration;
+// popsAndBangsAirAdd
+		case -1037040214:
+			return engineConfiguration->popsAndBangsAirAdd;
+// popsAndBangsRpmHigh
+		case 885805652:
+			return engineConfiguration->popsAndBangsRpmHigh;
+// popsAndBangsRpmLow
+		case -363604410:
+			return engineConfiguration->popsAndBangsRpmLow;
+// popsAndBangsRpmMax
+		case -363603782:
+			return engineConfiguration->popsAndBangsRpmMax;
+// popsAndBangsCltMin
+		case -955126548:
+			return engineConfiguration->popsAndBangsCltMin;
+// popsAndBangsCltMax
+		case -955126802:
+			return engineConfiguration->popsAndBangsCltMax;
+// popsAndBangsTimingOverride
+		case -1130644819:
+			return engineConfiguration->popsAndBangsTimingOverride;
+// popsAndBangsVeOverride
+		case -756073888:
+			return engineConfiguration->popsAndBangsVeOverride;
+// popsAndBangsLuaGaugeValue
+		case -899380947:
+			return engineConfiguration->popsAndBangsLuaGaugeValue;
 // tcu_shiftTime
 		case -1658957891:
 			return config->tcu_shiftTime;
@@ -3093,19 +3144,19 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->secondaryFpActivationTps = (int)value;
 		return 1;
 	}
-		case -131897395:
+		case 654808709:
 	{
-		engineConfiguration->secondaryFpDeactivationRpm = (int)value;
+		engineConfiguration->secondaryFpRpmHysteresis = (int)value;
 		return 1;
 	}
-		case -57863746:
+		case -479316394:
 	{
-		engineConfiguration->secondaryFpDeactivationLoad = (int)value;
+		engineConfiguration->secondaryFpLoadHysteresis = (int)value;
 		return 1;
 	}
-		case -131895211:
+		case -437130995:
 	{
-		engineConfiguration->secondaryFpDeactivationTps = (int)value;
+		engineConfiguration->secondaryFpTpsHysteresis = (int)value;
 		return 1;
 	}
 		case -847641639:
@@ -4328,6 +4379,11 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->useHardSkipInTraction = (int)value;
 		return 1;
 	}
+		case -1005323934:
+	{
+		engineConfiguration->tractionControlUseLuaGauge = (int)value;
+		return 1;
+	}
 		case -723870257:
 	{
 		engineConfiguration->useAuxSpeedForSlipRatio = (int)value;
@@ -4426,6 +4482,11 @@ bool setConfigValueByName(const char *name, float value) {
 		case 1581905133:
 	{
 		engineConfiguration->offIdleRpmAdder = (int)value;
+		return 1;
+	}
+		case -2065814304:
+	{
+		engineConfiguration->iacByTpsTaper = (int)value;
 		return 1;
 	}
 		case 329016035:
@@ -5293,6 +5354,16 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->benchTestCount = (int)value;
 		return 1;
 	}
+		case -235994182:
+	{
+		engineConfiguration->iacByTpsHoldTime = (int)value;
+		return 1;
+	}
+		case 1742748825:
+	{
+		engineConfiguration->iacByTpsDecayTime = (int)value;
+		return 1;
+	}
 		case 1895143778:
 	{
 		engineConfiguration->offIdleWaitTime = (int)value;
@@ -5683,6 +5754,11 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->cdvUseClutchExit = (int)value;
 		return 1;
 	}
+		case 1523670664:
+	{
+		engineConfiguration->luaLimiterEnabled = (int)value;
+		return 1;
+	}
 		case -1760115393:
 	{
 		engineConfiguration->nitrousLuaGaugeArmingValue = value;
@@ -5971,6 +6047,66 @@ bool setConfigValueByName(const char *name, float value) {
 		case -804834476:
 	{
 		engineConfiguration->smDownshiftRateThreshold = (int)value;
+		return 1;
+	}
+		case 1183876976:
+	{
+		engineConfiguration->popsAndBangsEnabled = (int)value;
+		return 1;
+	}
+		case -2110426348:
+	{
+		engineConfiguration->popsAndBangsDelay = (int)value;
+		return 1;
+	}
+		case 1859213803:
+	{
+		engineConfiguration->popsAndBangsDuration = (int)value;
+		return 1;
+	}
+		case -1037040214:
+	{
+		engineConfiguration->popsAndBangsAirAdd = (int)value;
+		return 1;
+	}
+		case 885805652:
+	{
+		engineConfiguration->popsAndBangsRpmHigh = (int)value;
+		return 1;
+	}
+		case -363604410:
+	{
+		engineConfiguration->popsAndBangsRpmLow = (int)value;
+		return 1;
+	}
+		case -363603782:
+	{
+		engineConfiguration->popsAndBangsRpmMax = (int)value;
+		return 1;
+	}
+		case -955126548:
+	{
+		engineConfiguration->popsAndBangsCltMin = (int)value;
+		return 1;
+	}
+		case -955126802:
+	{
+		engineConfiguration->popsAndBangsCltMax = (int)value;
+		return 1;
+	}
+		case -1130644819:
+	{
+		engineConfiguration->popsAndBangsTimingOverride = value;
+		return 1;
+	}
+		case -756073888:
+	{
+		engineConfiguration->popsAndBangsVeOverride = value;
+		return 1;
+	}
+		case -899380947:
+	{
+		engineConfiguration->popsAndBangsLuaGaugeValue = value;
 		return 1;
 	}
 		case -1658957891:
