@@ -3,7 +3,7 @@ pins:
   - id: EFI_ADC_0
     class: analog_inputs
 # getAdcChannelBrainPin in 'stm32_adc.cpp' says EFI_ADC_0 is PA0
-    ts_name: TPS (A0)https://github.com/ElDominio/rusefi
+    ts_name: TPS (A0)
 
   - id: EFI_ADC_5
     class: analog_inputs
