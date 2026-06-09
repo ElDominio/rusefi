@@ -307,6 +307,12 @@ pins:
     type: av
     function: Crank Sensor (IN_CRANK)
 
+  - pin: IN_VIGN
+    meta: H144_IN_VBATT
+    class: analog_inputs
+    type: av
+    function: Battery Voltage (IN_VIGN)
+
 info:
   cid: main
   title: protorico-econoline

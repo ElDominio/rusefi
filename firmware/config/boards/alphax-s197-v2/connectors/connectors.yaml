@@ -297,6 +297,12 @@ pins:
     class: switch_inputs
     function: Brake Switch (STM32_BRAKE)
 
+  - pin: IN_VIGN
+    meta: H144_IN_VBATT
+    class: analog_inputs
+    type: av
+    function: Battery Voltage (IN_VIGN)
+
 info:
   cid: main
   title: alphax-s197-v2

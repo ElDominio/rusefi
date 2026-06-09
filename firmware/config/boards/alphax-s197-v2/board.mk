@@ -42,10 +42,8 @@ DDEFS += -DEFI_SENT_SUPPORT=TRUE
 
 ONBOARD_MEMS_TYPE=LIS2DH12
 
-# This board uses the 144-pin MCU module, but doesn't have the standard critical LED on PG0
-LED_CRITICAL_ERROR_BRAIN_PIN = -DLED_CRITICAL_ERROR_BRAIN_PIN=Gpio::Unassigned
-include $(BOARDS_DIR)/hellen/hellen-common144.mk
-BOARDCPPSRC := $(filter-out %hellen_leds_144.cpp,$(BOARDCPPSRC))
+# This board uses the 100-pin MCU module
+include $(BOARDS_DIR)/hellen/hellen-common100.mk
 
 # Drop some Lua functionality to save RAM
 DDEFS += -DWITH_LUA_CONSUMPTION=FALSE
@@ -61,7 +59,11 @@ DDEFS += -DEFI_ENGINE_SNIFFER=FALSE
 DDEFS += -DEFI_ENGINE_EMULATOR=FALSE
 DDEFS += -DEFI_TOOTH_LOGGER=FALSE
 
+# Override USART2 pins to match hardware: PD5 is TX, PD6 is RX
+PRIMARY_COMMUNICATION_PORT_USART2 = -DTS_PRIMARY_UxART_PORT=SD2 -DEFI_TS_PRIMARY_IS_SERIAL=TRUE -DSTM32_SERIAL_USE_USART2=TRUE
+PRIMARY_COMMUNICATION_PORT_USART2 += -DEFI_CONSOLE_TX_BRAIN_PIN=Gpio::D5 -DEFI_CONSOLE_RX_BRAIN_PIN=Gpio::D6
 DDEFS += $(PRIMARY_COMMUNICATION_PORT_USART2)
+
 
 ifeq ($(PROJECT_CPU),ARCH_STM32F7)
  DDEFS += -DUSB_DESCRIPTOR_STRING_CONTENT="'r', 0, 'u', 0, 's', 0, 'E', 0, 'F', 0, 'I', 0, ' ', 0, 'u', 0, 'a', 0, 'E', 0, 'F', 0, 'I', 0, ' ', 0, 'P', 0, 'R', 0, 'O', 0"

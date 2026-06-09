@@ -54,7 +54,7 @@ static void setupDefaultSensorInputs() {
 	setTPS1Inputs(H144_IN_TPS, EFI_ADC_NONE); // PA4 / IN_TPS
 
 	// PPS (Pedal Position Sensor) Inputs
-	setPPSInputs(H144_IN_PPS, H144_IN_AUX3_ANALOG); // PA3 / IN_PPS, PA7 / IN_AUX3
+	setPPSInputs(EFI_ADC_NONE, EFI_ADC_NONE); // No pedal position sensors
 
 	// MAP sensor
 	engineConfiguration->map.sensor.hwChannel = H144_IN_MAP1; // PC0 / IN_MAP
@@ -63,26 +63,28 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->baroSensor.hwChannel = H144_IN_MAP2; // PC1 / IN_MAP2
 
 	// O2 sensors
-	engineConfiguration->afr.hwChannel = H144_IN_AUX2_ANALOG; // PC4 / IN_O2S
-	engineConfiguration->afr.hwChannel2 = H144_IN_AUX1_ANALOG; // PB0 / IN_O2S2
+	engineConfiguration->afr.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->afr.hwChannel2 = EFI_ADC_NONE;
 
 	// Aux linear inputs (mapped to other analog inputs)
-	engineConfiguration->auxLinear1.hwChannel = H144_IN_AUX3_ANALOG; // PA7 / IN_AUX3
-	engineConfiguration->auxLinear2.hwChannel = H144_IN_AUX4_ANALOG; // PC5 / IN_AUX2
-	engineConfiguration->auxLinear3.hwChannel = H144_IN_MAP3;        // PA2 / IN_AUX4
-	engineConfiguration->auxLinear4.hwChannel = H144_IN_O2S2;        // PA1 / IN_AUX1
+	engineConfiguration->auxLinear1.hwChannel = EFI_ADC_NONE; // PA7 / IN_AUX3 - Unset
+	engineConfiguration->auxLinear2.hwChannel = EFI_ADC_14;   // PC4 / IN_AUX2 (A21)
+	engineConfiguration->auxLinear3.hwChannel = EFI_ADC_NONE; // PA2 / IN_AUX4 - Unset
+	engineConfiguration->auxLinear4.hwChannel = EFI_ADC_8;    // PB0 / IN_AUX1 (A23)
+
+	// Switch inputs
+	engineConfiguration->clutchDownPin = Gpio::A6; // PA6 / A19 (STM32_CLUTCHU)
+	engineConfiguration->brakePedalPin = Gpio::B1; // PB1 / A24 (STM32_BRAKE)
 }
 
 static void protorico_econoline_boardConfigOverrides() {
 	setHellenMegaEnPin(); // PWR_EN (PE10)
-	setHellenVbatt();     // VBAT (PA5)
+	setHellenVbatt();     // VBAT (PA5) / VIGN (PA5)
 
-	// SD Card Configuration
-	setHellenSdCardSpi3();
-	engineConfiguration->isSdCardEnabled = true;
-
-	// Accelerometer CS Pin
-	hellenMegaAccelerometerPreInitCS2Pin();
+	// No SPI/SD Card/Accelerometer
+	// setHellenSdCardSpi3();
+	// engineConfiguration->isSdCardEnabled = true;
+	// hellenMegaAccelerometerPreInitCS2Pin();
 
 	// CAN Configurations
 	setHellenCan();
@@ -123,6 +125,22 @@ static void protorico_econoline_boardDefaultConfiguration() {
 	setCrankOperationMode();
 	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
 
+	// Disable SPI
+	engineConfiguration->sdCardCsPin = Gpio::Unassigned;
+	engineConfiguration->isSdCardEnabled = false;
+	engineConfiguration->is_enabled_spi_1 = false;
+	engineConfiguration->is_enabled_spi_2 = false;
+	engineConfiguration->is_enabled_spi_3 = false;
+	engineConfiguration->spi1mosiPin = Gpio::Unassigned;
+	engineConfiguration->spi1misoPin = Gpio::Unassigned;
+	engineConfiguration->spi1sckPin = Gpio::Unassigned;
+	engineConfiguration->spi2mosiPin = Gpio::Unassigned;
+	engineConfiguration->spi2misoPin = Gpio::Unassigned;
+	engineConfiguration->spi2sckPin = Gpio::Unassigned;
+	engineConfiguration->spi3mosiPin = Gpio::Unassigned;
+	engineConfiguration->spi3misoPin = Gpio::Unassigned;
+	engineConfiguration->spi3sckPin = Gpio::Unassigned;
+
 	hellenWbo();
 }
 
@@ -148,7 +166,7 @@ static Gpio OUTPUTS[] = {
 	Gpio::C8,  // CEL
 	Gpio::D13, // Idle
 	Gpio::C7,  // Tacho
-	Gpio::G1,  // EGR Solenoid
+	Gpio::D7,  // EGR Solenoid
 	Gpio::E8,  // TCI Control
 	Gpio::A10, // IMRC Control
 	Gpio::B15, // Line Pressure
@@ -178,11 +196,11 @@ void setup_custom_board_overrides() {
 }
 
 Gpio getCommsLedPin() {
-	return Gpio::Unassigned;
+	return Gpio::E7;
 }
 
 Gpio getRunningLedPin() {
-	return Gpio::Unassigned;
+	return Gpio::D7;
 }
 
 Gpio getWarningLedPin() {

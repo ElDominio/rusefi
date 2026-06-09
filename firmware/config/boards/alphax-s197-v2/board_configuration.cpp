@@ -51,10 +51,10 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->iat.adcChannel = H144_IN_IAT; // PC3 / IAT_OUT
 
 	// TPS (Throttle Position Sensor) Inputs
-	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1_ANALOG); // TPSA_OUT on PA4 (TPS), TPSB_OUT on PB0 (AUX1)
+	setTPS1Inputs(H144_IN_TPS, EFI_ADC_1); // TPSA on A17 (PA4), TPSB on A12 (PA1)
 
 	// PPS (Pedal Position Sensor) Inputs
-	setPPSInputs(H144_IN_PPS, H144_IN_AUX3_ANALOG); // PPSA_OUT on PA3 (PPS), PPSB_OUT on PA7 (AUX3)
+	setPPSInputs(H144_IN_PPS, EFI_ADC_7); // PPSA on A18 (PA3), PPSB on A20 (PA7)
 
 	// Vehicle Speed Sensor
 	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::D6; // H144_UART2_RX (STM32_VSS)
@@ -68,25 +68,33 @@ static void setupDefaultSensorInputs() {
 	// Knock sensor is configured at compile-time in knock_config.h
 
 	// Cylinder Head Temp & AC Pressure
-	engineConfiguration->auxTempSensor1.adcChannel = H144_IN_AUX4_ANALOG; // PC5 / CHT_OUT
-	engineConfiguration->acPressure.hwChannel = EFI_ADC_2; // PA2 / AC_PRESS_OUT (H144_IN_MAP3)
-	engineConfiguration->oilPressure.hwChannel = H144_IN_AUX2_ANALOG; // PC4 / OILPRESS_OUT
+	engineConfiguration->auxTempSensor1.adcChannel = EFI_ADC_14; // PC4 / CHT_OUT (A21)
+	engineConfiguration->acPressure.hwChannel = EFI_ADC_15; // PC5 / AC_PRESS_OUT (A22)
+	engineConfiguration->oilPressure.hwChannel = EFI_ADC_0; // PA0 / OILPRESS_OUT (A13)
+
+	// O2 sensors
+	engineConfiguration->afr.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->afr.hwChannel2 = EFI_ADC_NONE;
+
+	// No aux linear inputs
+	engineConfiguration->auxLinear1.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->auxLinear2.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->auxLinear3.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->auxLinear4.hwChannel = EFI_ADC_NONE;
 
 	// Switch inputs
-	engineConfiguration->clutchDownPin = Gpio::A6; // H144_IN_CAM (STM32_CLUTCHU)
-	engineConfiguration->brakePedalPin = Gpio::B1; // H144_IN_CRANK (STM32_BRAKE)
+	engineConfiguration->clutchDownPin = Gpio::A6; // PA6 / A19 (STM32_CLUTCHU)
+	engineConfiguration->brakePedalPin = Gpio::B1; // PB1 / A24 (STM32_BRAKE)
 }
 
 static void alphax_s197_boardConfigOverrides() {
 	setHellenMegaEnPin(); // PWR_EN (PE10)
-	setHellenVbatt();     // VBAT (PA5)
+	setHellenVbatt();     // VBAT (PA5) / VIGN (PA5)
 
-	// SD Card Configuration
-	setHellenSdCardSpi3();
-	engineConfiguration->isSdCardEnabled = true;
-
-	// Accelerometer CS Pin
-	hellenMegaAccelerometerPreInitCS2Pin();
+	// No SPI/SD Card/Accelerometer
+	// setHellenSdCardSpi3();
+	// engineConfiguration->isSdCardEnabled = true;
+	// hellenMegaAccelerometerPreInitCS2Pin();
 
 	// CAN Configurations
 	setHellenCan();
@@ -107,7 +115,7 @@ static void alphax_s197_boardDefaultConfiguration() {
 	engineConfiguration->enableSoftwareKnock = true;
 
 	// Relays and Solenoids
-	engineConfiguration->mainRelayPin = Gpio::G1;    // H144_LED2_GREEN (STM32_MREL)
+	engineConfiguration->mainRelayPin = Gpio::D7;    // PD7 / LED2 (STM32_MREL)
 	engineConfiguration->fuelPumpPin = Gpio::D14;    // H144_OUT_PWM6 (STM32_FP)
 	engineConfiguration->acRelayPin = Gpio::B14;     // H_SPI2_MISO (STM32_ACREL)
 	engineConfiguration->fanPin = Gpio::A15;         // H_SPI3_CS (STM32_FAN)
@@ -115,12 +123,12 @@ static void alphax_s197_boardDefaultConfiguration() {
 	engineConfiguration->alternatorControlPin = Gpio::C9; // H144_OUT_PWM5 (STM32_ALT)
 
 	// Boost Control
-	engineConfiguration->boostControlPin = Gpio::F8; // H144_IN_RES3 (STM32_BOOST)
+	engineConfiguration->boostControlPin = Gpio::E9; // PE9 / A25 (STM32_BOOST)
 
 	// VVT Solenoids
 	engineConfiguration->vvtPins[0] = Gpio::D13; // H144_OUT_PWM1 (STM32_VVT1)
 	engineConfiguration->vvtPins[1] = Gpio::C6;  // H144_OUT_PWM2 (STM32_VVT2)
-	engineConfiguration->vvtPins[2] = Gpio::A10; // H144_USB1ID (STM32_VVT3)
+	engineConfiguration->vvtPins[2] = Gpio::A10; // PA10 / USBID (STM32_VVT3)
 	engineConfiguration->vvtPins[3] = Gpio::E8;  // H144_LED4_YELLOW (STM32_VVT4)
 
 	setupDefaultSensorInputs();
@@ -133,6 +141,22 @@ static void alphax_s197_boardDefaultConfiguration() {
 
 	setCrankOperationMode();
 	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
+
+	// Disable SPI
+	engineConfiguration->sdCardCsPin = Gpio::Unassigned;
+	engineConfiguration->isSdCardEnabled = false;
+	engineConfiguration->is_enabled_spi_1 = false;
+	engineConfiguration->is_enabled_spi_2 = false;
+	engineConfiguration->is_enabled_spi_3 = false;
+	engineConfiguration->spi1mosiPin = Gpio::Unassigned;
+	engineConfiguration->spi1misoPin = Gpio::Unassigned;
+	engineConfiguration->spi1sckPin = Gpio::Unassigned;
+	engineConfiguration->spi2mosiPin = Gpio::Unassigned;
+	engineConfiguration->spi2misoPin = Gpio::Unassigned;
+	engineConfiguration->spi2sckPin = Gpio::Unassigned;
+	engineConfiguration->spi3mosiPin = Gpio::Unassigned;
+	engineConfiguration->spi3misoPin = Gpio::Unassigned;
+	engineConfiguration->spi3sckPin = Gpio::Unassigned;
 
 	hellenWbo();
 }
@@ -154,13 +178,13 @@ static Gpio OUTPUTS[] = {
 	Gpio::B8,  // Coil 6
 	Gpio::B9,  // Coil 7
 	Gpio::E6,  // Coil 8
-	Gpio::G1,  // Main Relay
+	Gpio::D7,  // Main Relay
 	Gpio::D14, // Fuel Pump
 	Gpio::B14, // A/C Relay
 	Gpio::A15, // Fan 1
 	Gpio::C11, // Fan 2
 	Gpio::C9,  // Alternator
-	Gpio::F8,  // Boost
+	Gpio::E9,  // Boost
 	Gpio::D13, // VVT 1
 	Gpio::C6,  // VVT 2
 	Gpio::A10, // VVT 3
@@ -185,11 +209,11 @@ void setup_custom_board_overrides() {
 }
 
 Gpio getCommsLedPin() {
-	return Gpio::Unassigned;
+	return Gpio::E7;
 }
 
 Gpio getRunningLedPin() {
-	return Gpio::Unassigned;
+	return Gpio::D7;
 }
 
 Gpio getWarningLedPin() {
