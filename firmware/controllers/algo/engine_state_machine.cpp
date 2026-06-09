@@ -233,7 +233,8 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		if (idlePhase == IIdleController::Phase::Coasting) {
 			// VSS is intentionally excluded: overrun is foot-off-throttle at high RPM regardless of speed.
 			// DFCO's VSS guard lives in getState() and is a fuel-cut-only constraint.
-			if (rpm > engineConfiguration->coastingFuelCutRpmHigh) {
+			bool tpsClosed = tps < engineConfiguration->coastingFuelCutTps;
+			if (tpsClosed && rpm > engineConfiguration->coastingFuelCutRpmHigh) {
 				return EngineStateMachineState::Overrun;
 			}
 			return EngineStateMachineState::Coasting;
