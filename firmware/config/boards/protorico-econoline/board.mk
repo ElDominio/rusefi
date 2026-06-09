@@ -1,8 +1,7 @@
 # Combine the related files for a specific platform and MCU.
 
 # Target ECU board design
-BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp \
-  $(BOARD_DIR)/../uaefi121/mega-uaefi.cpp
+BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 
 ifeq ($(PROJECT_CPU),ARCH_STM32F7)
 	DDEFS += -DLUA_RX_MAX_FILTER_COUNT=96
@@ -35,7 +34,7 @@ DDEFS += -DHELLEN_BOARD_ID_DEBUG
 DDEFS += -DHW_HELLEN_SKIP_BOARD_TYPE=TRUE
 DDEFS += -DSTATIC_BOARD_ID=BOARD_ID_UAEFI_B
 
-DDEFS += -DHW_HELLEN_UAEFI=1
+
 DDEFS += -DDIAG_5VP_PIN=Gpio::C12
 
 DDEFS += -DSTM32_ICU_USE_TIM1=TRUE -DSTM32_PWM_USE_TIM1=FALSE

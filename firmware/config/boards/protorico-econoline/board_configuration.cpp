@@ -10,7 +10,6 @@
 #include "defaults.h"
 #include "hellen_meta.h"
 #include "board_overrides.h"
-#include "../uaefi121/mega-uaefi.h"
 
 static void setInjectorPins() {
 	// Mapped to injector low-side drivers

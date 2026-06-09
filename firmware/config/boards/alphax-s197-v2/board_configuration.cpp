@@ -10,7 +10,6 @@
 #include "defaults.h"
 #include "hellen_meta.h"
 #include "board_overrides.h"
-#include "../uaefi121/mega-uaefi.h"
 
 static void setInjectorPins() {
 	// Mapped to injector low-side drivers
@@ -78,7 +77,7 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->brakePedalPin = Gpio::B1; // H144_IN_CRANK (STM32_BRAKE)
 }
 
-static void uaefi_s197_boardConfigOverrides() {
+static void alphax_s197_boardConfigOverrides() {
 	setHellenMegaEnPin(); // PWR_EN (PE10)
 	setHellenVbatt();     // VBAT (PA5)
 
@@ -96,7 +95,7 @@ static void uaefi_s197_boardConfigOverrides() {
 	setDefaultHellenAtPullUps();
 }
 
-static void uaefi_s197_boardDefaultConfiguration() {
+static void alphax_s197_boardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 
@@ -181,6 +180,6 @@ int getBoardMetaDcOutputsCount() {
 }
 
 void setup_custom_board_overrides() {
-	custom_board_DefaultConfiguration = uaefi_s197_boardDefaultConfiguration;
-	custom_board_ConfigOverrides = uaefi_s197_boardConfigOverrides;
+	custom_board_DefaultConfiguration = alphax_s197_boardDefaultConfiguration;
+	custom_board_ConfigOverrides = alphax_s197_boardConfigOverrides;
 }
