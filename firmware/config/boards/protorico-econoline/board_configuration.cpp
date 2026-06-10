@@ -1,7 +1,7 @@
 /**
  * @file boards/hellen/protorico-econoline/board_configuration.cpp
  *
- * Protorico-Econoline custom board based on H144 (144-pin MCU module).
+ * Protorico-Econoline custom board.
  *
  * @author Andrey Belomutskiy, (c) 2012-2024
  */
@@ -63,14 +63,14 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->baroSensor.hwChannel = H144_IN_MAP2; // PC1 / IN_MAP2
 
 	// O2 sensors
-	engineConfiguration->afr.hwChannel = EFI_ADC_NONE;
-	engineConfiguration->afr.hwChannel2 = EFI_ADC_NONE;
+	engineConfiguration->afr.hwChannel = H144_IN_O2S;
+	engineConfiguration->afr.hwChannel2 = H144_IN_O2S2;
 
 	// Aux linear inputs (mapped to other analog inputs)
 	engineConfiguration->auxLinear1.hwChannel = EFI_ADC_NONE; // PA7 / IN_AUX3 - Unset
-	engineConfiguration->auxLinear2.hwChannel = EFI_ADC_14;   // PC4 / IN_AUX2 (A21)
-	engineConfiguration->auxLinear3.hwChannel = EFI_ADC_NONE; // PA2 / IN_AUX4 - Unset
-	engineConfiguration->auxLinear4.hwChannel = EFI_ADC_8;    // PB0 / IN_AUX1 (A23)
+	engineConfiguration->auxLinear2.hwChannel = H144_IN_AUX2_ANALOG; // PC4 / Fuel Tank Pressure Sensor (A21)
+	engineConfiguration->auxLinear3.hwChannel = H144_IN_AUX4_ANALOG; // PC5 / EGR Sensor (A22)
+	engineConfiguration->auxLinear4.hwChannel = H144_IN_AUX1_ANALOG; // PB0 / CHT Sensor (A23)
 
 	// Switch inputs
 	engineConfiguration->clutchDownPin = Gpio::A6; // PA6 / A19 (STM32_CLUTCHU)
@@ -88,16 +88,12 @@ static void protorico_econoline_boardConfigOverrides() {
 
 	// CAN Configurations
 	setHellenCan();
-	setHellenCan2();
-
-	setDefaultHellenAtPullUps();
 }
 
 static void protorico_econoline_boardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 
-	engineConfiguration->displayLogicLevelsInEngineSniffer = true;
 	engineConfiguration->enableSoftwareKnock = true;
 
 	// Relays and Solenoids

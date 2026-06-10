@@ -42,7 +42,8 @@ DDEFS += -DEFI_SENT_SUPPORT=TRUE
 
 ONBOARD_MEMS_TYPE=LIS2DH12
 
-# This board uses the 100-pin MCU module
+# This board uses the 100-pin MCU module, but doesn't have the standard critical LED
+LED_CRITICAL_ERROR_BRAIN_PIN = -DLED_CRITICAL_ERROR_BRAIN_PIN=Gpio::Unassigned
 include $(BOARDS_DIR)/hellen/hellen-common100.mk
 
 # Drop some Lua functionality to save RAM

@@ -1,7 +1,7 @@
 /**
  * @file boards/hellen/alphax-s197-v2/board_configuration.cpp
  *
- * S197 Mustang custom board based on H144 (144-pin MCU module).
+ * S197 Mustang custom board.
  *
  * @author Andrey Belomutskiy, (c) 2012-2024
  */
@@ -98,9 +98,6 @@ static void alphax_s197_boardConfigOverrides() {
 
 	// CAN Configurations
 	setHellenCan();
-	setHellenCan2();
-
-	setDefaultHellenAtPullUps();
 }
 
 static void alphax_s197_boardDefaultConfiguration() {
@@ -111,7 +108,6 @@ static void alphax_s197_boardDefaultConfiguration() {
 	// PWM: OUT_PWM4 (PC8), DIR: OUT_PWM3 (PC7), DIS: SPI2_MOSI (PB15)
 	setupTLE9201IncludingStepper(Gpio::C8, Gpio::C7, Gpio::B15);
 
-	engineConfiguration->displayLogicLevelsInEngineSniffer = true;
 	engineConfiguration->enableSoftwareKnock = true;
 
 	// Relays and Solenoids

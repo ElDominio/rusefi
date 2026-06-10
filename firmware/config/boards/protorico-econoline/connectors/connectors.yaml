@@ -1,317 +1,217 @@
 meta: config/boards/hellen_meta.h
 
 pins:
-  - pin: IGN1
-    meta: H144_IGN_1
+  - meta: H144_IGN_1
     class: outputs
-    type: ign
-    function: Ignition Coil 1 (STM32_IGN1)
+    ts_name: Ignition Coil 1
 
-  - pin: IGN2
-    meta: H144_IGN_2
+  - meta: H144_IGN_2
     class: outputs
-    type: ign
-    function: Ignition Coil 2 (STM32_IGN2)
+    ts_name: Ignition Coil 2
 
-  - pin: IGN3
-    meta: H144_IGN_3
+  - meta: H144_IGN_3
     class: outputs
-    type: ign
-    function: Ignition Coil 3 (STM32_IGN3)
+    ts_name: Ignition Coil 3
 
-  - pin: IGN4
-    meta: H144_IGN_4
+  - meta: H144_IGN_4
     class: outputs
-    type: ign
-    function: Ignition Coil 4 (STM32_IGN4)
+    ts_name: Ignition Coil 4
 
-  - pin: IGN5
-    meta: H144_IGN_5
+  - meta: H144_IGN_5
     class: outputs
-    type: ign
-    function: Ignition Coil 5 (STM32_IGN5)
+    ts_name: Ignition Coil 5
 
-  - pin: IGN6
-    meta: H144_IGN_6
+  - meta: H144_IGN_6
     class: outputs
-    type: ign
-    function: Ignition Coil 6 (STM32_IGN6)
+    ts_name: Ignition Coil 6
 
-  - pin: IGN7
-    meta: H144_IGN_7
+  - meta: H144_IGN_7
     class: outputs
-    type: ign
-    function: Ignition Coil 7 (STM32_IGN7)
+    ts_name: Ignition Coil 7
 
-  - pin: IGN8
-    meta: H144_IGN_8
+  - meta: H144_IGN_8
     class: outputs
-    type: ign
-    function: Ignition Coil 8 (STM32_IGN8)
+    ts_name: Ignition Coil 8
 
-  - pin: OUT_INJ1
-    id: D3
+  - id: D3
     class: outputs
-    type: ls
-    function: Injector 1 (STM32_INJ1)
+    ts_name: Injector 1
 
-  - pin: OUT_INJ2
-    id: A9
+  - id: A9
     class: outputs
-    type: ls
-    function: Injector 2 (STM32_INJ2)
+    ts_name: Injector 2
 
-  - pin: OUT_INJ3
-    id: D11
+  - id: D11
     class: outputs
-    type: ls
-    function: Injector 3 (STM32_INJ3)
+    ts_name: Injector 3
 
-  - pin: OUT_INJ4
-    id: D10
+  - id: D10
     class: outputs
-    type: ls
-    function: Injector 4 (STM32_INJ4)
+    ts_name: Injector 4
 
-  - pin: OUT_INJ5
-    id: D2
+  - id: D2
     class: outputs
-    type: ls
-    function: Injector 5 (STM32_INJ5)
+    ts_name: Injector 5
 
-  - pin: OUT_INJ6
-    id: A8
+  - id: A8
     class: outputs
-    type: ls
-    function: Injector 6 (STM32_INJ6)
+    ts_name: Injector 6
 
-  - pin: OUT_INJ7
-    id: D15
+  - id: D15
     class: outputs
-    type: ls
-    function: Injector 7 (STM32_INJ7)
+    ts_name: Injector 7
 
-  - pin: OUT_INJ8
-    id: D12
+  - id: D12
     class: outputs
-    type: ls
-    function: Injector 8 (STM32_INJ8)
+    ts_name: Injector 8
 
-  - pin: IN_D1
-    meta: H144_IN_D_1
+  - meta: H144_IN_D_1
     class: event_inputs
-    function: Crank Trigger (STM32_CRANK)
+    ts_name: Crank Trigger
 
-  - pin: IN_D2
-    meta: H144_IN_D_2
+  - meta: H144_IN_D_2
     class: event_inputs
-    function: Cam Position (STM32_CAM)
+    ts_name: Cam Position
 
-  - pin: IN_D3
-    meta: H144_IN_D_3
+  - meta: H144_IN_D_3
     class: event_inputs
-    function: Digital Input 3 (IN_D3)
+    ts_name: Digital Input 3
 
-  - pin: IN_D4
-    meta: H144_IN_D_4
+  - meta: H144_IN_D_4
     class: event_inputs
-    function: Digital Input 4 (IN_D4)
+    ts_name: Digital Input 4
 
-  - pin: UART8_RX
-    meta: H144_UART8_RX
+  - meta: H144_UART8_RX
     class: event_inputs
-    function: EVAP Sensor/Input (STM32_EVAP)
+    ts_name: EVAP Sensor/Input
 
-  - pin: UART8_TX
-    meta: H144_UART8_TX
+  - meta: H144_UART8_TX
     class: event_inputs
-    function: Aux Solenoid/Input (STM32_AUX)
+    ts_name: Aux Solenoid/Input
 
-  - pin: LED2
-    id: G1
+  - id: D7
     class: outputs
-    type: ls
-    function: EGR Solenoid (STM32_EGR)
+    ts_name: EGR Solenoid
 
-  - pin: LED4
-    id: E8
+  - id: E8
     class: outputs
-    type: ls
-    function: TCI Control (STM32_TCI)
+    ts_name: TCI Control
 
-  - pin: USBID
-    id: A10
+  - id: A10
     class: outputs
-    type: ls
-    function: IMRC Control (STM32_IMRC)
+    ts_name: IMRC Control
 
-  - pin: SPI2_MISO
-    id: B14
+  - id: B14
     class: outputs
-    type: ls
-    function: Fuel Pump Relay (STM32_FP)
+    ts_name: Fuel Pump Relay
 
-  - pin: SPI2_MOSI
-    id: B15
+  - id: B15
     class: outputs
-    type: ls
-    function: Line Pressure Solenoid (STM32_LINE_PRESS)
+    ts_name: Line Pressure Solenoid
 
-  - pin: SPI3_CS
-    id: A15
+  - id: A15
     class: outputs
-    type: ls
-    function: O2 Sensor Heater (STM32_HTR)
+    ts_name: O2 Sensor Heater
 
-  - pin: SPI3_MISO
-    id: C11
+  - id: C11
     class: outputs
-    type: ls
-    function: Torque Lockup Driver (DRV_TLOCK)
+    ts_name: Torque Lockup Driver
 
-  - pin: SPI3_MOSI
-    id: C12
+  - id: C12
     class: outputs
-    type: ls
-    function: TLS115 Power Good (TLS115_PG)
+    ts_name: TLS115 Power Good (TLS115_PG)
 
-  - pin: SPI3_SCK
-    id: C10
+  - id: C10
     class: outputs
-    type: ls
-    function: Purge Solenoid (STM32_PURGE)
+    ts_name: Purge Solenoid
 
-  - pin: OUT_PWM1
-    meta: H144_OUT_PWM1
+  - meta: H144_OUT_PWM1
     class: outputs
-    type: ls
-    function: Idle Control (STM32_IDLE)
+    ts_name: Idle Control
 
-  - pin: OUT_PWM2
-    meta: H144_OUT_PWM2
+  - meta: H144_OUT_PWM2
     class: outputs
-    type: ls
-    function: A/C Clutch (STM32_AC_CL)
+    ts_name: A/C Clutch
 
-  - pin: OUT_PWM3
-    meta: H144_OUT_PWM3
+  - meta: H144_OUT_PWM3
     class: outputs
-    type: ls
-    function: Tachometer Output (STM32_TACHO)
+    ts_name: Tachometer Output
 
-  - pin: OUT_PWM4
-    meta: H144_OUT_PWM4
+  - meta: H144_OUT_PWM4
     class: outputs
-    type: ls
-    function: Check Engine Light (STM32_CEL)
+    ts_name: Check Engine Light
 
-  - pin: OUT_PWM5
-    meta: H144_OUT_PWM5
+  - meta: H144_OUT_PWM5
     class: outputs
-    type: ls
-    function: Solenoid A (STM32_SOLA)
+    ts_name: Solenoid A
 
-  - pin: OUT_PWM6
-    meta: H144_OUT_PWM6
+  - meta: H144_OUT_PWM6
     class: outputs
-    type: ls
-    function: Solenoid B (STM32_SOLB)
+    ts_name: Solenoid B
 
-  - pin: A9
-    meta: H144_IN_MAP1
+  - meta: H144_IN_MAP1
     class: analog_inputs
-    type: av
-    function: MAP Sensor (IN_MAP)
+    ts_name: MAP Sensor
 
-  - pin: A10
-    meta: H144_IN_MAP2
+  - meta: H144_IN_MAP2
     class: analog_inputs
-    type: av
-    function: Baro Sensor (IN_MAP2)
+    ts_name: Baro Sensor
 
-  - pin: A11
-    meta: H144_IN_CLT
+  - meta: H144_IN_CLT
     class: analog_inputs
-    type: av
-    function: Coolant Temperature (IN_CLT)
+    ts_name: Coolant Temperature
 
-  - pin: A12
-    meta: H144_IN_AUX1_ANALOG
+  - meta: H144_IN_O2S2
     class: analog_inputs
-    type: av
-    function: Oxygen Sensor 2 (IN_O2S2)
+    ts_name: Oxygen Sensor 2
 
-  - pin: A13
-    meta: H144_IN_AUX2_ANALOG
+  - meta: H144_IN_O2S
     class: analog_inputs
-    type: av
-    function: Oxygen Sensor 1 (IN_O2S)
+    ts_name: Oxygen Sensor 1
 
-  - pin: A14
-    meta: H144_IN_IAT
+  - meta: H144_IN_IAT
     class: analog_inputs
-    type: av
-    function: Intake Air Temp (IN_IAT)
+    ts_name: Intake Air Temp
 
-  - pin: A15
-    meta: H144_IN_O2S
+  - meta: H144_IN_MAP3
     class: analog_inputs
-    type: av
-    function: Knock Sensor (IN_KNOCK)
+    ts_name: Knock Sensor
 
-  - pin: A17
-    meta: H144_IN_TPS
+  - meta: H144_IN_TPS
     class: analog_inputs
-    type: av
-    function: Throttle Position Sensor (IN_TPS)
+    ts_name: Throttle Position Sensor
 
-  - pin: A18
-    meta: H144_IN_PPS
+  - meta: H144_IN_PPS
     class: analog_inputs
-    type: av
-    function: Pedal Position Sensor (IN_PPS)
+    ts_name: Pedal Position Sensor
 
-  - pin: A19
-    meta: H144_IN_CAM_ANALOG
+  - meta: H144_IN_CAM_ANALOG
     class: analog_inputs
-    type: av
-    function: Cam Sensor (IN_CAM)
+    ts_name: Cam Sensor
 
-  - pin: A20
-    meta: H144_IN_AUX3_ANALOG
+  - meta: H144_IN_AUX3_ANALOG
     class: analog_inputs
-    type: av
-    function: Aux Input 3 (IN_AUX3)
+    ts_name: Aux Input 3
 
-  - pin: A21
-    meta: H144_IN_AUX4_ANALOG
+  - meta: H144_IN_AUX2_ANALOG
     class: analog_inputs
-    type: av
-    function: Aux Input 2 (IN_AUX2)
+    ts_name: Fuel Tank Pressure Sensor
 
-  - pin: A22
-    meta: H144_IN_MAP3
+  - meta: H144_IN_AUX4_ANALOG
     class: analog_inputs
-    type: av
-    function: Aux Input 4 (IN_AUX4)
+    ts_name: EGR Sensor
 
-  - pin: A23
-    meta: H144_IN_O2S2
+  - meta: H144_IN_AUX1_ANALOG
     class: analog_inputs
-    type: av
-    function: Aux Input 1 (IN_AUX1)
+    ts_name: Cylinder Head Temperature
 
-  - pin: A24
-    meta: H144_IN_CRANK_ANALOG
+  - meta: H144_IN_CRANK_ANALOG
     class: analog_inputs
-    type: av
-    function: Crank Sensor (IN_CRANK)
+    ts_name: Crank Sensor
 
-  - pin: IN_VIGN
-    meta: H144_IN_VBATT
+  - meta: H144_IN_VBATT
     class: analog_inputs
-    type: av
-    function: Battery Voltage (IN_VIGN)
+    ts_name: Battery Voltage
 
 info:
   cid: main
