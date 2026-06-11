@@ -248,6 +248,7 @@ void RpmCalculator::setStopSpinning() {
 	isSpinning = false;
 	revolutionCounterSinceStart = 0;
 	rpmRate = 0;
+	prevCycleRpm = 0;
 
 	if (cachedRpmValue != 0) {
 		assignRpmValue(0);
@@ -311,19 +312,28 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 		 * and each revolution of crankshaft consists of two engine cycles revolutions
 		 *
 		 */
-			if (!alwaysInstantRpm) {
-				if (periodSeconds == 0) {
+			// rpmRate (dRPM) is always derived from the cycle-averaged RPM and the full-cycle
+			// period, independent of which value we publish as the reported RPM. Computing it
+			// from instant RPM would mean differentiating per-tooth values over microsecond
+			// intervals - pure noise - so we keep this cycle-to-cycle even when alwaysInstantRpm
+			// publishes instant RPM as the reported value.
+			if (periodSeconds == 0) {
+				rpmState->rpmRate = 0;
+				rpmState->prevCycleRpm = 0;
+				if (!alwaysInstantRpm) {
 					rpmState->setRpmValue(0);
-					rpmState->rpmRate = 0;
-				} else {
-				  // todo: extract utility method? see duplication with high_pressure_pump.cpp
-					int mult = (int)getEngineCycle(getEngineRotationState()->getOperationMode()) / 360;
-					float rpm = 60 * mult / periodSeconds;
+				}
+			} else {
+			  // todo: extract utility method? see duplication with high_pressure_pump.cpp
+				int mult = (int)getEngineCycle(getEngineRotationState()->getOperationMode()) / 360;
+				float cycleRpm = 60 * mult / periodSeconds;
 
-					auto rpmDelta = rpm - rpmState->previousRpmValue;
-					rpmState->rpmRate = rpmDelta / (mult * periodSeconds);
+				float rpmDelta = cycleRpm - rpmState->prevCycleRpm;
+				rpmState->rpmRate = rpmDelta / (mult * periodSeconds);
+				rpmState->prevCycleRpm = cycleRpm;
 
-					rpmState->setRpmValue(rpm);
+				if (!alwaysInstantRpm) {
+					rpmState->setRpmValue(cycleRpm);
 				}
 			}
 		} else {
