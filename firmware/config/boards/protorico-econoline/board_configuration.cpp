@@ -66,11 +66,10 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->afr.hwChannel = H144_IN_O2S;
 	engineConfiguration->afr.hwChannel2 = H144_IN_O2S2;
 
-	// Aux linear inputs (mapped to other analog inputs)
-	engineConfiguration->auxLinear1.hwChannel = EFI_ADC_NONE; // PA7 / IN_AUX3 - Unset
-	engineConfiguration->auxLinear2.hwChannel = H144_IN_AUX2_ANALOG; // PC4 / Fuel Tank Pressure Sensor (A21)
-	engineConfiguration->auxLinear3.hwChannel = H144_IN_AUX4_ANALOG; // PC5 / EGR Sensor (A22)
-	engineConfiguration->auxLinear4.hwChannel = H144_IN_AUX1_ANALOG; // PB0 / CHT Sensor (A23)
+	engineConfiguration->auxLinear1.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->auxLinear2.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->auxLinear3.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->auxLinear4.hwChannel = EFI_ADC_NONE;
 
 	// Switch inputs
 	engineConfiguration->clutchDownPin = Gpio::A6; // PA6 / A19 (STM32_CLUTCHU)
@@ -88,6 +87,10 @@ static void protorico_econoline_boardConfigOverrides() {
 
 	// CAN Configurations
 	setHellenCan();
+
+	// Force disable hidden/unconfigurable AuxLinear sensors to prevent pin conflicts (specifically PA2 for Knock control)
+	engineConfiguration->auxLinear3.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->auxLinear4.hwChannel = EFI_ADC_NONE;
 }
 
 static void protorico_econoline_boardDefaultConfiguration() {

@@ -76,15 +76,16 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->afr.hwChannel = EFI_ADC_NONE;
 	engineConfiguration->afr.hwChannel2 = EFI_ADC_NONE;
 
-	// No aux linear inputs
 	engineConfiguration->auxLinear1.hwChannel = EFI_ADC_NONE;
 	engineConfiguration->auxLinear2.hwChannel = EFI_ADC_NONE;
 	engineConfiguration->auxLinear3.hwChannel = EFI_ADC_NONE;
 	engineConfiguration->auxLinear4.hwChannel = EFI_ADC_NONE;
 
+
 	// Switch inputs
 	engineConfiguration->clutchDownPin = Gpio::A6; // PA6 / A19 (STM32_CLUTCHU)
 	engineConfiguration->brakePedalPin = Gpio::B1; // PB1 / A24 (STM32_BRAKE)
+
 }
 
 static void alphax_s197_boardConfigOverrides() {
@@ -98,6 +99,10 @@ static void alphax_s197_boardConfigOverrides() {
 
 	// CAN Configurations
 	setHellenCan();
+
+	// Force disable hidden/unconfigurable AuxLinear sensors to prevent pin conflicts (specifically PA2 for Knock control)
+	engineConfiguration->auxLinear3.hwChannel = EFI_ADC_NONE;
+	engineConfiguration->auxLinear4.hwChannel = EFI_ADC_NONE;
 }
 
 static void alphax_s197_boardDefaultConfiguration() {
