@@ -306,6 +306,14 @@ Usages:
     output_name: esm
     engineModule: EngineStateMachine
 
+  - name: downshift_blipper_state
+    java: DownshiftBlipper.java
+    folder: controllers/actuators
+    prepend: integration/rusefi_config_shared.txt
+    output_name: dsb
+    engineModule: DownshiftBlipper
+    conditional_compilation: "EFI_ELECTRONIC_THROTTLE_BODY"
+
   - name: dfco_state
     java: DfcoState.java
     folder: controllers/algo/fuel

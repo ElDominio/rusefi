@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "custom_page.h"
 
 #include "engine_state_machine.h"
 
@@ -8,9 +9,9 @@ static constexpr float TEST_RUNNING_RPM  = 800.0f;
 
 static void setupSmConfig() {
 	engineConfiguration->useEngineStateMachine = true;
-	engineConfiguration->smShiftTpsThreshold = 10;
-	engineConfiguration->smWotTpsThreshold = 90;
-	engineConfiguration->smTransientHoldoffCallbacks = 0; // no hold-off by default in tests
+	getCustomPage()->smShiftTpsThreshold = 10;
+	getCustomPage()->smWotTpsThreshold = 90;
+	getCustomPage()->smTransientHoldoffCallbacks = 0; // no hold-off by default in tests
 	// Lower AE threshold so tests can trigger Transient with small TPS steps on Tps1
 	engineConfiguration->tpsAccelEnrichmentThreshold = 5.0f;
 }
@@ -137,7 +138,7 @@ TEST(EngineStateMachine, transientState) {
 TEST(EngineStateMachine, transientHoldoff) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	engineConfiguration->smTransientHoldoffCallbacks = 2; // hold Transient for 2 callbacks after AE drops
+	getCustomPage()->smTransientHoldoffCallbacks = 2; // hold Transient for 2 callbacks after AE drops
 
 	// Use a 2-entry AE buffer so delta from the step scrolls out on the very next stable callback
 	engine->module<TpsAccelEnrichment>()->setLength(2);
@@ -334,10 +335,10 @@ TEST(EngineStateMachine, overlayPriorityUpshiftBeatsLaunch) {
 static void setupShiftDetectionConfig() {
 	setupSmConfig();
 	// Both directions mapped to Clutch Down switch, Simple Throttle mode
-	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
-	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::SimpleThrottle;
-	engineConfiguration->smShiftLookbackMs       = 300;
+	getCustomPage()->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smShiftDetectionMode    = sm_shift_detection_mode_e::SimpleThrottle;
+	getCustomPage()->smShiftLookbackMs       = 300;
 }
 
 // Seed the history buffer with several callbacks so getHistoryAt has data
@@ -438,12 +439,12 @@ static void seedRampedRpm(float startRpm, float rpmPerCallback, int callbacks, f
 
 static void setupRpmRateModeConfig() {
 	setupSmConfig();
-	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
-	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
-	engineConfiguration->smShiftLookbackMs       = 300;
-	engineConfiguration->smUpshiftRateThreshold  = 500;  // 500 RPM/s
-	engineConfiguration->smDownshiftRateThreshold = 500;
+	getCustomPage()->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
+	getCustomPage()->smShiftLookbackMs       = 300;
+	getCustomPage()->smUpshiftRateThreshold  = 500;  // 500 RPM/s
+	getCustomPage()->smDownshiftRateThreshold = 500;
 }
 
 // Rising RPM before the clutch press → upshift confirmed.
@@ -503,8 +504,8 @@ TEST(EngineStateMachine, noShiftBitsWithoutClutchSwitch) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
 	// No clutch switch configured (default = None)
-	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
-	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
+	getCustomPage()->smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
+	getCustomPage()->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
 	enterRunning();
 
 	engine->engineState.lua.clutchDownState = true;

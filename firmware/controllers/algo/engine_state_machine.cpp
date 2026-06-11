@@ -1,6 +1,9 @@
 #include "pch.h"
+#include "custom_page.h"
 #include "engine_state_machine.h"
 #include "dfco.h"
+
+#if EFI_ENGINE_STATE_MACHINE
 
 bool EngineStateMachine::isEnabled() const {
 	return engineConfiguration->useEngineStateMachine;
@@ -100,13 +103,13 @@ void EngineStateMachine::updatePopsAndBangs(bool isOverrun) {
 		}
 
 		if (m_pnbState == PopsAndBangsState::Inactive) {
-			if (rpm > engineConfiguration->popsAndBangsRpmHigh &&
-			    rpm < engineConfiguration->popsAndBangsRpmMax &&
-			    m_pnbOverrunTimer.hasElapsedSec(engineConfiguration->popsAndBangsDelay)) {
+			if (rpm > getCustomPage()->popsAndBangsRpmHigh &&
+			    rpm < getCustomPage()->popsAndBangsRpmMax &&
+			    m_pnbOverrunTimer.hasElapsedSec(getCustomPage()->popsAndBangsDelay)) {
 				const auto clt = Sensor::get(SensorType::Clt);
 				bool cltOk = clt &&
-					clt.Value >= engineConfiguration->popsAndBangsCltMin &&
-					clt.Value <= engineConfiguration->popsAndBangsCltMax;
+					clt.Value >= getCustomPage()->popsAndBangsCltMin &&
+					clt.Value <= getCustomPage()->popsAndBangsCltMax;
 				if (cltOk && !isPopsAndBangsBlocked()) {
 					m_pnbState = PopsAndBangsState::Active;
 					m_pnbActiveTimer.reset();
@@ -115,12 +118,12 @@ void EngineStateMachine::updatePopsAndBangs(bool isOverrun) {
 				}
 			}
 		} else if (m_pnbState == PopsAndBangsState::Active) {
-			if (rpm < engineConfiguration->popsAndBangsRpmLow ||
-			    rpm > engineConfiguration->popsAndBangsRpmMax) {
+			if (rpm < getCustomPage()->popsAndBangsRpmLow ||
+			    rpm > getCustomPage()->popsAndBangsRpmMax) {
 				m_pnbState = PopsAndBangsState::Expired;
 			}
 
-			float duration = engineConfiguration->popsAndBangsDuration;
+			float duration = getCustomPage()->popsAndBangsDuration;
 			if (duration > 0 && m_pnbActiveTimer.hasElapsedSec(duration)) {
 				m_pnbState = PopsAndBangsState::Expired;
 			}
@@ -138,7 +141,7 @@ void EngineStateMachine::updatePopsAndBangs(bool isOverrun) {
 }
 
 bool EngineStateMachine::isPopsAndBangsBlocked() const {
-	auto mode = engineConfiguration->popsAndBangsDisableMode;
+	auto mode = getCustomPage()->popsAndBangsDisableMode;
 
 	bool pinBlocked = false;
 	bool gaugeBlocked = false;
@@ -146,8 +149,8 @@ bool EngineStateMachine::isPopsAndBangsBlocked() const {
 #if !EFI_UNIT_TEST
 	if (mode == POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT ||
 	    mode == POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE) {
-		const switch_input_pin_e pin = engineConfiguration->popsAndBangsDisablePin;
-		const pin_input_mode_e pinMode = engineConfiguration->popsAndBangsDisablePinMode;
+		const switch_input_pin_e pin = getCustomPage()->popsAndBangsDisablePin;
+		const pin_input_mode_e pinMode = getCustomPage()->popsAndBangsDisablePinMode;
 		if (isBrainPinValid(pin)) {
 			pinBlocked = efiReadPin(pin, pinMode);
 		}
@@ -157,7 +160,7 @@ bool EngineStateMachine::isPopsAndBangsBlocked() const {
 	if (mode == POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE ||
 	    mode == POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE) {
 		SensorType gaugeType = SensorType::LuaGauge1;
-		switch (engineConfiguration->popsAndBangsLuaGauge) {
+		switch (getCustomPage()->popsAndBangsLuaGauge) {
 			case LUA_GAUGE_2: gaugeType = SensorType::LuaGauge2; break;
 			case LUA_GAUGE_3: gaugeType = SensorType::LuaGauge3; break;
 			case LUA_GAUGE_4: gaugeType = SensorType::LuaGauge4; break;
@@ -170,8 +173,8 @@ bool EngineStateMachine::isPopsAndBangsBlocked() const {
 		const auto gaugeResult = Sensor::get(gaugeType);
 		if (gaugeResult.Valid) {
 			const float value = gaugeResult.Value;
-			const float threshold = engineConfiguration->popsAndBangsLuaGaugeValue;
-			switch (engineConfiguration->popsAndBangsLuaGaugeMeaning) {
+			const float threshold = getCustomPage()->popsAndBangsLuaGaugeValue;
+			switch (getCustomPage()->popsAndBangsLuaGaugeMeaning) {
 				case LUA_GAUGE_LOWER_BOUND:
 					gaugeBlocked = (value >= threshold);
 					break;
@@ -197,7 +200,7 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 	}
 
 	// Priority 3: wide open throttle
-	if (tps > engineConfiguration->smWotTpsThreshold) {
+	if (tps > getCustomPage()->smWotTpsThreshold) {
 		return EngineStateMachineState::WOT;
 	}
 
@@ -207,7 +210,7 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		bool aeActive = engine->module<TpsAccelEnrichment>()->isAboveAccelThreshold ||
 		                engine->module<TpsAccelEnrichment>()->isBelowDecelThreshold;
 		if (aeActive) {
-			m_transientHoldoffRemaining = engineConfiguration->smTransientHoldoffCallbacks;
+			m_transientHoldoffRemaining = getCustomPage()->smTransientHoldoffCallbacks;
 			return EngineStateMachineState::Transient;
 		}
 		if (m_transientHoldoffRemaining > 0) {
@@ -280,8 +283,8 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 	bool clutchUpActive   = engine->engineState.clutchUpState  != 0;
 	bool clutchDownActive = engine->engineState.clutchDownState;
 
-	sm_clutch_switch_e upSw = engineConfiguration->smUpshiftClutchSwitch;
-	sm_clutch_switch_e dnSw = engineConfiguration->smDownshiftClutchSwitch;
+	sm_clutch_switch_e upSw = getCustomPage()->smUpshiftClutchSwitch;
+	sm_clutch_switch_e dnSw = getCustomPage()->smDownshiftClutchSwitch;
 
 	// No direction configured → disable shift detection
 	if (upSw == sm_clutch_switch_e::None && dnSw == sm_clutch_switch_e::None) {
@@ -316,7 +319,7 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 		if (upRose && dnRose) {
 			// Both directions share the same physical switch. Use current TPS to disambiguate:
 			// above idle threshold = driver was on throttle = upshift.
-			m_shiftIsUpshift = (tps >= (float)engineConfiguration->smShiftTpsThreshold);
+			m_shiftIsUpshift = (tps >= (float)getCustomPage()->smShiftTpsThreshold);
 		} else {
 			m_shiftIsUpshift = upRose;
 		}
@@ -326,7 +329,7 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 		sm_clutch_switch_e dirSwitch = m_shiftIsUpshift ? upSw : dnSw;
 		bool usingClutchUpSwitch = (dirSwitch == sm_clutch_switch_e::ClutchUp);
 		efitimems_t delay = usingClutchUpSwitch
-			? static_cast<efitimems_t>(engineConfiguration->smClutchUpDisengagementDelayMs) : 0u;
+			? static_cast<efitimems_t>(getCustomPage()->smClutchUpDisengagementDelayMs) : 0u;
 		m_shiftEvaluateAtMs = nowMs + delay;
 	}
 
@@ -359,7 +362,7 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 }
 
 bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentRpm*/, float currentVss, efitimems_t /*nowMs*/) {
-	uint16_t lookbackMs = engineConfiguration->smShiftLookbackMs;
+	uint16_t lookbackMs = getCustomPage()->smShiftLookbackMs;
 	if (lookbackMs < 100) {
 		lookbackMs = 300; // safe default when not yet configured
 	}
@@ -367,7 +370,7 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentR
 		lookbackMs = 1000;
 	}
 
-	sm_shift_detection_mode_e mode = engineConfiguration->smShiftDetectionMode;
+	sm_shift_detection_mode_e mode = getCustomPage()->smShiftDetectionMode;
 
 	const SmHistoryEntry* hist = getHistoryAt(lookbackMs);
 	if (!hist) {
@@ -378,7 +381,7 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentR
 	if (mode == sm_shift_detection_mode_e::SimpleThrottle) {
 		// Simple Throttle: TPS position at lookback time reveals driver intent.
 		// Above idle threshold at shift start → driver was on throttle → upshift.
-		bool tpsWasOpen = hist->tps >= engineConfiguration->smShiftTpsThreshold;
+		bool tpsWasOpen = hist->tps >= getCustomPage()->smShiftTpsThreshold;
 		return isUpshift ? tpsWasOpen : !tpsWasOpen;
 	}
 
@@ -393,9 +396,9 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentR
 		}
 		float deltaPer1s = (hist->rpm - hist2->rpm) / (static_cast<float>(lookbackMs) / 1000.0f);
 		if (isUpshift) {
-			return deltaPer1s > (float)engineConfiguration->smUpshiftRateThreshold;
+			return deltaPer1s > (float)getCustomPage()->smUpshiftRateThreshold;
 		} else {
-			return deltaPer1s < -(float)engineConfiguration->smDownshiftRateThreshold;
+			return deltaPer1s < -(float)getCustomPage()->smDownshiftRateThreshold;
 		}
 	}
 
@@ -410,18 +413,30 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentR
 				        "Engine SM: VSS Rate mode selected but no VSS sensor configured — falling back to Simple Throttle");
 				m_vssRateWarningEmitted = true;
 			}
-			bool tpsWasOpen = hist->tps >= engineConfiguration->smShiftTpsThreshold;
+			bool tpsWasOpen = hist->tps >= getCustomPage()->smShiftTpsThreshold;
 			return isUpshift ? tpsWasOpen : !tpsWasOpen;
 		}
 		m_vssRateWarningEmitted = false;
 
 		float deltaPer1s = (currentVss - hist->vss) / (static_cast<float>(lookbackMs) / 1000.0f);
 		if (isUpshift) {
-			return deltaPer1s > (float)engineConfiguration->smUpshiftRateThreshold;
+			return deltaPer1s > (float)getCustomPage()->smUpshiftRateThreshold;
 		} else {
-			return deltaPer1s < -(float)engineConfiguration->smDownshiftRateThreshold;
+			return deltaPer1s < -(float)getCustomPage()->smDownshiftRateThreshold;
 		}
 	}
 
 	return true; // unknown mode — assume switch direction is correct
 }
+
+#else // !EFI_ENGINE_STATE_MACHINE
+
+// Engine State Machine compiled out (board set -DEFI_ENGINE_STATE_MACHINE=FALSE).
+// The module stays in the tuple so consumers, live-data and Lua lookups still link;
+// it simply does nothing and all engineSm* flags stay at their default (false).
+bool EngineStateMachine::isEnabled() const { return false; }
+EngineStateMachineState EngineStateMachine::getCurrentState() const { return EngineStateMachineState::Off; }
+void EngineStateMachine::onSlowCallback() { }
+void EngineStateMachine::updatePopsAndBangs(bool /*isOverrun*/) { engineSmIsPopsAndBangs = false; }
+
+#endif // EFI_ENGINE_STATE_MACHINE

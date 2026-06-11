@@ -1,17 +1,18 @@
 #include "pch.h"
+#include "custom_page.h"
 
 // Helper: set all three dual-mode activation thresholds
 static void setDualActivation(uint16_t rpm, uint8_t load, uint8_t tps) {
-	engineConfiguration->secondaryFpActivationRpm  = rpm;
-	engineConfiguration->secondaryFpActivationLoad = load;
-	engineConfiguration->secondaryFpActivationTps  = tps;
+	getCustomPage()->secondaryFpActivationRpm  = rpm;
+	getCustomPage()->secondaryFpActivationLoad = load;
+	getCustomPage()->secondaryFpActivationTps  = tps;
 }
 
 // Helper: set all three dual-mode hysteresis values
 static void setDualHysteresis(uint16_t rpm, uint8_t load, uint8_t tps) {
-	engineConfiguration->secondaryFpRpmHysteresis  = rpm;
-	engineConfiguration->secondaryFpLoadHysteresis = load;
-	engineConfiguration->secondaryFpTpsHysteresis  = tps;
+	getCustomPage()->secondaryFpRpmHysteresis  = rpm;
+	getCustomPage()->secondaryFpLoadHysteresis = load;
+	getCustomPage()->secondaryFpTpsHysteresis  = tps;
 }
 
 // Helper: configure secondary pump pin and re-init its GPIO
@@ -25,7 +26,7 @@ TEST(FuelPumpPwm, SingleModeUnchanged) {
 	FuelPumpController dut;
 
 	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	engineConfiguration->fuelPumpMode = FP_MODE_SINGLE;
+	getCustomPage()->fuelPumpMode = FP_MODE_SINGLE;
 	enginePins.fuelPumpRelay.init();
 
 	setTimeNowUs(0.5e6);
@@ -43,7 +44,7 @@ TEST(FuelPumpPwm, DualModeSecondaryOffBelowThresholds) {
 	FuelPumpController dut;
 
 	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	engineConfiguration->fuelPumpMode = FP_MODE_DUAL;
+	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
 	enginePins.fuelPumpRelay.init();
 	setupDualPin();
 
@@ -64,7 +65,7 @@ TEST(FuelPumpPwm, DualModeSecondaryOnAboveAllThresholds) {
 	FuelPumpController dut;
 
 	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	engineConfiguration->fuelPumpMode = FP_MODE_DUAL;
+	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
 	enginePins.fuelPumpRelay.init();
 	setupDualPin();
 
@@ -89,7 +90,7 @@ TEST(FuelPumpPwm, DualModeSecondaryStaysOffIfOnlyOneConditionMet) {
 	FuelPumpController dut;
 
 	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	engineConfiguration->fuelPumpMode = FP_MODE_DUAL;
+	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
 	enginePins.fuelPumpRelay.init();
 	setupDualPin();
 
@@ -114,7 +115,7 @@ TEST(FuelPumpPwm, DualHysteresisStaysOnUntilRpmDropsBelow) {
 	FuelPumpController dut;
 
 	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	engineConfiguration->fuelPumpMode = FP_MODE_DUAL;
+	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
 	enginePins.fuelPumpRelay.init();
 	setupDualPin();
 
@@ -147,7 +148,7 @@ TEST(FuelPumpPwm, DualHysteresisOrLogicOnDeactivation) {
 	FuelPumpController dut;
 
 	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	engineConfiguration->fuelPumpMode = FP_MODE_DUAL;
+	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
 	enginePins.fuelPumpRelay.init();
 	setupDualPin();
 
@@ -174,7 +175,7 @@ TEST(FuelPumpPwm, PwmGetSetpointFromTable) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	FuelPumpController dut;
 
-	engineConfiguration->fuelPumpMode = FP_MODE_PWM;
+	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
 
 	// Fill target table with a constant 300 kPa
 	for (int i = 0; i < FP_PRESSURE_TABLE_SIZE; i++) {
@@ -197,7 +198,7 @@ TEST(FuelPumpPwm, PwmOpenLoopNoSensor) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	FuelPumpController dut;
 
-	engineConfiguration->fuelPumpMode = FP_MODE_PWM;
+	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
 
 	// Fill base duty table: at 300 kPa target -> 50% duty
 	for (int i = 0; i < FP_DUTY_TABLE_SIZE; i++) {
@@ -219,7 +220,7 @@ TEST(FuelPumpPwm, PwmClosedLoopWithSensor) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	FuelPumpController dut;
 
-	engineConfiguration->fuelPumpMode = FP_MODE_PWM;
+	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
 	engineConfiguration->fuelPumpControl.pFactor = 1.0f;
 	engineConfiguration->fuelPumpControl.iFactor = 0;
 	engineConfiguration->fuelPumpControl.dFactor = 0;
@@ -240,9 +241,9 @@ TEST(FuelPumpPwm, PwmDutyClampedToMinMax) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	FuelPumpController dut;
 
-	engineConfiguration->fuelPumpMode  = FP_MODE_PWM;
-	engineConfiguration->fuelPumpMinDuty = 20;
-	engineConfiguration->fuelPumpMaxDuty = 90;
+	getCustomPage()->fuelPumpMode  = FP_MODE_PWM;
+	getCustomPage()->fuelPumpMinDuty = 20;
+	getCustomPage()->fuelPumpMaxDuty = 90;
 
 	// Ignite at t=0, then advance past the prime window
 	setTimeNowUs(0);
@@ -267,9 +268,9 @@ TEST(FuelPumpPwm, PwmPrimeForcesMaxDuty) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	FuelPumpController dut;
 
-	engineConfiguration->fuelPumpMode       = FP_MODE_PWM;
-	engineConfiguration->fuelPumpMinDuty    = 20;
-	engineConfiguration->fuelPumpMaxDuty    = 90;
+	getCustomPage()->fuelPumpMode       = FP_MODE_PWM;
+	getCustomPage()->fuelPumpMinDuty    = 20;
+	getCustomPage()->fuelPumpMaxDuty    = 90;
 	engineConfiguration->startUpFuelPumpDuration = 4;
 
 	// Within prime window

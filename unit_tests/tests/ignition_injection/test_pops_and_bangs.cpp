@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "custom_page.h"
 #include "engine_state_machine.h"
 #include "dfco.h"
 
@@ -13,16 +14,16 @@ static void setupSensors() {
 
 static void setupPopsAndBangs() {
 	engineConfiguration->popsAndBangsEnabled      = true;
-	engineConfiguration->popsAndBangsDelay        = 0.0f;
-	engineConfiguration->popsAndBangsDuration     = 2.0f;
-	engineConfiguration->popsAndBangsRpmHigh      = 2500;
-	engineConfiguration->popsAndBangsRpmLow       = 1800;
-	engineConfiguration->popsAndBangsRpmMax       = 6000;
-	engineConfiguration->popsAndBangsCltMin       = 40;
-	engineConfiguration->popsAndBangsCltMax       = 105;
-	engineConfiguration->popsAndBangsTimingOverride = -10.0f;
-	engineConfiguration->popsAndBangsVeOverride   = 30.0f;
-	engineConfiguration->popsAndBangsDisableMode  = POPS_AND_BANGS_DISABLE_MODE_NONE;
+	getCustomPage()->popsAndBangsDelay        = 0.0f;
+	getCustomPage()->popsAndBangsDuration     = 2.0f;
+	getCustomPage()->popsAndBangsRpmHigh      = 2500;
+	getCustomPage()->popsAndBangsRpmLow       = 1800;
+	getCustomPage()->popsAndBangsRpmMax       = 6000;
+	getCustomPage()->popsAndBangsCltMin       = 40;
+	getCustomPage()->popsAndBangsCltMax       = 105;
+	getCustomPage()->popsAndBangsTimingOverride = -10.0f;
+	getCustomPage()->popsAndBangsVeOverride   = 30.0f;
+	getCustomPage()->popsAndBangsDisableMode  = POPS_AND_BANGS_DISABLE_MODE_NONE;
 }
 
 // Helper: run the ESM P&B state machine with overrun=true at the given time
@@ -128,7 +129,7 @@ TEST(PopsAndBangs, DelayBeforeActivation) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSensors();
 	setupPopsAndBangs();
-	engineConfiguration->popsAndBangsDelay = 0.5f;
+	getCustomPage()->popsAndBangsDelay = 0.5f;
 
 	setTimeNowUs(1e6);
 	tickPnb(eth);

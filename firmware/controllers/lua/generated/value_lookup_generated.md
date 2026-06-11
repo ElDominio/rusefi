@@ -463,33 +463,6 @@ Set this so your vehicle speed signal is responsive, but not noisy. Larger value
 ### vssToothCount
 Number of pulses output per revolution of the shaft where your VSS is mounted. For example, GM applications of the T56 output 17 pulses per revolution of the transmission output shaft.
 
-### secondaryFpActivationRpm
-Secondary pump activates above this RPM (Dual mode)
-
-### secondaryFpActivationLoad
-Secondary pump activates above this MAP load (Dual mode)
-
-### secondaryFpActivationTps
-Secondary pump activates above this TPS (Dual mode)
-
-### secondaryFpRpmHysteresis
-Secondary pump deactivates when RPM drops this far below activation threshold (Dual mode)
-
-### secondaryFpLoadHysteresis
-Secondary pump deactivates when load drops this far below activation threshold (Dual mode)
-
-### secondaryFpTpsHysteresis
-Secondary pump deactivates when TPS drops this far below activation threshold (Dual mode)
-
-### fuelPumpPwmFrequency
-Fuel pump PWM frequency (PWM mode)
-
-### fuelPumpMinDuty
-Minimum PWM duty - keeps pump spinning at low demand (PWM mode)
-
-### fuelPumpMaxDuty
-Maximum PWM duty - also held during prime (PWM mode)
-
 ### fuelPumpControl.pFactor
 
 
@@ -510,12 +483,6 @@ Output Min Duty Cycle
 
 ### fuelPumpControl.maxValue
 Output Max Duty Cycle
-
-### fuelPump_iTermMin
-PID integrator lower limit (PWM mode)
-
-### fuelPump_iTermMax
-PID integrator upper limit (PWM mode)
 
 ### gapVvtTrackingLengthOverride
 How many consecutive VVT gap rations have to match expected ranges for sync to happen
@@ -1273,9 +1240,6 @@ AEM X-Series EGT gauge kit or rusEFI EGT sensor from Wideband controller
 ### enableKnockSpectrogramFilter
 
 
-### offIdleRpmAdder
-RPM added to closed-loop idle target when returning from off-idle (Running/Coasting) conditions. PID chases this elevated target to prevent stalling.
-
 ### iacByTpsTaper
 This value is an added for base idle value. Idle Value added when coasting and transitioning into idle.
 
@@ -1804,12 +1768,6 @@ How long initial idle adder is held before starting to decay.
 ### iacByTpsDecayTime
 How long it takes to remove initial IAC adder to return to normal idle.
 
-### offIdleWaitTime
-Time to wait after RPM stabilizes before starting the off-idle adder decay.
-
-### offIdleRpmAdderDecayTime
-Time over which the off-idle RPM adder linearly decays from max to zero after the wait expires.
-
 ### canVssScaling
 Scale the reported vehicle speed value from CAN. Example: Parameter set to 1.1, CAN VSS reports 50kph, ECU will report 55kph instead.
 
@@ -2101,20 +2059,11 @@ Compensates for trigger delay due to belt stretch, or other electromechanical is
 ### maxOilPressureTimeout
 Delay before cutting fuel due to extra high oil pressure. Use this to ignore short pressure blips and sensor noise.
 
-### offIdleRpmStabilityThreshold
-RPM rate-of-change (RPM/s) below which RPM is considered stable when returning to idle. Transition from Stabilizing to Waiting occurs when dRPM/s falls below this value.
-
 ### wastegatePositionOpenedVoltage
 Voltage when the wastegate is fully open
 
 ### wastegatePositionClosedVoltage
 Voltage when the wastegate is closed
-
-### cdvExitDelay
-Seconds after launch control exits before deactivating CDV solenoid. Set 0 to deactivate immediately.
-
-### cdvExitVss
-Deactivate CDV above this vehicle speed. Set 0 to disable.
 
 ### vvlController.fuelAdderPercent
 
@@ -2158,98 +2107,8 @@ Rotational Idle Auto engage CLT
 ### rotationalIdleController.auto_engage_clt
 Rotational Idle Auto engage CLT.
 
-### exhaustCutoutLuaGaugeThreshold
-Lua gauge activation threshold
-
-### exhaustCutoutOpenRpm
-RPM threshold to open cutout (0 to disable)
-
-### exhaustCutoutOpenTps
-TPS threshold to open cutout (0 to disable)
-
-### exhaustCutoutTpsDelayS
-Anti-blip: TPS must exceed threshold for this long before opening
-
-### exhaustCutoutOpenMapKpa
-MAP/Boost threshold to open cutout (0 to disable)
-
-### exhaustCutoutClosingDelayS
-Hold-open time after triggers clear
-
-### exhaustCutoutMoveDurationS
-H-Bridge motor drive time (de-energizes after). Also controls LED blink duration and actuator test step duration.
-
-### exhaustCutoutPwmFrequency
-PWM output frequency (PWM mode only)
-
-### exhaustCutoutPwmOpenDuty
-PWM duty when cutout is OPEN (PWM mode only)
-
-### exhaustCutoutPwmClosedDuty
-PWM duty when cutout is CLOSED (PWM mode only)
-
-### exhaustCutoutHBridgePwmFrequency
-H-Bridge IN1/IN2 PWM frequency (H-Bridge mode only)
-
-### exhaustCutoutHBridgeDutyCycle
-H-Bridge motor drive duty cycle (H-Bridge mode only)
-
-### smShiftTpsThreshold
-Engine SM: TPS threshold used for shift-direction disambiguation (above = driver was on throttle = upshift).
-
-### smWotTpsThreshold
-Engine SM: TPS threshold above which the engine is at Wide Open Throttle.
-
-### smTransientHoldoffCallbacks
-Engine SM: slow-callback periods (50 ms each) to hold the Transient state after the accel-enrichment threshold drops. 0 = no hold-off.
-
-### smShiftLookbackMs
-Engine SM: Sensor history window used for shift direction evaluation (100-1000ms).
-
-### smClutchUpDisengagementDelayMs
-Engine SM: Delay after Clutch-Up switch fires before evaluating shift direction. Compensates for the time between electrical and mechanical clutch disengagement.
-
-### smUpshiftRateThreshold
-Engine SM: Rate-of-change magnitude to confirm upshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s drop. VSS mode: km/h/s rise.
-
-### smDownshiftRateThreshold
-Engine SM: Rate-of-change magnitude to confirm downshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s rise. VSS mode: km/h/s fall.
-
 ### popsAndBangsEnabled
 Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce turbocharger life.
-
-### popsAndBangsDelay
-Delay after overrun starts before pops and bangs activates.
-
-### popsAndBangsDuration
-Duration of pops and bangs mode. 0 = indefinitely active (DFCO will never engage).
-
-### popsAndBangsAirAdd
-Additional idle / ETB % while pops and bangs is active.
-
-### popsAndBangsRpmHigh
-Activate above this RPM.
-
-### popsAndBangsRpmLow
-Deactivate below this RPM.
-
-### popsAndBangsRpmMax
-Never activate above this RPM.
-
-### popsAndBangsCltMin
-Do not activate below this coolant temperature (cold engine protection).
-
-### popsAndBangsCltMax
-Do not activate above this coolant temperature (overheating protection).
-
-### popsAndBangsTimingOverride
-Flat ignition timing override when pops and bangs is active.
-
-### popsAndBangsVeOverride
-VE override percentage when pops and bangs is active.
-
-### popsAndBangsLuaGaugeValue
-Lua gauge threshold for disabling pops and bangs.
 
 ### tcu_shiftTime
 

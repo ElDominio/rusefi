@@ -19,6 +19,7 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
 
 #include "idle_thread.h"
 #include "launch_control.h"
@@ -299,7 +300,7 @@ angle_t IgnitionState::getWrappedAdvance(const float rpm, const float engineLoad
 	bool isCranking = engine->rpmCalculator.isCranking();
 	if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
 		popsAndBangsTimingActive = true;
-		angle_t angle = engineConfiguration->popsAndBangsTimingOverride * luaTimingMult + luaTimingAdd;
+		angle_t angle = getCustomPage()->popsAndBangsTimingOverride * luaTimingMult + luaTimingAdd;
 		wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
 		return angle;
 	}

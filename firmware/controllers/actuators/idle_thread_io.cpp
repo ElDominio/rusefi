@@ -23,6 +23,7 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
 
 #if ! EFI_UNIT_TEST
 #include "dc_motors.h"
@@ -69,7 +70,7 @@ void startSwitchPins() {
 	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
 		startInputPinIfValid("Idle Up Switch", engineConfiguration->idleUpSwitchPins[i], engineConfiguration->idleUpSwitchMode[i]);
 	}
-	startInputPinIfValid("Pops and Bangs Disable", engineConfiguration->popsAndBangsDisablePin, engineConfiguration->popsAndBangsDisablePinMode);
+	startInputPinIfValid("Pops and Bangs Disable", getCustomPage()->popsAndBangsDisablePin, getCustomPage()->popsAndBangsDisablePinMode);
 #endif /* EFI_PROD_CODE */
 }
 
@@ -85,7 +86,8 @@ void stopSwitchPins() {
 	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
 		brain_pin_markUnused(activeConfiguration.idleUpSwitchPins[i]);
 	}
-	brain_pin_markUnused(activeConfiguration.popsAndBangsDisablePin);
+	// popsAndBangsDisablePin now lives in TS page 5, which the page-1 activeConfiguration
+	// snapshot does not track. It is (re)marked each config change via startInputPinIfValid above.
 }
 
 #if ! EFI_UNIT_TEST

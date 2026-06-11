@@ -1443,6 +1443,32 @@ float getOutputValueByHash(const int hash) {
 		case 1239062717:
 			return engine->module<BoostController>()->boostOutput;
 #endif
+#if EFI_ELECTRONIC_THROTTLE_BODY
+// downshiftBlipActive
+		case 491146174:
+			return engine->module<DownshiftBlipper>()->downshiftBlipActive;
+// downshiftBlipState
+		case -1394835389:
+			return engine->module<DownshiftBlipper>()->downshiftBlipState;
+// downshiftBlipPreShiftGear
+		case 686125510:
+			return engine->module<DownshiftBlipper>()->downshiftBlipPreShiftGear;
+// downshiftBlipTargetGear
+		case 1977331048:
+			return engine->module<DownshiftBlipper>()->downshiftBlipTargetGear;
+// downshiftBlipTargetRpm
+		case -1241573768:
+			return engine->module<DownshiftBlipper>()->downshiftBlipTargetRpm;
+// downshiftBlipThrottleRequest
+		case 428560257:
+			return engine->module<DownshiftBlipper>()->downshiftBlipThrottleRequest;
+// downshiftBlipPidOutput
+		case 607611952:
+			return engine->module<DownshiftBlipper>()->downshiftBlipPidOutput;
+// downshiftBlipLuaMult
+		case 1031247910:
+			return engine->module<DownshiftBlipper>()->downshiftBlipLuaMult;
+#endif
 #if EFI_ENGINE_CONTROL
 // totalFuelCorrection
 		case -1779658835:

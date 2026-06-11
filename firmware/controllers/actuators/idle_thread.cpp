@@ -11,6 +11,7 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
 #include "engine_state_machine.h"
 
 #if EFI_IDLE_CONTROL
@@ -135,18 +136,19 @@ float IdleController::getCrankingTaperFraction(float clt) const {
 }
 
 float IdleController::getOffIdleAdder(Phase phase, float rpm) {
+#if EFI_OFF_IDLE_RPM_ADDER
 	float dRpmPerSec = std::abs(rpm - m_lastRpmForStability) / (FAST_CALLBACK_PERIOD_MS / 1000.0f);
 	m_lastRpmForStability = rpm;
 
-	if (engineConfiguration->offIdleRpmAdder <= 0) {
+	if (getCustomPage()->offIdleRpmAdder <= 0) {
 		m_offIdlePhase = OffIdleAdderPhase::Inactive;
 		return m_offIdleAdderRpm = 0;
 	}
 
-	const float maxAdder  = engineConfiguration->offIdleRpmAdder;
-	const float stability = engineConfiguration->offIdleRpmStabilityThreshold;
-	const float waitTime  = engineConfiguration->offIdleWaitTime;
-	const float decayTime = engineConfiguration->offIdleRpmAdderDecayTime;
+	const float maxAdder  = getCustomPage()->offIdleRpmAdder;
+	const float stability = getCustomPage()->offIdleRpmStabilityThreshold;
+	const float waitTime  = getCustomPage()->offIdleWaitTime;
+	const float decayTime = getCustomPage()->offIdleRpmAdderDecayTime;
 
 	bool isOffIdle = (phase == Phase::Running || phase == Phase::Coasting);
 
@@ -187,6 +189,10 @@ float IdleController::getOffIdleAdder(Phase phase, float rpm) {
 		}
 	}
 	return m_offIdleAdderRpm = 0;
+#else // !EFI_OFF_IDLE_RPM_ADDER
+	(void)phase; (void)rpm;
+	return m_offIdleAdderRpm = 0;
+#endif // EFI_OFF_IDLE_RPM_ADDER
 }
 
 /**
@@ -552,7 +558,7 @@ float IdleController::getIdlePosition(float rpm) {
 			}
 
 			if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
-				iacPosition += engineConfiguration->popsAndBangsAirAdd;
+				iacPosition += getCustomPage()->popsAndBangsAirAdd;
 			}
 
 			iacPosition = clampPercentValue(iacPosition);

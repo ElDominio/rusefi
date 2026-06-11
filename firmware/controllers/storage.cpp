@@ -99,6 +99,9 @@ static bool storageWriteID(uint32_t id) {
 	} else if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		burnExtraFlashPage(EFI_SECOND_TABLES_RECORD_ID);
 		return true;
+	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
+		burnExtraFlashPage(EFI_CUSTOM_PAGE_RECORD_ID);
+		return true;
 	} else {
 		efiPrintf("Requested to write unknown record id %ld", id);
 		// to clear pending bit
@@ -115,6 +118,9 @@ static bool storageReadID(uint32_t id) {
 		return true;
 	} else if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		loadExtraPage(EFI_SECOND_TABLES_RECORD_ID);
+		return true;
+	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
+		loadExtraPage(EFI_CUSTOM_PAGE_RECORD_ID);
 		return true;
 	} else {
 		efiPrintf("Requested to read unknown record id %ld", id);

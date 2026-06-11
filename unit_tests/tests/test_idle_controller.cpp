@@ -6,6 +6,7 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
 
 #include "efi_pid.h"
 #include "idle_thread.h"
@@ -607,10 +608,10 @@ TEST(idle_v2, IntegrationClamping) {
 // ---- Off-idle RPM adder tests ----
 
 static void setupOffIdleAdder(int adderRpm = 200, float stabilityThreshold = 100, float waitTime = 0.5f, float decayTime = 2.0f) {
-	engineConfiguration->offIdleRpmAdder = adderRpm;
-	engineConfiguration->offIdleRpmStabilityThreshold = stabilityThreshold;
-	engineConfiguration->offIdleWaitTime = waitTime;
-	engineConfiguration->offIdleRpmAdderDecayTime = decayTime;
+	getCustomPage()->offIdleRpmAdder = adderRpm;
+	getCustomPage()->offIdleRpmStabilityThreshold = stabilityThreshold;
+	getCustomPage()->offIdleWaitTime = waitTime;
+	getCustomPage()->offIdleRpmAdderDecayTime = decayTime;
 }
 
 TEST(idle_v2, offIdleAdder_disabled) {
@@ -618,7 +619,7 @@ TEST(idle_v2, offIdleAdder_disabled) {
 	IdleController dut;
 
 	// Feature is disabled when adder is zero
-	engineConfiguration->offIdleRpmAdder = 0;
+	getCustomPage()->offIdleRpmAdder = 0;
 
 	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Running, 2000));
 	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Idling, 900));

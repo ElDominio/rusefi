@@ -35,6 +35,7 @@
 #include "shift_torque_reduction_controller.h"
 #include "nitrous_controller.h"
 #include "engine_state_machine.h"
+#include "downshift_blipper.h"
 #include "antilag_system.h"
 #include "start_stop.h"
 #include "trigger_scheduler.h"
@@ -194,6 +195,9 @@ public:
         NitrousController,
 #endif // EFI_LAUNCH_CONTROL
         EngineStateMachine,
+#if EFI_ELECTRONIC_THROTTLE_BODY
+        DownshiftBlipper,
+#endif // EFI_ELECTRONIC_THROTTLE_BODY
 #if EFI_LTFT_CONTROL
         LongTermFuelTrim,
 #endif

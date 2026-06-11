@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "custom_page.h"
 
 #include "limp_manager.h"
 #include "fuel_math.h"
@@ -47,11 +48,13 @@ void LimpManager::onFastCallback() {
 	updateState(Sensor::getOrZero(SensorType::Rpm), getTimeNowNt());
 }
 
+#if EFI_LUA_LIMITER
 static float getLuaLimiterGaugeValue() {
-	int gaugeIndex = (int)engineConfiguration->luaLimiterGaugeSelect;
+	int gaugeIndex = (int)getCustomPage()->luaLimiterGaugeSelect;
 	SensorType type = static_cast<SensorType>(static_cast<int>(SensorType::LuaGauge1) + gaugeIndex);
 	return Sensor::getOrZero(type);
 }
+#endif // EFI_LUA_LIMITER
 
 void LimpManager::updateRevLimit(float rpm) {
 	// User-configured hard RPM limit, either constant or CLT-lookup
@@ -59,9 +62,11 @@ void LimpManager::updateRevLimit(float rpm) {
 		? interpolate2d(Sensor::getOrZero(SensorType::Clt), config->cltRevLimitRpmBins, config->cltRevLimitRpm)
 		: (float)engineConfiguration->rpmHardLimit;
 
+#if EFI_LUA_LIMITER
 	if (engineConfiguration->luaLimiterEnabled) {
-		m_revLimit += interpolate2d(getLuaLimiterGaugeValue(), config->luaLimiterRpmAddBins, config->luaLimiterRpmAdd);
+		m_revLimit += interpolate2d(getLuaLimiterGaugeValue(), getCustomPage()->luaLimiterRpmAddBins, getCustomPage()->luaLimiterRpmAdd);
 	}
+#endif // EFI_LUA_LIMITER
 
 	// Require configurable rpm drop before resuming
 	resumeRpm = m_revLimit - engineConfiguration->rpmHardLimitHyst;
@@ -134,9 +139,11 @@ void LimpManager::updateState(float rpm, efitick_t nowNt) {
 	// Limit fuel only on boost pressure (limiting spark bends valves)
 	float mapCut = engineConfiguration->boostCutPressure;
 	if (mapCut != 0) {
+#if EFI_LUA_LIMITER
 		if (engineConfiguration->luaLimiterEnabled) {
-			mapCut += interpolate2d(getLuaLimiterGaugeValue(), config->luaLimiterBoostAddBins, config->luaLimiterBoostAdd);
+			mapCut += interpolate2d(getLuaLimiterGaugeValue(), getCustomPage()->luaLimiterBoostAddBins, getCustomPage()->luaLimiterBoostAdd);
 		}
+#endif // EFI_LUA_LIMITER
 		// require drop of 'boostCutPressureHyst' kPa to resume fuel
 		if (m_boostCutHysteresis.checkIfLimitIsExceeded(Sensor::getOrZero(SensorType::Map), mapCut, engineConfiguration->boostCutPressureHyst)) {
 			allowFuel.clear(ClearReason::BoostCut);

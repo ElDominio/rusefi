@@ -1,0 +1,15 @@
+struct_no_prefix downshift_blipper_state_s
+
+	bit downshiftBlipActive;Blipper: active
+
+	uint8_t downshiftBlipState;Blipper: state
+	uint8_t downshiftBlipPreShiftGear;Blipper: pre-shift gear
+	uint8_t downshiftBlipTargetGear;Blipper: target gear
+
+	uint16_t downshiftBlipTargetRpm;Blipper: target RPM
+
+	float downshiftBlipThrottleRequest;Blipper: throttle req
+	float downshiftBlipPidOutput;Blipper: PID output
+	float downshiftBlipLuaMult;Blipper: Lua mult
+
+end_struct

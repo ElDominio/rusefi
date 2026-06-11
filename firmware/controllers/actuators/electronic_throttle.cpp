@@ -36,6 +36,7 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
 
 #include "electronic_throttle_impl.h"
 #include "engine_state_machine.h"
@@ -344,7 +345,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 #endif /* EFI_ANTILAG_SYSTEM */
 
 	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
-		targetPosition += engineConfiguration->popsAndBangsAirAdd;
+		targetPosition += getCustomPage()->popsAndBangsAirAdd;
 	}
 
   tcEtbDrop = engine->tractionController.getAppliedEtbDrop();
@@ -356,6 +357,15 @@ expected<percent_t> EtbController::getSetpointEtb() {
 
 	// Clamp before rev limiter to avoid ineffective rev limit due to crazy out of range position target
 	targetPosition = clampPercentValue(targetPosition);
+
+#if EFI_ELECTRONIC_THROTTLE_BODY
+	// Downshift Blipper: during an active blip, fully replace the pedal-derived target so one
+	// or two ETBs rev-match to the same setpoint. Placed before the rev limiter below so the
+	// limiter still clamps the blip — the blipper cannot out-vote the rev limiter.
+	if (engine->module<DownshiftBlipper>().unmock().isActive()) {
+		targetPosition = engine->module<DownshiftBlipper>().unmock().getThrottleRequest();
+	}
+#endif // EFI_ELECTRONIC_THROTTLE_BODY
 
 	// Lastly, apply ETB rev limiter
 	auto etbRpmLimit = engineConfiguration->etbRevLimitStart;

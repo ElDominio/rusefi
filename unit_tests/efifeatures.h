@@ -88,3 +88,10 @@
 #define EFI_VVT_COMPENSATION TRUE
 
 #define EFI_EXHAUST_CUTOUT TRUE
+
+// AlphaX custom subsystems (config in TS page 5) — enabled for unit tests.
+#define EFI_DOWNSHIFT_BLIPPER TRUE
+#define EFI_ENGINE_STATE_MACHINE TRUE
+#define EFI_CLUTCH_DELAY_VALVE TRUE
+#define EFI_OFF_IDLE_RPM_ADDER TRUE
+#define EFI_LUA_LIMITER TRUE

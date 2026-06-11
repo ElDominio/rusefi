@@ -1,5 +1,5 @@
 package com.rusefi.enums;
-//was generated automatically by rusEFI tool config_definition_base-all.jar based on StateDictionaryGenerator integration/LiveData.yaml on Tue Jun 09 04:55:04 AST 2026
+//was generated automatically by rusEFI tool config_definition_base-all.jar based on StateDictionaryGenerator integration/LiveData.yaml on Thu Jun 11 02:31:32 AST 2026
 
 import com.rusefi.config.generated.*;
 import com.rusefi.ldmp.StateDictionary;
@@ -54,6 +54,7 @@ public class StateDictionaryFactory {
         stateDictionary.register(live_data_e.LDS_cdv_controller_state, "cdv_controller_state");
         stateDictionary.register(live_data_e.LDS_live_data_rotational_idle, "live_data_rotational_idle");
         stateDictionary.register(live_data_e.LDS_engine_state_machine_state, "engine_state_machine_state");
+        stateDictionary.register(live_data_e.LDS_downshift_blipper_state, "downshift_blipper_state");
         stateDictionary.register(live_data_e.LDS_dfco_state, "dfco_state");
     }
 }

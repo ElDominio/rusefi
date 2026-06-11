@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "custom_page.h"
 
 #include "airmass.h"
 #include "idle_thread.h"
@@ -102,7 +103,7 @@ float AirmassVeModelBase::getVe(float rpm, float load, bool postState) const {
 	}
 
 	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
-		return engineConfiguration->popsAndBangsVeOverride * PERCENT_DIV;
+		return getCustomPage()->popsAndBangsVeOverride * PERCENT_DIV;
 	}
 
 	if (postState) {

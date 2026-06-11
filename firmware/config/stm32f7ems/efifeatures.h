@@ -24,6 +24,26 @@
 #define EFI_EXHAUST_CUTOUT TRUE
 #endif
 
+#ifndef EFI_DOWNSHIFT_BLIPPER
+#define EFI_DOWNSHIFT_BLIPPER TRUE
+#endif
+
+#ifndef EFI_ENGINE_STATE_MACHINE
+#define EFI_ENGINE_STATE_MACHINE TRUE
+#endif
+
+#ifndef EFI_CLUTCH_DELAY_VALVE
+#define EFI_CLUTCH_DELAY_VALVE TRUE
+#endif
+
+#ifndef EFI_OFF_IDLE_RPM_ADDER
+#define EFI_OFF_IDLE_RPM_ADDER TRUE
+#endif
+
+#ifndef EFI_LUA_LIMITER
+#define EFI_LUA_LIMITER TRUE
+#endif
+
 // Disable ini ramdisk as a mitigation of https://github.com/rusefi/rusefi/issues/3775
 // See STM32F7.ld for more info
 #ifndef EFI_EMBED_INI_MSD

@@ -147,23 +147,9 @@ static void setDefaultFuelCutParameters() {
 	engineConfiguration->coastingFuelCutMap = 30;
 	engineConfiguration->coastingFuelCutClt = 60;
 
+	// Pops & Bangs enable bit (the rest of the pops & bangs settings now live in TS page 5;
+	// their defaults are set in customPageSetDefaults() in custom_page.cpp).
 	engineConfiguration->popsAndBangsEnabled = false;
-	engineConfiguration->popsAndBangsDelay = 1.0f;
-	engineConfiguration->popsAndBangsDuration = 2.0f;
-	engineConfiguration->popsAndBangsAirAdd = 0;
-	engineConfiguration->popsAndBangsRpmHigh = 2500;
-	engineConfiguration->popsAndBangsRpmLow = 1800;
-	engineConfiguration->popsAndBangsRpmMax = 5500;
-	engineConfiguration->popsAndBangsCltMin = 40;
-	engineConfiguration->popsAndBangsCltMax = 105;
-	engineConfiguration->popsAndBangsTimingOverride = -10.0f;
-	engineConfiguration->popsAndBangsVeOverride = 30.0f;
-	engineConfiguration->popsAndBangsDisableMode = POPS_AND_BANGS_DISABLE_MODE_NONE;
-	engineConfiguration->popsAndBangsDisablePin = Gpio::Unassigned;
-	engineConfiguration->popsAndBangsDisablePinMode = PI_DEFAULT;
-	engineConfiguration->popsAndBangsLuaGauge = LUA_GAUGE_1;
-	engineConfiguration->popsAndBangsLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
-	engineConfiguration->popsAndBangsLuaGaugeValue = 0.0f;
 }
 
 static void setDefaultStftSettings() {

@@ -9,6 +9,7 @@ CONTROLLERS_DIR=$(PROJECT_DIR)/controllers
 
 CONTROLLERS_SRC_CPP = \
 	$(CONTROLLERS_DIR)/actuators/electronic_throttle.cpp \
+	$(CONTROLLERS_DIR)/actuators/downshift_blipper.cpp \
 	$(CONTROLLERS_DIR)/actuators/ac_control.cpp \
 	$(CONTROLLERS_DIR)/actuators/alternator_controller.cpp \
 	$(CONTROLLERS_DIR)/actuators/boost_control.cpp \
@@ -77,6 +78,7 @@ CONTROLLERS_SRC_CPP = \
 	$(CONTROLLERS_DIR)/max_limit_with_hysteresis.cpp \
 	$(CONTROLLERS_DIR)/long_term_fuel_trim.cpp \
 	$(CONTROLLERS_DIR)/second_tables.cpp \
+	$(CONTROLLERS_DIR)/custom_page.cpp \
 	$(CONTROLLERS_DIR)/extra_flash_pages.cpp \
 
 CONTROLLERS_INC=\

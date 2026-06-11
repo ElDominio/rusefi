@@ -51,6 +51,7 @@ LDS_vvl_controller_state,
 LDS_cdv_controller_state,
 LDS_live_data_rotational_idle,
 LDS_engine_state_machine_state,
+LDS_downshift_blipper_state,
 LDS_dfco_state,
 } live_data_e;
 #define OUTPUT_CHANNELS_BASE_ADDRESS 0
@@ -94,4 +95,5 @@ LDS_dfco_state,
 #define CDV_CONTROLLER_STATE_BASE_ADDRESS 2168
 #define LIVE_DATA_ROTATIONAL_IDLE_BASE_ADDRESS 2172
 #define ENGINE_STATE_MACHINE_STATE_BASE_ADDRESS 2176
-#define DFCO_STATE_BASE_ADDRESS 2184
+#define DOWNSHIFT_BLIPPER_STATE_BASE_ADDRESS 2184
+#define DFCO_STATE_BASE_ADDRESS 2208

@@ -563,6 +563,28 @@
 #define EFI_VVT_COMPENSATION FALSE
 #endif
 
+// AlphaX custom subsystems (config lives in TS page 5). Default FALSE on F4 (limited flash);
+// F7/H7 override these to TRUE. A board may set -DEFI_<FEATURE>=TRUE in its board.mk to opt in.
 #ifndef EFI_EXHAUST_CUTOUT
 #define EFI_EXHAUST_CUTOUT FALSE
+#endif
+
+#ifndef EFI_DOWNSHIFT_BLIPPER
+#define EFI_DOWNSHIFT_BLIPPER FALSE
+#endif
+
+#ifndef EFI_ENGINE_STATE_MACHINE
+#define EFI_ENGINE_STATE_MACHINE FALSE
+#endif
+
+#ifndef EFI_CLUTCH_DELAY_VALVE
+#define EFI_CLUTCH_DELAY_VALVE FALSE
+#endif
+
+#ifndef EFI_OFF_IDLE_RPM_ADDER
+#define EFI_OFF_IDLE_RPM_ADDER FALSE
+#endif
+
+#ifndef EFI_LUA_LIMITER
+#define EFI_LUA_LIMITER FALSE
 #endif

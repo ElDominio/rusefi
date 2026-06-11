@@ -329,6 +329,15 @@ const engine_state_machine_state_s* getLiveData(size_t) {
 }
 
 template<>
+const downshift_blipper_state_s* getLiveData(size_t) {
+#if EFI_ELECTRONIC_THROTTLE_BODY
+	return &engine->module<DownshiftBlipper>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
 const cdv_controller_state_s* getLiveData(size_t) {
 #if MODULE_CDV_CONTROLLER
 	return &engine->module<CdvController>().unmock();

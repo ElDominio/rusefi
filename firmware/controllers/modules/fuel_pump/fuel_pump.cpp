@@ -3,6 +3,7 @@
  * for high-pressure see HpfpController@high_pressure_fuel_pump
  */
 #include "pch.h"
+#include "custom_page.h"
 
 #include "fuel_pump.h"
 #include "bench_test.h"
@@ -29,7 +30,7 @@ void FuelPumpController::onSlowCallback() {
 	isFuelPumpOn = isPrime || engineTurnedRecently;
 
 #if EFI_ADVANCED_FUEL_PUMP
-	fuel_pump_mode_e mode = engineConfiguration->fuelPumpMode;
+	fuel_pump_mode_e mode = getCustomPage()->fuelPumpMode;
 
 	if (mode == FP_MODE_SINGLE) {
 		if (!isRunningBenchTest()) {
@@ -64,16 +65,16 @@ void FuelPumpController::updateDualRelay() {
 
 	if (!m_secondaryPumpOn) {
 		// Activation: all three axes must exceed their activation threshold
-		if (rpm  > engineConfiguration->secondaryFpActivationRpm  &&
-		    load > engineConfiguration->secondaryFpActivationLoad &&
-		    tps  > engineConfiguration->secondaryFpActivationTps) {
+		if (rpm  > getCustomPage()->secondaryFpActivationRpm  &&
+		    load > getCustomPage()->secondaryFpActivationLoad &&
+		    tps  > getCustomPage()->secondaryFpActivationTps) {
 			m_secondaryPumpOn = true;
 		}
 	} else {
 		// Deactivation: any single axis dropping below (activation - hysteresis) shuts off secondary
-		if (rpm  < (float)engineConfiguration->secondaryFpActivationRpm  - engineConfiguration->secondaryFpRpmHysteresis  ||
-		    load < (float)engineConfiguration->secondaryFpActivationLoad - engineConfiguration->secondaryFpLoadHysteresis ||
-		    tps  < (float)engineConfiguration->secondaryFpActivationTps  - engineConfiguration->secondaryFpTpsHysteresis) {
+		if (rpm  < (float)getCustomPage()->secondaryFpActivationRpm  - getCustomPage()->secondaryFpRpmHysteresis  ||
+		    load < (float)getCustomPage()->secondaryFpActivationLoad - getCustomPage()->secondaryFpLoadHysteresis ||
+		    tps  < (float)getCustomPage()->secondaryFpActivationTps  - getCustomPage()->secondaryFpTpsHysteresis) {
 			m_secondaryPumpOn = false;
 		}
 	}
@@ -83,7 +84,7 @@ void FuelPumpController::updateDualRelay() {
 }
 
 void FuelPumpController::onFastCallback() {
-	if (engineConfiguration->fuelPumpMode != FP_MODE_PWM) {
+	if (getCustomPage()->fuelPumpMode != FP_MODE_PWM) {
 		return;
 	}
 
@@ -131,8 +132,8 @@ expected<percent_t> FuelPumpController::getOpenLoop(float target) {
 
 expected<percent_t> FuelPumpController::getClosedLoop(float setpoint, float observation) {
 	isFpPidActive = true;
-	m_fuelPumpPid.iTermMin = engineConfiguration->fuelPump_iTermMin;
-	m_fuelPumpPid.iTermMax = engineConfiguration->fuelPump_iTermMax;
+	m_fuelPumpPid.iTermMin = getCustomPage()->fuelPump_iTermMin;
+	m_fuelPumpPid.iTermMax = getCustomPage()->fuelPump_iTermMax;
 	return m_fuelPumpPid.getOutput(setpoint, observation, FAST_CALLBACK_PERIOD_MS / 1000.0f);
 }
 
@@ -140,14 +141,14 @@ void FuelPumpController::setOutput(expected<percent_t> output) {
 	percent_t duty;
 
 	if (isPrime) {
-		duty = engineConfiguration->fuelPumpMaxDuty;
+		duty = getCustomPage()->fuelPumpMaxDuty;
 		m_fuelPumpPid.reset();
 	} else if (output) {
-		duty = clampF(engineConfiguration->fuelPumpMinDuty,
+		duty = clampF(getCustomPage()->fuelPumpMinDuty,
 		              output.Value,
-		              engineConfiguration->fuelPumpMaxDuty);
+		              getCustomPage()->fuelPumpMaxDuty);
 	} else {
-		duty = engineConfiguration->fuelPumpMinDuty;
+		duty = getCustomPage()->fuelPumpMinDuty;
 		isFpPidActive = false;
 		m_fuelPumpPid.reset();
 	}
@@ -167,7 +168,7 @@ void FuelPumpController::onConfigurationChange(engine_configuration_s const* pre
 
 void initFuelPumpPwm() {
 #if EFI_PROD_CODE || EFI_SIMULATOR
-	if (engineConfiguration->fuelPumpMode != FP_MODE_PWM) {
+	if (getCustomPage()->fuelPumpMode != FP_MODE_PWM) {
 		return;
 	}
 
@@ -179,8 +180,8 @@ void initFuelPumpPwm() {
 	               "Fuel pump PWM",
 	               &engine->scheduler,
 	               &enginePins.fuelPumpRelay,
-	               engineConfiguration->fuelPumpPwmFrequency,
-	               PERCENT_TO_DUTY(engineConfiguration->fuelPumpMinDuty));
+	               getCustomPage()->fuelPumpPwmFrequency,
+	               PERCENT_TO_DUTY(getCustomPage()->fuelPumpMinDuty));
 #endif
 }
 #endif // EFI_ADVANCED_FUEL_PUMP

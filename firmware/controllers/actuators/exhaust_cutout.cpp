@@ -1,5 +1,8 @@
 #include "pch.h"
 #include "exhaust_cutout.h"
+#include "custom_page.h"
+
+#if EFI_EXHAUST_CUTOUT
 
 static constexpr float VBATT_KEY_ON_TEST_THRESHOLD = 10.0f;
 
@@ -13,9 +16,9 @@ void ExhaustCutoutController::initPins() {
 	m_hbridgePin2.deInit();
 	m_ledPin.deInit();
 
-	auto& cfg = *engineConfiguration;
+	auto& cfg = *getCustomPage();
 
-	if (!cfg.exhaustCutoutEnabled) {
+	if (!engineConfiguration->exhaustCutoutEnabled) {
 		return;
 	}
 
@@ -58,13 +61,13 @@ void ExhaustCutoutController::initPins() {
 	} else if (isPwm) {
 		m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutPwmClosedDuty));
 	} else {
-		m_outputPin.setValue(cfg.exhaustCutoutInvertedOutput ? 1 : 0);
+		m_outputPin.setValue(engineConfiguration->exhaustCutoutInvertedOutput ? 1 : 0);
 	}
 
 	m_ledPin.setValue(0);
 
 	// Arm key-on test; actual start is deferred until 12V is present (onSlowCallback)
-	if (cfg.exhaustCutoutKeyOnTestEnabled && !m_bootTestDone) {
+	if (engineConfiguration->exhaustCutoutKeyOnTestEnabled && !m_bootTestDone) {
 		m_keyOnTestPending = true;
 	}
 }
@@ -74,7 +77,7 @@ void ExhaustCutoutController::onConfigurationChange(engine_configuration_s const
 }
 
 bool ExhaustCutoutController::getInputHigh() const {
-	auto& cfg = *engineConfiguration;
+	auto& cfg = *getCustomPage();
 
 	if (cfg.exhaustCutoutActivationMode == EXHAUST_CUTOUT_SWITCH) {
 #if !EFI_SIMULATOR
@@ -112,7 +115,7 @@ bool ExhaustCutoutController::getInputHigh() const {
 }
 
 bool ExhaustCutoutController::evaluateAutoTrigger() {
-	auto& cfg = *engineConfiguration;
+	auto& cfg = *getCustomPage();
 
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
 	isTriggerRpm = (cfg.exhaustCutoutOpenRpm > 0) && (rpm > cfg.exhaustCutoutOpenRpm);
@@ -147,7 +150,7 @@ void ExhaustCutoutController::setState(ExhaustCutoutState newState) {
 	m_moveTimer.reset();
 	m_ledTimer.reset();
 
-	auto& cfg = *engineConfiguration;
+	auto& cfg = *getCustomPage();
 	bool isHBridge = cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_HBRIDGE;
 	bool isPwm = cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_PWM;
 
@@ -158,7 +161,7 @@ void ExhaustCutoutController::setState(ExhaustCutoutState newState) {
 			} else if (isPwm) {
 				m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutPwmClosedDuty));
 			} else {
-				m_outputPin.setValue(cfg.exhaustCutoutInvertedOutput ? 1 : 0);
+				m_outputPin.setValue(engineConfiguration->exhaustCutoutInvertedOutput ? 1 : 0);
 			}
 			m_ledPin.setValue(0);
 			break;
@@ -170,7 +173,7 @@ void ExhaustCutoutController::setState(ExhaustCutoutState newState) {
 			} else if (isPwm) {
 				m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutPwmOpenDuty));
 			} else {
-				m_outputPin.setValue(cfg.exhaustCutoutInvertedOutput ? 0 : 1);
+				m_outputPin.setValue(engineConfiguration->exhaustCutoutInvertedOutput ? 0 : 1);
 			}
 			break;
 		case ExhaustCutoutState::OPEN:
@@ -188,7 +191,7 @@ void ExhaustCutoutController::setState(ExhaustCutoutState newState) {
 			} else if (isPwm) {
 				m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutPwmClosedDuty));
 			} else {
-				m_outputPin.setValue(cfg.exhaustCutoutInvertedOutput ? 1 : 0);
+				m_outputPin.setValue(engineConfiguration->exhaustCutoutInvertedOutput ? 1 : 0);
 			}
 			break;
 	}
@@ -217,7 +220,7 @@ void ExhaustCutoutController::updateLed() {
 
 // Returns the desired open state for the current test step, advancing phase when timer expires.
 bool ExhaustCutoutController::runTestSequence() {
-	auto& cfg = *engineConfiguration;
+	auto& cfg = *getCustomPage();
 	float stepDuration = cfg.exhaustCutoutMoveDurationS;
 	bool stepDone = m_testStepTimer.hasElapsedSec(stepDuration);
 
@@ -241,7 +244,7 @@ bool ExhaustCutoutController::runTestSequence() {
 				m_testPhase = ExhaustCutoutTestPhase::IDLE;
 				m_bootTestDone = true;
 				m_closeDelayTimer.reset();
-				if (cfg.exhaustCutoutEngineOnTestEnabled) {
+				if (engineConfiguration->exhaustCutoutEngineOnTestEnabled) {
 					m_engineOnTestArmed = true;
 				}
 			}
@@ -261,16 +264,16 @@ bool ExhaustCutoutController::runTestSequence() {
 }
 
 void ExhaustCutoutController::onSlowCallback() {
-	auto& cfg = *engineConfiguration;
+	auto& cfg = *getCustomPage();
 
-	if (!cfg.exhaustCutoutEnabled || cfg.exhaustCutoutActivationMode == EXHAUST_CUTOUT_OFF) {
+	if (!engineConfiguration->exhaustCutoutEnabled || cfg.exhaustCutoutActivationMode == EXHAUST_CUTOUT_OFF) {
 		if (m_state != ExhaustCutoutState::CLOSED) {
 			if (cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_HBRIDGE) {
 				deEnergize();
 			} else if (cfg.exhaustCutoutOutputMode == EXHAUST_CUTOUT_OUTPUT_PWM) {
 				m_pwmOutput.setSimplePwmDutyCycle(PERCENT_TO_DUTY(cfg.exhaustCutoutPwmClosedDuty));
 			} else {
-				m_outputPin.setValue(cfg.exhaustCutoutInvertedOutput ? 1 : 0);
+				m_outputPin.setValue(engineConfiguration->exhaustCutoutInvertedOutput ? 1 : 0);
 			}
 			m_ledPin.setValue(0);
 			m_state = ExhaustCutoutState::CLOSED;
@@ -369,3 +372,14 @@ void ExhaustCutoutController::onSlowCallback() {
 void initExhaustCutout() {
 	engine->module<ExhaustCutoutController>()->initPins();
 }
+
+#else // !EFI_EXHAUST_CUTOUT
+
+// Exhaust Cutout compiled out (board set -DEFI_EXHAUST_CUTOUT=FALSE).
+// Module stays in the tuple so live-data / Lua lookups still link; it does nothing.
+void ExhaustCutoutController::initPins() { }
+void ExhaustCutoutController::onConfigurationChange(engine_configuration_s const* /*previousConfig*/) { }
+void ExhaustCutoutController::onSlowCallback() { }
+void initExhaustCutout() { }
+
+#endif // EFI_EXHAUST_CUTOUT

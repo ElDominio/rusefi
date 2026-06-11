@@ -101,6 +101,7 @@ TESTS_SRC_CPP = \
 	tests/nitrous_control/test_nitrous_fuel_adder.cpp \
 	tests/nitrous_control/test_nitrous_ignition_retard.cpp \
 	tests/engine_state_machine/test_engine_state_machine.cpp \
+	tests/actuators/test_downshift_blipper.cpp \
 	tests/test_fft.cpp \
 	tests/lua/test_lua_basic.cpp \
 	tests/lua/test_bit_range_msb.cpp \

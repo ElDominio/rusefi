@@ -844,23 +844,12 @@ engineSyncCam_e engineSyncCam;Select which cam is used for engine sync. Other ca
 
 	output_pin_e fuelPumpPin;
 	pin_output_mode_e fuelPumpPinMode;
-	fuel_pump_mode_e fuelPumpMode;Fuel pump output mode: Single relay, Dual relay with secondary activation, or PWM pressure control;"", 1, 0, 0, 2, 0
 
 	output_pin_e fuelPump2Pin;Secondary fuel pump output pin (Dual mode only)
 	pin_output_mode_e fuelPump2PinMode;Secondary fuel pump output mode
-	uint16_t secondaryFpActivationRpm;Secondary pump activates above this RPM (Dual mode);"rpm", 1, 0, 0, 8000, 0
-	uint8_t secondaryFpActivationLoad;Secondary pump activates above this MAP load (Dual mode);"%", 1, 0, 0, 100, 0
-	uint8_t secondaryFpActivationTps;Secondary pump activates above this TPS (Dual mode);"%", 1, 0, 0, 100, 0
-	uint16_t secondaryFpRpmHysteresis;Secondary pump deactivates when RPM drops this far below activation threshold (Dual mode);"rpm", 1, 0, 0, 2000, 0
-	uint8_t secondaryFpLoadHysteresis;Secondary pump deactivates when load drops this far below activation threshold (Dual mode);"%", 1, 0, 0, 50, 0
-	uint8_t secondaryFpTpsHysteresis;Secondary pump deactivates when TPS drops this far below activation threshold (Dual mode);"%", 1, 0, 0, 50, 0
 
-	uint16_t fuelPumpPwmFrequency;Fuel pump PWM frequency (PWM mode);"Hz", 1, 0, 10, 3000, 0
-	uint8_t fuelPumpMinDuty;Minimum PWM duty - keeps pump spinning at low demand (PWM mode);"%", 1, 0, 0, 100, 0
-	uint8_t fuelPumpMaxDuty;Maximum PWM duty - also held during prime (PWM mode);"%", 1, 0, 0, 100, 0
 	pid_s fuelPumpControl;PID settings for closed-loop fuel pressure control (PWM mode, requires FP sensor)
-	int16_t fuelPump_iTermMin;PID integrator lower limit (PWM mode);"", 1, 0, -30000, 30000, 0
-	int16_t fuelPump_iTermMax;PID integrator upper limit (PWM mode);"", 1, 0, -30000, 30000, 0
+	! Advanced fuel pump tuning (fuelPumpMode, secondaryFp*, PWM duties/freq, iTerm) moved to TS page 5 (page5_s).
 
 	int8_t gapVvtTrackingLengthOverride;How many consecutive VVT gap rations have to match expected ranges for sync to happen;"count", 1, 0, 1, @@VVT_TRACKING_LENGTH@@, 0
 
@@ -1336,7 +1325,6 @@ tps_limit_t tps2Max;Fully opened voltage for primary throttle position sensor
 	bit enableKnockSpectrogram,"yes","no";"Available via TS Plugin see https://rusefi.com/s/knock"
 	bit enableKnockSpectrogramFilter,"yes","no"
 
-	int16_t offIdleRpmAdder;RPM added to closed-loop idle target when returning from off-idle (Running/Coasting) conditions. PID chases this elevated target to prevent stalling.;"RPM", 1, 0, 0, 1000, 0
 	int16_t iacByTpsTaper;This value is an added for base idle value. Idle Value added when coasting and transitioning into idle.;"percent", 1, 0, 0, 500, 0
 
 	Gpio accelerometerCsPin;
@@ -1718,8 +1706,6 @@ pin_input_mode_e[LUA_DIGITAL_INPUT_COUNT iterate] luaDigitalInputPinModes;
 	uint32_t benchTestCount;How many test bench pulses do you want;"", 1, 0, 1, 10000000, 0
 	uint8_t autoscale iacByTpsHoldTime;How long initial idle adder is held before starting to decay.;"seconds", 0.1, 0, 0, 25, 1
 	uint8_t autoscale iacByTpsDecayTime;How long it takes to remove initial IAC adder to return to normal idle.;"seconds", 0.1, 0, 0, 25, 1
-	uint8_t autoscale offIdleWaitTime;Time to wait after RPM stabilizes before starting the off-idle adder decay.;"sec", 0.1, 0, 0, 10, 1
-	uint8_t autoscale offIdleRpmAdderDecayTime;Time over which the off-idle RPM adder linearly decays from max to zero after the wait expires.;"sec", 0.1, 0, 0, 10, 1
 
 	switch_input_pin_e[RANGE_INPUT_COUNT iterate] tcu_rangeInput;
 	pin_input_mode_e[RANGE_INPUT_COUNT iterate] tcu_rangeInputMode;
@@ -1886,7 +1872,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	custom lua_gauge_e  1 bits, S08, @OFFSET@, [0:2], @@lua_gauge_e_enum@@
 	lua_gauge_e nitrousLuaGauge;
 	lua_gauge_e tractionControlLuaGauge;Lua gauge index used as traction control multiplier input
-	lua_gauge_e luaLimiterGaugeSelect;
+	! luaLimiterGaugeSelect moved to TS page 5 (page5_s).
 
 	#define lua_gauge_meaning_e_enum "greater than", "less than"
 	custom lua_gauge_meaning_e  1 bits, S08, @OFFSET@, [3:3], @@lua_gauge_meaning_e_enum@@
@@ -1930,7 +1916,6 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 
 	int8_t[8] airmassToTimingBins;;"mg", 1, 0, -100, 100, 0
 	int8_t[8] airmassToTimingValues;;"deg", 1, 0, -30, 30, 0
-	uint8_t autoscale offIdleRpmStabilityThreshold;RPM rate-of-change (RPM/s) below which RPM is considered stable when returning to idle. Transition from Stabilizing to Waiting occurs when dRPM/s falls below this value.;"RPM/s", 10, 0, 0, 2550, 0
 
 	float wastegatePositionOpenedVoltage;Voltage when the wastegate is fully open;"v", 1, 0, 0, 10, 2
 	float wastegatePositionClosedVoltage;Voltage when the wastegate is closed;"v", 1, 0, 0, 10, 2
@@ -1956,8 +1941,7 @@ end_struct
 
 	output_pin_e cdvSolenoidPin;Output pin for clutch delay valve bypass solenoid
 	pin_output_mode_e cdvSolenoidPinMode;
-	uint8_t autoscale cdvExitDelay;Seconds after launch control exits before deactivating CDV solenoid. Set 0 to deactivate immediately.;"s", 0.1, 0, 0, 10, 1
-	uint16_t cdvExitVss;Deactivate CDV above this vehicle speed. Set 0 to disable.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
+	! cdvExitDelay / cdvExitVss moved to TS page 5 (page5_s).
 
 struct vvl_s
     int8_t fuelAdderPercent;;"%", 1, 0, 0, 100, 0
@@ -1981,106 +1965,25 @@ end_struct
 
     rotational_idle_s rotationalIdleController;
 
-! Exhaust Cutout Control
-	#define exhaust_cutout_activation_e_enum "OFF", "Switch", "LuaGauge"
-	custom exhaust_cutout_activation_e 1 bits, U08, @OFFSET@, [0:1], @@exhaust_cutout_activation_e_enum@@
+! Exhaust Cutout Control settings live in TS page 5 (integration/config_page_5.txt / page5_s).
+! The exhaust_cutout_* C++ enums remain defined in controllers/algo/rusefi_enums.h.
 
-	#define exhaust_cutout_behavior_e_enum "Always Closed", "Always Open", "Auto"
-	custom exhaust_cutout_behavior_e 1 bits, U08, @OFFSET@, [0:1], @@exhaust_cutout_behavior_e_enum@@
-
-	#define exhaust_cutout_output_mode_e_enum "Digital", "PWM", "H-Bridge"
-	custom exhaust_cutout_output_mode_e 1 bits, U08, @OFFSET@, [0:1], @@exhaust_cutout_output_mode_e_enum@@
-
-	exhaust_cutout_output_mode_e exhaustCutoutOutputMode;Exhaust cutout output type: Digital on/off, PWM, or H-Bridge motor
-	exhaust_cutout_activation_e exhaustCutoutActivationMode;Exhaust cutout activation mode
-	exhaust_cutout_behavior_e exhaustCutoutBehaviorLow;Cutout behavior when switch is OFF or gauge is below threshold
-	exhaust_cutout_behavior_e exhaustCutoutBehaviorHigh;Cutout behavior when switch is ON or gauge is above threshold
-	lua_gauge_e exhaustCutoutLuaGauge;Lua gauge index for activation
-	lua_gauge_meaning_e exhaustCutoutLuaGaugeMeaning;Lua gauge comparison direction
-
-	switch_input_pin_e exhaustCutoutSwitchPin;Hardware switch input pin
-	pin_input_mode_e exhaustCutoutSwitchPinMode;
-
-	output_pin_e exhaustCutoutOutputPin;Cutout output pin (digital) or H-Bridge IN1 (Open direction)
-	pin_output_mode_e exhaustCutoutOutputPinMode;
-
-	output_pin_e exhaustCutoutHBridgePin2;H-Bridge IN2 pin (Close direction)
-	pin_output_mode_e exhaustCutoutHBridgePin2Mode;
-
-	output_pin_e exhaustCutoutLedPin;Status LED output pin
-	pin_output_mode_e exhaustCutoutLedPinMode;
-
-	float exhaustCutoutLuaGaugeThreshold;Lua gauge activation threshold;"", 1, 0, -30000, 30000, 3
-
-	uint16_t exhaustCutoutOpenRpm;RPM threshold to open cutout (0 to disable);"rpm", 1, 0, 0, 20000, 0
-	uint8_t exhaustCutoutOpenTps;TPS threshold to open cutout (0 to disable);"%", 1, 0, 0, 100, 0
-	uint8_t autoscale exhaustCutoutTpsDelayS;Anti-blip: TPS must exceed threshold for this long before opening;"s", 0.1, 0, 0, 25, 1
-	float exhaustCutoutOpenMapKpa;MAP/Boost threshold to open cutout (0 to disable);"kPa", 1, 0, 0, 500, 1
-	uint8_t autoscale exhaustCutoutClosingDelayS;Hold-open time after triggers clear;"s", 0.1, 0, 0, 25, 1
-	uint8_t autoscale exhaustCutoutMoveDurationS;H-Bridge motor drive time (de-energizes after). Also controls LED blink duration and actuator test step duration.;"s", 0.1, 0, 0, 5, 1
-
-	uint16_t exhaustCutoutPwmFrequency;PWM output frequency (PWM mode only);"Hz", 1, 0, 1, 10000, 0
-	uint8_t autoscale exhaustCutoutPwmOpenDuty;PWM duty when cutout is OPEN (PWM mode only);"%", 1, 0, 0, 100, 0
-	uint8_t autoscale exhaustCutoutPwmClosedDuty;PWM duty when cutout is CLOSED (PWM mode only);"%", 1, 0, 0, 100, 0
-
-	uint16_t exhaustCutoutHBridgePwmFrequency;H-Bridge IN1/IN2 PWM frequency (H-Bridge mode only);"Hz", 1, 0, 1, 10000, 0
-	uint8_t autoscale exhaustCutoutHBridgeDutyCycle;H-Bridge motor drive duty cycle (H-Bridge mode only);"%", 1, 0, 0, 100, 0
-	uint8_t[3] exhaustCutoutHBridgeAlignmentPad;unused
-
-! Engine State Machine thresholds (used only when useEngineStateMachine is enabled)
-	uint8_t smShiftTpsThreshold;Engine SM: TPS threshold used for shift-direction disambiguation (above = driver was on throttle = upshift).;"%", 1, 0, 0, 50, 0
-	uint8_t smWotTpsThreshold;Engine SM: TPS threshold above which the engine is at Wide Open Throttle.;"%", 1, 0, 50, 100, 0
-	uint8_t smTransientHoldoffCallbacks;Engine SM: slow-callback periods (50 ms each) to hold the Transient state after the accel-enrichment threshold drops. 0 = no hold-off.;"callbacks", 1, 0, 0, 20, 0
-
-! Engine SM: Shift Detection (requires at least one clutch switch in Inputs -> Switch Inputs)
-! 0=None 1=Clutch Up 2=Clutch Down
-#define sm_clutch_switch_e_enum "None", "Clutch Up", "Clutch Down", "INVALID"
-	custom sm_clutch_switch_e 1 bits, U08, @OFFSET@, [0:1], @@sm_clutch_switch_e_enum@@
-
-! 0=Simple Throttle 1=RPM Rate 2=VSS Rate
-#define sm_shift_detection_mode_e_enum "Simple Throttle", "RPM Rate", "VSS Rate (needs VSS sensor)", "INVALID"
-	custom sm_shift_detection_mode_e 1 bits, U08, @OFFSET@, [0:1], @@sm_shift_detection_mode_e_enum@@
-
-	sm_clutch_switch_e smUpshiftClutchSwitch;Engine SM: Clutch switch that signals an upshift. 'Clutch Up' fires on pedal release; 'Clutch Down' fires on full press. Flat-shift torque reduction always overrides this.
-	sm_clutch_switch_e smDownshiftClutchSwitch;Engine SM: Clutch switch that signals a downshift.
-	sm_shift_detection_mode_e smShiftDetectionMode;Engine SM: Method used to confirm shift direction. RPM Rate: upshift=RPM drops, downshift=RPM rises. VSS Rate: upshift=VSS rises (accel), downshift=VSS falls (decel). Both require configured rate thresholds.
-	uint16_t smShiftLookbackMs;Engine SM: Sensor history window used for shift direction evaluation (100-1000ms).;"ms", 1, 0, 100, 1000, 0
-	uint16_t smClutchUpDisengagementDelayMs;Engine SM: Delay after Clutch-Up switch fires before evaluating shift direction. Compensates for the time between electrical and mechanical clutch disengagement.;"ms", 1, 0, 0, 1000, 0
-	int16_t smUpshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm upshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s drop. VSS mode: km/h/s rise.;"/s", 1, 0, 0, 10000, 0
-	int16_t smDownshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm downshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s rise. VSS mode: km/h/s fall.;"/s", 1, 0, 0, 10000, 0
+! Engine State Machine thresholds + shift detection, and Pops & Bangs settings live in
+! TS page 5 (integration/config_page_5.txt / page5_s). The sm_*/pops_and_bangs_* C++ enums
+! remain defined in controllers/algo/rusefi_enums.h. Only the two enable bits stay here
+! (useEngineStateMachine above, and popsAndBangsEnabled below) since they share bit words
+! with other features.
 
 ! Pops and Bangs (antilag on decel / exhaust crackle)
 	bit popsAndBangsEnabled,"enabled","disabled";Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce turbocharger life.
-
-	uint8_t autoscale popsAndBangsDelay;Delay after overrun starts before pops and bangs activates.;"sec", 0.1, 0, 0, 10, 1
-	uint8_t autoscale popsAndBangsDuration;Duration of pops and bangs mode. 0 = indefinitely active (DFCO will never engage).;"sec", 0.1, 0, 0, 10, 1
-	uint8_t popsAndBangsAirAdd;Additional idle / ETB % while pops and bangs is active.;"%", 1, 0, 0, 100, 0
-
-	uint16_t popsAndBangsRpmHigh;Activate above this RPM.;"rpm", 1, 0, 0, 15000, 0
-	uint16_t popsAndBangsRpmLow;Deactivate below this RPM.;"rpm", 1, 0, 0, 15000, 0
-	uint16_t popsAndBangsRpmMax;Never activate above this RPM.;"rpm", 1, 0, 0, 15000, 0
-
-	int16_t popsAndBangsCltMin;Do not activate below this coolant temperature (cold engine protection).;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -100 : -148}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
-	int16_t popsAndBangsCltMax;Do not activate above this coolant temperature (overheating protection).;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -100 : -148}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
-
-	float popsAndBangsTimingOverride;Flat ignition timing override when pops and bangs is active.;"deg", 1, 0, -60, 60, 1
-	float popsAndBangsVeOverride;VE override percentage when pops and bangs is active.;"%", 1, 0, 0, 150, 0
-
-	#define pops_and_bangs_disable_mode_e_enum "None", "Switch Input", "Lua Gauge", "Switch or Lua Gauge"
-	custom pops_and_bangs_disable_mode_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_disable_mode_e_enum@@
-	pops_and_bangs_disable_mode_e popsAndBangsDisableMode;Condition that disables pops and bangs while active.
-
-	switch_input_pin_e popsAndBangsDisablePin;Switch pin that disables pops and bangs when active.
-	pin_input_mode_e popsAndBangsDisablePinMode;
-
-	lua_gauge_e popsAndBangsLuaGauge;Lua gauge used to disable pops and bangs.
-	lua_gauge_meaning_e popsAndBangsLuaGaugeMeaning;
-	float popsAndBangsLuaGaugeValue;Lua gauge threshold for disabling pops and bangs.;"", 1, 0, -30000, 30000, 3
 
 #define IDLE_UP_SWITCH_COUNT 3
 	switch_input_pin_e[IDLE_UP_SWITCH_COUNT iterate] idleUpSwitchPins;Idle-up digital input pins
 	pin_input_mode_e[IDLE_UP_SWITCH_COUNT iterate] idleUpSwitchMode;Idle-up input polarity/pull
 	uint8_t[IDLE_UP_SWITCH_COUNT iterate] idleUpAdder;Idle % to add when this switch is active;"%", 1, 0, 0, 100, 0
+
+! Note: the Downshift Blipper settings live in TS page 5 (integration/config_page_5.txt /
+! page5_s), not here, to keep engine_configuration_s under the 64 KB TS page limit.
 
 ! end of engine_configuration_s
 end_struct
@@ -2499,11 +2402,7 @@ float tcu_shiftTime;;"ms", 1, 0, 0, 3000, 0
 
 #define LUA_LIMITER_CURVE_SIZE 8
 
-float[LUA_LIMITER_CURVE_SIZE] luaLimiterRpmAddBins;;"value", 1, 0, -10000, 10000, 2
-float[LUA_LIMITER_CURVE_SIZE] luaLimiterRpmAdd;;"RPM", 1, 0, -10000, 10000, 0
-
-float[LUA_LIMITER_CURVE_SIZE] luaLimiterBoostAddBins;;"value", 1, 0, -10000, 10000, 2
-float[LUA_LIMITER_CURVE_SIZE] luaLimiterBoostAdd;;"kPa", 1, 0, -1000, 1000, 1
+! luaLimiter add curves moved to TS page 5 (page5_s).
 
 int16_t[ALTERNATOR_VOLTAGE_TARGET_SIZE x ALTERNATOR_VOLTAGE_RPM_SIZE] autoscale alternatorVoltageTargetTable;;"volts", 0.1, 0, 0, 30, 1
 uint16_t[ALTERNATOR_VOLTAGE_TARGET_SIZE] alternatorVoltageTargetLoadBins;;"Load", 1, 0, 0, 1000, 0

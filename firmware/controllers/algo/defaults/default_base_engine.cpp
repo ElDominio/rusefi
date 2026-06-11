@@ -460,20 +460,9 @@ void setDefaultBaseEngine() {
 
 	engineConfiguration->useMetricOnInterface = true;
 
-	// Engine State Machine defaults
+	// Engine State Machine enable bit (the sm* thresholds + shift detection now live in
+	// TS page 5; their defaults are set in customPageSetDefaults() in custom_page.cpp).
 	engineConfiguration->useEngineStateMachine = false;
-	engineConfiguration->smShiftTpsThreshold = 5;       // 5% TPS — matches idlePidDeactivationTpsThreshold default
-	engineConfiguration->smWotTpsThreshold = 90;        // 90% TPS
-	engineConfiguration->smTransientHoldoffCallbacks = 4; // 200 ms at 20 Hz
-
-	// Shift detection — disabled by default; requires clutch switch(es) to be configured
-	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
-	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
-	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::SimpleThrottle;
-	engineConfiguration->smShiftLookbackMs       = 300;
-	engineConfiguration->smClutchUpDisengagementDelayMs = 0;
-	engineConfiguration->smUpshiftRateThreshold   = 0;
-	engineConfiguration->smDownshiftRateThreshold = 0;
 
   // we invoke this last so that we can validate even defaults
   defaultsOrFixOnBurn();

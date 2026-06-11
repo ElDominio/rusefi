@@ -1,5 +1,8 @@
 #include "pch.h"
+#include "custom_page.h"
 #include "cdv_controller.h"
+
+#if EFI_CLUTCH_DELAY_VALVE
 
 void CdvController::onSlowCallback() {
     if (!engineConfiguration->cdvControlEnabled) {
@@ -25,11 +28,11 @@ void CdvController::onSlowCallback() {
 
     if (isCdvActive) {
         // Time-based exit: fires after configured delay once LC has exited
-        float exitDelay = engineConfiguration->cdvExitDelay;
+        float exitDelay = getCustomPage()->cdvExitDelay;
         isCdvTimeExitCondition = !launchActive && m_sinceExitTimer.hasElapsedSec(exitDelay);
 
         // VSS-based exit: fires when vehicle speed exceeds threshold (0 = disabled)
-        float exitVss = engineConfiguration->cdvExitVss;
+        float exitVss = getCustomPage()->cdvExitVss;
         if (exitVss > 0) {
             isCdvVssExitCondition = Sensor::getOrZero(SensorType::VehicleSpeed) >= exitVss;
         } else {
@@ -52,3 +55,10 @@ void CdvController::onSlowCallback() {
 
     enginePins.cdvSolenoid.setValue(isCdvActive);
 }
+
+#else // !EFI_CLUTCH_DELAY_VALVE
+
+// Clutch Delay Valve compiled out (board set -DEFI_CLUTCH_DELAY_VALVE=FALSE).
+void CdvController::onSlowCallback() { isCdvActive = false; }
+
+#endif // EFI_CLUTCH_DELAY_VALVE
