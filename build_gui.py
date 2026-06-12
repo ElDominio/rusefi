@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import os
 import sys
 
@@ -13,6 +14,8 @@ import queue
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from datetime import datetime
+
+CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".rusefi_build_gui.json")
 
 # Color Palette (Catppuccin Mocha inspired dark theme)
 BG_MAIN = "#1e1e2e"
@@ -66,6 +69,10 @@ class App(tk.Tk):
             self.dest_dir.set(os.path.join(self.workspace_root.get(), "out"))
         else:
             self.dest_dir.set(os.path.join(os.path.expanduser("~"), "rusefi_build_output"))
+
+        # Override default with last-used directory, then persist future changes
+        self.load_config()
+        self.dest_dir.trace_add("write", self.save_config)
 
     def detect_default_repo(self):
         # Scan upwards from script location to find rusEFI repo root
@@ -867,6 +874,24 @@ class App(tk.Tk):
             self.build_failed()
         finally:
             self.build_complete()
+
+    def load_config(self):
+        try:
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, "r") as f:
+                    cfg = json.load(f)
+                saved = cfg.get("dest_dir", "")
+                if saved:
+                    self.dest_dir.set(saved)
+        except Exception:
+            pass
+
+    def save_config(self, *args):
+        try:
+            with open(CONFIG_FILE, "w") as f:
+                json.dump({"dest_dir": self.dest_dir.get()}, f)
+        except Exception:
+            pass
 
     def build_failed(self, status="Failed"):
         if threading.current_thread() is threading.main_thread():

@@ -20,7 +20,8 @@ static void setupMisfireConfig() {
 	auto* d = getCustomPage();
 	d->misfireDetectionEnabled = true;
 	d->misfireThresholdRatio   = 1.15f;
-	d->misfireConsecutiveCount = 2;
+	d->misfireConsecutiveCount = 2;   // need >=2 flagged firings within the window
+	d->misfireWindowFirings    = 16;  // sliding window across all cylinders (~4 cycles)
 	d->misfireCountThreshold   = 4;   // small so the test latches quickly
 	d->misfireWindowStart      = 20;
 	d->misfireWindowEnd        = 120;
@@ -119,14 +120,15 @@ TEST(MisfireDetection, repeatedMisfireLatchesMil) {
 	engine->module<EngineStateMachine>().unmock().engineSmIsIdle = true;
 
 	ToothDriver d;
-	// Seed each cylinder's baseline with healthy cycles first.
+	// Seed the shared engine-wide baseline with healthy cycles first.
 	for (int i = 0; i < 5; i++) {
 		d.feedHealthyCycle();
 	}
 	ASSERT_EQ(0, getMc().misfireTotalCount);
 
-	// Now misfire cylinder 0 every cycle (1.6x slower segment >> 1.15 ratio).
-	// consecutiveCount=2 arms after 2, threshold=4 latches a few cycles later.
+	// Now misfire cylinder 0 every cycle (1.6x slower segment >> 1.15 ratio). Even though the
+	// other cylinders fire cleanly in between, a single dead cylinder puts >=2 flagged firings
+	// in the 16-firing window, so the engine-wide rate test counts it and the MIL latches.
 	for (int i = 0; i < 12; i++) {
 		d.feedCycle(0, 1.6f);
 	}

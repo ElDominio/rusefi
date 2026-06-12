@@ -8,35 +8,51 @@
 #include "malfunction_central.h"
 #include "efilib.h"
 
-// Baseline EMA blend factor — small so a single misfire barely moves the per-cylinder
+// Baseline EMA blend factor — small so a single misfire barely moves the shared
 // baseline, and the baseline is only updated on clean (non-flagged) firings anyway.
 static constexpr float MISFIRE_EMA_ALPHA = 0.05f;
-
-// Maps a 0-based cylinder index to its OBD per-cylinder misfire code (P0301..P0312),
-// falling back to the generic random/multiple misfire code (P0300).
-static ObdCode misfireObdCode(uint8_t cyl) {
-	if (cyl < 12) {
-		return static_cast<ObdCode>(static_cast<uint16_t>(ObdCode::OBD_Cylinder_1_Misfire) + cyl);
-	}
-	return ObdCode::OBD_Random_Misfire;
-}
 
 void MisfireController::resetDetectionState() {
 	for (size_t i = 0; i < MAX_CYLINDER_COUNT; i++) {
 		m_segActive[i] = false;
-		m_emaSeeded[i] = false;
-		m_streak[i] = 0;
-		m_armed[i] = false;
 	}
+	m_emaSeeded = false;
+	m_emaSeg = 0;
+	m_windowHead = 0;
+	m_windowFill = 0;
 }
 
 void MisfireController::onEngineStop() {
-	// Prepare for the next start: drop baselines/streaks/timers. Cumulative counters
-	// (misfireTotalCount / misfireCylCount) and the MIL latch persist until power cycle.
+	// Prepare for the next start: drop the baseline, rate-test window and segment timers.
+	// Cumulative counters (misfireTotalCount / misfireCylCount) and the MIL latch persist
+	// until power cycle.
 	resetDetectionState();
 }
 
+void MisfireController::recordFiring(bool flagged) {
+	m_window[m_windowHead] = flagged;
+	m_windowHead = (m_windowHead + 1) % MISFIRE_WINDOW_MAX;
+	if (m_windowFill < MISFIRE_WINDOW_MAX) {
+		m_windowFill++;
+	}
+}
+
+uint8_t MisfireController::flaggedInWindow(uint8_t windowSize) const {
+	uint8_t n = windowSize < m_windowFill ? windowSize : m_windowFill;
+	uint8_t flagged = 0;
+	uint8_t idx = m_windowHead; // one past the newest entry
+	for (uint8_t k = 0; k < n; k++) {
+		idx = (idx == 0) ? (MISFIRE_WINDOW_MAX - 1) : (idx - 1);
+		if (m_window[idx]) {
+			flagged++;
+		}
+	}
+	return flagged;
+}
+
 void MisfireController::registerMisfire(uint8_t cyl) {
+	// Per-cylinder tally is informational only — it records where the flagged firings came
+	// from; the detection decision itself (above) is engine-wide.
 	if (misfireCylCount[cyl] < UINT16_MAX) {
 		misfireCylCount[cyl]++;
 	}
@@ -48,7 +64,8 @@ void MisfireController::registerMisfire(uint8_t cyl) {
 	uint16_t threshold = getCustomPage()->misfireCountThreshold;
 	if (!misfireLatched && threshold > 0 && misfireTotalCount >= threshold) {
 		misfireLatched = true;
-		addError(misfireObdCode(cyl));
+		// Engine-wide detection => generic random/multiple-cylinder misfire code (P0300).
+		addError(ObdCode::OBD_Random_Misfire);
 	}
 }
 
@@ -58,35 +75,41 @@ void MisfireController::evaluateSegment(uint8_t cyl, float segDurationUs) {
 		return;
 	}
 
-	if (!m_emaSeeded[cyl]) {
-		// Warm-up: seed the baseline with the first valid segment, don't judge it.
-		m_emaSeg[cyl] = segDurationUs;
-		m_emaSeeded[cyl] = true;
-		m_streak[cyl] = 0;
-		m_armed[cyl] = false;
+	if (!m_emaSeeded) {
+		// Warm-up: seed the shared baseline with the first valid segment, don't judge it.
+		m_emaSeg = segDurationUs;
+		m_emaSeeded = true;
 		return;
 	}
 
 	float ratio = getCustomPage()->misfireThresholdRatio;
-	bool flagged = segDurationUs > m_emaSeg[cyl] * ratio;
+	bool flagged = segDurationUs > m_emaSeg * ratio;
+
+	// Slot this firing into the engine-wide rate-test window.
+	recordFiring(flagged);
 
 	if (flagged) {
-		// Streak must reach the consecutive count to arm; once armed, every flagged
-		// firing counts (so a hard fault racks up fast). Freeze the baseline meanwhile.
-		if (m_streak[cyl] < UINT8_MAX) {
-			m_streak[cyl]++;
+		// "N of last M": a flagged firing only counts once at least misfireConsecutiveCount
+		// flagged firings (any cylinder) fall within the last misfireWindowFirings firings.
+		// This catches both a single dead cylinder and a whole-engine breakup while ignoring
+		// a lone outlier. The baseline is frozen on flagged firings so it cannot drift up.
+		uint8_t windowSize = getCustomPage()->misfireWindowFirings;
+		if (windowSize < 1) {
+			windowSize = 1;
 		}
-		if (m_streak[cyl] >= getCustomPage()->misfireConsecutiveCount) {
-			m_armed[cyl] = true;
+		if (windowSize > MISFIRE_WINDOW_MAX) {
+			windowSize = MISFIRE_WINDOW_MAX;
 		}
-		if (m_armed[cyl]) {
+		uint8_t need = getCustomPage()->misfireConsecutiveCount;
+		if (need < 1) {
+			need = 1;
+		}
+		if (flaggedInWindow(windowSize) >= need) {
 			registerMisfire(cyl);
 		}
 	} else {
-		// Clean firing: disarm and let the baseline track slow RPM/load drift.
-		m_streak[cyl] = 0;
-		m_armed[cyl] = false;
-		m_emaSeg[cyl] += MISFIRE_EMA_ALPHA * (segDurationUs - m_emaSeg[cyl]);
+		// Clean firing: let the shared baseline track slow RPM/load drift.
+		m_emaSeg += MISFIRE_EMA_ALPHA * (segDurationUs - m_emaSeg);
 	}
 }
 
@@ -144,5 +167,7 @@ void MisfireController::onEngineStop() {}
 void MisfireController::evaluateSegment(uint8_t, float) {}
 void MisfireController::registerMisfire(uint8_t) {}
 void MisfireController::resetDetectionState() {}
+void MisfireController::recordFiring(bool) {}
+uint8_t MisfireController::flaggedInWindow(uint8_t) const { return 0; }
 
 #endif // EFI_MISFIRE_DETECTION

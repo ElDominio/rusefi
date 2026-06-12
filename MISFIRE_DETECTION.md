@@ -79,23 +79,29 @@ inertia ⇒ highest combustion-torque signal). Sub-feature of the SM, gated by
 * **Windowing** — uses `engine->cylinders[i].getAngleOffset()` (firing order / odd-fire
   aware) + `isPhaseInRange`, mirroring `MapAveragingModule`. Window is `[TDC+start, TDC+end]`
   in the expansion stroke (defaults 20°–120°).
-* **Metric — self-referenced EMA**, not raw `triggerSyncGapRatio`: each cylinder's
-  *segment time* (latched from `edgeTimestamp` between the window-start and window-end teeth)
-  is compared to that cylinder's own slow rolling average. A fixed trigger-wheel offset and a
-  chronically-weak cylinder both fold into the baseline, so only an **acute** deceleration
-  flags — this sidesteps the §4 wheel-learning problem for v1.
-* **Counting — consecutive-arm** — a streak must reach `misfireConsecutiveCount` flagged
-  firings on one cylinder to *arm*; once armed, every flagged firing increments that
-  cylinder's counter; a clean firing disarms. Cumulative since key-on.
-* **Trip** — when the total across cylinders reaches `misfireCountThreshold` (default 50),
-  the MIL is **latched until power cycle** via an OBD code (`P0300`/`P0301`–`P0312`).
+* **Metric — self-referenced EMA**, not raw `triggerSyncGapRatio`: each firing's *segment
+  time* (latched from `edgeTimestamp` between the window-start and window-end teeth) is
+  compared to a **single shared engine-wide** slow rolling average. Detection is **not
+  cylinder-specific** — every cylinder feeds and is judged against the one baseline. A fixed
+  trigger-wheel offset folds into the baseline, so only an **acute** deceleration flags,
+  sidestepping the §4 wheel-learning problem.
+* **Counting — N of last M firings** — a flagged firing is only *counted* once at least
+  `misfireConsecutiveCount` flagged firings fall within the last `misfireWindowFirings`
+  firings (any cylinder), evaluated over a ring buffer of recent results. This rejects a lone
+  outlier yet still catches a single dead cylinder (whose misses recur every few firings) as
+  well as a whole-engine breakup. The baseline is frozen on flagged firings so a sustained
+  misfire cannot drag it upward. Counts are cumulative since key-on.
+* **Trip** — when the engine-wide total reaches `misfireCountThreshold` (default 50), the MIL
+  is **latched until power cycle** via the generic OBD random/multiple-misfire code (`P0300`).
 * **Config (TS page 5)** — `misfireDetectionEnabled`, `misfireCountThreshold`,
-  `misfireConsecutiveCount`, `misfireThresholdRatio`, `misfireWindowStart/End`. TS dialog
-  under Setup → Limits and protection, grayed unless `useEngineStateMachine`.
+  `misfireConsecutiveCount` (min flagged firings in the window), `misfireWindowFirings`
+  (window size), `misfireThresholdRatio`, `misfireWindowStart/End`. TS dialog under Setup →
+  Limits and protection, grayed unless `useEngineStateMachine`.
 * **LiveData** — `misfire_detection_state_s`: active/latched bits, last cylinder, total +
-  per-cylinder counts.
+  per-cylinder counts (the per-cylinder counts are informational only — they record where the
+  flagged firings came from but do not drive detection).
 * **Files** — `controllers/algo/misfire_detection.{h,cpp,_state.txt}`; tests in
   `unit_tests/tests/test_misfire_detection.cpp`.
 
-Known v1 trade-off (accepted): a *sporadic* misfire that keeps disarming won't count. The
-upgrade path is "N of last M firings" instead of strict-consecutive.
+The earlier strict-consecutive-per-cylinder v1 missed a *sporadic* misfire (it kept
+disarming); the engine-wide N-of-last-M window above is that planned upgrade.
