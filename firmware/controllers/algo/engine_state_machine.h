@@ -45,6 +45,20 @@ public:
 	// Public so unit tests can call it directly without needing a full slow-callback setup.
 	void updatePopsAndBangs(bool isOverrun);
 
+	// P&B spark-cut overlay: returns the spark skip ratio (0..1) to feed the hard spark
+	// limiter. Non-zero only while a cut window is open (every popsAndBangsCutEveryRevs
+	// revolutions, held for popsAndBangsCutDurationMs), so raw fuel charges the exhaust and
+	// is re-lit when the window closes. Returns 0 outside the window.
+	float getPopsAndBangsSparkSkipRatio();
+
+	// Latches the engine into Limp mode. Once latched, the engineSmIsLimp overlay stays set
+	// (published every slow callback) and the configured limp limits — rev / boost / ETB /
+	// timing / AFR — are enforced by their respective subsystems until power cycle.
+	//
+	// Currently the only caller is LimpManager::reportEtbJammed (ETB jam). Other fault
+	// conditions could call this in the future — see the TODO in onSlowCallback().
+	void reportLimpCondition();
+
 private:
 	struct SmHistoryEntry {
 		efitimems_t timestampMs;
@@ -81,10 +95,21 @@ private:
 	// Suppresses repeated VSS-unavailable warnings once emitted
 	bool m_vssRateWarningEmitted = false;
 
+	// Limp mode latch — set by reportLimpCondition(), never auto-cleared (matches the old
+	// ETB-jam behaviour which persisted until reboot). TODO: an un-latch path (e.g. a
+	// settings command or a clean key cycle) could be added later if desired.
+	bool m_limpModeLatched = false;
+
 	// Pops and Bangs state machine
 	bool isPopsAndBangsBlocked() const;
 	PopsAndBangsState m_pnbState  = PopsAndBangsState::Inactive;
 	bool m_wasPnbOverrun          = false;
 	Timer m_pnbOverrunTimer;
 	Timer m_pnbActiveTimer;
+
+	// P&B spark-cut overlay state
+	bool m_pnbCutActive           = false;  // currently inside a spark-cut window
+	uint32_t m_pnbLastFireRev     = 0;      // revolution counter at the last resume-firing point
+	float m_pnbCutDurationMs      = 0;      // duration chosen for the current cut window
+	Timer m_pnbCutWindowTimer;              // measures the current cut window
 };

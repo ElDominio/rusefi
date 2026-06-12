@@ -329,6 +329,15 @@ const engine_state_machine_state_s* getLiveData(size_t) {
 }
 
 template<>
+const misfire_detection_state_s* getLiveData(size_t) {
+#if EFI_MISFIRE_DETECTION
+	return &engine->module<MisfireController>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
 const downshift_blipper_state_s* getLiveData(size_t) {
 #if EFI_ELECTRONIC_THROTTLE_BODY
 	return &engine->module<DownshiftBlipper>().unmock();
@@ -341,6 +350,24 @@ template<>
 const cdv_controller_state_s* getLiveData(size_t) {
 #if MODULE_CDV_CONTROLLER
 	return &engine->module<CdvController>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const launch_power_ramp_state_s* getLiveData(size_t) {
+#if EFI_LAUNCH_POWER_RAMP
+	return &engine->module<LaunchPowerRamp>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const burst_knock_state_s* getLiveData(size_t) {
+#if EFI_BURST_KNOCK
+	return &engine->module<BurstKnock>().unmock();
 #else
 	return nullptr;
 #endif

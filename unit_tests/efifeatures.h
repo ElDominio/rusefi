@@ -92,6 +92,9 @@
 // AlphaX custom subsystems (config in TS page 5) — enabled for unit tests.
 #define EFI_DOWNSHIFT_BLIPPER TRUE
 #define EFI_ENGINE_STATE_MACHINE TRUE
+#define EFI_MISFIRE_DETECTION TRUE
 #define EFI_CLUTCH_DELAY_VALVE TRUE
+#define EFI_LAUNCH_POWER_RAMP TRUE
+#define EFI_BURST_KNOCK TRUE
 #define EFI_OFF_IDLE_RPM_ADDER TRUE
 #define EFI_LUA_LIMITER TRUE

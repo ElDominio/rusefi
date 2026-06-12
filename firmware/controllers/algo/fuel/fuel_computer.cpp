@@ -7,6 +7,8 @@
 #include "table_helper.h"
 #include "fuel_math.h"
 #include "fuel_computer.h"
+#include "engine_state_machine.h"
+#include "custom_page.h"
 
 #if EFI_ENGINE_CONTROL
 
@@ -15,6 +17,12 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 
 	float stoich = getStoichiometricRatio();
 	float lambda = getTargetLambda(rpm, load);
+
+	// Limp Mode AFR enrichment: richen the target (lower lambda) while limp is latched.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+		lambda *= (1.0f - getCustomPage()->limpModeAfrEnrichment * 0.01f);
+	}
+
 	float afr = stoich * lambda;
 
 	afrTableYAxis = load;

@@ -58,6 +58,32 @@ void customPageSetDefaults() {
 	d.smUpshiftRateThreshold   = 0;
 	d.smDownshiftRateThreshold = 0;
 
+	// Limp Mode (Engine State Machine sub-feature) — conservative "get-home" defaults.
+	d.limpModeEtbLimit       = 30;   // cap throttle at 30%
+	d.limpModeTimingReduction = 5;   // pull 5 deg of timing
+	d.limpModeAfrEnrichment  = 5;    // 5% richer than target
+	d.limpModeRevLimit       = 3000; // 3000 RPM hard limit
+	d.limpModeBoostLimit     = 0;    // 0 = no boost ceiling
+
+	// Misfire Detection (Engine State Machine sub-feature) — disabled by default.
+	d.misfireDetectionEnabled = false;
+	d.misfireConsecutiveCount = 3;     // 3 consecutive bad firings to arm
+	d.misfireCountThreshold   = 50;    // 50 total events latch the MIL
+	d.misfireThresholdRatio   = 1.15f; // 15% slower than the cylinder's own baseline
+	d.misfireWindowStart      = 20;    // expansion stroke: TDC + 20 deg
+	d.misfireWindowEnd        = 120;   //                   TDC + 120 deg
+
+	// Burst Knock (transient ignition timing pull) — disabled by default; seed usable axes.
+	d.burstKnockEnabled = false;
+	d.burstKnockDecayTime = 1.0f; // pull decays back to zero over 1 s
+	for (size_t i = 0; i < efi::size(d.burstKnockRpmBins); i++) {
+		d.burstKnockRpmBins[i] = 800 + i * 800;      // 800 .. 6400 rpm
+	}
+	for (size_t i = 0; i < efi::size(d.burstKnockTpsRateBins); i++) {
+		d.burstKnockTpsRateBins[i] = i * 150;        // 0 .. 1050 %/s
+	}
+	// burstKnockRetardTable left at zero (no pull) until the user tunes it.
+
 	// Pops and Bangs (enable bit lives in page 1).
 	d.popsAndBangsDelay = 1.0f;
 	d.popsAndBangsDuration = 2.0f;
@@ -75,6 +101,13 @@ void customPageSetDefaults() {
 	d.popsAndBangsLuaGauge = LUA_GAUGE_1;
 	d.popsAndBangsLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
 	d.popsAndBangsLuaGaugeValue = 0.0f;
+
+	// Pops and Bangs spark cut (overlay on top of P&B).
+	d.popsAndBangsSparkCutEnabled = false;
+	d.popsAndBangsCutDurationAuto = false;
+	d.popsAndBangsCutEveryRevs = 4;
+	d.popsAndBangsCutPercent = 60;
+	d.popsAndBangsCutDurationMs = 100;
 }
 
 void loadCustomPage() {

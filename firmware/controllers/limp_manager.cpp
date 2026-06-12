@@ -2,6 +2,7 @@
 #include "custom_page.h"
 
 #include "limp_manager.h"
+#include "engine_state_machine.h"
 #include "fuel_math.h"
 #include "main_trigger_callback.h"
 
@@ -67,6 +68,15 @@ void LimpManager::updateRevLimit(float rpm) {
 		m_revLimit += interpolate2d(getLuaLimiterGaugeValue(), getCustomPage()->luaLimiterRpmAddBins, getCustomPage()->luaLimiterRpmAdd);
 	}
 #endif // EFI_LUA_LIMITER
+
+	// Limp Mode rev limit: while limp is latched, clamp the hard limit down to the
+	// configured limp value (only ever lowers it, never raises it).
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+		float limpRev = getCustomPage()->limpModeRevLimit;
+		if (limpRev > 0 && limpRev < m_revLimit) {
+			m_revLimit = limpRev;
+		}
+	}
 
 	// Require configurable rpm drop before resuming
 	resumeRpm = m_revLimit - engineConfiguration->rpmHardLimitHyst;
@@ -297,6 +307,16 @@ void LimpManager::onIgnitionStateChanged(bool ignitionOn) {
 }
 
 void LimpManager::reportEtbJammed() {
+	// When the Engine State Machine is active, an ETB jam latches its configurable Limp
+	// mode (rev / boost / ETB / timing / AFR limits) instead of the legacy fixed response.
+	// When the state machine is compiled out or disabled by the tune, fall back to the
+	// original protection so an ETB jam is never left completely unhandled.
+	auto& sm = engine->module<EngineStateMachine>().unmock();
+	if (sm.isEnabled()) {
+		sm.reportLimpCondition();
+		return;
+	}
+
 	m_allowEtb.clear(ClearReason::EtbProblem);
 	setFaultRevLimit(/*rpm*/1500, ClearReason::EtbJammedRevLimit);
 }

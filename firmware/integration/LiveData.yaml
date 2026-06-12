@@ -292,6 +292,22 @@ Usages:
     engineModule: CdvController
     conditional_compilation: "MODULE_CDV_CONTROLLER"
 
+  - name: launch_power_ramp_state
+    java: LaunchPowerRamp.java
+    folder: controllers/modules/launch_power_ramp
+    prepend: integration/rusefi_config_shared.txt
+    output_name: launch_power_ramp
+    engineModule: LaunchPowerRamp
+    conditional_compilation: "EFI_LAUNCH_POWER_RAMP"
+
+  - name: burst_knock_state
+    java: BurstKnock.java
+    folder: controllers/modules/burst_knock
+    prepend: integration/rusefi_config_shared.txt
+    output_name: burst_knock
+    engineModule: BurstKnock
+    conditional_compilation: "EFI_BURST_KNOCK"
+
   - name: live_data_rotational_idle
     java: RotationalIdle.java
     folder: controllers/engine_cycle
@@ -305,6 +321,14 @@ Usages:
     prepend: integration/rusefi_config_shared.txt
     output_name: esm
     engineModule: EngineStateMachine
+
+  - name: misfire_detection_state
+    java: MisfireDetection.java
+    folder: controllers/algo
+    prepend: integration/rusefi_config_shared.txt
+    output_name: misfire
+    engineModule: MisfireController
+    conditional_compilation: "EFI_MISFIRE_DETECTION"
 
   - name: downshift_blipper_state
     java: DownshiftBlipper.java

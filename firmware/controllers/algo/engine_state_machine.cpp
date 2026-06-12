@@ -2,8 +2,13 @@
 #include "custom_page.h"
 #include "engine_state_machine.h"
 #include "dfco.h"
+#include "tinymt32.h" // basic 'random' for the P&B automatic cut duration
 
 #if EFI_ENGINE_STATE_MACHINE
+
+// Lower/upper bounds (ms) for the P&B spark-cut window, also used by the 'automatic' random mode.
+static constexpr float PNB_CUT_MIN_MS = 20.0f;
+static constexpr float PNB_CUT_MAX_MS = 500.0f;
 
 bool EngineStateMachine::isEnabled() const {
 	return engineConfiguration->useEngineStateMachine;
@@ -11,6 +16,10 @@ bool EngineStateMachine::isEnabled() const {
 
 EngineStateMachineState EngineStateMachine::getCurrentState() const {
 	return m_currentState;
+}
+
+void EngineStateMachine::reportLimpCondition() {
+	m_limpModeLatched = true;
 }
 
 void EngineStateMachine::onSlowCallback() {
@@ -66,12 +75,21 @@ void EngineStateMachine::onSlowCallback() {
 		updateShiftDetection(tps, rpm, vss, nowMs);
 	}
 
-	// Overlay: Limp Mode — any active fuel or spark cut from LimpManager
-	{
-		LimpState injState = getLimpManager()->allowInjection();
-		LimpState ignState = getLimpManager()->allowIgnition();
-		engineSmIsLimp = !injState || !ignState;
-	}
+	// Overlay: Limp Mode — explicit latched protective state.
+	//
+	// This used to be derived from ANY LimpManager fuel/spark cut, which incorrectly
+	// flagged limp for the normal rev limit, boost cut, launch cut, etc. Limp mode is now
+	// a dedicated latch (m_limpModeLatched) raised only via reportLimpCondition(). The
+	// only current trigger is an ETB jam (LimpManager::reportEtbJammed); the ordinary rev
+	// limit and other transient cuts intentionally do NOT enter limp mode.
+	//
+	// TODO(limp triggers): additional fault conditions could latch limp mode here by
+	// inspecting LimpManager state, e.g.:
+	//   - overheat:          Sensor::get(SensorType::Clt).Value above a configured limit
+	//   - oil pressure:      getLimpManager()->allowInjection().reason == ClearReason::OilPressure
+	//   - lambda protection: getLimpManager()->allowInjection().reason == ClearReason::LambdaProtection
+	// Left unwired for now per design — wire them through reportLimpCondition() when needed.
+	engineSmIsLimp = m_limpModeLatched;
 
 	// Override the display integer for overlay priority: Limp > Upshifting > Downshifting > LaunchControl
 	if (engineSmIsLimp) {
@@ -113,6 +131,9 @@ void EngineStateMachine::updatePopsAndBangs(bool isOverrun) {
 				if (cltOk && !isPopsAndBangsBlocked()) {
 					m_pnbState = PopsAndBangsState::Active;
 					m_pnbActiveTimer.reset();
+					// Start the spark-cut cycle from a clean firing phase.
+					m_pnbCutActive = false;
+					m_pnbLastFireRev = getRevolutionCounter();
 				} else {
 					m_pnbState = PopsAndBangsState::Expired;
 				}
@@ -138,6 +159,74 @@ void EngineStateMachine::updatePopsAndBangs(bool isOverrun) {
 
 	m_wasPnbOverrun = isOverrun;
 	engineSmIsPopsAndBangs = (m_pnbState == PopsAndBangsState::Active);
+
+	if (!engineSmIsPopsAndBangs) {
+		// P&B no longer active — make sure no stale cut window is left open.
+		m_pnbCutActive = false;
+		engineSmPnbSparkCut = false;
+	}
+}
+
+static tinymt32_t pnbRandom;
+
+// Returns a fresh random cut-window duration within [PNB_CUT_MIN_MS, PNB_CUT_MAX_MS].
+static float pnbRandomCutDurationMs() {
+	static bool inited = false;
+	if (!inited) {
+		tinymt32_init(&pnbRandom, 0x50616E42 /* 'PanB' */);
+		inited = true;
+	}
+	// tinymt32_generate_float returns [0, 1)
+	float r = tinymt32_generate_float(&pnbRandom);
+	return PNB_CUT_MIN_MS + r * (PNB_CUT_MAX_MS - PNB_CUT_MIN_MS);
+}
+
+// Skip ratio (0..1) applied while a cut window is open.
+static float pnbCutRatio() {
+	return clampF(0.0f, getCustomPage()->popsAndBangsCutPercent, 100.0f) / 100.0f;
+}
+
+float EngineStateMachine::getPopsAndBangsSparkSkipRatio() {
+	if (!engineSmIsPopsAndBangs || !getCustomPage()->popsAndBangsSparkCutEnabled) {
+		m_pnbCutActive = false;
+		engineSmPnbSparkCut = false;
+		return 0.0f;
+	}
+
+	const uint32_t rev = getRevolutionCounter();
+
+	if (m_pnbCutActive) {
+		// Still inside the current cut window? Keep cutting spark so fuel charges the exhaust.
+		if (m_pnbCutWindowTimer.getElapsedSeconds() * 1000.0f < m_pnbCutDurationMs) {
+			engineSmPnbSparkCut = true;
+			return pnbCutRatio();
+		}
+		// Window elapsed — resume firing (re-lights the charge) and restart the rev count.
+		m_pnbCutActive = false;
+		m_pnbLastFireRev = rev;
+	}
+
+	// Firing normally until the configured number of revolutions have elapsed.
+	uint8_t everyRevs = getCustomPage()->popsAndBangsCutEveryRevs;
+	if (everyRevs < 1) {
+		everyRevs = 1;
+	}
+
+	if (rev - m_pnbLastFireRev >= everyRevs) {
+		// Open a new spark-cut window.
+		m_pnbCutActive = true;
+		m_pnbCutWindowTimer.reset();
+		if (getCustomPage()->popsAndBangsCutDurationAuto) {
+			m_pnbCutDurationMs = pnbRandomCutDurationMs();
+		} else {
+			m_pnbCutDurationMs = clampF(PNB_CUT_MIN_MS, getCustomPage()->popsAndBangsCutDurationMs, PNB_CUT_MAX_MS);
+		}
+		engineSmPnbSparkCut = true;
+		return pnbCutRatio();
+	}
+
+	engineSmPnbSparkCut = false;
+	return 0.0f;
 }
 
 bool EngineStateMachine::isPopsAndBangsBlocked() const {
@@ -436,7 +525,9 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentR
 // it simply does nothing and all engineSm* flags stay at their default (false).
 bool EngineStateMachine::isEnabled() const { return false; }
 EngineStateMachineState EngineStateMachine::getCurrentState() const { return EngineStateMachineState::Off; }
+void EngineStateMachine::reportLimpCondition() { /* state machine compiled out — no limp mode */ }
 void EngineStateMachine::onSlowCallback() { }
 void EngineStateMachine::updatePopsAndBangs(bool /*isOverrun*/) { engineSmIsPopsAndBangs = false; }
+float EngineStateMachine::getPopsAndBangsSparkSkipRatio() { engineSmPnbSparkCut = false; return 0.0f; }
 
 #endif // EFI_ENGINE_STATE_MACHINE

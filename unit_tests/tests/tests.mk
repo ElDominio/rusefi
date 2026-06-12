@@ -58,6 +58,7 @@ TESTS_SRC_CPP = \
 	tests/ignition_injection/test_ignition_scheduling.cpp \
 	tests/ignition_injection/test_fuelCut.cpp \
 	tests/ignition_injection/test_pops_and_bangs.cpp \
+	tests/ignition_injection/test_burst_knock.cpp \
 	tests/ignition_injection/test_fuel_computer.cpp \
 	tests/ignition_injection/test_injector_model.cpp \
 	tests/ignition_injection/test_odd_firing_engine.cpp \
@@ -101,6 +102,8 @@ TESTS_SRC_CPP = \
 	tests/nitrous_control/test_nitrous_fuel_adder.cpp \
 	tests/nitrous_control/test_nitrous_ignition_retard.cpp \
 	tests/engine_state_machine/test_engine_state_machine.cpp \
+	tests/test_misfire_detection.cpp \
+	tests/test_launch_power_ramp.cpp \
 	tests/actuators/test_downshift_blipper.cpp \
 	tests/test_fft.cpp \
 	tests/lua/test_lua_basic.cpp \

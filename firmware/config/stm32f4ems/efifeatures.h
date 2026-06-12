@@ -577,8 +577,22 @@
 #define EFI_ENGINE_STATE_MACHINE FALSE
 #endif
 
+// Misfire Detection (Engine State Machine sub-feature, reads SM idle state)
+#ifndef EFI_MISFIRE_DETECTION
+#define EFI_MISFIRE_DETECTION FALSE
+#endif
+
 #ifndef EFI_CLUTCH_DELAY_VALVE
 #define EFI_CLUTCH_DELAY_VALVE FALSE
+#endif
+
+#ifndef EFI_LAUNCH_POWER_RAMP
+#define EFI_LAUNCH_POWER_RAMP FALSE
+#endif
+
+// Burst Knock (transient ignition timing pull on a TPS-rate stab)
+#ifndef EFI_BURST_KNOCK
+#define EFI_BURST_KNOCK FALSE
 #endif
 
 #ifndef EFI_OFF_IDLE_RPM_ADDER

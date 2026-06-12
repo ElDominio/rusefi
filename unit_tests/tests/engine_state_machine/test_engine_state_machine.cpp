@@ -554,38 +554,50 @@ static void updateLimpManager() {
 	getLimpManager()->updateState(engine->rpmCalculator.getCachedRpm(), getTimeNowNt());
 }
 
-TEST(EngineStateMachine, limpOverlayWhenFuelCut) {
+// Limp mode is a dedicated latch (reportLimpCondition), NOT derived from generic cuts.
+TEST(EngineStateMachine, limpLatchOverlay) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
 	enterRunning(2000.0f, 50.0f);
 
-	// No cut → Limp bit clear, primary state shown
-	updateLimpManager();
+	// No latch → Limp bit clear, primary state shown
 	engine->periodicSlowCallback();
 	auto& sm = getSm();
 	EXPECT_FALSE(sm.engineSmIsLimp);
 
-	// Cut fuel via Lua → Limp bit set, display overrides to Limp (12)
-	engine->engineState.lua.luaFuelCut = true;
-	updateLimpManager();
+	// Latch limp → Limp bit set, display overrides to Limp (12)
+	sm.reportLimpCondition();
 	engine->periodicSlowCallback();
 	EXPECT_TRUE(sm.engineSmIsLimp);
 	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), sm.engineSmCurrentState);
 
-	// Restore fuel → Limp clears
-	engine->engineState.lua.luaFuelCut = false;
-	updateLimpManager();
+	// Latch is sticky — stays set on subsequent callbacks (until power cycle)
 	engine->periodicSlowCallback();
-	EXPECT_FALSE(sm.engineSmIsLimp);
+	EXPECT_TRUE(sm.engineSmIsLimp);
 }
 
-TEST(EngineStateMachine, limpOverlayWhenIgnitionCut) {
+// A normal fuel/ignition cut (e.g. the rev limit or a Lua cut) must NOT enter limp mode.
+TEST(EngineStateMachine, ordinaryCutDoesNotEnterLimp) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
 	enterRunning(2000.0f, 50.0f);
 
+	engine->engineState.lua.luaFuelCut = true;
 	engine->engineState.lua.luaIgnCut = true;
 	updateLimpManager();
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_FALSE(sm.engineSmIsLimp);
+}
+
+// An ETB jam latches limp mode through the state machine when the SM is enabled.
+TEST(EngineStateMachine, etbJamLatchesLimp) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning(2000.0f, 50.0f);
+
+	getLimpManager()->reportEtbJammed();
 	engine->periodicSlowCallback();
 
 	auto& sm = getSm();
@@ -599,8 +611,7 @@ TEST(EngineStateMachine, limpPriorityOverUpshifting) {
 	enterRunning(3000.0f, 95.0f);
 
 	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
-	engine->engineState.lua.luaFuelCut = true;
-	updateLimpManager();
+	getSm().reportLimpCondition();
 
 	engine->periodicSlowCallback();
 	// Limp (12) must beat Upshifting (10) in the display integer

@@ -759,7 +759,9 @@ class App(tk.Tk):
 
             # 3. Main bundle compilation
             self.append_log("\n[STEP 3/3] Compiling firmware & building console bundle...\n", "info")
-            cmd = ["bash", "bin/compile.sh", "-b", rel_meta_info]
+            # We only build the Linux console bundle; skip the Windows simulator
+            # (.exe), which would require the i686-w64-mingw32 cross-compiler.
+            cmd = ["bash", "bin/compile.sh", "-b", rel_meta_info, "BUNDLE_SIMULATOR=false"]
             self.append_log(f"Running: {' '.join(cmd)}\n", "info")
             
             self.process = subprocess.Popen(
@@ -838,7 +840,25 @@ class App(tk.Tk):
                 
                 with zipfile.ZipFile(dest_zip, 'r') as zip_ref:
                     zip_ref.extractall(extract_path)
-                    
+
+            # Copy the canonical OpenBLT update .srec directly from the build directory.
+            # The bundle's own .srec embeds a SIGNATURE_HASH read via a recursively-expanded
+            # $(shell) in bundle.mk; because the signature header is regenerated mid-build, that
+            # hash can change between when the .srec is written and when it is zipped, so the srec
+            # is frequently missing (or stale) inside rusefi_bundle_*.zip. build/rusefi.srec is the
+            # CRC'd image OpenBLT actually needs and is unaffected by the filename-hash race.
+            self.append_log("\n--- Copying OpenBLT update image (.srec) ---\n", "info")
+            build_srec = os.path.join(self.firmware_dir, "build", "rusefi.srec")
+            if os.path.exists(build_srec):
+                dest_srec = os.path.join(dest, f"rusefi_{short_name}_update.srec")
+                self.append_log(f"Copying {build_srec}\n  -> {dest_srec}\n", "info")
+                shutil.copy2(build_srec, dest_srec)
+                # Also drop it into the extracted bundle folder so it sits next to rusefi.bin.
+                if extract_zip:
+                    shutil.copy2(build_srec, os.path.join(extract_path, f"rusefi_{short_name}_update.srec"))
+            else:
+                self.append_log(f"[WARNING] Expected srec not found at {build_srec}; OpenBLT image not copied.\n", "stderr")
+
             self.append_log("\n[SUCCESS] Build and bundle packaging completed successfully!\n", "success")
             self.build_success()
             

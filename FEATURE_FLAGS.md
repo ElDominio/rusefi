@@ -76,7 +76,10 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_DOWNSHIFT_BLIPPER` | Downshift blipper (also needs `EFI_ELECTRONIC_THROTTLE_BODY`) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_EXHAUST_CUTOUT` | Exhaust cutout | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_ENGINE_STATE_MACHINE` | Engine state machine + pops & bangs | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_MISFIRE_DETECTION` | Idle misfire detection (ESM sub-feature; needs `EFI_ENGINE_STATE_MACHINE` at runtime) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_CLUTCH_DELAY_VALVE` | Clutch delay valve (CDV) | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_LAUNCH_POWER_RAMP` | Launch power ramp (timing pull + ramp-in after a WOT launch release) | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_BURST_KNOCK` | Burst knock (transient ignition timing pull on a TPS-rate stab, decays over time) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_OFF_IDLE_RPM_ADDER` | Off-idle RPM adder | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_LUA_LIMITER` | Lua limiter | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_ADVANCED_FUEL_PUMP` | Advanced / PWM secondary fuel pump | FALSE (f4) / TRUE (f7,h7) |
@@ -95,6 +98,7 @@ EFI_BLUETOOTH_SETUP
 EFI_BOOST_CONTROL
 EFI_BOR_LEVEL
 EFI_BOSCH_YAW
+EFI_BURST_KNOCK                  ← AlphaX (burst knock transient timing pull)
 EFI_CAN_GPIO
 EFI_CAN_SERIAL
 EFI_CAN_SUPPORT
@@ -137,6 +141,7 @@ EFI_INTERNAL_FAST_ADC_GPT
 EFI_INTERNAL_FAST_ADC_PWM
 EFI_INTERNAL_SLOW_ADC_BACKGROUND
 EFI_LAUNCH_CONTROL
+EFI_LAUNCH_POWER_RAMP            ← AlphaX (launch power ramp)
 EFI_LOGIC_ANALYZER
 EFI_LTFT_CONTROL
 EFI_LUA
@@ -148,6 +153,7 @@ EFI_MAP_AVERAGING
 EFI_MAX_31855
 EFI_MC33816
 EFI_MCP_3208
+EFI_MISFIRE_DETECTION            ← AlphaX (idle misfire detection)
 EFI_OFF_IDLE_RPM_ADDER           ← AlphaX (off-idle RPM adder)
 EFI_ONBOARD_MEMS
 EFI_PERF_METRICS

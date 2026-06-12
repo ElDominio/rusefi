@@ -2587,6 +2587,8 @@ end_struct
 #define ts_show_vvt_output_pin true
 #define ts_show_vvl_control true
 #define ts_show_cdv_control true
+#define ts_show_launch_power_ramp true
+#define ts_show_downshift_blipper true
 #define ts_show_hbridge_function true
 #define ts_show_aux_sensors true
 #define ts_show_clutch_up true

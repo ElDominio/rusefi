@@ -104,8 +104,13 @@ void burnExtraFlashPage(StorageItemId id) {
 	// INT_FLASH boards: extra pages share a flash sector with the main config.
 	// A full config burn erases the sector, then burnExtraFlashPages()
 	// writes all extra pages into the now-blank region in one pass.
+	// Use the deferred (non-forced) request, NOT writeToFlashNow(): on F4/F7 the
+	// CPU freezes for ~1-2s during an internal-flash write, so the storage manager
+	// postpones the write until the engine is stopped (storageAllowWriteID()).
+	// This also lights TunerStudio's "unsaved changes" indicator until the burn
+	// actually lands, matching how the main settings page (TS_PAGE_SETTINGS) burns.
 	(void)id;
-	writeToFlashNow();
+	setNeedToWriteConfiguration();
 #else
 	// MFS/SD boards or simulator: write the specific page directly to all backends.
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {

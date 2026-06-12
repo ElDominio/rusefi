@@ -367,6 +367,16 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	}
 #endif // EFI_ELECTRONIC_THROTTLE_BODY
 
+	// Limp Mode ETB ceiling: cap throttle opening while limp is latched. Placed after the
+	// blipper (which fully replaces the target) so limp mode out-votes a rev-match blip, and
+	// before the rev limiter so the limiter can still pull the throttle further closed.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+		percent_t limpEtb = getCustomPage()->limpModeEtbLimit;
+		if (targetPosition > limpEtb) {
+			targetPosition = limpEtb;
+		}
+	}
+
 	// Lastly, apply ETB rev limiter
 	auto etbRpmLimit = engineConfiguration->etbRevLimitStart;
 	if (etbRpmLimit != 0) {

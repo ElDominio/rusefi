@@ -238,7 +238,14 @@ angle_t getAdvanceCorrections(float engineLoad) {
 		+ engine->ignitionState.vvtExhaustTimingCorrection
 #endif
 		+ engine->ignitionState.timingPidCorrection
-		- engine->ignitionState.dfcoTimingRetard;
+		- engine->ignitionState.dfcoTimingRetard
+#if EFI_LAUNCH_POWER_RAMP
+		- engine->module<LaunchPowerRamp>().unmock().getTimingRetard()
+#endif // EFI_LAUNCH_POWER_RAMP
+#if EFI_BURST_KNOCK
+		- engine->module<BurstKnock>().unmock().getTimingRetard()
+#endif // EFI_BURST_KNOCK
+		;
 }
 
 /**
@@ -306,6 +313,10 @@ angle_t IgnitionState::getWrappedAdvance(const float rpm, const float engineLoad
 	}
 	popsAndBangsTimingActive = false;
     angle_t angle = getAdvance(rpm, engineLoad) * luaTimingMult + luaTimingAdd;
+    // Limp Mode: pull timing while limp is latched (skipped during cranking above).
+    if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+        angle -= getCustomPage()->limpModeTimingReduction;
+    }
     wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
     return angle;
 }

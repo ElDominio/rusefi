@@ -16,6 +16,7 @@ struct_no_prefix engine_state_machine_state_s
 	bit engineSmIsDownshifting;Engine SM: Downshifting
 	bit engineSmIsLimp;Engine SM: Limp/Cut Active
 	bit engineSmIsPopsAndBangs;Engine SM: Pops and Bangs active
+	bit engineSmPnbSparkCut;Engine SM: P&B spark cut
 
 	uint8_t engineSmCurrentState;Engine SM: primary state
 

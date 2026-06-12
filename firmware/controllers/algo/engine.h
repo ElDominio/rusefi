@@ -35,6 +35,7 @@
 #include "shift_torque_reduction_controller.h"
 #include "nitrous_controller.h"
 #include "engine_state_machine.h"
+#include "misfire_detection.h"
 #include "downshift_blipper.h"
 #include "antilag_system.h"
 #include "start_stop.h"
@@ -43,6 +44,8 @@
 #include "main_relay.h"
 #include "exhaust_cutout.h"
 #include "cdv_controller.h"
+#include "launch_power_ramp.h"
+#include "burst_knock.h"
 #include "ac_control.h"
 #include "type_list.h"
 #include "boost_control.h"
@@ -168,6 +171,12 @@ public:
         MainRelayController,
         ExhaustCutoutController,
         CdvController,
+#if EFI_LAUNCH_POWER_RAMP
+        LaunchPowerRamp,
+#endif // EFI_LAUNCH_POWER_RAMP
+#if EFI_BURST_KNOCK
+        BurstKnock,
+#endif // EFI_BURST_KNOCK
         Mockable<IgnitionController>,
         Mockable<AcController>,
         PrimeController,
@@ -195,6 +204,9 @@ public:
         NitrousController,
 #endif // EFI_LAUNCH_CONTROL
         EngineStateMachine,
+#if EFI_MISFIRE_DETECTION
+        MisfireController,
+#endif // EFI_MISFIRE_DETECTION
 #if EFI_ELECTRONIC_THROTTLE_BODY
         DownshiftBlipper,
 #endif // EFI_ELECTRONIC_THROTTLE_BODY

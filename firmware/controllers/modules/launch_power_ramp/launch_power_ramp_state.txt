@@ -1,0 +1,7 @@
+struct_no_prefix launch_power_ramp_state_s
+
+	bit isLaunchPowerRampActive
+	float launchPowerRampRetard;"deg"
+	float launchPowerRampElapsed;"s"
+
+end_struct

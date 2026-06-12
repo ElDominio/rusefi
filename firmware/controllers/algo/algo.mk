@@ -11,6 +11,7 @@ CONTROLLERS_ALGO_SRC_CPP = $(PROJECT_DIR)/controllers/algo/ignition/ignition_sta
 	$(PROJECT_DIR)/controllers/algo/shift_torque_reduction_controller.cpp \
 	$(PROJECT_DIR)/controllers/algo/nitrous_controller.cpp \
 	$(PROJECT_DIR)/controllers/algo/engine_state_machine.cpp \
+	$(PROJECT_DIR)/controllers/algo/misfire_detection.cpp \
 	$(PROJECT_DIR)/controllers/algo/antilag_system.cpp \
 	$(PROJECT_DIR)/controllers/algo/dynoview.cpp \
 	$(PROJECT_DIR)/controllers/algo/runtime_state.cpp \
