@@ -3,8 +3,6 @@ struct_no_prefix misfire_detection_state_s
 	bit misfireDetectionActive;Misfire: active
 	bit misfireLatched;Misfire: MIL latched
 
-	uint8_t misfireLastCylinder;Misfire: last cylinder
-
 	uint16_t misfireTotalCount;Misfire: total count;"events", 1, 0, 0, 0, 0
 
 	float misfireEmaUs;Misfire: EMA baseline;"us", 1, 0, 0, 0, 0

@@ -40,8 +40,8 @@ public:
 	static constexpr uint8_t MISFIRE_WINDOW_MAX = 32;
 
 private:
-	void evaluateSegment(uint8_t cyl, float segDurationUs);
-	void registerMisfire(uint8_t cyl);
+	void evaluateSegment(float segDurationUs);
+	void registerMisfire();
 	void resetDetectionState();
 
 	// Push one firing result into the ring buffer; count flagged firings among the most

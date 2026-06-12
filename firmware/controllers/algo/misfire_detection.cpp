@@ -48,11 +48,10 @@ uint8_t MisfireController::flaggedInWindow(uint8_t windowSize) const {
 	return flagged;
 }
 
-void MisfireController::registerMisfire(uint8_t cyl) {
+void MisfireController::registerMisfire() {
 	if (misfireTotalCount < UINT16_MAX) {
 		misfireTotalCount++;
 	}
-	misfireLastCylinder = cyl + 1;
 
 	uint16_t threshold = getCustomPage()->misfireCountThreshold;
 	if (!misfireLatched && threshold > 0 && misfireTotalCount >= threshold) {
@@ -62,7 +61,7 @@ void MisfireController::registerMisfire(uint8_t cyl) {
 	}
 }
 
-void MisfireController::evaluateSegment(uint8_t cyl, float segDurationUs) {
+void MisfireController::evaluateSegment(float segDurationUs) {
 	if (segDurationUs <= 0) {
 		// Degenerate timing (phase wrap / first sample) — ignore.
 		return;
@@ -104,7 +103,7 @@ void MisfireController::evaluateSegment(uint8_t cyl, float segDurationUs) {
 			need = 1;
 		}
 		if (flaggedInWindow(windowSize) >= need) {
-			registerMisfire(cyl);
+			registerMisfire();
 		}
 	} else {
 		// Clean firing: let the shared baseline track slow RPM/load drift.
@@ -158,7 +157,7 @@ void MisfireController::onEnginePhase(float /*rpm*/, efitick_t edgeTimestamp,
 		if (m_segActive[i] && isPhaseInRange(windowEnd, currentPhase, nextPhase)) {
 			m_segActive[i] = false;
 			float segUs = NT2US((float)(edgeTimestamp - m_segStart[i]));
-			evaluateSegment(i, segUs);
+			evaluateSegment(segUs);
 		}
 	}
 }
@@ -167,8 +166,8 @@ void MisfireController::onEnginePhase(float /*rpm*/, efitick_t edgeTimestamp,
 
 void MisfireController::onEnginePhase(float, efitick_t, angle_t, angle_t) {}
 void MisfireController::onEngineStop() {}
-void MisfireController::evaluateSegment(uint8_t, float) {}
-void MisfireController::registerMisfire(uint8_t) {}
+void MisfireController::evaluateSegment(float) {}
+void MisfireController::registerMisfire() {}
 void MisfireController::resetDetectionState() {}
 void MisfireController::recordFiring(bool) {}
 uint8_t MisfireController::flaggedInWindow(uint8_t) const { return 0; }
