@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "custom_page.h"
 #include "engine_state_machine.h"
+#include "malfunction_central.h"
 #include "dfco.h"
 #include "tinymt32.h" // basic 'random' for the P&B automatic cut duration
 
@@ -79,16 +80,18 @@ void EngineStateMachine::onSlowCallback() {
 	//
 	// This used to be derived from ANY LimpManager fuel/spark cut, which incorrectly
 	// flagged limp for the normal rev limit, boost cut, launch cut, etc. Limp mode is now
-	// a dedicated latch (m_limpModeLatched) raised only via reportLimpCondition(). The
-	// only current trigger is an ETB jam (LimpManager::reportEtbJammed); the ordinary rev
-	// limit and other transient cuts intentionally do NOT enter limp mode.
-	//
-	// TODO(limp triggers): additional fault conditions could latch limp mode here by
-	// inspecting LimpManager state, e.g.:
-	//   - overheat:          Sensor::get(SensorType::Clt).Value above a configured limit
-	//   - oil pressure:      getLimpManager()->allowInjection().reason == ClearReason::OilPressure
-	//   - lambda protection: getLimpManager()->allowInjection().reason == ClearReason::LambdaProtection
-	// Left unwired for now per design — wire them through reportLimpCondition() when needed.
+	// a dedicated latch (m_limpModeLatched) raised only via reportLimpCondition(). Triggers:
+	//   - ETB jam (LimpManager::reportEtbJammed), and
+	//   - cumulative DTC severity (below): when active fault codes add up to at least the
+	//     user-configurable limpSeverityThreshold. Severity weights are fixed per fault class
+	//     in obdCodeSeverity(); a latched misfire (5 pts) trips limp at the default threshold,
+	//     while light informational codes (0 pts) never do.
+	// The ordinary rev limit and other transient cuts intentionally do NOT enter limp mode.
+	uint16_t limpThreshold = getCustomPage()->limpSeverityThreshold;
+	if (limpThreshold > 0 && getErrorSeverityTotal() >= limpThreshold) {
+		reportLimpCondition();
+	}
+
 	engineSmIsLimp = m_limpModeLatched;
 
 	// Override the display integer for overlay priority: Limp > Upshifting > Downshifting > LaunchControl

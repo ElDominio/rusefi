@@ -59,6 +59,7 @@ void customPageSetDefaults() {
 	d.smDownshiftRateThreshold = 0;
 
 	// Limp Mode (Engine State Machine sub-feature) — conservative "get-home" defaults.
+	d.limpSeverityThreshold  = 5;    // one latched misfire (5 severity pts) latches limp
 	d.limpModeEtbLimit       = 30;   // cap throttle at 30%
 	d.limpModeTimingReduction = 5;   // pull 5 deg of timing
 	d.limpModeAfrEnrichment  = 5;    // 5% richer than target

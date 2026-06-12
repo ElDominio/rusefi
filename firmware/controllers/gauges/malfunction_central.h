@@ -17,8 +17,6 @@ struct error_codes_set_s {
 	ObdCode error_codes[MAX_ERROR_CODES_COUNT];
 };
 
-// TODO: wow this is not used by real firmware?!
-#if EFI_UNIT_TEST
 /**
  * @brief Adds an error code into the set of current errors.
  * The error code is placed into the fixed-size data structure if it fits into it.
@@ -31,7 +29,6 @@ void addError(ObdCode errorCode);
  *
  */
 void removeError(ObdCode errorCode);
-#endif // EFI_UNIT_TEST
 
 void clearWarnings(void);
 /**
@@ -40,3 +37,17 @@ void clearWarnings(void);
 void getErrorCodes(error_codes_set_s * buffer);
 
 bool hasErrorCodes(void);
+
+/**
+ * @brief Programmer-defined fault severity (in "severity points") for a single DTC.
+ * This is NOT user-facing — it is the fixed weight we assign to each fault class on the
+ * firmware side. Misfire codes are heavy; most codes are 0 (informational) for now.
+ */
+uint8_t obdCodeSeverity(ObdCode errorCode);
+
+/**
+ * @brief Sum of obdCodeSeverity() over every DTC currently in the active set.
+ * The Engine State Machine compares this against the user-configurable limpSeverityThreshold
+ * to decide whether to latch Limp mode.
+ */
+uint16_t getErrorSeverityTotal(void);
