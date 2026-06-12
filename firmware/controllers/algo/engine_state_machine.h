@@ -25,6 +25,7 @@ enum class EngineStateMachineState : uint8_t {
 	Upshifting   = 10,
 	Downshifting = 11,
 	Limp         = 12,
+	Eco          = 13,
 };
 
 // History buffer: 20 samples at 20 Hz = 1000 ms of lookback
@@ -44,6 +45,12 @@ public:
 	// Drives the P&B state machine off the given overrun state.
 	// Public so unit tests can call it directly without needing a full slow-callback setup.
 	void updatePopsAndBangs(bool isOverrun);
+
+	// Drives the Eco mode overlay: engages after the engine has been Cruising continuously for
+	// ecoModeCruisingTime, drops instantly on leaving Cruising, and can be forced on or inhibited
+	// by a manual switch / Lua gauge. Takes the current state directly so unit tests can drive it
+	// without standing up the full state determination.
+	void updateEcoMode(EngineStateMachineState currentState);
 
 	// P&B spark-cut overlay: returns the spark skip ratio (0..1) to feed the hard spark
 	// limiter. Non-zero only while a cut window is open (every popsAndBangsCutEveryRevs
@@ -99,6 +106,12 @@ private:
 	// ETB-jam behaviour which persisted until reboot). TODO: an un-latch path (e.g. a
 	// settings command or a clean key cycle) could be added later if desired.
 	bool m_limpModeLatched = false;
+
+	// Eco mode overlay state
+	bool isEcoModeSwitchAsserted() const; // manual switch / Lua gauge currently asserting
+	bool isEcoModeForced() const;         // asserted in Force-On mode
+	bool isEcoModeInhibited() const;      // asserted in Inhibit mode
+	Timer m_ecoCruiseTimer;               // measures continuous time in the Cruising state
 
 	// Pops and Bangs state machine
 	bool isPopsAndBangsBlocked() const;

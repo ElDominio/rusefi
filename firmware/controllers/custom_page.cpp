@@ -92,6 +92,22 @@ void customPageSetDefaults() {
 	}
 	// wotEnrichmentAfrAdder left at zero (no enrichment) until the user tunes it.
 
+	// Eco Mode (Engine State Machine sub-feature) — disabled by default; inert calibration.
+	d.ecoModeEnabled       = false;
+	d.ecoModeVvtOverride   = false;
+	d.ecoModeSwitchMode    = eco_mode_switch_mode_e::Off;
+	d.ecoModeSwitchPin     = Gpio::Unassigned;
+	d.ecoModeSwitchPinMode = PI_DEFAULT;
+	d.ecoModeLuaGauge      = LUA_GAUGE_1;
+	d.ecoModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
+	d.ecoModeLuaGaugeValue = 0.0f;
+	d.ecoModeCruisingTime  = 10;     // 10 s of steady cruise before eco engages
+	d.ecoTargetAfr         = 15.5f;  // slightly leaner than stoich for economy
+	d.ecoTimingAdder       = 0.0f;   // no timing change until the user tunes it
+	d.ecoVvtIntakeTarget   = 0.0f;
+	d.ecoVvtExhaustTarget  = 0.0f;
+	d.ecoThrottleMult      = 1.0f;   // pass-through until the user tunes it
+
 	// Pops and Bangs (enable bit lives in page 1).
 	d.popsAndBangsDelay = 1.0f;
 	d.popsAndBangsDuration = 2.0f;

@@ -34,6 +34,12 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 	lambda = afr / stoich;   // keep published targetLambda consistent with the adjusted AFR
 #endif // EFI_WOT_ENRICHMENT
 
+	// Eco Mode: lean the mixture to an absolute target AFR while the economy overlay is active.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
+		afr = getCustomPage()->ecoTargetAfr;
+		lambda = afr / stoich; // keep published targetLambda consistent with the eco target
+	}
+
 	afrTableYAxis = load;
 	targetLambda = lambda;
 	targetAFR = afr;

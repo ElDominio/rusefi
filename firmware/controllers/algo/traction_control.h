@@ -12,6 +12,13 @@ public:
 	float getAppliedTimingDrop() const { return appliedTimingDrop; }
 	float getAppliedSparkSkip() const { return appliedSparkSkip; }
 
+	// True whenever traction control is actively pulling torque (a non-zero ETB,
+	// timing, or spark-skip correction is being applied). Consumed by the Engine
+	// State Machine to raise its Torque Reduction overlay.
+	bool isActive() const {
+		return appliedEtbDrop != 0.0f || appliedTimingDrop != 0.0f || appliedSparkSkip != 0.0f;
+	}
+
 private:
 	Map3D<TRACTION_CONTROL_ETB_DROP_SLIP_SIZE, TRACTION_CONTROL_ETB_DROP_SPEED_SIZE, int8_t, uint16_t, uint8_t> tcTimingDropTable{"tct"};
 	Map3D<TRACTION_CONTROL_ETB_DROP_SLIP_SIZE, TRACTION_CONTROL_ETB_DROP_SPEED_SIZE, int8_t, uint16_t, uint8_t> tcSparkSkipTable{"tcs"};

@@ -317,6 +317,10 @@ angle_t IgnitionState::getWrappedAdvance(const float rpm, const float engineLoad
     if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
         angle -= getCustomPage()->limpModeTimingReduction;
     }
+    // Eco Mode: add (or pull) timing while the economy overlay is active.
+    if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
+        angle += getCustomPage()->ecoTimingAdder;
+    }
     wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
     return angle;
 }

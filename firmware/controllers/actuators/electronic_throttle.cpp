@@ -348,6 +348,11 @@ expected<percent_t> EtbController::getSetpointEtb() {
 		targetPosition += getCustomPage()->popsAndBangsAirAdd;
 	}
 
+	// Eco Mode: scale the throttle target (0.8-1.2) while the economy overlay is active.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
+		targetPosition *= clampF(0.8f, getCustomPage()->ecoThrottleMult, 1.2f);
+	}
+
   tcEtbDrop = engine->tractionController.getAppliedEtbDrop();
 
 	// Apply any adjustment that this throttle alone needs

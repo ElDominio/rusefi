@@ -40,6 +40,8 @@ custom sm_clutch_switch_e 1 bits, U08, @OFFSET@, [0:1], @@sm_clutch_switch_e_enu
 custom sm_shift_detection_mode_e 1 bits, U08, @OFFSET@, [0:1], @@sm_shift_detection_mode_e_enum@@
 #define pops_and_bangs_disable_mode_e_enum "None", "Switch Input", "Lua Gauge", "Switch or Lua Gauge"
 custom pops_and_bangs_disable_mode_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_disable_mode_e_enum@@
+#define eco_mode_switch_mode_e_enum "Off", "Force On", "Inhibit", "INVALID"
+custom eco_mode_switch_mode_e 1 bits, U08, @OFFSET@, [0:1], @@eco_mode_switch_mode_e_enum@@
 
 custom fuel_pump_mode_e 1 bits, U08, @OFFSET@, [0:1], "Single", "Dual", "PWM"
 
@@ -148,6 +150,30 @@ struct_no_prefix page5_s
 	float misfireThresholdRatio;Misfire Detection: how much slower than its own baseline a cylinder's expansion segment must be to flag a misfire (e.g. 1.15 = 15% slower).;"ratio", 1, 0, 1, 3, 2
 	float misfireWindowStart;Misfire Detection: window start, degrees after each cylinder's TDC, where the expansion-torque deceleration is measured.;"deg", 1, 0, 0, 360, 0
 	float misfireWindowEnd;Misfire Detection: window end, degrees after each cylinder's TDC.;"deg", 1, 0, 0, 360, 0
+
+	! --- Eco Mode (Engine State Machine sub-feature) ---
+	! Fuel-economy overlay. Engages once the engine has been in the Cruising state continuously for
+	! ecoModeCruisingTime, and drops instantly on leaving Cruising (a tip-in into Transient/WOT).
+	! While active it overrides target AFR, adds/pulls ignition timing, optionally retargets the
+	! intake/exhaust VVT cams, and scales the throttle target. A manual switch / Lua gauge can Force
+	! On (engage regardless of the timer) or Inhibit (block) eco. Limp mode out-votes eco entirely.
+	bit ecoModeEnabled,"enabled","disabled";Eco Mode: master enable. Engages after sustained cruising to bias fuel/timing/throttle for economy.
+	bit ecoModeVvtOverride,"enabled","disabled";Eco Mode: also override the intake/exhaust VVT cam targets while active (engines with VVT only).
+
+	eco_mode_switch_mode_e ecoModeSwitchMode;Eco Mode: how the manual switch / Lua gauge acts. Force On engages eco regardless of the cruise timer; Inhibit blocks eco while asserted.
+	switch_input_pin_e ecoModeSwitchPin;Eco Mode: hardware switch input pin (used by Force On / Inhibit).
+	pin_input_mode_e ecoModeSwitchPinMode;
+	lua_gauge_e ecoModeLuaGauge;Eco Mode: Lua gauge used as the switch source.
+	lua_gauge_meaning_e ecoModeLuaGaugeMeaning;
+
+	uint16_t ecoModeCruisingTime;Eco Mode: continuous time in the Cruising state before eco engages.;"sec", 1, 0, 0, 600, 0
+
+	float ecoModeLuaGaugeValue;Eco Mode: Lua gauge threshold for the switch source.;"", 1, 0, -30000, 30000, 3
+	float ecoTargetAfr;Eco Mode: absolute target AFR while active (leaner = more economy).;"afr", 1, 0, 10, 20, 1
+	float ecoTimingAdder;Eco Mode: ignition timing added (+) or pulled (-) while active.;"deg", 1, 0, -15, 15, 1
+	float ecoVvtIntakeTarget;Eco Mode: intake cam VVT target while active (when VVT override enabled).;"deg", 1, 0, -360, 360, 1
+	float ecoVvtExhaustTarget;Eco Mode: exhaust cam VVT target while active (when VVT override enabled).;"deg", 1, 0, -360, 360, 1
+	float ecoThrottleMult;Eco Mode: throttle target multiplier while active.;"mult", 1, 0, 0.8, 1.2, 2
 
 	! --- Pops and Bangs (enable bit stays in page 1) ---
 	uint8_t autoscale popsAndBangsDelay;Delay after overrun starts before pops and bangs activates.;"sec", 0.1, 0, 0, 10, 1

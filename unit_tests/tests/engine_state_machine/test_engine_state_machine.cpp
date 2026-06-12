@@ -286,6 +286,60 @@ TEST(EngineStateMachine, flatShiftClearsWhenInactive) {
 	EXPECT_FALSE(getSm().engineSmIsTorqueReduction);
 }
 
+// ---- Traction control torque reduction ----
+
+TEST(EngineStateMachine, tractionControlSetsTorqueReduction) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+
+	// Configure a non-zero ETB drop across the whole traction-control table, then reload
+	// the controller's Map3D tables from the freshly-written config.
+	for (size_t s = 0; s < efi::size(engineConfiguration->tractionControlEtbDrop); s++) {
+		for (size_t v = 0; v < efi::size(engineConfiguration->tractionControlEtbDrop[0]); v++) {
+			engineConfiguration->tractionControlEtbDrop[s][v] = -10;
+		}
+	}
+	engineConfiguration->tractionControlYAxisSource = TC_Y_AXIS_WHEEL_SLIP;
+	engineConfiguration->tractionControlHoldTime = 0;
+	engineConfiguration->tractionControlDecayTime = 0;
+	engine->tractionController.init();
+
+	enterRunning(3000.0f, 50.0f);
+
+	// Feed slip / speed so the table returns its (non-zero) ETB drop
+	Sensor::setMockValue(SensorType::WheelSlipRatio, 1.1f);
+	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0f);
+
+	// Fast callback computes the applied traction-control corrections; slow callback runs the SM
+	engine->periodicFastCallback();
+	EXPECT_TRUE(engine->tractionController.isActive());
+
+	engine->periodicSlowCallback();
+	auto& sm = getSm();
+	EXPECT_TRUE(sm.engineSmIsTorqueReduction);
+	// Traction control is not a gear shift — it must not raise the shift-direction bits
+	EXPECT_FALSE(sm.engineSmIsUpshifting);
+	EXPECT_FALSE(sm.engineSmIsDownshifting);
+}
+
+TEST(EngineStateMachine, torqueReductionClearsWhenTractionInactive) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+
+	// Leave the traction-control table at its default (all zero) → no correction applied
+	engine->tractionController.init();
+	enterRunning(3000.0f, 50.0f);
+
+	Sensor::setMockValue(SensorType::WheelSlipRatio, 1.1f);
+	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0f);
+
+	engine->periodicFastCallback();
+	EXPECT_FALSE(engine->tractionController.isActive());
+
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsTorqueReduction);
+}
+
 // ---- Launch Control overlay ----
 
 TEST(EngineStateMachine, launchControlOverlay) {

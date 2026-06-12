@@ -64,8 +64,11 @@ void EngineStateMachine::onSlowCallback() {
 	// Overlay: Torque Reduction + Shift direction
 	// Flat-shift torque reduction is an authoritative upshift signal: the driver stayed WOT
 	// throughout the shift, so direction is certain and no clutch analysis is needed.
-	bool flatShiftActive = engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied;
-	engineSmIsTorqueReduction = flatShiftActive;
+	bool flatShiftActive = engine->shiftTorqueReductionController.isCuttingTorque();
+	// Traction control also reduces torque (ETB / timing / spark cut) but is not a gear shift,
+	// so it raises the Torque Reduction overlay without driving shift direction below.
+	bool tractionActive = engine->tractionController.isActive();
+	engineSmIsTorqueReduction = flatShiftActive || tractionActive;
 
 	if (flatShiftActive) {
 		engineSmIsUpshifting   = true;
@@ -94,7 +97,11 @@ void EngineStateMachine::onSlowCallback() {
 
 	engineSmIsLimp = m_limpModeLatched;
 
-	// Override the display integer for overlay priority: Limp > Upshifting > Downshifting > LaunchControl
+	// Eco mode overlay — must run before the display override below so the dash reflects it
+	// this cycle. Depends on m_currentState (set above) and engineSmIsLimp (limp wins).
+	updateEcoMode(m_currentState);
+
+	// Override the display integer for overlay priority: Limp > Upshifting > Downshifting > LaunchControl > Eco
 	if (engineSmIsLimp) {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Limp);
 	} else if (engineSmIsUpshifting) {
@@ -103,9 +110,79 @@ void EngineStateMachine::onSlowCallback() {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Downshifting);
 	} else if (engineSmIsLaunchControl) {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::LaunchControl);
+	} else if (engineSmIsEcoMode) {
+		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Eco);
 	}
 
 	updatePopsAndBangs(engineSmIsOverrun);
+}
+
+void EngineStateMachine::updateEcoMode(EngineStateMachineState currentState) {
+	// Limp mode is protective and out-votes eco; a disabled feature is always inactive.
+	if (!getCustomPage()->ecoModeEnabled || engineSmIsLimp) {
+		m_ecoCruiseTimer.reset();
+		engineSmIsEcoMode = false;
+		return;
+	}
+
+	// Instant drop: only the Cruising state accumulates time. Any other state pins the timer at
+	// zero, so re-entry must accumulate the full ecoModeCruisingTime again before eco re-engages.
+	bool cruiseElapsed = false;
+	if (currentState == EngineStateMachineState::Cruising) {
+		cruiseElapsed = m_ecoCruiseTimer.hasElapsedSec(getCustomPage()->ecoModeCruisingTime);
+	} else {
+		m_ecoCruiseTimer.reset();
+	}
+
+	// Force-On engages regardless of the timer; Inhibit blocks the timer-based engage.
+	engineSmIsEcoMode = isEcoModeForced() || (cruiseElapsed && !isEcoModeInhibited());
+}
+
+// Reads the configured manual switch source (hardware pin and/or Lua gauge). Either asserting
+// counts as asserted; mirrors the pin + Lua-gauge reading pattern in isPopsAndBangsBlocked().
+bool EngineStateMachine::isEcoModeSwitchAsserted() const {
+	bool pinAsserted = false;
+
+#if !EFI_UNIT_TEST
+	const switch_input_pin_e pin = getCustomPage()->ecoModeSwitchPin;
+	if (isBrainPinValid(pin)) {
+		pinAsserted = efiReadPin(pin, getCustomPage()->ecoModeSwitchPinMode);
+	}
+#endif
+
+	bool gaugeAsserted = false;
+	SensorType gaugeType = SensorType::LuaGauge1;
+	switch (getCustomPage()->ecoModeLuaGauge) {
+		case LUA_GAUGE_2: gaugeType = SensorType::LuaGauge2; break;
+		case LUA_GAUGE_3: gaugeType = SensorType::LuaGauge3; break;
+		case LUA_GAUGE_4: gaugeType = SensorType::LuaGauge4; break;
+		case LUA_GAUGE_5: gaugeType = SensorType::LuaGauge5; break;
+		case LUA_GAUGE_6: gaugeType = SensorType::LuaGauge6; break;
+		case LUA_GAUGE_7: gaugeType = SensorType::LuaGauge7; break;
+		case LUA_GAUGE_8: gaugeType = SensorType::LuaGauge8; break;
+		default: break;
+	}
+	const auto gaugeResult = Sensor::get(gaugeType);
+	if (gaugeResult.Valid) {
+		const float value = gaugeResult.Value;
+		const float threshold = getCustomPage()->ecoModeLuaGaugeValue;
+		switch (getCustomPage()->ecoModeLuaGaugeMeaning) {
+			case LUA_GAUGE_LOWER_BOUND: gaugeAsserted = (value >= threshold); break;
+			case LUA_GAUGE_UPPER_BOUND: gaugeAsserted = (value <= threshold); break;
+		}
+	}
+
+	return pinAsserted || gaugeAsserted;
+}
+
+bool EngineStateMachine::isEcoModeForced() const {
+	return getCustomPage()->ecoModeSwitchMode == eco_mode_switch_mode_e::ForceOn
+		&& isEcoModeSwitchAsserted();
+}
+
+bool EngineStateMachine::isEcoModeInhibited() const {
+	return getCustomPage()->ecoModeSwitchMode == eco_mode_switch_mode_e::Inhibit
+		&& isEcoModeSwitchAsserted();
 }
 
 void EngineStateMachine::updatePopsAndBangs(bool isOverrun) {
@@ -531,6 +608,7 @@ EngineStateMachineState EngineStateMachine::getCurrentState() const { return Eng
 void EngineStateMachine::reportLimpCondition() { /* state machine compiled out — no limp mode */ }
 void EngineStateMachine::onSlowCallback() { }
 void EngineStateMachine::updatePopsAndBangs(bool /*isOverrun*/) { engineSmIsPopsAndBangs = false; }
+void EngineStateMachine::updateEcoMode(EngineStateMachineState /*currentState*/) { engineSmIsEcoMode = false; }
 float EngineStateMachine::getPopsAndBangsSparkSkipRatio() { engineSmPnbSparkCut = false; return 0.0f; }
 
 #endif // EFI_ENGINE_STATE_MACHINE

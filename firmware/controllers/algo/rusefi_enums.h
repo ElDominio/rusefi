@@ -642,6 +642,13 @@ typedef enum __attribute__ ((__packed__)) {
 	POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE = 3,
 } pops_and_bangs_disable_mode_e;
 
+// Eco Mode manual switch behaviour. Values must match eco_mode_switch_mode_e_enum order in config_page_5.txt
+enum class eco_mode_switch_mode_e : uint8_t {
+	Off     = 0, // switch ignored — eco engages purely on the cruise timer
+	ForceOn = 1, // asserted switch forces eco on regardless of the cruise timer
+	Inhibit = 2, // asserted switch blocks eco from engaging
+};
+
 // this one is "Rotational Idle", it's a naming mess https://github.com/rusefi/rusefi/issues/8435
 typedef enum __attribute__ ((__packed__)) {
 	SWITCH_INPUT_ANTILAG = 0,
