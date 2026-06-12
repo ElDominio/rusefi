@@ -133,10 +133,9 @@ TEST(MisfireDetection, repeatedMisfireLatchesMil) {
 		d.feedCycle(0, 1.6f);
 	}
 
-	EXPECT_GT(getMc().misfireCylCount[0], 0);
 	EXPECT_GE(getMc().misfireTotalCount, getCustomPage()->misfireCountThreshold);
 	EXPECT_TRUE(getMc().misfireLatched);
-	EXPECT_EQ(1, getMc().misfireLastCylinder); // 1-based
+	EXPECT_EQ(1, getMc().misfireLastCylinder); // 1-based; misfire was on cylinder 0 (0-based)
 }
 
 // ---- Leaving idle stops monitoring ----

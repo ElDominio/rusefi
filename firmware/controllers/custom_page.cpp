@@ -72,6 +72,7 @@ void customPageSetDefaults() {
 	d.misfireWindowFirings    = 12;    // sliding window: last 12 firings, any cylinder (~3 cycles on a 4-cyl)
 	d.misfireCountThreshold   = 50;    // 50 counted events latch the MIL
 	d.misfireThresholdRatio   = 1.15f; // 15% slower than the shared engine-wide baseline
+	d.misfireEmaAlpha         = 0.05f; // blend factor for the healthy-firing EMA baseline
 	d.misfireWindowStart      = 20;    // expansion stroke: TDC + 20 deg
 	d.misfireWindowEnd        = 120;   //                   TDC + 120 deg
 

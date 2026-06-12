@@ -8,9 +8,8 @@
 #include "malfunction_central.h"
 #include "efilib.h"
 
-// Baseline EMA blend factor — small so a single misfire barely moves the shared
-// baseline, and the baseline is only updated on clean (non-flagged) firings anyway.
-static constexpr float MISFIRE_EMA_ALPHA = 0.05f;
+// Fallback if misfireEmaAlpha is misconfigured (zero or out of range).
+static constexpr float MISFIRE_EMA_ALPHA_DEFAULT = 0.05f;
 
 void MisfireController::resetDetectionState() {
 	for (size_t i = 0; i < MAX_CYLINDER_COUNT; i++) {
@@ -24,8 +23,7 @@ void MisfireController::resetDetectionState() {
 
 void MisfireController::onEngineStop() {
 	// Prepare for the next start: drop the baseline, rate-test window and segment timers.
-	// Cumulative counters (misfireTotalCount / misfireCylCount) and the MIL latch persist
-	// until power cycle.
+	// misfireTotalCount and the MIL latch persist until power cycle.
 	resetDetectionState();
 }
 
@@ -51,11 +49,6 @@ uint8_t MisfireController::flaggedInWindow(uint8_t windowSize) const {
 }
 
 void MisfireController::registerMisfire(uint8_t cyl) {
-	// Per-cylinder tally is informational only — it records where the flagged firings came
-	// from; the detection decision itself (above) is engine-wide.
-	if (misfireCylCount[cyl] < UINT16_MAX) {
-		misfireCylCount[cyl]++;
-	}
 	if (misfireTotalCount < UINT16_MAX) {
 		misfireTotalCount++;
 	}
@@ -83,7 +76,13 @@ void MisfireController::evaluateSegment(uint8_t cyl, float segDurationUs) {
 	}
 
 	float ratio = getCustomPage()->misfireThresholdRatio;
-	bool flagged = segDurationUs > m_emaSeg * ratio;
+	float thresh = m_emaSeg * ratio;
+	bool flagged = segDurationUs > thresh;
+
+	// Update live data so the log always shows current segment vs. baseline/threshold.
+	misfireLastSegUs = segDurationUs;
+	misfireEmaUs     = m_emaSeg;
+	misfireThreshUs  = thresh;
 
 	// Slot this firing into the engine-wide rate-test window.
 	recordFiring(flagged);
@@ -109,7 +108,11 @@ void MisfireController::evaluateSegment(uint8_t cyl, float segDurationUs) {
 		}
 	} else {
 		// Clean firing: let the shared baseline track slow RPM/load drift.
-		m_emaSeg += MISFIRE_EMA_ALPHA * (segDurationUs - m_emaSeg);
+		float alpha = getCustomPage()->misfireEmaAlpha;
+		if (alpha <= 0.0f || alpha > 1.0f) {
+			alpha = MISFIRE_EMA_ALPHA_DEFAULT;
+		}
+		m_emaSeg += alpha * (segDurationUs - m_emaSeg);
 	}
 }
 

@@ -156,6 +156,7 @@ struct_no_prefix page5_s
 	float misfireThresholdRatio;Misfire Detection: how much slower than the shared engine-wide baseline a firing's expansion-stroke segment must run to be flagged (e.g. 1.15 = 15% slower than a healthy firing).;"ratio", 1, 0, 1, 3, 2
 	float misfireWindowStart;Misfire Detection: window start, in degrees after each cylinder's TDC, where the expansion-torque deceleration is measured.;"deg", 1, 0, 0, 360, 0
 	float misfireWindowEnd;Misfire Detection: window end, in degrees after each cylinder's TDC.;"deg", 1, 0, 0, 360, 0
+	float misfireEmaAlpha;Misfire Detection: EMA blend factor for the shared healthy-firing baseline. Smaller = slower adaptation (more stable baseline, less sensitive to RPM/load transients). Larger = faster adaptation. Default 0.05.;"", 1, 0, 0.001, 0.5, 3
 
 	! --- Eco Mode (Engine State Machine sub-feature) ---
 	! Fuel-economy overlay. Engages once the engine has been in the Cruising state continuously for
@@ -230,10 +231,10 @@ struct_no_prefix page5_s
 	! --- Advanced / PWM Fuel Pump (relay pins stay in page 1) ---
 	fuel_pump_mode_e fuelPumpMode;Fuel pump output mode: Single relay, Dual relay with secondary activation, or PWM pressure control
 	uint16_t secondaryFpActivationRpm;Secondary pump activates above this RPM (Dual mode);"rpm", 1, 0, 0, 8000, 0
-	uint8_t secondaryFpActivationLoad;Secondary pump activates above this MAP load (Dual mode);"%", 1, 0, 0, 100, 0
-	uint8_t secondaryFpActivationTps;Secondary pump activates above this TPS (Dual mode);"%", 1, 0, 0, 100, 0
+	uint16_t secondaryFpActivationLoad;Secondary pump activates above this fueling load (Dual mode). In Speed Density mode this is MAP in kPa - set above 100 kPa to use boost as the trigger threshold.;"kPa", 1, 0, 0, @@MAP_UPPER_LIMIT@@, 0
 	uint16_t secondaryFpRpmHysteresis;Secondary pump deactivates when RPM drops this far below activation threshold (Dual mode);"rpm", 1, 0, 0, 2000, 0
-	uint8_t secondaryFpLoadHysteresis;Secondary pump deactivates when load drops this far below activation threshold (Dual mode);"%", 1, 0, 0, 50, 0
+	uint16_t secondaryFpLoadHysteresis;Secondary pump deactivates when load drops this far below activation threshold (Dual mode);"kPa", 1, 0, 0, @@MAP_UPPER_LIMIT@@, 0
+	uint8_t secondaryFpActivationTps;Secondary pump activates above this TPS (Dual mode);"%", 1, 0, 0, 100, 0
 	uint8_t secondaryFpTpsHysteresis;Secondary pump deactivates when TPS drops this far below activation threshold (Dual mode);"%", 1, 0, 0, 50, 0
 	uint16_t fuelPumpPwmFrequency;Fuel pump PWM frequency (PWM mode);"Hz", 1, 0, 10, 3000, 0
 	uint8_t fuelPumpMinDuty;Minimum PWM duty - keeps pump spinning at low demand (PWM mode);"%", 1, 0, 0, 100, 0
