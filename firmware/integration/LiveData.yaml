@@ -308,6 +308,14 @@ Usages:
     engineModule: BurstKnock
     conditional_compilation: "EFI_BURST_KNOCK"
 
+  - name: wot_enrichment_state
+    java: WotEnrichment.java
+    folder: controllers/modules/wot_enrichment
+    prepend: integration/rusefi_config_shared.txt
+    output_name: wot_enrichment
+    engineModule: WotEnrichment
+    conditional_compilation: "EFI_WOT_ENRICHMENT"
+
   - name: live_data_rotational_idle
     java: RotationalIdle.java
     folder: controllers/engine_cycle

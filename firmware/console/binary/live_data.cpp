@@ -374,6 +374,15 @@ const burst_knock_state_s* getLiveData(size_t) {
 }
 
 template<>
+const wot_enrichment_state_s* getLiveData(size_t) {
+#if EFI_WOT_ENRICHMENT
+	return &engine->module<WotEnrichment>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
 const dfco_state_s* getLiveData(size_t) {
 	return &engine->module<DfcoController>().unmock();
 }

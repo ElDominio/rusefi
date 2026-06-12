@@ -12,6 +12,7 @@
 #define LAUNCH_POWER_RAMP_CURVE_SIZE 8
 #define BURST_KNOCK_RPM_SIZE 8
 #define BURST_KNOCK_TPS_RATE_SIZE 8
+#define WOT_ENRICHMENT_SIZE 8
 
 ! Custom types re-declared for the isolated page generator (see config_page_4.txt header).
 ! The C++ enums themselves are defined in headers (e.g. rusefi_enums.h) and shared;
@@ -223,6 +224,14 @@ struct_no_prefix page5_s
 	float[BURST_KNOCK_RPM_SIZE] burstKnockRpmBins;Burst Knock: RPM axis (table X).;"rpm", 1, 0, 0, 15000, 0
 	float[BURST_KNOCK_TPS_RATE_SIZE] burstKnockTpsRateBins;Burst Knock: TPS rate-of-change axis (table Y).;"%/s", 1, 0, 0, 30000, 0
 	float[BURST_KNOCK_TPS_RATE_SIZE x BURST_KNOCK_RPM_SIZE] burstKnockRetardTable;Burst Knock: ignition timing removed (deg) at each TPS-rate x RPM cell.;"deg", 1, 0, 0, 30, 1
+
+	! --- WOT Time Enrichment (richen target AFR after prolonged WOT) ---
+	! Once the engine is held at Wide Open Throttle (Engine SM WOT state), a timer counts the
+	! elapsed seconds (capped at 30 s). The curve below maps that time to an AFR adder that is
+	! added to the target AFR (negative values richen). The adder resets the moment WOT ends.
+	bit wotEnrichmentEnabled,"enabled","disabled";WOT Enrichment: master enable. Adds an AFR adder to the target after prolonged time at WOT.
+	float[WOT_ENRICHMENT_SIZE] wotEnrichmentTimeBins;WOT Enrichment: elapsed time at WOT (curve X).;"s", 1, 0, 0, 30, 1
+	float[WOT_ENRICHMENT_SIZE] wotEnrichmentAfrAdder;WOT Enrichment: AFR added to target at each time point (negative = richer) (curve Y).;"afr", 1, 0, -10, 10, 1
 
 	! --- Lua Limiter add curves ---
 	float[LUA_LIMITER_CURVE_SIZE] luaLimiterRpmAddBins;;"value", 1, 0, -10000, 10000, 2

@@ -9,6 +9,9 @@
 #include "fuel_computer.h"
 #include "engine_state_machine.h"
 #include "custom_page.h"
+#if EFI_WOT_ENRICHMENT
+#include "wot_enrichment.h"
+#endif // EFI_WOT_ENRICHMENT
 
 #if EFI_ENGINE_CONTROL
 
@@ -24,6 +27,12 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 	}
 
 	float afr = stoich * lambda;
+
+#if EFI_WOT_ENRICHMENT
+	// WOT time enrichment: add an AFR adder (negative = richer) after prolonged WOT.
+	afr += engine->module<WotEnrichment>().unmock().getAfrAdder();
+	lambda = afr / stoich;   // keep published targetLambda consistent with the adjusted AFR
+#endif // EFI_WOT_ENRICHMENT
 
 	afrTableYAxis = load;
 	targetLambda = lambda;

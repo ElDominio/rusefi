@@ -46,6 +46,7 @@
 #include "cdv_controller.h"
 #include "launch_power_ramp.h"
 #include "burst_knock.h"
+#include "wot_enrichment.h"
 #include "ac_control.h"
 #include "type_list.h"
 #include "boost_control.h"
@@ -177,6 +178,9 @@ public:
 #if EFI_BURST_KNOCK
         BurstKnock,
 #endif // EFI_BURST_KNOCK
+#if EFI_WOT_ENRICHMENT
+        WotEnrichment,
+#endif // EFI_WOT_ENRICHMENT
         Mockable<IgnitionController>,
         Mockable<AcController>,
         PrimeController,

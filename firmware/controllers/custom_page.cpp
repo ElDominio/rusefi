@@ -84,6 +84,13 @@ void customPageSetDefaults() {
 	}
 	// burstKnockRetardTable left at zero (no pull) until the user tunes it.
 
+	// WOT Time Enrichment — disabled by default; seed a 0..30 s time axis, no enrichment yet.
+	d.wotEnrichmentEnabled = false;
+	for (size_t i = 0; i < efi::size(d.wotEnrichmentTimeBins); i++) {
+		d.wotEnrichmentTimeBins[i] = i * (30.0f / 7);  // 0 .. 30 s
+	}
+	// wotEnrichmentAfrAdder left at zero (no enrichment) until the user tunes it.
+
 	// Pops and Bangs (enable bit lives in page 1).
 	d.popsAndBangsDelay = 1.0f;
 	d.popsAndBangsDuration = 2.0f;

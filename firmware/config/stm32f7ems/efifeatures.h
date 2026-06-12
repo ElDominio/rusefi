@@ -50,6 +50,11 @@
 #define EFI_BURST_KNOCK TRUE
 #endif
 
+// WOT Time Enrichment (richen target AFR after prolonged WOT; needs Engine State Machine at runtime)
+#ifndef EFI_WOT_ENRICHMENT
+#define EFI_WOT_ENRICHMENT TRUE
+#endif
+
 #ifndef EFI_OFF_IDLE_RPM_ADDER
 #define EFI_OFF_IDLE_RPM_ADDER TRUE
 #endif
