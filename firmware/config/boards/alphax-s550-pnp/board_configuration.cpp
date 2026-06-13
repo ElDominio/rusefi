@@ -91,7 +91,9 @@ static void alphax_8chan_defaultConfiguration() {
 //	engineConfiguration->vvtPins[0] = Gpio::H144_OUT_PWM7;
 //	engineConfiguration->vvtPins[1] = Gpio::H144_OUT_PWM8;
 
-    setHellenMMbaro();
+    // LPS25HBTR on s550 PCB is wired to PB6/PB7, not the standard MM176 PB10/PB11
+	engineConfiguration->lps25BaroSensorScl = Gpio::B6;
+	engineConfiguration->lps25BaroSensorSda = Gpio::B7;
 
 	engineConfiguration->mainRelayPin = Gpio::MM176_GP1;
 //	engineConfiguration->fanPin = Gpio::H144_OUT_IO11;
