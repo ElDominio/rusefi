@@ -6,6 +6,12 @@
 
 #pragma once
 
+// Sport Pedal multiplier curve length. Defined here (rather than in a module header like the
+// other page-5 curves) because Sport Pedal has no dedicated module — its logic lives in
+// electronic_throttle.cpp. Must match SPORT_PEDAL_SIZE in integration/config_page_5.txt and be
+// visible before the generated struct below uses it.
+#define SPORT_PEDAL_SIZE 8
+
 #include "page_5_generated.h"
 
 page5_s* getCustomPage();

@@ -301,6 +301,49 @@ PUBLIC_API_WEAK float boardAdjustEtbTarget(float currentEtbTarget) {
   return currentEtbTarget;
 }
 
+#if EFI_SPORT_PEDAL
+// Sport Pedal: returns true while the configured activation source (hardware switch or Lua gauge)
+// is asserting. Mirrors the Exhaust Cutout activation reading (see exhaust_cutout.cpp getInputHigh).
+static bool isSportPedalActive() {
+	auto& cfg = *getCustomPage();
+
+	if (cfg.sportPedalActivationMode == SPORT_PEDAL_SWITCH) {
+#if !EFI_UNIT_TEST
+		if (isBrainPinValid(cfg.sportPedalSwitchPin)) {
+			return efiReadPin(cfg.sportPedalSwitchPin, cfg.sportPedalSwitchPinMode);
+		}
+#endif // !EFI_UNIT_TEST
+		return false;
+	}
+
+	if (cfg.sportPedalActivationMode == SPORT_PEDAL_LUA_GAUGE) {
+		SensorType gauge;
+		switch (cfg.sportPedalLuaGauge) {
+			case LUA_GAUGE_2: gauge = SensorType::LuaGauge2; break;
+			case LUA_GAUGE_3: gauge = SensorType::LuaGauge3; break;
+			case LUA_GAUGE_4: gauge = SensorType::LuaGauge4; break;
+			case LUA_GAUGE_5: gauge = SensorType::LuaGauge5; break;
+			case LUA_GAUGE_6: gauge = SensorType::LuaGauge6; break;
+			case LUA_GAUGE_7: gauge = SensorType::LuaGauge7; break;
+			case LUA_GAUGE_8: gauge = SensorType::LuaGauge8; break;
+			default:          gauge = SensorType::LuaGauge1; break;
+		}
+		auto result = Sensor::get(gauge);
+		if (!result.Valid) {
+			return false;
+		}
+		if (cfg.sportPedalLuaGaugeMeaning == LUA_GAUGE_LOWER_BOUND) {
+			return result.Value >= cfg.sportPedalLuaGaugeThreshold;
+		} else {
+			return result.Value <= cfg.sportPedalLuaGaugeThreshold;
+		}
+	}
+
+	// SPORT_PEDAL_OFF
+	return false;
+}
+#endif // EFI_SPORT_PEDAL
+
 expected<percent_t> EtbController::getSetpointEtb() {
 	// Autotune runs with 50% target position
 	if (m_isAutotune) {
@@ -324,6 +367,19 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	percent_t preBoard = m_pedalProvider->getValue(rpm, sanitizedPedal);
 	etbCurrentTarget = boardAdjustEtbTarget(preBoard);
 	boardEtbAdjustment = etbCurrentTarget - preBoard;
+
+#if EFI_SPORT_PEDAL
+	// Sport Pedal: reshape the pedal-to-throttle ratio by multiplying the throttle target by a
+	// pedal-indexed curve. Applied before the idle-range compression below so 0% pedal still maps
+	// to the idle position, and clamped to 100% so an aggressive multiplier cannot command
+	// throttle over-travel.
+	if (isSportPedalActive()) {
+		float sportMult = interpolate2d(sanitizedPedal,
+			getCustomPage()->sportPedalPedalBins,
+			getCustomPage()->sportPedalMultValues);
+		etbCurrentTarget = clampPercentValue(etbCurrentTarget * sportMult);
+	}
+#endif // EFI_SPORT_PEDAL
 
 	percent_t etbIdlePosition = clampPercentValue(m_idlePosition);
 	percent_t etbIdleAddition = PERCENT_DIV * engineConfiguration->etbIdleThrottleRange * etbIdlePosition;

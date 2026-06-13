@@ -94,6 +94,18 @@ void customPageSetDefaults() {
 	}
 	// wotEnrichmentAfrAdder left at zero (no enrichment) until the user tunes it.
 
+	// Sport Pedal (ETB pedal-to-throttle ratio shaping) — disabled by default; pass-through curve.
+	d.sportPedalActivationMode   = SPORT_PEDAL_OFF;
+	d.sportPedalLuaGauge         = LUA_GAUGE_1;
+	d.sportPedalLuaGaugeMeaning  = LUA_GAUGE_LOWER_BOUND;
+	d.sportPedalSwitchPin        = Gpio::Unassigned;
+	d.sportPedalSwitchPinMode    = PI_DEFAULT;
+	d.sportPedalLuaGaugeThreshold = 0.0f;
+	for (size_t i = 0; i < efi::size(d.sportPedalPedalBins); i++) {
+		d.sportPedalPedalBins[i] = i * (100.0f / 7); // 0 .. 100 % pedal
+		d.sportPedalMultValues[i] = 1.0f;            // 1.0 = pass-through until the user tunes it
+	}
+
 	// Eco Mode (Engine State Machine sub-feature) — disabled by default; inert calibration.
 	d.ecoModeEnabled       = false;
 	d.ecoModeVvtOverride   = false;

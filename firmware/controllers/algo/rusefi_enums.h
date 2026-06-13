@@ -635,6 +635,14 @@ typedef enum __attribute__ ((__packed__)) {
 	EXHAUST_CUTOUT_OUTPUT_HBRIDGE = 2,
 } exhaust_cutout_output_mode_e;
 
+// Sport Pedal activation source (mirrors exhaust_cutout_activation_e — opening cutouts and a
+// sportier pedal feel tend to be wanted together).
+typedef enum __attribute__ ((__packed__)) {
+	SPORT_PEDAL_OFF = 0,
+	SPORT_PEDAL_SWITCH = 1,
+	SPORT_PEDAL_LUA_GAUGE = 2,
+} sport_pedal_activation_e;
+
 typedef enum __attribute__ ((__packed__)) {
 	POPS_AND_BANGS_DISABLE_MODE_NONE              = 0,
 	POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT      = 1,

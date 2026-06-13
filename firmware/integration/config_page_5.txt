@@ -13,6 +13,7 @@
 #define BURST_KNOCK_RPM_SIZE 8
 #define BURST_KNOCK_TPS_RATE_SIZE 8
 #define WOT_ENRICHMENT_SIZE 8
+#define SPORT_PEDAL_SIZE 8
 
 ! Custom types re-declared for the isolated page generator (see config_page_4.txt header).
 ! The C++ enums themselves are defined in headers (e.g. rusefi_enums.h) and shared;
@@ -42,6 +43,8 @@ custom sm_shift_detection_mode_e 1 bits, U08, @OFFSET@, [0:1], @@sm_shift_detect
 custom pops_and_bangs_disable_mode_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_disable_mode_e_enum@@
 #define eco_mode_switch_mode_e_enum "Off", "Force On", "Inhibit", "INVALID"
 custom eco_mode_switch_mode_e 1 bits, U08, @OFFSET@, [0:1], @@eco_mode_switch_mode_e_enum@@
+#define sport_pedal_activation_e_enum "OFF", "Switch", "LuaGauge"
+custom sport_pedal_activation_e 1 bits, U08, @OFFSET@, [0:1], @@sport_pedal_activation_e_enum@@
 
 custom fuel_pump_mode_e 1 bits, U08, @OFFSET@, [0:1], "Single", "Dual", "PWM"
 
@@ -269,6 +272,24 @@ struct_no_prefix page5_s
 	bit wotEnrichmentEnabled,"enabled","disabled";WOT Enrichment: master enable. Adds an AFR adder to the target after prolonged time at WOT.
 	float[WOT_ENRICHMENT_SIZE] wotEnrichmentTimeBins;WOT Enrichment: elapsed time at WOT (curve X).;"s", 1, 0, 0, 30, 1
 	float[WOT_ENRICHMENT_SIZE] wotEnrichmentAfrAdder;WOT Enrichment: AFR added to target at each time point (negative = richer) (curve Y).;"afr", 1, 0, -10, 10, 1
+
+	! --- Sport Pedal (ETB pedal-to-throttle ratio shaping) ---
+	! Electronic-throttle only. While active, the ETB throttle target is multiplied by an 8-cell
+	! curve indexed by accelerator pedal position, letting the driver reshape the pedal-to-throttle
+	! ratio (e.g. a more aggressive "sport" tip-in). The multiplied target is always clamped to 100%
+	! so an aggressive multiplier can never command throttle over-travel. Activation mirrors the
+	! Exhaust Cutout control (switch input or Lua gauge) since opening cutouts and a sportier pedal
+	! feel are usually wanted together.
+	sport_pedal_activation_e sportPedalActivationMode;Sport Pedal: activation source. OFF disables the feature; Switch uses a hardware switch input; LuaGauge compares a Lua gauge against a threshold. ETB only.
+	lua_gauge_e sportPedalLuaGauge;Sport Pedal: Lua gauge used as the activation source (LuaGauge mode).
+	lua_gauge_meaning_e sportPedalLuaGaugeMeaning;Sport Pedal: Lua gauge comparison direction (greater/less than the threshold).
+
+	switch_input_pin_e sportPedalSwitchPin;Sport Pedal: hardware switch input pin (Switch mode). One switch state activates sport pedal, the other deactivates it (polarity set by the pin mode below).
+	pin_input_mode_e sportPedalSwitchPinMode;
+
+	float sportPedalLuaGaugeThreshold;Sport Pedal: Lua gauge activation threshold (LuaGauge mode).;"", 1, 0, -30000, 30000, 3
+	float[SPORT_PEDAL_SIZE] sportPedalPedalBins;Sport Pedal: accelerator pedal position axis (curve X).;"%", 1, 0, 0, 100, 0
+	float[SPORT_PEDAL_SIZE] sportPedalMultValues;Sport Pedal: throttle target multiplier applied at each pedal position (curve Y). Result is clamped to 100%.;"mult", 1, 0, 0, 5, 2
 
 	! --- Lua Limiter add curves ---
 	float[LUA_LIMITER_CURVE_SIZE] luaLimiterRpmAddBins;;"value", 1, 0, -10000, 10000, 2

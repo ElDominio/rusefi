@@ -81,6 +81,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_LAUNCH_POWER_RAMP` | Launch power ramp (timing pull + ramp-in after a WOT launch release) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_BURST_KNOCK` | Burst knock (transient ignition timing pull on a TPS-rate stab, decays over time) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_WOT_ENRICHMENT` | WOT time enrichment (AFR adder applied to the target after prolonged WOT; needs `EFI_ENGINE_STATE_MACHINE` at runtime for WOT state) | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_SPORT_PEDAL` | Sport Pedal (ETB pedal-to-throttle ratio shaping via a pedal-indexed multiplier curve; switch/Lua-gauge activated; needs `EFI_ELECTRONIC_THROTTLE_BODY`) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_OFF_IDLE_RPM_ADDER` | Off-idle RPM adder | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_LUA_LIMITER` | Lua limiter | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_ADVANCED_FUEL_PUMP` | Advanced / PWM secondary fuel pump | FALSE (f4) / TRUE (f7,h7) |
@@ -171,6 +172,7 @@ EFI_SPI3_AF
 EFI_SPI4_AF
 EFI_SPI5_AF
 EFI_SPI6_AF
+EFI_SPORT_PEDAL                  ← AlphaX (ETB sport pedal ratio shaping)
 EFI_STORAGE_INT_FLASH
 EFI_STORAGE_MFS
 EFI_STORAGE_SD

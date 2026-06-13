@@ -600,6 +600,11 @@
 #define EFI_WOT_ENRICHMENT FALSE
 #endif
 
+// Sport Pedal (ETB pedal-to-throttle ratio shaping; needs EFI_ELECTRONIC_THROTTLE_BODY)
+#ifndef EFI_SPORT_PEDAL
+#define EFI_SPORT_PEDAL FALSE
+#endif
+
 #ifndef EFI_OFF_IDLE_RPM_ADDER
 #define EFI_OFF_IDLE_RPM_ADDER FALSE
 #endif
