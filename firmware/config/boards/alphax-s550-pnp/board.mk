@@ -41,3 +41,6 @@ DDEFS += -DHAL_USE_WDG=FALSE
 
 # PB10/PB11 are not wired for I2C on this board; disable I2C2 to free PB10 for SMCS_HIGH output
 DDEFS += -DSTM32_I2C_USE_I2C2=FALSE
+
+# Added by Board Configuration Editor
+DDEFS += -DEFI_EMBED_INI_MSD=FALSE

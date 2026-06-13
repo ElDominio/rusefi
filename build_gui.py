@@ -45,6 +45,7 @@ class App(tk.Tk):
         self.custom_board_dir = tk.StringVar()
         self.dest_dir = tk.StringVar()
         self.extract_zip = tk.BooleanVar(value=True)
+        self.delete_zip = tk.BooleanVar(value=False)
         self.clean_build = tk.BooleanVar(value=False)
         
         self.boards_list = []
@@ -310,10 +311,11 @@ class App(tk.Tk):
         new_folder_btn.grid(row=0, column=3, sticky=tk.W, pady=5)
         
         extract_chk = tk.Checkbutton(
-            dest_panel, 
-            text="Extract zip bundle contents to target folder", 
+            dest_panel,
+            text="Extract zip bundle contents to target folder",
             variable=self.extract_zip,
-            bg=BG_MAIN, 
+            command=self._on_extract_zip_changed,
+            bg=BG_MAIN,
             fg=FG_MAIN,
             selectcolor=BG_PANEL,
             activebackground=BG_MAIN,
@@ -324,7 +326,24 @@ class App(tk.Tk):
             font=("Helvetica", 10)
         )
         extract_chk.grid(row=1, column=1, columnspan=3, sticky=tk.W, pady=5, padx=5)
-        
+
+        self.delete_zip_chk = tk.Checkbutton(
+            dest_panel,
+            text="Delete zip file after extraction",
+            variable=self.delete_zip,
+            bg=BG_MAIN,
+            fg=FG_MAIN,
+            selectcolor=BG_PANEL,
+            activebackground=BG_MAIN,
+            activeforeground=ACCENT,
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+            font=("Helvetica", 10)
+        )
+        self.delete_zip_chk.grid(row=2, column=1, columnspan=3, sticky=tk.W, pady=(0, 5), padx=25)
+        self._on_extract_zip_changed()
+
         clean_chk = tk.Checkbutton(
             dest_panel, 
             text="Clean build folder (make clean) before compiling", 
@@ -339,7 +358,7 @@ class App(tk.Tk):
             highlightthickness=0,
             font=("Helvetica", 10)
         )
-        clean_chk.grid(row=2, column=1, columnspan=3, sticky=tk.W, pady=5, padx=5)
+        clean_chk.grid(row=3, column=1, columnspan=3, sticky=tk.W, pady=5, padx=5)
         
         # Action Buttons Frame
         btn_frame = ttk.Frame(main_frame)
@@ -375,6 +394,13 @@ class App(tk.Tk):
         self.log_text.tag_config("stderr", foreground=ERROR)
         self.log_text.tag_config("info", foreground=HIGHLIGHT)
         self.log_text.tag_config("success", foreground=SUCCESS)
+
+    def _on_extract_zip_changed(self):
+        if self.extract_zip.get():
+            self.delete_zip_chk.configure(state="normal")
+        else:
+            self.delete_zip.set(False)
+            self.delete_zip_chk.configure(state="disabled")
 
     def toggle_mode(self):
         use_custom = self.use_custom_board.get()
@@ -622,10 +648,11 @@ class App(tk.Tk):
         
         clean_build = self.clean_build.get()
         extract_zip = self.extract_zip.get()
+        delete_zip = self.delete_zip.get()
         workspace_root = self.workspace_root.get()
         self.build_thread = threading.Thread(
             target=self.build_worker,
-            args=(build_meta_info_path, board_dir_path, short_name, dest, clean_build, extract_zip, workspace_root)
+            args=(build_meta_info_path, board_dir_path, short_name, dest, clean_build, extract_zip, delete_zip, workspace_root)
         )
         self.build_thread.start()
 
@@ -638,7 +665,7 @@ class App(tk.Tk):
             except Exception:
                 pass
                 
-    def build_worker(self, meta_info_file, board_dir, short_name, dest, clean_build, extract_zip, workspace_root):
+    def build_worker(self, meta_info_file, board_dir, short_name, dest, clean_build, extract_zip, delete_zip, workspace_root):
         try:
             # Clean the deliver directory to prevent packing stale .srec files with different signature hashes
             deliver_dir = os.path.join(self.firmware_dir, "deliver")
@@ -848,6 +875,10 @@ class App(tk.Tk):
                 with zipfile.ZipFile(dest_zip, 'r') as zip_ref:
                     zip_ref.extractall(extract_path)
 
+                if delete_zip:
+                    self.append_log(f"Deleting zip file: {dest_zip}\n", "info")
+                    os.remove(dest_zip)
+
             # Copy the canonical OpenBLT update .srec directly from the build directory.
             # The bundle's own .srec embeds a SIGNATURE_HASH read via a recursively-expanded
             # $(shell) in bundle.mk; because the signature header is regenerated mid-build, that
@@ -860,11 +891,40 @@ class App(tk.Tk):
                 dest_srec = os.path.join(dest, f"rusefi_{short_name}_update.srec")
                 self.append_log(f"Copying {build_srec}\n  -> {dest_srec}\n", "info")
                 shutil.copy2(build_srec, dest_srec)
-                # Also drop it into the extracted bundle folder so it sits next to rusefi.bin.
+                # Also drop it into the extracted bundle folder using the canonical name
+                # so the rusEFI console can detect it alongside rusefi.bin.
                 if extract_zip:
-                    shutil.copy2(build_srec, os.path.join(extract_path, f"rusefi_{short_name}_update.srec"))
+                    shutil.copy2(build_srec, os.path.join(extract_path, "rusefi_update.srec"))
             else:
                 self.append_log(f"[WARNING] Expected srec not found at {build_srec}; OpenBLT image not copied.\n", "stderr")
+
+            # Generate double-clickable launcher scripts inside the extracted bundle folder.
+            # The .sh uses $(dirname "$0") so it works even if the folder is moved.
+            # The .desktop file gives GNOME/KDE/etc a proper double-click entry pointing to the .sh.
+            if extract_zip:
+                self.append_log("\n--- Generating Launcher Scripts ---\n", "info")
+                try:
+                    launcher_sh = os.path.join(extract_path, "update_firmware.sh")
+                    with open(launcher_sh, "w") as lf:
+                        lf.write('#!/bin/bash\ncd "$(dirname "$0")"\nbash rusefi_updater.sh\n')
+                    os.chmod(launcher_sh, 0o755)
+                    self.append_log(f"Created launcher: {launcher_sh}\n", "info")
+
+                    desktop_path = os.path.join(extract_path, "update_firmware.desktop")
+                    with open(desktop_path, "w") as df:
+                        df.write(
+                            "[Desktop Entry]\n"
+                            "Type=Application\n"
+                            f"Name=Flash {short_name} Firmware\n"
+                            "Comment=Flash rusEFI firmware via OpenBLT\n"
+                            f'Exec=bash "{launcher_sh}"\n'
+                            "Terminal=true\n"
+                            "StartupNotify=false\n"
+                        )
+                    os.chmod(desktop_path, 0o755)
+                    self.append_log(f"Created desktop launcher: {desktop_path}\n", "info")
+                except Exception as e:
+                    self.append_log(f"[WARNING] Failed to create launcher scripts: {str(e)}\n", "stderr")
 
             self.append_log("\n[SUCCESS] Build and bundle packaging completed successfully!\n", "success")
             self.build_success()

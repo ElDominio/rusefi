@@ -90,9 +90,11 @@ expected<percent_t> AlternatorController::getClosedLoop(float setpoint, float ob
 
 void AlternatorController::setOutput(expected<percent_t> outputValue) {
 	if (outputValue) {
+		engine->outputChannels.alternatorOutputDuty = outputValue.Value;
 		alternatorControl.setSimplePwmDutyCycle(PERCENT_TO_DUTY(outputValue.Value));
 	} else {
 		// Shut off output if not needed
+		engine->outputChannels.alternatorOutputDuty = 0;
 		alternatorPid.reset();
 		alternatorControl.setSimplePwmDutyCycle(0);
 	}
