@@ -295,7 +295,7 @@ int16_t rpmAcceleration;dRPM;"RPM acceleration/Rate of Change/ROC",1, 0, 0, 5, 2
 
 	float alternatorVoltageTarget;;"V", 1, 0, 0, 20, 2
 	float alternatorBaseDuty;Alternator base duty (table);"%", 1, 0, 0, 100, 1
-	float alternatorOutputDuty;Total alternator output duty (base + PID);"%", 1, 0, 0, 100, 1
+	float alternatorOutputDuty;Alternator duty (base+PID);"%", 1, 0, 0, 100, 1
 	pid_status_s alternatorStatus
 	pid_status_s idleStatus
 	pid_status_s etbStatus
