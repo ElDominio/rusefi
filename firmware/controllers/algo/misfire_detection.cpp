@@ -50,9 +50,7 @@ uint8_t MisfireController::flaggedInWindow(uint8_t windowSize) const {
 }
 
 void MisfireController::registerMisfire() {
-	if (misfireTotalCount < UINT16_MAX) {
-		misfireTotalCount++;
-	}
+	misfireTotalCount++;
 
 	uint16_t threshold = getCustomPage()->misfireCountThreshold;
 	if (!misfireLatched && threshold > 0 && misfireTotalCount >= threshold) {

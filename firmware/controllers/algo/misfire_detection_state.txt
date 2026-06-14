@@ -3,10 +3,10 @@ struct_no_prefix misfire_detection_state_s
 	bit misfireDetectionActive;Misfire: active
 	bit misfireLatched;Misfire: MIL latched
 
-	uint16_t misfireTotalCount;Misfire: total count;"events", 1, 0, 0, 0, 0
+	uint8_t misfireTotalCount;Misfire: total count;"events", 1, 0, 0, 0, 0
 
-	float misfireEmaUs;Misfire: EMA baseline;"us", 1, 0, 0, 0, 0
-	float misfireLastSegUs;Misfire: last segment;"us", 1, 0, 0, 0, 0
-	float misfireThreshUs;Misfire: threshold;"us", 1, 0, 0, 0, 0
+	float misfireEmaUs;Misfire: EMA baseline;"ms", 0.001, 0, 0, 0, 0
+	float misfireLastSegUs;Misfire: last segment;"ms", 0.001, 0, 0, 0, 0
+	float misfireThreshUs;Misfire: threshold;"ms", 0.001, 0, 0, 0, 0
 
 end_struct
