@@ -14,6 +14,8 @@
 #include "efi_pid.h"
 #include "local_version_holder.h"
 #include "periodic_task.h"
+#include "engine_state_machine.h"
+#include "custom_page.h"
 
 #if defined(HAS_OS_ACCESS)
 #error "Unexpected OS ACCESS HERE"
@@ -53,6 +55,14 @@ expected<float> AlternatorController::getSetpoint() {
 		config->alternatorVoltageTargetLoadBins, load,
 		config->alternatorVoltageTargetRpmBins, rpm
 	);
+
+	// Eco Mode: hold a lower absolute charging target to reduce alternator drag while the economy
+	// overlay is active. A target of 0 disables the override (use the normal voltage target table).
+	const float ecoTarget = getCustomPage()->ecoAlternatorVoltageTarget;
+	if (ecoTarget > 0 && engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
+		targetVoltage = ecoTarget;
+	}
+
 	engine->outputChannels.alternatorVoltageTarget = targetVoltage;
 	return targetVoltage;
 }

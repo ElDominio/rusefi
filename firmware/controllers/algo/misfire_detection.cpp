@@ -8,8 +8,9 @@
 #include "malfunction_central.h"
 #include "efilib.h"
 
-// Fallback if misfireEmaAlpha is misconfigured (zero or out of range).
-static constexpr float MISFIRE_EMA_ALPHA_DEFAULT = 0.05f;
+// Fallbacks if misfireEmaAlphaDecel/Fall are misconfigured (zero or out of range).
+static constexpr float MISFIRE_EMA_ALPHA_RISE_DEFAULT = 0.05f;
+static constexpr float MISFIRE_EMA_ALPHA_FALL_DEFAULT = 0.005f;
 
 void MisfireController::resetDetectionState() {
 	for (size_t i = 0; i < MAX_CYLINDER_COUNT; i++) {
@@ -106,12 +107,26 @@ void MisfireController::evaluateSegment(float segDurationUs) {
 			registerMisfire();
 		}
 	} else {
-		// Clean firing: let the shared baseline track slow RPM/load drift.
-		float alpha = getCustomPage()->misfireEmaAlpha;
-		if (alpha <= 0.0f || alpha > 1.0f) {
-			alpha = MISFIRE_EMA_ALPHA_DEFAULT;
+		// Clean firing: update the shared baseline with an asymmetric EMA.
+		// Positive delta (segment slower than baseline = engine decelerating) uses a higher
+		// alpha so genuine RPM drops are tracked quickly and don't cause false positives.
+		// Negative delta (segment faster = engine recovering) uses a lower alpha to resist
+		// upward baseline drift from the borderline-slow clean firings that occur between
+		// misfires when only one or two cylinders are dead.
+		float diff = segDurationUs - m_emaSeg;
+		float alpha;
+		if (diff > 0.0f) {
+			alpha = getCustomPage()->misfireEmaAlphaDecel;
+			if (alpha <= 0.0f || alpha > 1.0f) {
+				alpha = MISFIRE_EMA_ALPHA_RISE_DEFAULT;
+			}
+		} else {
+			alpha = getCustomPage()->misfireEmaAlphaAccel;
+			if (alpha <= 0.0f || alpha > 1.0f) {
+				alpha = MISFIRE_EMA_ALPHA_FALL_DEFAULT;
+			}
 		}
-		m_emaSeg += alpha * (segDurationUs - m_emaSeg);
+		m_emaSeg += alpha * diff;
 	}
 }
 

@@ -12,6 +12,8 @@
  * misfireWindowFirings firings (any cylinder) — an "N of last M" rate test. Once the
  * cumulative counted total reaches misfireCountThreshold the malfunction indicator light
  * is latched (until power cycle) via the generic OBD random-misfire code (P0300).
+ * Setting misfireCountThreshold to 0 disables latching entirely — misfireTotalCount still
+ * accumulates so the gauge reflects real activity, but no MIL or DTC is ever set.
  *
  * Sub-feature of the Engine State Machine — gated by EFI_MISFIRE_DETECTION (FALSE on the
  * F4 base, TRUE on F7/H7). Reads the SM idle state, so it is only useful when the SM is

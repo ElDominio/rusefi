@@ -196,6 +196,10 @@ public interface ConfigField {
 
     boolean isDirective();
 
+    default boolean isGraphSplit() {
+        return false;
+    }
+
     int getSize(ConfigField next);
 
     int[] getArraySizes();

@@ -32,7 +32,7 @@ public class FieldIterator {
 
     public void start(int index) {
         int nextIndex = index + 1;
-        while (nextIndex < fields.size() && fields.get(nextIndex).isDirective())
+        while (nextIndex < fields.size() && (fields.get(nextIndex).isDirective() || fields.get(nextIndex).isGraphSplit()))
             nextIndex++;
 
         next = nextIndex >= fields.size() ? ConfigField.VOID : fields.get(nextIndex);
@@ -44,7 +44,7 @@ public class FieldIterator {
     }
 
     public void end(int currentPosition) {
-        if (!cf.isDirective())
+        if (!cf.isDirective() && !cf.isGraphSplit())
             prev = cf;
         bitState.incrementBitIndex(cf, next);
     }

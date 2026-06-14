@@ -42,6 +42,7 @@ public class ConfigFieldImpl implements ConfigField {
     public static final String VOID_NAME = "";
     public static final String BOOLEAN_T = "boolean";
     public static final String DIRECTIVE_T = "directive";
+    public static final String GRAPH_SPLIT_T = "graph_split";
 
     private final String name;
     private final String comment;
@@ -246,6 +247,11 @@ public class ConfigFieldImpl implements ConfigField {
     @Override
     public boolean isDirective() {
         return DIRECTIVE_T.equalsIgnoreCase(type);
+    }
+
+    @Override
+    public boolean isGraphSplit() {
+        return GRAPH_SPLIT_T.equalsIgnoreCase(type);
     }
 
     private boolean isVoid() {

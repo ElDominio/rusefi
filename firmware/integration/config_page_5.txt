@@ -152,20 +152,23 @@ struct_no_prefix page5_s
 	! flagged firings have occurred within the last misfireWindowFirings firings (any cylinder).
 	! When the cumulative counted total reaches misfireCountThreshold the malfunction indicator
 	! light latches (generic OBD P0300, random/multiple-cylinder misfire) until power cycle.
+	! Set misfireCountThreshold to 0 to disable latching entirely (monitor-only mode).
 	bit misfireDetectionEnabled,"enabled","disabled";Misfire Detection: master enable. Detects misfires at idle (only while the Engine State Machine reports the Idle state) and latches the check-engine light (OBD P0300) once the count threshold is reached. Detection is engine-wide, not per-cylinder.
 	uint8_t misfireConsecutiveCount;Misfire Detection: minimum number of flagged firings that must fall within the recent-firings window (misfireWindowFirings) before a misfire is actually counted. This is a rate test over the whole engine, not one cylinder. Higher rejects more sporadic noise, but it must stay low enough relative to the window size and cylinder count to still trip on a single dead cylinder (a single dead cylinder produces roughly misfireWindowFirings divided by cylindersCount flags per window). Recommended N (with the matching window below) -- 4-cyl: 3, 6-cyl: 2, 8-cyl: 2.;"events", 1, 0, 1, 20, 0
 	uint8_t misfireWindowFirings;Misfire Detection: length, in recent firings across all cylinders, of the sliding window the misfireConsecutiveCount rate test runs over. About two engine cycles is a good starting point. Recommended M (with the matching N above) -- 4-cyl: 12, 6-cyl: 12, 8-cyl: 16.;"firings", 1, 0, 1, 32, 0
-	uint16_t misfireCountThreshold;Misfire Detection: total counted misfire events (engine-wide, accumulated since key-on) required before the check-engine light latches.;"events", 1, 0, 1, 10000, 0
+	uint16_t misfireCountThreshold;Misfire Detection: total counted misfire events (engine-wide, accumulated since key-on) required before the check-engine light latches. Set to 0 to monitor only -- the misfireTotalCount gauge still accumulates but no MIL or DTC is ever set.;"events", 1, 0, 0, 10000, 0
 	float misfireThresholdRatio;Misfire Detection: how much slower than the shared engine-wide baseline a firing's expansion-stroke segment must run to be flagged (e.g. 1.15 = 15% slower than a healthy firing).;"ratio", 1, 0, 1, 3, 2
 	float misfireWindowStart;Misfire Detection: window start, in degrees after each cylinder's TDC, where the expansion-torque deceleration is measured.;"deg", 1, 0, 0, 360, 0
 	float misfireWindowEnd;Misfire Detection: window end, in degrees after each cylinder's TDC.;"deg", 1, 0, 0, 360, 0
-	float misfireEmaAlpha;Misfire Detection: EMA blend factor for the shared healthy-firing baseline. Smaller = slower adaptation (more stable baseline, less sensitive to RPM/load transients). Larger = faster adaptation. Default 0.05.;"", 1, 0, 0.001, 0.5, 3
+	float misfireEmaAlphaDecel;Misfire Detection: EMA alpha when a clean segment is SLOWER than the baseline (engine decelerating). Higher values let the baseline rise quickly to track genuine RPM drops and avoid false positives. Recommended 0.05–0.2.;"", 1, 0, 0.001, 1, 3
+	float misfireEmaAlphaAccel;Misfire Detection: EMA alpha when a clean segment is FASTER than the baseline (engine accelerating/recovering). Keep small to resist upward baseline drift during a persistent misfire. Recommended 0.001–0.01.;"", 1, 0, 0.001, 1, 3
 
 	! --- Eco Mode (Engine State Machine sub-feature) ---
 	! Fuel-economy overlay. Engages once the engine has been in the Cruising state continuously for
 	! ecoModeCruisingTime, and drops instantly on leaving Cruising (a tip-in into Transient/WOT).
 	! While active it overrides target AFR, adds/pulls ignition timing, optionally retargets the
-	! intake/exhaust VVT cams, and scales the throttle target. A manual switch / Lua gauge can Force
+	! intake/exhaust VVT cams, scales the throttle target, and can hold a lower absolute alternator
+	! charging target (when smart alternator control is enabled). A manual switch / Lua gauge can Force
 	! On (engage regardless of the timer) or Inhibit (block) eco. Limp mode out-votes eco entirely.
 	bit ecoModeEnabled,"enabled","disabled";Eco Mode: master enable. Engages after sustained cruising to bias fuel/timing/throttle for economy.
 	bit ecoModeVvtOverride,"enabled","disabled";Eco Mode: also override the intake/exhaust VVT cam targets while active (engines with VVT only).
@@ -184,6 +187,7 @@ struct_no_prefix page5_s
 	float ecoVvtIntakeTarget;Eco Mode: intake cam VVT target while active (when VVT override enabled).;"deg", 1, 0, -360, 360, 1
 	float ecoVvtExhaustTarget;Eco Mode: exhaust cam VVT target while active (when VVT override enabled).;"deg", 1, 0, -360, 360, 1
 	float ecoThrottleMult;Eco Mode: throttle target multiplier while active.;"mult", 1, 0, 0.8, 1.2, 2
+	float ecoAlternatorVoltageTarget;Eco Mode: absolute alternator voltage target while active (lower = less alternator drag). 0 disables the override and uses the normal voltage target table. Requires smart alternator control.;"volts", 1, 0, 0, 30, 1
 
 	! --- Pops and Bangs (enable bit stays in page 1) ---
 	uint8_t autoscale popsAndBangsDelay;Delay after overrun starts before pops and bangs activates.;"sec", 0.1, 0, 0, 10, 1

@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE5_DATA_VERSION = 1;
+static constexpr uint32_t PAGE5_DATA_VERSION = 2;
 
 using page5_container_s = ExtraPageContainer<page5_s, PAGE5_DATA_VERSION>;
 
@@ -72,7 +72,8 @@ void customPageSetDefaults() {
 	d.misfireWindowFirings    = 12;    // sliding window: last 12 firings, any cylinder (~3 cycles on a 4-cyl)
 	d.misfireCountThreshold   = 50;    // 50 counted events latch the MIL
 	d.misfireThresholdRatio   = 1.15f; // 15% slower than the shared engine-wide baseline
-	d.misfireEmaAlpha         = 0.05f; // blend factor for the healthy-firing EMA baseline
+	d.misfireEmaAlphaDecel     = 0.05f; // positive delta (engine slowing): track RPM drops quickly
+	d.misfireEmaAlphaAccel     = 0.005f; // negative delta (engine faster): resist upward drift during misfires
 	d.misfireWindowStart      = 20;    // expansion stroke: TDC + 20 deg
 	d.misfireWindowEnd        = 120;   //                   TDC + 120 deg
 
@@ -146,6 +147,15 @@ void customPageSetDefaults() {
 	d.popsAndBangsCutEveryRevs = 4;
 	d.popsAndBangsCutPercent = 60;
 	d.popsAndBangsCutDurationMs = 100;
+
+	// Advanced / PWM Fuel Pump — default to single relay so initFuelPumpPwm() returns
+	// early and never hands the pin to the SimplePwm scheduler.
+	d.fuelPumpMode = FP_MODE_SINGLE;
+	d.fuelPumpMinDuty = 0;
+	d.fuelPumpMaxDuty = 100;
+	d.fuelPumpPwmFrequency = 100;
+	d.fuelPump_iTermMin = -30;
+	d.fuelPump_iTermMax = 30;
 }
 
 void loadCustomPage() {

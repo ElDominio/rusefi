@@ -137,6 +137,26 @@ TEST(MisfireDetection, repeatedMisfireLatchesMil) {
 	EXPECT_TRUE(getMc().misfireLatched);
 }
 
+// ---- threshold == 0: monitor-only, never latches ----
+
+TEST(MisfireDetection, thresholdZeroMonitorOnly) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupMisfireConfig();
+	getCustomPage()->misfireCountThreshold = 0; // monitor-only
+	engine->module<EngineStateMachine>().unmock().engineSmIsIdle = true;
+
+	ToothDriver d;
+	for (int i = 0; i < 5; i++) {
+		d.feedHealthyCycle();
+	}
+	for (int i = 0; i < 20; i++) {
+		d.feedCycle(0, 1.6f); // misfire cylinder 0 every cycle
+	}
+
+	EXPECT_GT(getMc().misfireTotalCount, 0u); // counter accumulated
+	EXPECT_FALSE(getMc().misfireLatched);     // never latched
+}
+
 // ---- Leaving idle stops monitoring ----
 
 TEST(MisfireDetection, leavingIdleStopsMonitoring) {
