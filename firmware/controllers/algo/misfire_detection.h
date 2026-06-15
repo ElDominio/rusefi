@@ -62,6 +62,11 @@ private:
 	float m_emaSeg = 0;
 	bool  m_emaSeeded = false;
 
+	// Wobble EMA: rolling mean absolute deviation of clean-firing durations from the baseline.
+	// Threshold = m_emaSeg + K * m_emaWobble. Updated only on clean firings, after baseline.
+	float m_emaWobble = 0;
+	bool  m_wobbleSeeded = false;
+
 	// Ring buffer of the most recent firing results (true = flagged), engine-wide. The
 	// rate test counts the flagged entries among the last misfireWindowFirings of them.
 	bool    m_window[MISFIRE_WINDOW_MAX];

@@ -19,10 +19,10 @@ static void setupMisfireConfig() {
 
 	auto* d = getCustomPage();
 	d->misfireDetectionEnabled = true;
-	d->misfireThresholdRatio   = 1.15f;
-	d->misfireConsecutiveCount = 2;   // need >=2 flagged firings within the window
-	d->misfireWindowFirings    = 16;  // sliding window across all cylinders (~4 cycles)
-	d->misfireCountThreshold   = 4;   // small so the test latches quickly
+	d->misfireK                = 3.0f; // threshold = baseline + 3 * wobble
+	d->misfireConsecutiveCount = 2;    // need >=2 flagged firings within the window
+	d->misfireWindowFirings    = 16;   // sliding window across all cylinders (~4 cycles)
+	d->misfireCountThreshold   = 4;    // small so the test latches quickly
 	d->misfireWindowStart      = 20;
 	d->misfireWindowEnd        = 120;
 }
