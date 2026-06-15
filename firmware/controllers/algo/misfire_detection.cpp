@@ -27,8 +27,14 @@ void MisfireController::resetDetectionState() {
 	m_emaSeg = 0;
 	m_wobbleSeeded = false;
 	m_emaWobble = 0;
+	m_settleCount = 0;
 	m_windowHead = 0;
 	m_windowFill = 0;
+}
+
+bool MisfireController::isSettled() const {
+	uint16_t settleCycles = getCustomPage()->misfireSettleCycles;
+	return (settleCycles == 0) || (m_settleCount >= settleCycles);
 }
 
 void MisfireController::onEngineStop() {
@@ -83,21 +89,22 @@ void MisfireController::evaluateSegment(float segDurationUs) {
 	}
 
 	// Adaptive wobble-based threshold: baseline + K * wobble.
-	// Before the wobble is seeded (second firing ever), treat as clean to gather the first
-	// wobble sample — no flagging yet.
+	// Flagging is suppressed until both the wobble is seeded and the settle period has elapsed.
+	// During settle the baseline and wobble still update so they are warm when detection starts.
 	float k = getCustomPage()->misfireK;
 	if (k <= 0.0f) {
 		k = MISFIRE_K_DEFAULT;
 	}
 	float kWobble = k * m_emaWobble;
-	float thresh = m_wobbleSeeded ? (m_emaSeg + kWobble) : 0.0f;
-	bool flagged = m_wobbleSeeded && (segDurationUs > thresh);
+	bool settled = isSettled();
+	float thresh = (settled && m_wobbleSeeded) ? (m_emaSeg + kWobble) : 0.0f;
+	bool flagged = settled && m_wobbleSeeded && (segDurationUs > thresh);
 
 	// Update live data so the log always shows current segment vs. baseline/threshold/wobble.
 	misfireLastSegUs      = segDurationUs;
 	misfireEmaUs          = m_emaSeg;
 	misfireThreshUs       = thresh;
-	misfireWobbleThreshUs = m_wobbleSeeded ? kWobble : 0.0f;
+	misfireWobbleThreshUs = (settled && m_wobbleSeeded) ? kWobble : 0.0f;
 
 	// Slot this firing into the engine-wide rate-test window.
 	recordFiring(flagged);
@@ -121,6 +128,11 @@ void MisfireController::evaluateSegment(float segDurationUs) {
 			registerMisfire();
 		}
 	} else {
+		// Advance the settle counter while we are still in the settle period.
+		if (!settled && m_settleCount < 65535u) {
+			m_settleCount++;
+		}
+
 		// Clean firing: compute deviation from current baseline before updating it, so both
 		// the baseline and wobble use the same reference point for this firing.
 		float deviation = fabsf(segDurationUs - m_emaSeg);
@@ -181,7 +193,7 @@ void MisfireController::onEnginePhase(float /*rpm*/, efitick_t edgeTimestamp,
 	bool idle = engine->module<EngineStateMachine>().unmock().engineSmIsIdle;
 	bool monitoring = enabled && idle;
 
-	misfireDetectionActive = monitoring;
+	misfireDetectionActive = monitoring && m_emaSeeded && isSettled();
 
 	if (!monitoring) {
 		// Reset transient detection state once when leaving idle so a later re-idle

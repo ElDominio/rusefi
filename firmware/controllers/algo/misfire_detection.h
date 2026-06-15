@@ -67,6 +67,12 @@ private:
 	float m_emaWobble = 0;
 	bool  m_wobbleSeeded = false;
 
+	// Settle counter: counts firing events after entering idle. Flagging is suppressed until
+	// this reaches misfireSettleCycles, giving the baseline and wobble time to warm up.
+	uint16_t m_settleCount = 0;
+
+	bool isSettled() const;
+
 	// Ring buffer of the most recent firing results (true = flagged), engine-wide. The
 	// rate test counts the flagged entries among the last misfireWindowFirings of them.
 	bool    m_window[MISFIRE_WINDOW_MAX];

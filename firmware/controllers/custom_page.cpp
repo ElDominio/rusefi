@@ -76,6 +76,7 @@ void customPageSetDefaults() {
 	d.misfireEmaAlphaAccel     = 0.005f; // negative delta (engine faster): resist upward drift during misfires
 	d.misfireWobbleAlphaRise   = 0.1f;   // wobble rising (engine rougher): track fast to avoid false positives
 	d.misfireWobbleAlphaFall   = 0.01f;  // wobble falling (engine smoother): relax slowly, stay conservative
+	d.misfireSettleCycles      = 200;    // ~2 s on a 4-cyl at 800 RPM before detection goes live
 	d.misfireWindowStart       = 20;   // expansion stroke: TDC + 20 deg
 	d.misfireWindowEnd         = 120;  //                   TDC + 120 deg
 
