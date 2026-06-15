@@ -9,5 +9,6 @@ struct_no_prefix misfire_detection_state_s
 	float misfireLastSegUs;Misfire: last segment;"ms", 0.001, 0, 0, 0, 0
 	float misfireThreshUs;Misfire: threshold;"ms", 0.001, 0, 0, 0, 0
 	float misfireWobbleUs;Misfire: wobble EMA;"ms", 0.001, 0, 0, 0, 0
+	float misfireWobbleThreshUs;Misfire: wobble thresh;"ms", 0.001, 0, 0, 0, 0
 
 end_struct

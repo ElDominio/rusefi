@@ -89,13 +89,15 @@ void MisfireController::evaluateSegment(float segDurationUs) {
 	if (k <= 0.0f) {
 		k = MISFIRE_K_DEFAULT;
 	}
-	float thresh = m_wobbleSeeded ? (m_emaSeg + k * m_emaWobble) : 0.0f;
+	float kWobble = k * m_emaWobble;
+	float thresh = m_wobbleSeeded ? (m_emaSeg + kWobble) : 0.0f;
 	bool flagged = m_wobbleSeeded && (segDurationUs > thresh);
 
 	// Update live data so the log always shows current segment vs. baseline/threshold/wobble.
-	misfireLastSegUs = segDurationUs;
-	misfireEmaUs     = m_emaSeg;
-	misfireThreshUs  = thresh;
+	misfireLastSegUs      = segDurationUs;
+	misfireEmaUs          = m_emaSeg;
+	misfireThreshUs       = thresh;
+	misfireWobbleThreshUs = m_wobbleSeeded ? kWobble : 0.0f;
 
 	// Slot this firing into the engine-wide rate-test window.
 	recordFiring(flagged);
