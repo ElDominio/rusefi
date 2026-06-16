@@ -230,6 +230,15 @@ void defaultsOrFixOnBurn() {
 		// preserve pre-existing behavior for old tunes: soft limit window used to be rpmHardLimitHyst-wide
 		engineConfiguration->rpmSoftLimitRange = engineConfiguration->rpmHardLimitHyst;
 	}
+
+	// Conditional SD logging: seed sensible start/stop/delay for tunes that predate the
+	// feature (a zero start RPM means it was never configured), so enabling conditional
+	// logging does not start from a degenerate "always on, never off" state.
+	if (engineConfiguration->sdLogStartRpm == 0) {
+		engineConfiguration->sdLogStartRpm = 800;
+		engineConfiguration->sdLogStopRpm = 700;
+		engineConfiguration->sdLogStopDelay = 30;
+	}
 }
 
 void setDefaultBaseEngine() {
