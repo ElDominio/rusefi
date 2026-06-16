@@ -972,628 +972,621 @@ struct output_channels_s {
 	 */
 	uint8_t extiOverflowCount = (uint8_t)0;
 	/**
+	 * units: V
 	 * offset 412
+	 */
+	float alternatorVoltageTarget = (float)0;
+	/**
+	 * Alternator base duty (table)
+	 * units: %
+	 * offset 416
+	 */
+	float alternatorBaseDuty = (float)0;
+	/**
+	 * offset 420
 	 */
 	pid_status_s alternatorStatus;
 	/**
-	 * offset 428
+	 * offset 436
 	 */
 	pid_status_s idleStatus;
 	/**
-	 * offset 444
+	 * offset 452
 	 */
 	pid_status_s etbStatus;
 	/**
-	 * offset 460
+	 * offset 468
 	 */
 	pid_status_s boostStatus;
 	/**
-	 * offset 476
+	 * offset 484
 	 */
 	pid_status_s wastegateDcStatus;
 	/**
-	 * offset 492
+	 * offset 500
 	 */
 	pid_status_s vvtStatus[CAM_INPUTS_COUNT] = {};
 	/**
 	 * Aux speed 1
 	 * units: s
-	 * offset 556
+	 * offset 564
 	 */
 	uint16_t auxSpeed1 = (uint16_t)0;
 	/**
 	 * Aux speed 2
 	 * units: s
-	 * offset 558
+	 * offset 566
 	 */
 	uint16_t auxSpeed2 = (uint16_t)0;
 	/**
 	 * @@GAUGE_NAME_ISS@@
 	 * units: RPM
-	 * offset 560
+	 * offset 568
 	 */
 	uint16_t ISSValue = (uint16_t)0;
 	/**
 	 * units: V
-	 * offset 562
+	 * offset 570
 	 */
 	scaled_channel<int16_t, 1000, 1> rawAnalogInput[LUA_ANALOG_INPUT_COUNT] = {};
 	/**
 	 * GPPWM Output
 	 * units: %
-	 * offset 578
+	 * offset 586
 	 */
 	scaled_channel<uint8_t, 2, 1> gppwmOutput[4] = {};
 	/**
-	 * offset 582
+	 * offset 590
 	 */
 	scaled_channel<int16_t, 1, 1> gppwmXAxis[4] = {};
 	/**
-	 * offset 590
+	 * offset 598
 	 */
 	scaled_channel<int16_t, 10, 1> gppwmYAxis[4] = {};
 	/**
 	 * units: V
-	 * offset 598
+	 * offset 606
 	 */
 	scaled_channel<int16_t, 1000, 1> rawBattery = (int16_t)0;
 	/**
-	 * offset 600
+	 * offset 608
 	 */
 	scaled_channel<int16_t, 10, 1> ignBlendParameter[IGN_BLEND_COUNT] = {};
 	/**
 	 * units: %
-	 * offset 608
+	 * offset 616
 	 */
 	scaled_channel<uint8_t, 2, 1> ignBlendBias[IGN_BLEND_COUNT] = {};
 	/**
 	 * units: deg
-	 * offset 612
+	 * offset 620
 	 */
 	scaled_channel<int16_t, 100, 1> ignBlendOutput[IGN_BLEND_COUNT] = {};
 	/**
-	 * offset 620
+	 * offset 628
 	 */
 	scaled_channel<int16_t, 10, 1> ignBlendYAxis[IGN_BLEND_COUNT] = {};
 	/**
-	 * offset 628
+	 * offset 636
 	 */
 	scaled_channel<int16_t, 10, 1> veBlendParameter[VE_BLEND_COUNT] = {};
 	/**
 	 * units: %
-	 * offset 636
+	 * offset 644
 	 */
 	scaled_channel<uint8_t, 2, 1> veBlendBias[VE_BLEND_COUNT] = {};
 	/**
 	 * units: %
-	 * offset 640
+	 * offset 648
 	 */
 	scaled_channel<int16_t, 100, 1> veBlendOutput[VE_BLEND_COUNT] = {};
 	/**
-	 * offset 648
+	 * offset 656
 	 */
 	scaled_channel<int16_t, 10, 1> veBlendYAxis[VE_BLEND_COUNT] = {};
 	/**
-	 * offset 656
+	 * offset 664
 	 */
 	scaled_channel<int16_t, 10, 1> secondVeBlendParameter = (int16_t)0;
 	/**
 	 * units: %
-	 * offset 658
+	 * offset 666
 	 */
 	scaled_channel<uint8_t, 2, 1> secondVeBlendBias = (uint8_t)0;
 	/**
 	 * need 4 byte alignment
 	 * units: units
-	 * offset 659
+	 * offset 667
 	 */
-	uint8_t alignmentFill_at_659[1] = {};
+	uint8_t alignmentFill_at_667[1] = {};
 	/**
-	 * offset 660
+	 * offset 668
 	 */
 	scaled_channel<int16_t, 10, 1> secondIgnitionBlendParameter = (int16_t)0;
 	/**
 	 * units: %
-	 * offset 662
+	 * offset 670
 	 */
 	scaled_channel<uint8_t, 2, 1> secondIgnitionBlendBias = (uint8_t)0;
 	/**
 	 * need 4 byte alignment
 	 * units: units
-	 * offset 663
+	 * offset 671
 	 */
-	uint8_t alignmentFill_at_663[1] = {};
+	uint8_t alignmentFill_at_671[1] = {};
 	/**
-	 * offset 664
+	 * offset 672
 	 */
 	scaled_channel<int16_t, 10, 1> boostOpenLoopBlendParameter[BOOST_BLEND_COUNT] = {};
 	/**
 	 * units: %
-	 * offset 668
+	 * offset 676
 	 */
 	scaled_channel<uint8_t, 2, 1> boostOpenLoopBlendBias[BOOST_BLEND_COUNT] = {};
 	/**
 	 * units: %
-	 * offset 670
+	 * offset 678
 	 */
 	int8_t boostOpenLoopBlendOutput[BOOST_BLEND_COUNT] = {};
 	/**
-	 * offset 672
+	 * offset 680
 	 */
 	scaled_channel<int16_t, 10, 1> boostOpenLoopBlendYAxis[BOOST_BLEND_COUNT] = {};
 	/**
-	 * offset 676
+	 * offset 684
 	 */
 	scaled_channel<int16_t, 10, 1> boostClosedLoopBlendParameter[BOOST_BLEND_COUNT] = {};
 	/**
 	 * units: %
-	 * offset 680
+	 * offset 688
 	 */
 	scaled_channel<uint8_t, 2, 1> boostClosedLoopBlendBias[BOOST_BLEND_COUNT] = {};
 	/**
 	 * units: %
-	 * offset 682
+	 * offset 690
 	 */
 	scaled_channel<int16_t, 10, 1> boostClosedLoopBlendOutput[BOOST_BLEND_COUNT] = {};
 	/**
-	 * offset 686
+	 * offset 694
 	 */
 	scaled_channel<int16_t, 10, 1> boostClosedLoopBlendYAxis[BOOST_BLEND_COUNT] = {};
 	/**
-	 * offset 690
+	 * offset 698
 	 */
 	scaled_channel<int16_t, 10, 1> targetAfrBlendParameter[TARGET_AFR_BLEND_COUNT] = {};
 	/**
 	 * units: %
-	 * offset 694
+	 * offset 702
 	 */
 	scaled_channel<uint8_t, 2, 1> targetAfrBlendBias[TARGET_AFR_BLEND_COUNT] = {};
 	/**
 	 * units: %
-	 * offset 696
+	 * offset 704
 	 */
 	scaled_channel<int16_t, 10, 1> targetAfrBlendOutput[TARGET_AFR_BLEND_COUNT] = {};
 	/**
-	 * offset 700
+	 * offset 708
 	 */
 	scaled_channel<int16_t, 10, 1> targetAfrBlendYAxis[TARGET_AFR_BLEND_COUNT] = {};
 	/**
-	offset 704 bit 0 */
+	offset 712 bit 0 */
 	bool coilState1 : 1 {};
 	/**
-	offset 704 bit 1 */
+	offset 712 bit 1 */
 	bool coilState2 : 1 {};
 	/**
-	offset 704 bit 2 */
+	offset 712 bit 2 */
 	bool coilState3 : 1 {};
 	/**
-	offset 704 bit 3 */
+	offset 712 bit 3 */
 	bool coilState4 : 1 {};
 	/**
-	offset 704 bit 4 */
+	offset 712 bit 4 */
 	bool coilState5 : 1 {};
 	/**
-	offset 704 bit 5 */
+	offset 712 bit 5 */
 	bool coilState6 : 1 {};
 	/**
-	offset 704 bit 6 */
+	offset 712 bit 6 */
 	bool coilState7 : 1 {};
 	/**
-	offset 704 bit 7 */
+	offset 712 bit 7 */
 	bool coilState8 : 1 {};
 	/**
-	offset 704 bit 8 */
+	offset 712 bit 8 */
 	bool coilState9 : 1 {};
 	/**
-	offset 704 bit 9 */
+	offset 712 bit 9 */
 	bool coilState10 : 1 {};
 	/**
-	offset 704 bit 10 */
+	offset 712 bit 10 */
 	bool coilState11 : 1 {};
 	/**
-	offset 704 bit 11 */
+	offset 712 bit 11 */
 	bool coilState12 : 1 {};
 	/**
-	offset 704 bit 12 */
+	offset 712 bit 12 */
 	bool injectorState1 : 1 {};
 	/**
-	offset 704 bit 13 */
+	offset 712 bit 13 */
 	bool injectorState2 : 1 {};
 	/**
-	offset 704 bit 14 */
+	offset 712 bit 14 */
 	bool injectorState3 : 1 {};
 	/**
-	offset 704 bit 15 */
+	offset 712 bit 15 */
 	bool injectorState4 : 1 {};
 	/**
-	offset 704 bit 16 */
+	offset 712 bit 16 */
 	bool injectorState5 : 1 {};
 	/**
-	offset 704 bit 17 */
+	offset 712 bit 17 */
 	bool injectorState6 : 1 {};
 	/**
-	offset 704 bit 18 */
+	offset 712 bit 18 */
 	bool injectorState7 : 1 {};
 	/**
-	offset 704 bit 19 */
+	offset 712 bit 19 */
 	bool injectorState8 : 1 {};
 	/**
-	offset 704 bit 20 */
+	offset 712 bit 20 */
 	bool injectorState9 : 1 {};
 	/**
-	offset 704 bit 21 */
+	offset 712 bit 21 */
 	bool injectorState10 : 1 {};
 	/**
-	offset 704 bit 22 */
+	offset 712 bit 22 */
 	bool injectorState11 : 1 {};
 	/**
-	offset 704 bit 23 */
+	offset 712 bit 23 */
 	bool injectorState12 : 1 {};
 	/**
-	offset 704 bit 24 */
+	offset 712 bit 24 */
 	bool triggerChannel1 : 1 {};
 	/**
-	offset 704 bit 25 */
+	offset 712 bit 25 */
 	bool triggerChannel2 : 1 {};
 	/**
 	 * bank 1 intake cam input
-	offset 704 bit 26 */
+	offset 712 bit 26 */
 	bool vvtChannel1 : 1 {};
 	/**
 	 * bank 1 exhaust cam input
-	offset 704 bit 27 */
+	offset 712 bit 27 */
 	bool vvtChannel2 : 1 {};
 	/**
 	 * bank 2 intake cam input
-	offset 704 bit 28 */
+	offset 712 bit 28 */
 	bool vvtChannel3 : 1 {};
 	/**
 	 * bank 2 exhaust cam input
-	offset 704 bit 29 */
+	offset 712 bit 29 */
 	bool vvtChannel4 : 1 {};
 	/**
 	 * AE: Map Prediction Active
-	offset 704 bit 30 */
+	offset 712 bit 30 */
 	bool isMapPredictionActive : 1 {};
 	/**
-	offset 704 bit 31 */
-	bool unusedBit_256_31 : 1 {};
+	offset 712 bit 31 */
+	bool unusedBit_258_31 : 1 {};
 	/**
-	 * offset 708
+	 * offset 716
 	 */
 	uint32_t outputRequestPeriod = (uint32_t)0;
 	/**
-	 * offset 712
+	 * offset 720
 	 */
 	float mapFast = (float)0;
 	/**
 	 * Lua: Gauge
 	 * units: value
-	 * offset 716
+	 * offset 724
 	 */
 	float luaGauges[LUA_GAUGE_COUNT] = {};
 	/**
 	 * units: V
-	 * offset 748
+	 * offset 756
 	 */
 	scaled_channel<uint16_t, 1000, 1> rawMaf2 = (uint16_t)0;
 	/**
 	 * @@GAUGE_NAME_AIR_FLOW_MEASURED_2@@
 	 * units: kg/h
-	 * offset 750
+	 * offset 758
 	 */
 	scaled_channel<uint16_t, 10, 1> mafMeasured2 = (uint16_t)0;
 	/**
-	 * offset 752
+	 * offset 760
 	 */
 	uint16_t schedulingUsedCount = (uint16_t)0;
 	/**
 	 * @@GAUGE_NAME_VVS@@
 	 * units: kph
-	 * offset 754
+	 * offset 762
 	 */
 	scaled_channel<uint16_t, 100, 1> vehicleSpeedKph = (uint16_t)0;
 	/**
 	 * units: %
-	 * offset 756
+	 * offset 764
 	 */
 	scaled_channel<uint16_t, 100, 1> Gego = (uint16_t)0;
 	/**
 	 * units: count
-	 * offset 758
+	 * offset 766
 	 */
 	uint16_t testBenchIter = (uint16_t)0;
 	/**
 	 * units: deg C
-	 * offset 760
+	 * offset 768
 	 */
 	scaled_channel<int16_t, 100, 1> oilTemp = (int16_t)0;
 	/**
 	 * units: deg C
-	 * offset 762
+	 * offset 770
 	 */
 	scaled_channel<int16_t, 100, 1> fuelTemp = (int16_t)0;
 	/**
 	 * units: deg C
-	 * offset 764
+	 * offset 772
 	 */
 	scaled_channel<int16_t, 100, 1> ambientTemp = (int16_t)0;
 	/**
 	 * units: deg C
-	 * offset 766
+	 * offset 774
 	 */
 	scaled_channel<int16_t, 100, 1> compressorDischargeTemp = (int16_t)0;
 	/**
 	 * units: kPa
-	 * offset 768
+	 * offset 776
 	 */
 	scaled_channel<uint16_t, 30, 1> compressorDischargePressure = (uint16_t)0;
 	/**
 	 * units: kPa
-	 * offset 770
+	 * offset 778
 	 */
 	scaled_channel<uint16_t, 30, 1> throttleInletPressure = (uint16_t)0;
 	/**
 	 * units: sec
-	 * offset 772
+	 * offset 780
 	 */
 	uint16_t ignitionOnTime = (uint16_t)0;
 	/**
 	 * units: sec
-	 * offset 774
+	 * offset 782
 	 */
 	uint16_t engineRunTime = (uint16_t)0;
 	/**
 	 * units: km
-	 * offset 776
+	 * offset 784
 	 */
 	scaled_channel<uint16_t, 10, 1> distanceTraveled = (uint16_t)0;
 	/**
 	 * @@GAUGE_NAME_AFR_GAS_SCALE@@
 	 * units: AFR
-	 * offset 778
+	 * offset 786
 	 */
 	scaled_channel<uint16_t, 1000, 1> afrGasolineScale = (uint16_t)0;
 	/**
 	 * @@GAUGE_NAME_AFR2_GAS_SCALE@@
 	 * units: AFR
-	 * offset 780
+	 * offset 788
 	 */
 	scaled_channel<uint16_t, 1000, 1> afr2GasolineScale = (uint16_t)0;
 	/**
 	 * need 4 byte alignment
 	 * units: units
-	 * offset 782
+	 * offset 790
 	 */
-	uint8_t alignmentFill_at_782[2] = {};
+	uint8_t alignmentFill_at_790[2] = {};
 	/**
-	 * offset 784
+	 * offset 792
 	 */
 	float wheelSlipRatio = (float)0;
 	/**
-	 * offset 788
+	 * offset 796
 	 */
 	uint8_t ignitorDiagnostic[MAX_CYLINDER_COUNT] = {};
 	/**
-	 * offset 800
+	 * offset 808
 	 */
 	uint8_t injectorDiagnostic[MAX_CYLINDER_COUNT] = {};
 	/**
 	 * @@GAUGE_NAME_FUEL_LAST_INJECTION_STAGE_2@@
 	 * units: ms
-	 * offset 812
+	 * offset 820
 	 */
 	scaled_channel<uint16_t, 300, 1> actualLastInjectionStage2 = (uint16_t)0;
 	/**
 	 * need 4 byte alignment
 	 * units: units
-	 * offset 814
+	 * offset 822
 	 */
-	uint8_t alignmentFill_at_814[2] = {};
+	uint8_t alignmentFill_at_822[2] = {};
 	/**
 	 * @@GAUGE_NAME_FUEL_LAST_INJECTION_RATIO_STAGE_2@@
-	 * offset 816
+	 * offset 824
 	 */
 	float actualLastInjectionRatioStage2 = (float)0;
 	/**
 	 * @@GAUGE_NAME_FUEL_INJ_DUTY_STAGE_2@@
 	 * units: %
-	 * offset 820
+	 * offset 828
 	 */
 	scaled_channel<uint8_t, 2, 1> injectorDutyCycleStage2 = (uint8_t)0;
 	/**
-	 * offset 821
+	 * offset 829
 	 */
 	uint8_t rawFlexFreq = (uint8_t)0;
 	/**
-	 * offset 822
+	 * offset 830
 	 */
 	uint8_t canReWidebandCmdStatus = (uint8_t)0;
 	/**
-	 * offset 823
+	 * offset 831
 	 */
 	uint8_t deviceUid = (uint8_t)0;
 	/**
-	 * offset 824
+	 * offset 832
 	 */
 	uint16_t mc33810spiErrorCounter = (uint16_t)0;
 	/**
-	 * offset 826
+	 * offset 834
 	 */
 	uint8_t injectionPrimingCounter = (uint8_t)0;
 	/**
-	 * offset 827
+	 * offset 835
 	 */
 	uint8_t tempLogging2 = (uint8_t)0;
 	/**
 	 * @@GAUGE_NAME_AC_PRESSURE@@
 	 * units: kPa
-	 * offset 828
+	 * offset 836
 	 */
 	float acPressure = (float)0;
 	/**
 	 * units: V
-	 * offset 832
+	 * offset 840
 	 */
 	scaled_channel<int16_t, 1000, 1> rawAuxAnalog1 = (int16_t)0;
 	/**
 	 * units: V
-	 * offset 834
+	 * offset 842
 	 */
 	scaled_channel<int16_t, 1000, 1> rawAuxAnalog2 = (int16_t)0;
 	/**
 	 * units: V
-	 * offset 836
+	 * offset 844
 	 */
 	scaled_channel<int16_t, 1000, 1> rawAuxAnalog3 = (int16_t)0;
 	/**
 	 * units: V
-	 * offset 838
+	 * offset 846
 	 */
 	scaled_channel<int16_t, 1000, 1> rawAuxAnalog4 = (int16_t)0;
 	/**
 	 * ECU: Fast ADC errors
-	 * offset 840
+	 * offset 848
 	 */
 	uint8_t fastAdcErrorCount = (uint8_t)0;
 	/**
 	 * ECU: Slow ADC errors
-	 * offset 841
+	 * offset 849
 	 */
 	uint8_t slowAdcErrorCount = (uint8_t)0;
 	/**
 	 * units: V
-	 * offset 842
+	 * offset 850
 	 */
 	scaled_channel<int16_t, 1000, 1> rawAuxTemp1 = (int16_t)0;
 	/**
 	 * units: V
-	 * offset 844
+	 * offset 852
 	 */
 	scaled_channel<int16_t, 1000, 1> rawAuxTemp2 = (int16_t)0;
 	/**
 	 * units: V
-	 * offset 846
+	 * offset 854
 	 */
 	scaled_channel<int16_t, 1000, 1> rawAmbientTemp = (int16_t)0;
 	/**
-	 * offset 848
+	 * offset 856
 	 */
 	uint32_t rtcUnixEpochTime = (uint32_t)0;
 	/**
-	 * offset 852
+	 * offset 860
 	 */
 	int8_t sparkCutReasonBlinker = (int8_t)0;
 	/**
-	 * offset 853
+	 * offset 861
 	 */
 	int8_t fuelCutReasonBlinker = (int8_t)0;
 	/**
-	 * offset 854
+	 * offset 862
 	 */
 	int16_t hp = (int16_t)0;
 	/**
-	 * offset 856
+	 * offset 864
 	 */
 	int16_t torque = (int16_t)0;
 	/**
 	 * need 4 byte alignment
 	 * units: units
-	 * offset 858
+	 * offset 866
 	 */
-	uint8_t alignmentFill_at_858[2] = {};
-	/**
-	 * offset 860
-	 */
-	float throttlePressureRatio = (float)0;
-	/**
-	 * offset 864
-	 */
-	float throttleEffectiveAreaOpening = (float)0;
+	uint8_t alignmentFill_at_866[2] = {};
 	/**
 	 * offset 868
 	 */
-	uint32_t mcuSerial = (uint32_t)0;
+	float throttlePressureRatio = (float)0;
 	/**
 	 * offset 872
 	 */
+	float throttleEffectiveAreaOpening = (float)0;
+	/**
+	 * offset 876
+	 */
+	uint32_t mcuSerial = (uint32_t)0;
+	/**
+	 * offset 880
+	 */
 	uint8_t sd_error = (uint8_t)0;
 	/**
-	 * SD: Logging state
-	 * units: code
-	 * offset 873
-	 */
-	uint8_t sdLoggingState = (uint8_t)0;
-	/**
 	 * ECU: Fast ADC overruns
-	 * offset 874
+	 * offset 881
 	 */
 	uint8_t fastAdcOverrunCount = (uint8_t)0;
 	/**
 	 * ECU: Slow ADC overruns
-	 * offset 875
+	 * offset 882
 	 */
 	uint8_t slowAdcOverrunCount = (uint8_t)0;
 	/**
 	 * ECU: Fast ADC error type
-	 * offset 876
+	 * offset 883
 	 */
 	uint8_t fastAdcLastError = (uint8_t)0;
 	/**
-	 * need 4 byte alignment
-	 * units: units
-	 * offset 877
-	 */
-	uint8_t alignmentFill_at_877[1] = {};
-	/**
 	 * ECU: Fast ADC period
 	 * units: ticks
-	 * offset 878
+	 * offset 884
 	 */
 	uint16_t fastAdcPeriod = (uint16_t)0;
 	/**
 	 * ECU: Fast ADC conversions
 	 * units: N
-	 * offset 880
+	 * offset 886
 	 */
 	uint16_t fastAdcConversionCount = (uint16_t)0;
 	/**
-	 * offset 882
+	 * offset 888
 	 */
 	uint8_t canReWidebandVersion = (uint8_t)0;
 	/**
-	 * offset 883
+	 * offset 889
 	 */
 	uint8_t canReWidebandFwDay = (uint8_t)0;
 	/**
-	 * offset 884
+	 * offset 890
 	 */
 	uint8_t canReWidebandFwMon = (uint8_t)0;
 	/**
-	 * offset 885
+	 * offset 891
 	 */
 	uint8_t canReWidebandFwYear = (uint8_t)0;
 	/**
-	 * offset 886
+	 * offset 892
 	 */
 	uint16_t transitionEventCode = (uint16_t)0;
 	/**
-	 * offset 888
+	 * offset 894
 	 */
 	uint16_t transitionEventsCounter = (uint16_t)0;
 	/**
 	 * units: kPa
-	 * offset 890
+	 * offset 896
 	 */
 	uint8_t mapPerCylinder[MAX_CYLINDER_COUNT] = {};
-	/**
-	 * need 4 byte alignment
-	 * units: units
-	 * offset 902
-	 */
-	uint8_t alignmentFill_at_902[2] = {};
 };
-static_assert(sizeof(output_channels_s) == 904);
+static_assert(sizeof(output_channels_s) == 908);
 
 // end
 // this section was generated automatically by rusEFI tool config_definition_base-all.jar based on (unknown script) console/binary/output_channels.txt

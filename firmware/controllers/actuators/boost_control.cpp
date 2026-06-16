@@ -11,6 +11,8 @@
 #include "boost_control.h"
 #include "electronic_throttle.h"
 #include "gppwm_channel_reader.h"
+#include "engine_state_machine.h"
+#include "custom_page.h"
 
 #if defined(HAS_OS_ACCESS)
 #error "Unexpected OS ACCESS HERE"
@@ -117,6 +119,16 @@ expected<float> BoostController::getSetpoint() {
 	if (temperatureAdder.has_value()) {
 		target += temperatureAdder.value();
 	}
+
+	// Limp Mode boost ceiling: cap the closed-loop boost target while limp is latched.
+	// Note: this only limits closed-loop target; open-loop wastegate duty is unaffected.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+		float limpBoost = getCustomPage()->limpModeBoostLimit;
+		if (limpBoost > 0 && target > limpBoost) {
+			target = limpBoost;
+		}
+	}
+
 	return target;
 }
 

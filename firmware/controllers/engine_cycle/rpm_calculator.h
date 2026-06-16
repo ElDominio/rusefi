@@ -130,6 +130,13 @@ public:
 	// RPM rate of change, in RPM per second
 	float rpmRate = 0;
 
+	/**
+	 * Cycle-averaged RPM from the previous engine cycle, used solely to compute rpmRate.
+	 * Kept separate from previousRpmValue because the alwaysInstantRpm path overwrites
+	 * previousRpmValue on every trigger tooth, which would corrupt the cycle-to-cycle derivative.
+	 */
+	float prevCycleRpm = 0;
+
 protected:
 	// Print sensor info - current RPM state
 	void showInfo(const char* sensorName) const override;

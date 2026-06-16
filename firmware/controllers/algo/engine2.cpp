@@ -16,6 +16,7 @@
 #include "aux_valves.h"
 #include "closed_loop_fuel.h"
 #include "launch_control.h"
+#include "engine_state_machine.h"
 #include "injector_model.h"
 #include "tunerstudio.h"
 
@@ -136,6 +137,13 @@ EngineState::EngineState() {
 
 void EngineState::updateSparkSkip() {
 #if EFI_LAUNCH_CONTROL
+		// Pops & Bangs spark cut rides the hard limiter so consecutive sparks can be skipped,
+		// letting raw fuel accumulate in the exhaust before it is re-lit. 0 outside the window.
+		float popsAndBangsSparkSkip = 0.0f;
+#if EFI_ENGINE_STATE_MACHINE
+		popsAndBangsSparkSkip = engine->module<EngineStateMachine>().unmock().getPopsAndBangsSparkSkipRatio();
+#endif // EFI_ENGINE_STATE_MACHINE
+
 		engine->softSparkLimiter.updateTargetSkipRatio(luaSoftSparkSkip, tractionControlSparkSkip);
 		engine->hardSparkLimiter.updateTargetSkipRatio(
 			luaHardSparkSkip,
@@ -145,6 +153,7 @@ void EngineState::updateSparkSkip() {
 			 * https://github.com/rusefi/rusefi/issues/6566#issuecomment-2153149902).
 			 */
 			engine->launchController.getSparkSkipRatio() + engine->shiftTorqueReductionController.getSparkSkipRatio()
+				+ popsAndBangsSparkSkip
 		);
 #endif // EFI_LAUNCH_CONTROL
 }
@@ -153,6 +162,8 @@ void EngineState::updateSparkSkip() {
 
 void EngineState::periodicFastCallback() {
 	ScopePerf perf(PE::EngineStatePeriodicFastCallback);
+
+	engine->tractionController.update();
 
 #if EFI_SHAFT_POSITION_INPUT
 	if (!engine->slowCallBackWasInvoked) {

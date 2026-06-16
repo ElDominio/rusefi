@@ -58,4 +58,31 @@ public class FragmentDialogConsumerTest {
                         "\n",
                 fragmentDialogConsumer.getContent());
     }
+
+    @Test
+    public void graphSplitForcesNewPanel() {
+        ReaderStateImpl state = new ReaderStateImpl();
+        String struct = "struct_no_prefix misfire_s\n" +
+                "uint16_t misfireTotalCount\n" +
+                "graph_split\n" +
+                "float misfireEmaUs\n" +
+                "float misfireLastSegUs\n" +
+                "float misfireThreshUs\n" +
+                "end_struct\n";
+
+        FragmentDialogConsumer consumer = new FragmentDialogConsumer("misfire", "", "");
+        state.readBufferedReader(struct, consumer);
+
+        assertEquals("\n" +
+                        "dialog = misfireDialog, \"misfire\"\n" +
+                        "\tliveGraph = misfire_1_Graph, \"Graph\", South\n" +
+                        "\t\tgraphLine = misfireTotalCount\n" +
+                        "\tliveGraph = misfire_2_Graph, \"Graph\", South\n" +
+                        "\t\tgraphLine = misfireEmaUs\n" +
+                        "\t\tgraphLine = misfireLastSegUs\n" +
+                        "\t\tgraphLine = misfireThreshUs\n" +
+                        "\n",
+                consumer.getContent());
+    }
+
 }

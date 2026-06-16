@@ -2,6 +2,8 @@
 
 #include "closed_loop_fuel.h"
 #include "tunerstudio.h"
+#include "engine_state_machine.h"
+#include "custom_page.h"
 
 #if EFI_ENGINE_CONTROL
 
@@ -13,7 +15,30 @@ SensorType ShortTermFuelTrim::getSensorForBankIndex(size_t index) {
 	}
 }
 
+ft_region_e ShortTermFuelTrim::regionForSmState(EngineStateMachineState state) {
+	switch (state) {
+		case EngineStateMachineState::Idle:
+		case EngineStateMachineState::Afterstart:
+			return ftRegionIdle;
+		case EngineStateMachineState::Coasting:
+		case EngineStateMachineState::Overrun:
+			return ftRegionOverrun;
+		case EngineStateMachineState::WOT:
+			return ftRegionPower;
+		default:
+			// Cruising plus any state where STFT is inactive anyway (Off, Cranking,
+			// Transient, Launch, shifting, Limp) maps to the main "in the middle" cell.
+			return ftRegionCruise;
+	}
+}
+
 ft_region_e ShortTermFuelTrim::computeStftBin(float rpm, float load, stft_s& cfg) {
+	// State-based selection: when the Engine State Machine is enabled and "state based STFT"
+	// is on, the live SM state picks the region instead of the RPM/load thresholds below.
+	if (engineConfiguration->useEngineStateMachine && getCustomPage()->stateBasedStft) {
+		return regionForSmState(engine->module<EngineStateMachine>().unmock().getCurrentState());
+	}
+
 	// Low RPM -> idle
 	if (idleDeadband.lt(rpm, cfg.maxIdleRegionRpm))
 	{

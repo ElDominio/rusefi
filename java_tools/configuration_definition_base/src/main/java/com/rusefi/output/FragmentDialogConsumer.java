@@ -36,6 +36,14 @@ public class FragmentDialogConsumer implements ConfigurationConsumer {
                 if (configField.isUnusedField())
                     return 0;
 
+                if (configField.isGraphSplit()) {
+                    if (graphLinesCounter > 0) {
+                        linesInCurrentGraph = 0;
+                        startNewGraph();
+                    }
+                    return 0;
+                }
+
                 ConfigStructure cs = configField.getStructureType();
                 if (cs != null) {
                     String extraPrefix = (cs.isWithPrefix() || configField.isFromIterate()) ? configField.getName() + "_" : "";

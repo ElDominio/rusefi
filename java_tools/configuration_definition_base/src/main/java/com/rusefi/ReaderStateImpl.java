@@ -395,6 +395,10 @@ public class ReaderStateImpl implements ReaderState {
                 cf = new ConfigFieldImpl(state, "", line, null,
                         ConfigFieldImpl.DIRECTIVE_T, new int[0], null, false, false,
                         null, null);
+            } else if (line.trim().equals(ConfigFieldImpl.GRAPH_SPLIT_T)) {
+                cf = new ConfigFieldImpl(state, ConfigFieldImpl.GRAPH_SPLIT_T, "", null,
+                        ConfigFieldImpl.GRAPH_SPLIT_T, new int[0], null, false, false,
+                        null, null);
             } else {
                 throw new IllegalStateException("Cannot parse line [" + line + "]");
             }
@@ -476,7 +480,7 @@ public class ReaderStateImpl implements ReaderState {
                 element.setFromIterate(cf.getName(), i);
                 structure.addTs(element);
             }
-        } else if (cf.isDirective()) {
+        } else if (cf.isDirective() || cf.isGraphSplit()) {
             structure.addTs(cf);
         } else {
             structure.addBoth(cf);

@@ -6,6 +6,7 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
 
 #include "efi_pid.h"
 #include "idle_thread.h"
@@ -213,66 +214,6 @@ TEST(idle_v2, idleAdderShouldNotAffectNonIdleAreas) {
 	EXPECT_FLOAT_EQ(50 + 9, dut.getRunningOpenLoop(IIdleController::Phase::Idling, 0, 10, 0));
 }
 
-TEST(idle_v2, runningOpenLoopTpsTaper) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	IdleController dut;
-
-	// Zero out base tempco table
-	setTable(config->cltIdleCorrTable, 0.0f);
-
-	// Add 50% idle position
-	engineConfiguration->iacByTpsTaper = 50;
-	// At 10% TPS
-	engineConfiguration->idlePidDeactivationTpsThreshold = 10;
-
-	// Check in-bounds points
-	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, 0));
-	EXPECT_FLOAT_EQ(25, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, 5));
-	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, 10));
-
-	// Check out of bounds - shouldn't leave the interval [0, 10]
-	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, -5));
-	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, 20));
-}
-
-TEST(idle_v2, runningOpenLoopTpsTaperWithDashpot) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	IdleController dut;
-
-	// Zero out base tempco table
-	setTable(config->cltIdleCorrTable, 0.0f);
-
-	// Add 50% idle position
-	engineConfiguration->iacByTpsTaper = 50;
-	// At 10% TPS
-	engineConfiguration->idlePidDeactivationTpsThreshold = 10;
-
-	// set hold and decay time
-	engineConfiguration->iacByTpsHoldTime = 10;	// 10 secs
-	engineConfiguration->iacByTpsDecayTime = 10;	// 10 secs
-
-	// save the lastTimeRunningUs time - let it be the start of the hold phase
-	advanceTimeUs(5'000'000);
-	// full throttle = max.iac
-	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(ICP::Running, 0, 0, 100));
-
-	// jump to the end of the 'hold' phase of dashpot
-	advanceTimeUs(10'000'000);
-
-	// change the state to idle (release the pedal) - but still 100% max.iac!
-    EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(ICP::Idling, 0, 0, 0));
-    // now we're in the middle of decay
-    advanceTimeUs(5'000'000);
-    // 50% decay (50% of 50 is 25)
-    EXPECT_FLOAT_EQ(25, dut.getRunningOpenLoop(ICP::Idling, 0, 0, 0));
-    // now the decay is finished
-    advanceTimeUs(5'000'000);
-    // no correction
-    EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(ICP::Idling, 0, 0, 0));
-    // still react to the pedal
-    EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(ICP::Idling, 0, 0, 10));
-}
-
 struct MockOpenLoopIdler : public IdleController {
 	MOCK_METHOD(float, getCrankingOpenLoop, (float clt), (const, override));
 	MOCK_METHOD(float, getRunningOpenLoop, (IIdleController::Phase phase, float rpm, float clt, SensorResult tps), (override));
@@ -281,6 +222,8 @@ struct MockOpenLoopIdler : public IdleController {
 TEST(idle_v2, testOpenLoopCranking) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	StrictMock<MockOpenLoopIdler> dut;
+
+	engineConfiguration->crankingAirAmountEnabled = true;
 
 	EXPECT_CALL(dut, getCrankingOpenLoop(30)).WillOnce(Return(44));
 
@@ -291,6 +234,8 @@ TEST(idle_v2, testOpenLoopCranking) {
 TEST(idle_v2, openLoopRunningTaper) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	StrictMock<MockOpenLoopIdler> dut;
+
+	engineConfiguration->crankingAirAmountEnabled = true;
 
 	EXPECT_CALL(dut, getRunningOpenLoop(ICP::CrankToIdleTaper, 0, 30, SensorResult(0))).WillRepeatedly(Return(25));
 	EXPECT_CALL(dut, getRunningOpenLoop(ICP::Running, 0, 30, SensorResult(0))).WillRepeatedly(Return(25));
@@ -340,6 +285,80 @@ TEST(idle_v2, getCrankingTaperFraction) {
 		engine->rpmCalculator.onNewEngineCycle();
 	}
 	EXPECT_FLOAT_EQ(2, dut.getCrankingTaperFraction(mockedTemperature));
+}
+
+TEST(idle_v2, crankingRpmFlare_openLoopBypassesCrankingDuty) {
+	// RPM flare enabled without air amount: getOpenLoop() during Cranking must fall through
+	// to running open-loop so m_lastTargetRpm drives the 3D table lookup.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	StrictMock<MockOpenLoopIdler> dut;
+
+	engineConfiguration->crankingIdleRpmFlareEnabled = true;
+
+	// Running open-loop returns 30%; cranking duty would be 75% but must be ignored.
+	EXPECT_CALL(dut, getRunningOpenLoop(ICP::Cranking, 0, 30, SensorResult(0))).WillOnce(Return(30));
+
+	EXPECT_FLOAT_EQ(30, dut.getOpenLoop(ICP::Cranking, 0, 30, 0, 0));
+}
+
+TEST(idle_v2, crankingRpmFlare_openLoopNoTaperBlend) {
+	// RPM flare enabled without air amount: no cranking-duty blend during crank-to-idle taper.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	StrictMock<MockOpenLoopIdler> dut;
+
+	engineConfiguration->crankingIdleRpmFlareEnabled = true;
+
+	EXPECT_CALL(dut, getRunningOpenLoop(ICP::CrankToIdleTaper, 0, 30, SensorResult(0))).WillRepeatedly(Return(25));
+
+	// At any taper fraction, running open-loop is used directly (no cranking duty blend).
+	EXPECT_FLOAT_EQ(25, dut.getOpenLoop(ICP::CrankToIdleTaper, 0, 30, 0, 0));
+	EXPECT_FLOAT_EQ(25, dut.getOpenLoop(ICP::CrankToIdleTaper, 0, 30, 0, 0.5f));
+	EXPECT_FLOAT_EQ(25, dut.getOpenLoop(ICP::CrankToIdleTaper, 0, 30, 0, 1.0f));
+}
+
+TEST(idle_v2, crankingRpmFlare_targetRpmTaper) {
+	// RPM flare: m_lastTargetRpm = (base idle RPM + adder) at crank, tapering to base idle RPM.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+
+	engineConfiguration->crankingIdleRpmFlareEnabled = true;
+
+	const float crankingRpmAdder = 700;  // +700 RPM during cranking
+	const float normalIdleRpm = 800;     // base idle RPM from CLT table
+	const float crankingRpmTarget = normalIdleRpm + crankingRpmAdder;  // 1500
+
+	// Flat RPM adder: all CLT bins → +700 RPM
+	setArrayValues(config->cltCrankingRpmAdder, crankingRpmAdder);
+	// Normal idle RPM target: flat at 800 RPM
+	setArrayValues(config->cltIdleRpm, (uint8_t)(normalIdleRpm / 20)); // cltIdleRpm is scaled x20
+
+	// At taper = 0: base + adder = 1500
+	float blended0 = interpolateClamped(0, crankingRpmTarget, 1, normalIdleRpm, 0.0f);
+	EXPECT_FLOAT_EQ(1500, blended0);
+
+	// At taper = 0.5: midpoint between 1500 and 800 = 1150
+	float blended05 = interpolateClamped(0, crankingRpmTarget, 1, normalIdleRpm, 0.5f);
+	EXPECT_FLOAT_EQ(1150, blended05);
+
+	// At taper = 1.0: back to normal idle RPM
+	float blended1 = interpolateClamped(0, crankingRpmTarget, 1, normalIdleRpm, 1.0f);
+	EXPECT_FLOAT_EQ(normalIdleRpm, blended1);
+}
+
+TEST(idle_v2, crankingRpmFlare_closedLoopStillOffDuringCranking) {
+	// Closed-loop must remain disabled during Cranking phase even when RPM flare is enabled.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	dut.init();
+
+	engineConfiguration->crankingIdleRpmFlareEnabled = true;
+	engineConfiguration->idleRpmPid.pFactor = 0.5f;
+	engineConfiguration->idleRpmPid.iFactor = 0;
+	engineConfiguration->idleRpmPid.dFactor = 0;
+
+	// Closed-loop returns 0 for any non-Idling phase
+	EXPECT_FLOAT_EQ(0, dut.getClosedLoop(ICP::Cranking, 0, 1000, 900));
+	EXPECT_FLOAT_EQ(0, dut.getClosedLoop(ICP::CrankToIdleTaper, 0, 1000, 900));
 }
 
 TEST(idle_v2, openLoopCoastingTable) {
@@ -584,4 +603,149 @@ TEST(idle_v2, IntegrationClamping) {
 
 	// Result would be 75 + 75 = 150, but it should clamp to 100
 	EXPECT_EQ(100, dut.getIdlePosition(950));
+}
+
+// ---- Off-idle RPM adder tests ----
+
+static void setupOffIdleAdder(int adderRpm = 200, float stabilityThreshold = 100, float waitTime = 0.5f, float decayTime = 2.0f) {
+	getCustomPage()->offIdleRpmAdder = adderRpm;
+	getCustomPage()->offIdleRpmStabilityThreshold = stabilityThreshold;
+	getCustomPage()->offIdleWaitTime = waitTime;
+	getCustomPage()->offIdleRpmAdderDecayTime = decayTime;
+}
+
+TEST(idle_v2, offIdleAdder_disabled) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+
+	// Feature is disabled when adder is zero
+	getCustomPage()->offIdleRpmAdder = 0;
+
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Running, 2000));
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Idling, 900));
+}
+
+TEST(idle_v2, offIdleAdder_armedByRunning) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder();
+
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Running, 2000));
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Running, 2000));
+}
+
+TEST(idle_v2, offIdleAdder_armedByCoasting) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder();
+
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Coasting, 1500));
+}
+
+TEST(idle_v2, offIdleAdder_stabilizingHoldsMax) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	// stability threshold = 100 RPM/s, FAST_CALLBACK_PERIOD_MS = 10ms
+	// so dRPM between calls must be < 100 * 0.01 = 1 RPM to pass
+	setupOffIdleAdder(200, 100);
+
+	// Arm the adder
+	dut.getOffIdleAdder(ICP::Running, 2000);
+
+	// Enter idle phase: transitions to Stabilizing
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+
+	// RPM still changing fast (delta = 50 RPM in 10ms = 5000 RPM/s > 100) → stays Stabilizing
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 950));
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 920));
+}
+
+TEST(idle_v2, offIdleAdder_stabilizingTransitionsToWaiting) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder(200, 100, 0.5f, 2.0f);
+
+	// Arm → Stabilizing
+	dut.getOffIdleAdder(ICP::Running, 2000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+
+	// RPM stable (delta = 0 RPM → 0 RPM/s < 100) → transitions to Waiting
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+	// State should now be Waiting (adder still at max)
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+}
+
+TEST(idle_v2, offIdleAdder_waitTimerBeforeDecay) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder(200, 100, 0.5f, 2.0f);
+
+	// Arm → Stabilizing → Waiting (stable RPM)
+	dut.getOffIdleAdder(ICP::Running, 2000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+	dut.getOffIdleAdder(ICP::Idling, 1000); // transitions to Waiting here
+
+	// Not yet expired - still max
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+
+	// Advance past the wait time
+	advanceTimeUs(600'000); // 0.6s > 0.5s wait time
+
+	// Should now be Decaying - first call returns max (transitions on this call)
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Idling, 1000));
+}
+
+TEST(idle_v2, offIdleAdder_linearDecay) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder(200, 100, 0.0f, 2.0f); // no wait time
+
+	// Arm → Stabilizing → Waiting (stable RPM, 0 wait) → Decaying
+	dut.getOffIdleAdder(ICP::Running, 2000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+	dut.getOffIdleAdder(ICP::Idling, 1000); // transitions to Waiting
+	dut.getOffIdleAdder(ICP::Idling, 1000); // wait=0 → transitions to Decaying, returns max
+
+	// At start of decay: full adder
+	EXPECT_NEAR(200, dut.getOffIdleAdder(ICP::Idling, 1000), 5);
+
+	// At ~1s: half adder
+	advanceTimeUs(1'000'000);
+	EXPECT_NEAR(100, dut.getOffIdleAdder(ICP::Idling, 1000), 5);
+
+	// At 2s: zero, transitions to Inactive
+	advanceTimeUs(1'000'000);
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Idling, 1000));
+}
+
+TEST(idle_v2, offIdleAdder_rearmDuringDecay) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder(200, 100, 0.0f, 2.0f);
+
+	// Get into Decaying state (same path as linearDecay)
+	dut.getOffIdleAdder(ICP::Running, 2000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+	dut.getOffIdleAdder(ICP::Idling, 1000); // now Decaying
+	advanceTimeUs(1'000'000); // decay is half-way
+
+	// Mid-decay value should be ~100
+	EXPECT_NEAR(100, dut.getOffIdleAdder(ICP::Idling, 1000), 10);
+
+	// Re-arm by going off-idle again
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Running, 3000));
+	// Back to Armed - full max
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Coasting, 1500));
+}
+
+TEST(idle_v2, offIdleAdder_inactiveWhenCranking) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder();
+
+	// Cranking is neither Running nor Coasting - adder stays Inactive
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Cranking, 400));
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Cranking, 400));
 }

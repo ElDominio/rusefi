@@ -7,6 +7,11 @@
 #include "table_helper.h"
 #include "fuel_math.h"
 #include "fuel_computer.h"
+#include "engine_state_machine.h"
+#include "custom_page.h"
+#if EFI_WOT_ENRICHMENT
+#include "wot_enrichment.h"
+#endif // EFI_WOT_ENRICHMENT
 
 #if EFI_ENGINE_CONTROL
 
@@ -15,7 +20,31 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 
 	float stoich = getStoichiometricRatio();
 	float lambda = getTargetLambda(rpm, load);
+
+	// Limp Mode AFR enrichment: richen the target (lower lambda) while limp is latched.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+		lambda *= (1.0f - getCustomPage()->limpModeAfrEnrichment * 0.01f);
+	}
+
 	float afr = stoich * lambda;
+
+#if EFI_WOT_ENRICHMENT
+	// WOT time enrichment: add an AFR adder (negative = richer) after prolonged WOT.
+	afr += engine->module<WotEnrichment>().unmock().getAfrAdder();
+	lambda = afr / stoich;   // keep published targetLambda consistent with the adjusted AFR
+#endif // EFI_WOT_ENRICHMENT
+
+	// Eco Mode: lean the mixture to an absolute target AFR while the economy overlay is active.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
+		afr = getCustomPage()->ecoTargetAfr;
+		lambda = afr / stoich; // keep published targetLambda consistent with the eco target
+	}
+
+	// Quick Warmup: override lambda target when cold + idle to aid catalyst light-off.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+		lambda = getCustomPage()->quickWarmupLambdaTarget;
+		afr = lambda * stoich;
+	}
 
 	afrTableYAxis = load;
 	targetLambda = lambda;

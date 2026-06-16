@@ -1,0 +1,28 @@
+struct_no_prefix engine_state_machine_state_s
+
+	bit engineSmEnabled;Engine SM: enabled
+	bit engineSmIsOff;Engine SM: Off
+	bit engineSmIsCranking;Engine SM: Cranking
+	bit engineSmIsAfterStart;Engine SM: Afterstart
+	bit engineSmIsIdle;Engine SM: Idle
+	bit engineSmIsCoasting;Engine SM: Coasting
+	bit engineSmIsTransient;Engine SM: Transient
+	bit engineSmIsWot;Engine SM: WOT
+	bit engineSmIsCruising;Engine SM: Cruising
+	bit engineSmIsOverrun;Engine SM: Overrun
+	bit engineSmIsLaunchControl;Engine SM: Launch Control
+	bit engineSmIsTorqueReduction;Engine SM: Torque Reduction
+	bit engineSmIsUpshifting;Engine SM: Upshifting
+	bit engineSmIsDownshifting;Engine SM: Downshifting
+	bit engineSmIsLimp;Engine SM: Limp/Cut Active
+	bit engineSmIsPopsAndBangs;Engine SM: Pops and Bangs active
+	bit engineSmPnbSparkCut;Engine SM: P&B spark cut
+	bit engineSmIsEcoMode;Engine SM: Eco mode active
+	bit engineSmIsCold;Engine SM: Cold engine
+	bit engineSmIsOperating;Engine SM: At operating temp
+	bit engineSmIsHot;Engine SM: Hot engine
+	bit engineSmIsQuickWarmup;Engine SM: Quick Warmup active
+
+	uint8_t engineSmCurrentState;Engine SM: primary state
+
+end_struct

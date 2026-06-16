@@ -57,6 +57,9 @@ TESTS_SRC_CPP = \
 	tests/ignition_injection/test_hd_cranking2.cpp \
 	tests/ignition_injection/test_ignition_scheduling.cpp \
 	tests/ignition_injection/test_fuelCut.cpp \
+	tests/ignition_injection/test_pops_and_bangs.cpp \
+	tests/ignition_injection/test_eco_mode.cpp \
+	tests/ignition_injection/test_burst_knock.cpp \
 	tests/ignition_injection/test_fuel_computer.cpp \
 	tests/ignition_injection/test_injector_model.cpp \
 	tests/ignition_injection/test_odd_firing_engine.cpp \
@@ -99,6 +102,10 @@ TESTS_SRC_CPP = \
 	tests/nitrous_control/test_nitrous_condition.cpp \
 	tests/nitrous_control/test_nitrous_fuel_adder.cpp \
 	tests/nitrous_control/test_nitrous_ignition_retard.cpp \
+	tests/engine_state_machine/test_engine_state_machine.cpp \
+	tests/test_misfire_detection.cpp \
+	tests/test_launch_power_ramp.cpp \
+	tests/actuators/test_downshift_blipper.cpp \
 	tests/test_fft.cpp \
 	tests/lua/test_lua_basic.cpp \
 	tests/lua/test_bit_range_msb.cpp \
@@ -138,6 +145,7 @@ TESTS_SRC_CPP = \
 	tests/test_idle_controller.cpp \
 	tests/test_launch.cpp \
 	tests/test_fuel_map.cpp \
+	tests/test_vvt_corrections.cpp \
 	tests/test_gear_detector.cpp \
 	tests/ignition_injection/test_fuel_wall_wetting.cpp \
 	tests/test_one_cylinder_logic.cpp \
@@ -194,6 +202,7 @@ TESTS_SRC_CPP = \
 	tests/actuators/test_etb_integrated.cpp \
 	tests/actuators/test_fan_control.cpp \
 	tests/actuators/test_fuel_pump.cpp \
+	tests/actuators/test_fuel_pump_pwm.cpp \
 	tests/actuators/test_gppwm.cpp \
 	tests/actuators/test_main_relay.cpp \
 	tests/actuators/test_stepper.cpp \

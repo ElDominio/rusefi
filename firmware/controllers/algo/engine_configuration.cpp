@@ -453,6 +453,9 @@ static void setDefaultEngineConfiguration() {
 	engineConfiguration->alternatorControl.minValue = 0;
 	engineConfiguration->alternatorControl.maxValue = 90;
 
+	engineConfiguration->fuelPumpControl.minValue = -50;
+	engineConfiguration->fuelPumpControl.maxValue = 50;
+
 	setLinearCurve(config->scriptCurve1Bins, 0, 100, 1);
 	setLinearCurve(config->scriptCurve1, 0, 100, 1);
 

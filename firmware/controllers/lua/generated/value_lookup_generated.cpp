@@ -151,6 +151,12 @@ float getConfigValueByHash(const int hash) {
 // useRunningMathForCranking
 		case -54973711:
 			return engineConfiguration->useRunningMathForCranking;
+// crankingAirAmountEnabled
+		case 584176973:
+			return engineConfiguration->crankingAirAmountEnabled;
+// crankingIdleRpmFlareEnabled
+		case 781350644:
+			return engineConfiguration->crankingIdleRpmFlareEnabled;
 // displayLogicLevelsInEngineSniffer
 		case 1616873838:
 			return engineConfiguration->displayLogicLevelsInEngineSniffer;
@@ -463,6 +469,27 @@ float getConfigValueByHash(const int hash) {
 // vssToothCount
 		case -1958312328:
 			return engineConfiguration->vssToothCount;
+// fuelPumpControl.pFactor
+		case 84173873:
+			return engineConfiguration->fuelPumpControl.pFactor;
+// fuelPumpControl.iFactor
+		case -366167318:
+			return engineConfiguration->fuelPumpControl.iFactor;
+// fuelPumpControl.dFactor
+		case 1766427429:
+			return engineConfiguration->fuelPumpControl.dFactor;
+// fuelPumpControl.offset
+		case -1077592247:
+			return engineConfiguration->fuelPumpControl.offset;
+// fuelPumpControl.periodMs
+		case -2136471963:
+			return engineConfiguration->fuelPumpControl.periodMs;
+// fuelPumpControl.minValue
+		case -413496189:
+			return engineConfiguration->fuelPumpControl.minValue;
+// fuelPumpControl.maxValue
+		case -1763951419:
+			return engineConfiguration->fuelPumpControl.maxValue;
 // gapVvtTrackingLengthOverride
 		case -188591438:
 			return engineConfiguration->gapVvtTrackingLengthOverride;
@@ -631,9 +658,6 @@ float getConfigValueByHash(const int hash) {
 // lambdaProtectionTimeout
 		case -1645106444:
 			return engineConfiguration->lambdaProtectionTimeout;
-// idleReturnTargetRamp
-		case 118504154:
-			return engineConfiguration->idleReturnTargetRamp;
 // useInjectorFlowLinearizationTable
 		case 435614729:
 			return engineConfiguration->useInjectorFlowLinearizationTable;
@@ -865,6 +889,9 @@ float getConfigValueByHash(const int hash) {
 // isAlternatorControlEnabled
 		case -1771449111:
 			return engineConfiguration->isAlternatorControlEnabled;
+// alternatorBaseDutyUseTable
+		case 2041197399:
+			return engineConfiguration->alternatorBaseDutyUseTable;
 // invertPrimaryTriggerSignal
 		case -587700301:
 			return engineConfiguration->invertPrimaryTriggerSignal;
@@ -1180,6 +1207,9 @@ float getConfigValueByHash(const int hash) {
 // useHardSkipInTraction
 		case -1495799741:
 			return engineConfiguration->useHardSkipInTraction;
+// tractionControlUseLuaGauge
+		case -1005323934:
+			return engineConfiguration->tractionControlUseLuaGauge;
 // useAuxSpeedForSlipRatio
 		case -723870257:
 			return engineConfiguration->useAuxSpeedForSlipRatio;
@@ -1858,6 +1888,12 @@ float getConfigValueByHash(const int hash) {
 // ignKeyAdcDivider
 		case -506535813:
 			return engineConfiguration->ignKeyAdcDivider;
+// tractionControlHoldTime
+		case 506560000:
+			return engineConfiguration->tractionControlHoldTime;
+// tractionControlDecayTime
+		case 477233055:
+			return engineConfiguration->tractionControlDecayTime;
 // maxInjectorDutyInstant
 		case 896753456:
 			return engineConfiguration->maxInjectorDutyInstant;
@@ -1963,6 +1999,33 @@ float getConfigValueByHash(const int hash) {
 // vvlControlEnabled
 		case -708922423:
 			return engineConfiguration->vvlControlEnabled;
+// exhaustCutoutEnabled
+		case 743685910:
+			return engineConfiguration->exhaustCutoutEnabled;
+// exhaustCutoutShowOpenState
+		case -619458017:
+			return engineConfiguration->exhaustCutoutShowOpenState;
+// exhaustCutoutInvertedOutput
+		case -1837381539:
+			return engineConfiguration->exhaustCutoutInvertedOutput;
+// exhaustCutoutKeyOnTestEnabled
+		case 351760956:
+			return engineConfiguration->exhaustCutoutKeyOnTestEnabled;
+// exhaustCutoutEngineOnTestEnabled
+		case 1210561033:
+			return engineConfiguration->exhaustCutoutEngineOnTestEnabled;
+// useEngineStateMachine
+		case 940343550:
+			return engineConfiguration->useEngineStateMachine;
+// cdvControlEnabled
+		case 1956679022:
+			return engineConfiguration->cdvControlEnabled;
+// cdvUseClutchExit
+		case -306046548:
+			return engineConfiguration->cdvUseClutchExit;
+// luaLimiterEnabled
+		case 1523670664:
+			return engineConfiguration->luaLimiterEnabled;
 // nitrousLuaGaugeArmingValue
 		case -1760115393:
 			return engineConfiguration->nitrousLuaGaugeArmingValue;
@@ -2023,9 +2086,6 @@ float getConfigValueByHash(const int hash) {
 // maxOilPressureTimeout
 		case -1788499857:
 			return engineConfiguration->maxOilPressureTimeout;
-// idleReturnTargetRampDuration
-		case 62925536:
-			return engineConfiguration->idleReturnTargetRampDuration;
 // wastegatePositionOpenedVoltage
 		case 866072300:
 			return engineConfiguration->wastegatePositionOpenedVoltage;
@@ -2074,6 +2134,9 @@ float getConfigValueByHash(const int hash) {
 // rotationalIdleController.auto_engage_clt
 		case 602046867:
 			return engineConfiguration->rotationalIdleController.auto_engage_clt;
+// popsAndBangsEnabled
+		case 1183876976:
+			return engineConfiguration->popsAndBangsEnabled;
 // tcu_shiftTime
 		case -1658957891:
 			return config->tcu_shiftTime;
@@ -2414,6 +2477,16 @@ bool setConfigValueByName(const char *name, float value) {
 		case -54973711:
 	{
 		engineConfiguration->useRunningMathForCranking = (int)value;
+		return 1;
+	}
+		case 584176973:
+	{
+		engineConfiguration->crankingAirAmountEnabled = (int)value;
+		return 1;
+	}
+		case 781350644:
+	{
+		engineConfiguration->crankingIdleRpmFlareEnabled = (int)value;
 		return 1;
 	}
 		case 1616873838:
@@ -2936,6 +3009,41 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->vssToothCount = (int)value;
 		return 1;
 	}
+		case 84173873:
+	{
+		engineConfiguration->fuelPumpControl.pFactor = value;
+		return 1;
+	}
+		case -366167318:
+	{
+		engineConfiguration->fuelPumpControl.iFactor = value;
+		return 1;
+	}
+		case 1766427429:
+	{
+		engineConfiguration->fuelPumpControl.dFactor = value;
+		return 1;
+	}
+		case -1077592247:
+	{
+		engineConfiguration->fuelPumpControl.offset = (int)value;
+		return 1;
+	}
+		case -2136471963:
+	{
+		engineConfiguration->fuelPumpControl.periodMs = (int)value;
+		return 1;
+	}
+		case -413496189:
+	{
+		engineConfiguration->fuelPumpControl.minValue = (int)value;
+		return 1;
+	}
+		case -1763951419:
+	{
+		engineConfiguration->fuelPumpControl.maxValue = (int)value;
+		return 1;
+	}
 		case -188591438:
 	{
 		engineConfiguration->gapVvtTrackingLengthOverride = (int)value;
@@ -3214,11 +3322,6 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1645106444:
 	{
 		engineConfiguration->lambdaProtectionTimeout = (int)value;
-		return 1;
-	}
-		case 118504154:
-	{
-		engineConfiguration->idleReturnTargetRamp = (int)value;
 		return 1;
 	}
 		case 435614729:
@@ -3604,6 +3707,11 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1771449111:
 	{
 		engineConfiguration->isAlternatorControlEnabled = (int)value;
+		return 1;
+	}
+		case 2041197399:
+	{
+		engineConfiguration->alternatorBaseDutyUseTable = (int)value;
 		return 1;
 	}
 		case -587700301:
@@ -4129,6 +4237,11 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1495799741:
 	{
 		engineConfiguration->useHardSkipInTraction = (int)value;
+		return 1;
+	}
+		case -1005323934:
+	{
+		engineConfiguration->tractionControlUseLuaGauge = (int)value;
 		return 1;
 	}
 		case -723870257:
@@ -5261,6 +5374,16 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->ignKeyAdcDivider = value;
 		return 1;
 	}
+		case 506560000:
+	{
+		engineConfiguration->tractionControlHoldTime = (int)value;
+		return 1;
+	}
+		case 477233055:
+	{
+		engineConfiguration->tractionControlDecayTime = (int)value;
+		return 1;
+	}
 		case 896753456:
 	{
 		engineConfiguration->maxInjectorDutyInstant = (int)value;
@@ -5436,6 +5559,51 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->vvlControlEnabled = (int)value;
 		return 1;
 	}
+		case 743685910:
+	{
+		engineConfiguration->exhaustCutoutEnabled = (int)value;
+		return 1;
+	}
+		case -619458017:
+	{
+		engineConfiguration->exhaustCutoutShowOpenState = (int)value;
+		return 1;
+	}
+		case -1837381539:
+	{
+		engineConfiguration->exhaustCutoutInvertedOutput = (int)value;
+		return 1;
+	}
+		case 351760956:
+	{
+		engineConfiguration->exhaustCutoutKeyOnTestEnabled = (int)value;
+		return 1;
+	}
+		case 1210561033:
+	{
+		engineConfiguration->exhaustCutoutEngineOnTestEnabled = (int)value;
+		return 1;
+	}
+		case 940343550:
+	{
+		engineConfiguration->useEngineStateMachine = (int)value;
+		return 1;
+	}
+		case 1956679022:
+	{
+		engineConfiguration->cdvControlEnabled = (int)value;
+		return 1;
+	}
+		case -306046548:
+	{
+		engineConfiguration->cdvUseClutchExit = (int)value;
+		return 1;
+	}
+		case 1523670664:
+	{
+		engineConfiguration->luaLimiterEnabled = (int)value;
+		return 1;
+	}
 		case -1760115393:
 	{
 		engineConfiguration->nitrousLuaGaugeArmingValue = value;
@@ -5536,11 +5704,6 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->maxOilPressureTimeout = (int)value;
 		return 1;
 	}
-		case 62925536:
-	{
-		engineConfiguration->idleReturnTargetRampDuration = (int)value;
-		return 1;
-	}
 		case 866072300:
 	{
 		engineConfiguration->wastegatePositionOpenedVoltage = value;
@@ -5619,6 +5782,11 @@ bool setConfigValueByName(const char *name, float value) {
 		case 602046867:
 	{
 		engineConfiguration->rotationalIdleController.auto_engage_clt = (int)value;
+		return 1;
+	}
+		case 1183876976:
+	{
+		engineConfiguration->popsAndBangsEnabled = (int)value;
 		return 1;
 	}
 		case -1658957891:

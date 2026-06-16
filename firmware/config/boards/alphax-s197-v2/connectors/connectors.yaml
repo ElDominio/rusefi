@@ -1,0 +1,220 @@
+meta: config/boards/hellen_meta.h
+
+pins:
+  - meta: H144_IGN_1
+    class: outputs
+    ts_name: Ignition Coil 1
+
+  - meta: H144_IGN_2
+    class: outputs
+    ts_name: Ignition Coil 2
+
+  - meta: H144_IGN_3
+    class: outputs
+    ts_name: Ignition Coil 3
+
+  - meta: H144_IGN_4
+    class: outputs
+    ts_name: Ignition Coil 4
+
+  - meta: H144_IGN_5
+    class: outputs
+    ts_name: Ignition Coil 5
+
+  - meta: H144_IGN_6
+    class: outputs
+    ts_name: Ignition Coil 6
+
+  - meta: H144_IGN_7
+    class: outputs
+    ts_name: Ignition Coil 7
+
+  - meta: H144_IGN_8
+    class: outputs
+    ts_name: Ignition Coil 8
+
+  - id: D3
+    class: outputs
+    ts_name: Injector 1
+
+  - id: A9
+    class: outputs
+    ts_name: Injector 2
+
+  - id: D11
+    class: outputs
+    ts_name: Injector 3
+
+  - id: D10
+    class: outputs
+    ts_name: Injector 4
+
+  - id: D2
+    class: outputs
+    ts_name: Injector 5
+
+  - id: A8
+    class: outputs
+    ts_name: Injector 6
+
+  - id: D15
+    class: outputs
+    ts_name: Injector 7
+
+  - id: D12
+    class: outputs
+    ts_name: Injector 8
+
+  - meta: H144_IN_D_1
+    class: event_inputs
+    ts_name: Crank Trigger
+
+  - meta: H144_IN_D_2
+    class: event_inputs
+    ts_name: Cam 1 Position
+
+  - meta: H144_IN_D_3
+    class: event_inputs
+    ts_name: Cam 2 Position
+
+  - meta: H144_IN_D_4
+    class: event_inputs
+    ts_name: Cam 3 Position
+
+  - meta: H144_UART8_RX
+    class: event_inputs
+    ts_name: Cam 4 Position
+
+  - meta: H144_UART2_RX
+    class: event_inputs
+    ts_name: Vehicle Speed Sensor
+
+  - meta: H144_UART2_TX
+    class: event_inputs
+    ts_name: Flex Fuel Input
+
+  - id: D7
+    class: outputs
+    ts_name: Main Relay
+
+  - meta: H144_OUT_PWM6
+    class: outputs
+    ts_name: Fuel Pump Relay
+
+  - id: B14
+    class: outputs
+    ts_name: A/C Clutch Relay
+
+  - id: A15
+    class: outputs
+    ts_name: Cooling Fan 1 Relay
+
+  - id: C11
+    class: outputs
+    ts_name: Cooling Fan 2 Relay
+
+  - meta: H144_OUT_PWM5
+    class: outputs
+    ts_name: Alternator Control
+
+  - meta: H144_OUT_PWM1
+    class: outputs
+    ts_name: VVT Solenoid 1
+
+  - meta: H144_OUT_PWM2
+    class: outputs
+    ts_name: VVT Solenoid 2
+
+  - id: A10
+    class: outputs
+    ts_name: VVT Solenoid 3
+
+  - id: E8
+    class: outputs
+    ts_name: VVT Solenoid 4
+
+  - id: E9
+    class: outputs
+    ts_name: Boost Control
+
+  - meta: H144_OUT_PWM3
+    class: outputs
+    ts_name: ETB H-Bridge Direction
+
+  - meta: H144_OUT_PWM4
+    class: outputs
+    ts_name: ETB H-Bridge PWM
+
+  - id: B15
+    class: outputs
+    ts_name: ETB H-Bridge Disable
+
+  - meta: H144_IN_MAP1
+    class: analog_inputs
+    ts_name: MAP Sensor
+
+  - meta: H144_IN_MAP2_DIGITAL
+    class: switch_inputs
+    ts_name: Start Request Switch
+
+  - meta: H144_IN_CLT
+    class: analog_inputs
+    ts_name: Coolant Temperature
+
+  - meta: H144_IN_O2S2
+    class: analog_inputs
+    ts_name: Throttle Position B
+
+  - meta: H144_IN_O2S
+    class: analog_inputs
+    ts_name: Oil Pressure Sensor
+
+  - meta: H144_IN_IAT
+    class: analog_inputs
+    ts_name: Intake Air Temperature
+
+  - meta: H144_IN_MAP3
+    class: analog_inputs
+    ts_name: Knock Sensor
+
+  - meta: H144_IN_TPS
+    class: analog_inputs
+    ts_name: Throttle Position A
+
+  - meta: H144_IN_PPS
+    class: analog_inputs
+    ts_name: Accelerator Pedal A
+
+  - meta: H144_IN_CAM
+    class: switch_inputs
+    ts_name: Clutch Switch
+
+  - meta: H144_IN_AUX3_ANALOG
+    class: analog_inputs
+    ts_name: Accelerator Pedal B
+
+  - meta: H144_IN_AUX2_ANALOG
+    class: analog_inputs
+    ts_name: Cylinder Head Temperature
+
+  - meta: H144_IN_AUX4_ANALOG
+    class: analog_inputs
+    ts_name: A/C Pressure Sensor
+
+  - meta: H144_IN_AUX1_DIGITAL
+    class: switch_inputs
+    ts_name: Reverse Switch
+
+  - meta: H144_IN_CRANK
+    class: switch_inputs
+    ts_name: Brake Switch
+
+  - meta: H144_IN_VBATT
+    class: analog_inputs
+    ts_name: Battery Voltage
+
+info:
+  cid: main
+  title: alphax-s197-v2
+  name: S197 Mustang Pinout
+  directory: hellen/alphax-s197-v2

@@ -37,6 +37,11 @@ constexpr size_t adcAux2ChannelCount = 1;
 #ifdef ADC_MUX_PIN
 // https://github.com/rusefi/alphax-4chan is the reference board with ADC mux
 static OutputPin muxControl;
+#ifndef ADC_MUX_PIN_INVERTED
+#define ADC_MUX_PIN_INVERTED 0
+#endif
+#define ADC_MUX_PRIMARY_VALUE (ADC_MUX_PIN_INVERTED ? 1 : 0)
+#define ADC_MUX_MUXED_VALUE   (ADC_MUX_PIN_INVERTED ? 0 : 1)
 #endif // ADC_MUX_PIN
 
 #if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == TRUE)
@@ -174,11 +179,87 @@ float getMcuVbatVoltage() {
 // 42000 / 8 / 32 = 164 clocks / channel
 // This ^ does not include additional MCU temperatur conversions
 
+#ifndef ADC1_SLOW_MUXED
+#if defined(ADC_MUX_PIN)
+#define ADC1_SLOW_MUXED 1
+#else
+#define ADC1_SLOW_MUXED 0
+#endif
+#endif
+
+#ifndef ADC3_SLOW_MUXED
+#if defined(ADC_MUX_PIN) && defined(ADC3_SLOW_CHANNEL_COUNT)
+#define ADC3_SLOW_MUXED 1
+#else
+#define ADC3_SLOW_MUXED 0
+#endif
+#endif
+
 // Slow ADC has 16 channels we can sample, or 32 if ADC mux mode is enabled.
 static volatile NO_CACHE adcsample_t slowSampleBuffer[SLOW_ADC_OVERSAMPLE * adcChannelCount];
-#ifdef ADC_MUX_PIN
+#if ADC1_SLOW_MUXED
 static volatile NO_CACHE adcsample_t slowSampleBufferMuxed[SLOW_ADC_OVERSAMPLE * adcChannelCount];
 #endif
+
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+// ADC3-only channels: PF6(IN4)=EFI_ADC_32, PF7(IN5)=_33, PF8(IN6)=_34, PF9(IN7)=_35,
+//                     PF10(IN8)=_36, PF3(IN9)=_37, PF4(IN14)=_38, PF5(IN15)=_39
+// mux=1 counterparts land at EFI_ADC_40-47
+static_assert(ADC3_SLOW_CHANNEL_COUNT == 8, "convGroupSlowAdc3 hardcodes exactly 8 channels (AN4-AN9, AN14, AN15)");
+static volatile NO_CACHE adcsample_t slowSampleBufferAdc3[SLOW_ADC_OVERSAMPLE * ADC3_SLOW_CHANNEL_COUNT];
+#if ADC3_SLOW_MUXED
+static volatile NO_CACHE adcsample_t slowSampleBufferAdc3Muxed[SLOW_ADC_OVERSAMPLE * ADC3_SLOW_CHANNEL_COUNT];
+#endif
+
+static const ADCConversionGroup convGroupSlowAdc3 = {
+	.circular        = FALSE,
+	.num_channels    = ADC3_SLOW_CHANNEL_COUNT,
+#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == TRUE)
+	.end_cb          = slowAdcEndCB,
+#else
+	.end_cb          = nullptr,
+#endif
+	.error_cb        = slowAdcErrorCB,
+	.cr1             = 0,
+	.cr2             = ADC_CR2_SWSTART,
+	.smpr1           =
+		ADC_SMPR1_SMP_AN14(ADC_SAMPLING_SLOW) |  // PF4
+		ADC_SMPR1_SMP_AN15(ADC_SAMPLING_SLOW),    // PF5
+	.smpr2           =
+		ADC_SMPR2_SMP_AN4(ADC_SAMPLING_SLOW) |    // PF6
+		ADC_SMPR2_SMP_AN5(ADC_SAMPLING_SLOW) |    // PF7
+		ADC_SMPR2_SMP_AN6(ADC_SAMPLING_SLOW) |    // PF8
+		ADC_SMPR2_SMP_AN7(ADC_SAMPLING_SLOW) |    // PF9
+		ADC_SMPR2_SMP_AN8(ADC_SAMPLING_SLOW) |    // PF10
+		ADC_SMPR2_SMP_AN9(ADC_SAMPLING_SLOW),     // PF3
+	.htr = 0, .ltr = 0,
+	// Positions 1-6 in SQR3, positions 7-8 in SQR2
+	.sqr1 = 0,
+	.sqr2 = ADC_SQR2_SQ7_N(14) | ADC_SQR2_SQ8_N(15),
+	.sqr3 =
+		ADC_SQR3_SQ1_N(4) | ADC_SQR3_SQ2_N(5) | ADC_SQR3_SQ3_N(6) |
+		ADC_SQR3_SQ4_N(7) | ADC_SQR3_SQ5_N(8) | ADC_SQR3_SQ6_N(9),
+};
+
+static bool readBatchAdc3(adcsample_t* convertedSamples, adcsample_t* b) {
+#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
+	msg_t result = adcConvert(&ADCD3, &convGroupSlowAdc3, b, SLOW_ADC_OVERSAMPLE);
+	if (result != MSG_OK) {
+		return false;
+	}
+#endif
+	for (size_t i = 0; i < ADC3_SLOW_CHANNEL_COUNT; i++) {
+		uint32_t sum = 0;
+		size_t index = i;
+		for (size_t j = 0; j < SLOW_ADC_OVERSAMPLE; j++) {
+			sum += b[index];
+			index += ADC3_SLOW_CHANNEL_COUNT;
+		}
+		convertedSamples[i] = static_cast<adcsample_t>(sum / SLOW_ADC_OVERSAMPLE);
+	}
+	return true;
+}
+#endif // ADC3_SLOW_CHANNEL_COUNT
 
 static void slowAdcErrorCB(ADCDriver *, adcerror_t err) {
 	engine->outputChannels.slowAdcErrorCount++;
@@ -233,8 +314,14 @@ static /* constexpr */ ADCConversionGroup convGroupSlow = {
 
 typedef enum {
 	convertPrimary,
-#ifdef ADC_MUX_PIN
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+	convertAdc3Primary,
+#endif
+#if ADC1_SLOW_MUXED
 	convertMuxed,
+#endif
+#if ADC3_SLOW_MUXED
+	convertAdc3Muxed,
 #endif
 	convertAux,
 	convertAux2,
@@ -244,22 +331,41 @@ static slowAdcState_t slowAdcGetNextState(slowAdcState_t state)
 {
 	switch (state) {
 	case convertPrimary:
-		#ifdef ADC_MUX_PIN
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+		return convertAdc3Primary;
+#elif ADC1_SLOW_MUXED
 		return convertMuxed;
-		#else
+#elif ADC3_SLOW_MUXED
+		return convertAdc3Muxed;
+#else
 		return convertAux;
-		#endif
-	break;
-#ifdef ADC_MUX_PIN
+#endif
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+	case convertAdc3Primary:
+#if ADC1_SLOW_MUXED
+		return convertMuxed;
+#elif ADC3_SLOW_MUXED
+		return convertAdc3Muxed;
+#else
+		return convertAux;
+#endif
+#endif
+#if ADC1_SLOW_MUXED
 	case convertMuxed:
+#if ADC3_SLOW_MUXED
+		return convertAdc3Muxed;
+#else
 		return convertAux;
-	break;
+#endif
+#endif
+#if ADC3_SLOW_MUXED
+	case convertAdc3Muxed:
+		return convertAux;
 #endif
 	case convertAux:
 		return convertAux2;
 	case convertAux2:
 		return convertPrimary;
-	break;
 	}
 	return convertPrimary;
 }
@@ -276,15 +382,29 @@ static void slowAdcEndCB(ADCDriver *adcp) {
 		switch (slowAdcState) {
 		case convertPrimary:
 			#ifdef ADC_MUX_PIN
-			muxControl.setValue(0, /*force*/true);
+			muxControl.setValue(ADC_MUX_PRIMARY_VALUE, /*force*/true);
 			#endif
 			adcStartConversionI(&EFI_SLOW_ADC, &convGroupSlow, (adcsample_t *)slowSampleBuffer, SLOW_ADC_OVERSAMPLE);
 			break;
-		#ifdef ADC_MUX_PIN
+		#ifdef ADC3_SLOW_CHANNEL_COUNT
+		case convertAdc3Primary:
+			// mux already 0; start ADC3 primary
+			adcStartConversionI(&ADCD3, &convGroupSlowAdc3, (adcsample_t *)slowSampleBufferAdc3, SLOW_ADC_OVERSAMPLE);
+			break;
+		#endif
+		#if ADC1_SLOW_MUXED
 		case convertMuxed:
-			muxControl.setValue(1, /*force*/true);
-			// convert second half
+			muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
 			adcStartConversionI(&EFI_SLOW_ADC, &convGroupSlow, (adcsample_t *)slowSampleBufferMuxed, SLOW_ADC_OVERSAMPLE);
+			break;
+		#endif
+		#if ADC3_SLOW_MUXED
+		case convertAdc3Muxed:
+			#if (ADC1_SLOW_MUXED == 0)
+			// If ADC1 wasn't muxed, the mux pin hasn't been set high yet
+			muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
+			#endif
+			adcStartConversionI(&ADCD3, &convGroupSlowAdc3, (adcsample_t *)slowSampleBufferAdc3Muxed, SLOW_ADC_OVERSAMPLE);
 			break;
 		#endif
 		case convertAux:
@@ -299,7 +419,7 @@ static void slowAdcEndCB(ADCDriver *adcp) {
 		chSysUnlockFromISR();
 	}
 }
-#endif
+#endif // EFI_INTERNAL_SLOW_ADC_BACKGROUND
 
 static bool readBatch(adcsample_t* convertedSamples, adcsample_t* b) {
 #if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
@@ -310,13 +430,12 @@ static bool readBatch(adcsample_t* convertedSamples, adcsample_t* b) {
 		return false;
 	}
 
-	// MCU Temperature sensor is only physically wired to ADC1
-	// todo: disable MCU Temperature sensor if EFI_SLOW_ADC is not ADC1?
-	adcConvert(&EFI_SLOW_ADC, &auxConvGroup, (adcsample_t *)auxSensorSamples, auxSensorOversample);
+	// Temperature sensor is only physically wired to ADC1
+	adcConvert(&EFI_SLOW_ADC, &aux1ConvGroup, (adcsample_t *)aux1SensorSamples, auxSensorOversample);
 
 	// Switch IN18 input to Vbat
 	adcSTM32EnableVBATE();
-	adcConvert(adcp, &aux2ConvGroup, (adcsample_t *)aux2SensorSamples, auxSensorOversample);
+	adcConvert(&EFI_SLOW_ADC, &aux2ConvGroup, (adcsample_t *)aux2SensorSamples, auxSensorOversample);
 	adcSTM32DisableVBATE();
 #endif
 
@@ -339,16 +458,58 @@ static bool readBatch(adcsample_t* convertedSamples, adcsample_t* b) {
 bool readSlowAnalogInputs(adcsample_t* convertedSamples) {
 	bool result = true;
 
+	// mux=0: ADC1 primary channels (EFI_ADC_0-15)
 	result &= readBatch(convertedSamples, (adcsample_t *)slowSampleBuffer);
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+	// mux=0: ADC3 primary channels (EFI_ADC_32-39)
+	result &= readBatchAdc3(&convertedSamples[EFI_ADC_32 - EFI_ADC_0], (adcsample_t *)slowSampleBufferAdc3);
+#endif
+
+#if defined(EFI_SLOW_ADC) && (EFI_SLOW_ADC == ADCD3)
+	// Map ADC3 channels to their standard EFI_ADC_32..39 indices
+	convertedSamples[EFI_ADC_32 - EFI_ADC_0] = convertedSamples[4];  // PF6
+	convertedSamples[EFI_ADC_33 - EFI_ADC_0] = convertedSamples[5];  // PF7
+	convertedSamples[EFI_ADC_34 - EFI_ADC_0] = convertedSamples[6];  // PF8
+	convertedSamples[EFI_ADC_35 - EFI_ADC_0] = convertedSamples[7];  // PF9
+	convertedSamples[EFI_ADC_36 - EFI_ADC_0] = convertedSamples[8];  // PF10
+	convertedSamples[EFI_ADC_37 - EFI_ADC_0] = convertedSamples[9];  // PF3
+	convertedSamples[EFI_ADC_38 - EFI_ADC_0] = convertedSamples[14]; // PF4
+	convertedSamples[EFI_ADC_39 - EFI_ADC_0] = convertedSamples[15]; // PF5
+#endif
+
+#if ADC1_SLOW_MUXED
+	#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
+		muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
+	#endif
+	// mux=1: ADC1 muxed channels (EFI_ADC_16-31)
+	result &= readBatch(&convertedSamples[adcChannelCount], (adcsample_t *)slowSampleBufferMuxed);
+#endif
+
+#if defined(EFI_SLOW_ADC) && (EFI_SLOW_ADC == ADCD3)
+	// Map ADC3 muxed channels to their standard EFI_ADC_40..47 indices
+	convertedSamples[EFI_ADC_40 - EFI_ADC_0] = convertedSamples[16 + 4];  // PF6
+	convertedSamples[EFI_ADC_41 - EFI_ADC_0] = convertedSamples[16 + 5];  // PF7
+	convertedSamples[EFI_ADC_42 - EFI_ADC_0] = convertedSamples[16 + 6];  // PF8
+	convertedSamples[EFI_ADC_43 - EFI_ADC_0] = convertedSamples[16 + 7];  // PF9
+	convertedSamples[EFI_ADC_44 - EFI_ADC_0] = convertedSamples[16 + 8];  // PF10
+	convertedSamples[EFI_ADC_45 - EFI_ADC_0] = convertedSamples[16 + 9];  // PF3
+	convertedSamples[EFI_ADC_46 - EFI_ADC_0] = convertedSamples[16 + 14]; // PF4
+	convertedSamples[EFI_ADC_47 - EFI_ADC_0] = convertedSamples[16 + 15]; // PF5
+#endif
+
+#if ADC3_SLOW_MUXED
+	#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
+		#if (ADC1_SLOW_MUXED == 0)
+			muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
+		#endif
+	#endif
+	// mux=1: ADC3 muxed channels (EFI_ADC_40-47)
+	result &= readBatchAdc3(&convertedSamples[EFI_ADC_40 - EFI_ADC_0], (adcsample_t *)slowSampleBufferAdc3Muxed);
+#endif
 
 #ifdef ADC_MUX_PIN
 	#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
-		muxControl.setValue(1, /*force*/true);
-	#endif
-		// read the second batch, starting where we left off
-		result &= readBatch(&convertedSamples[adcChannelCount], (adcsample_t *)slowSampleBufferMuxed);
-	#if (EFI_INTERNAL_SLOW_ADC_BACKGROUND == FALSE)
-		muxControl.setValue(0, /*force*/true);
+		muxControl.setValue(ADC_MUX_PRIMARY_VALUE, /*force*/true);
 	#endif
 #endif
 
@@ -532,6 +693,10 @@ void portInitAdc() {
 #ifdef EFI_SOFTWARE_KNOCK
 	adcStart(&KNOCK_ADC, nullptr);
 #endif // EFI_SOFTWARE_KNOCK
+
+#ifdef ADC3_SLOW_CHANNEL_COUNT
+	adcStart(&ADCD3, nullptr);
+#endif
 }
 
 #endif // HAL_USE_ADC

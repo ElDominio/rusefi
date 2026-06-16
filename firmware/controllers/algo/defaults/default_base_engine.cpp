@@ -13,6 +13,10 @@
 static void setDefaultAlternatorParameters() {
 	setTable(config->alternatorVoltageTargetTable, 14);
 
+	setTable(config->alternatorBaseDutyTable, 0);
+	setLinearCurve(config->alternatorBaseDutyVoltageBins, 11, 15, 1);
+	setRpmTableBin(config->alternatorBaseDutyRpmBins);
+
 	engineConfiguration->alternatorControl.offset = 0;
 	engineConfiguration->alternatorControl.pFactor = 30;
 	engineConfiguration->alternatorControl.periodMs = 100;
@@ -175,10 +179,6 @@ void defaultsOrFixOnBurn() {
 	if (engineConfiguration->alternator_iTermMax == 0) {
   	engineConfiguration->alternator_iTermMax = 1000;
 	}
-	if (engineConfiguration->idleReturnTargetRampDuration <= 0.1){
-		engineConfiguration->idleReturnTargetRampDuration = 3;
-	}
-
 	if (engineConfiguration->vvtControlMinRpm < engineConfiguration->cranking.rpm) {
 		engineConfiguration->vvtControlMinRpm = engineConfiguration->cranking.rpm;
 	}
@@ -397,7 +397,6 @@ void setDefaultBaseEngine() {
 	engineConfiguration->idleStepperReactionTime = 3;
 	engineConfiguration->idleStepperTotalSteps = 200;
 	engineConfiguration->stepperForceParkingEveryRestart = true;
-	engineConfiguration->iacByTpsTaper = 2;
 
     engineConfiguration->etbSplit = MAX_TPS_PPS_DISCREPANCY;
 
@@ -460,6 +459,10 @@ void setDefaultBaseEngine() {
 	engine->engineModules.apply_all([](auto & m) { m.setDefaultConfiguration(); });
 
 	engineConfiguration->useMetricOnInterface = true;
+
+	// Engine State Machine enable bit (the sm* thresholds + shift detection now live in
+	// TS page 5; their defaults are set in customPageSetDefaults() in custom_page.cpp).
+	engineConfiguration->useEngineStateMachine = false;
 
   // we invoke this last so that we can validate even defaults
   defaultsOrFixOnBurn();

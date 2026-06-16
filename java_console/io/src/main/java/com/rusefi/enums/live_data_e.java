@@ -24,6 +24,7 @@ public enum live_data_e {
 	LDS_fan_control1,
 	LDS_fuel_pump_control,
 	LDS_main_relay,
+	LDS_exhaust_cutout,
 	LDS_engine_state,
 	LDS_tps_accel_state,
 	LDS_trigger_central,
@@ -49,5 +50,9 @@ public enum live_data_e {
 	LDS_long_term_fuel_trim_state,
 	LDS_short_term_fuel_trim_state,
 	LDS_vvl_controller_state,
+	LDS_cdv_controller_state,
 	LDS_live_data_rotational_idle,
+	LDS_engine_state_machine_state,
+	LDS_downshift_blipper_state,
+	LDS_dfco_state,
 }

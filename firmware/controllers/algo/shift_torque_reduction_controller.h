@@ -14,6 +14,12 @@ public:
 
 	float getTorqueReductionIgnitionRetard();
 
+	// True while a flat-shift torque cut is engaged. isFlatShiftConditionSatisfied is the
+	// single gate that enables both the spark skip (getSparkSkipRatio) and the ignition
+	// retard (getTorqueReductionIgnitionRetard), so it is exactly "currently cutting torque".
+	// Consumed by the Engine State Machine to raise its Torque Reduction overlay.
+	bool isCuttingTorque() const { return isFlatShiftConditionSatisfied; }
+
 private:
 	void updateTriggerPinState();
 	void updateTriggerPinState(switch_input_pin_e pin, pin_input_mode_e mode, const bool invertPhysicalPin, bool invalidPinState);

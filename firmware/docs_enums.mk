@@ -5,6 +5,7 @@ DOCS_ENUMS_INPUTS = \
   $(PROJECT_DIR)/integration/config_page_2.txt \
   $(PROJECT_DIR)/integration/config_page_3.txt \
   $(PROJECT_DIR)/integration/config_page_4.txt \
+  $(PROJECT_DIR)/integration/config_page_5.txt \
   $(PROJECT_DIR)/console/binary/output_channels.txt \
   $(PROJECT_DIR)/controllers/engine_cycle/knock_controller.txt \
   $(PROJECT_DIR)/controllers/engine_cycle/prime_injection.txt \
@@ -17,6 +18,7 @@ DOCS_ENUMS_INPUTS = \
   $(PROJECT_DIR)/controllers/engine_cycle/high_pressure_fuel_pump.txt \
   $(PROJECT_DIR)/controllers/actuators/idle_state.txt \
   $(PROJECT_DIR)/controllers/actuators/electronic_throttle.txt \
+  $(PROJECT_DIR)/controllers/actuators/exhaust_cutout.txt \
   $(PROJECT_DIR)/hw_layer/drivers/gpio/mc33810_state.txt \
   $(PROJECT_DIR)/integration/LiveData.yaml \
   $(PROJECT_DIR)/controllers/sensors/sensor_type.h \

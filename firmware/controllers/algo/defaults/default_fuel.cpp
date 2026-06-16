@@ -146,6 +146,10 @@ static void setDefaultFuelCutParameters() {
 	engineConfiguration->coastingFuelCutTps = 2;
 	engineConfiguration->coastingFuelCutMap = 30;
 	engineConfiguration->coastingFuelCutClt = 60;
+
+	// Pops & Bangs enable bit (the rest of the pops & bangs settings now live in TS page 5;
+	// their defaults are set in customPageSetDefaults() in custom_page.cpp).
+	engineConfiguration->popsAndBangsEnabled = false;
 }
 
 static void setDefaultStftSettings() {

@@ -58,9 +58,8 @@ else
   BRANCH_REF_FOR_BUNDLE=lts_unknown
 endif
 else
-  # todo: (as long as not Windows linux?) invoke bin/find_branch_name_or_snapshot.sh instead?
-  BRANCH_PART_OF_FOLDER=snapshot
-  BRANCH_REF_FOR_BUNDLE=development
+  BRANCH_PART_OF_FOLDER=$(shell bash bin/find_branch_name_or_snapshot.sh)
+  BRANCH_REF_FOR_BUNDLE=$(shell git rev-parse --abbrev-ref HEAD)
 endif
 
 # todo: replace all usages of $(FOLDER) with $(STAGING_FOLDER) just to make code search simpler
@@ -200,17 +199,18 @@ $(BOOTLOADER_HEX) $(BOOTLOADER_BIN): .bootloader-sentinel ;
 
 $(BUILDDIR)/$(PROJECT).map: $(BUILDDIR)/$(PROJECT).elf
 
-$(SREC_TARGET): $(BUILDDIR)/rusefi.srec
-	ln -rfs $< $@
+$(SREC_TARGET): $(BUILDDIR)/rusefi.srec | $(FOLDER)
+	rm -f $(FOLDER)/*.srec
+	cp $< $@
 
 $(FIRMWARE_OUTPUTS): $(FOLDER)/%: $(BUILDDIR)/% | $(FOLDER)
-	ln -rfs $< $@
+	cp $< $@
 
 $(BOOTLOADER_BIN_OUT): $(FOLDER)/openblt%: bootloader/blbuild/openblt_$(PROJECT_BOARD)% | $(FOLDER)
-	ln -rfs $< $@
+	cp $< $@
 
 $(FIRMWARE_BIN_OUT) $(FOLDER)/$(PROJECT).dfu: $(FOLDER)/%: $(DELIVER)/% | $(FOLDER)
-	ln -rfs $< $@
+	cp $< $@
 
 HEX_BASE_ADDRESS = $(shell $(OD) -h -j .vectors $(BUILDDIR)/$(PROJECT).elf | awk '/.vectors/ {print $$5 }')
 CHECKSUM_ADDRESS = 0x$(shell echo "ibase=16; obase=10; ${HEX_BASE_ADDRESS} + 1C" | bc)
@@ -221,7 +221,7 @@ $(BUILDDIR)/rusefi.srec: $(BUILDDIR)/$(PROJECT).hex
 	$(CP) -I binary -O srec --change-addresses=0x$(HEX_BASE_ADDRESS) $(DBIN_CRC) $@
 
 # The DFU is currently not included in the bundle, so these prerequisites are listed as order-only to avoid building it.
-# If you want it, you can build it with `make rusefi.snapshot.$BUNDLE_NAME/rusefi.dfu`
+# If you want it, you can build it with `make $(FOLDER)/rusefi.dfu`
 $(DFU) $(DBIN): .h2d-sentinel ;
 
 .h2d-sentinel: $(BUILDDIR)/$(PROJECT).hex $(BOOTLOADER_HEX_OUT) $(BINSRC) | $(DELIVER)
@@ -243,7 +243,7 @@ OBFUSCATED_OUT = \
 
 $(OBFUSCATED_OUT): .obfuscated-sentinel
 
-.obfuscated-sentinel: $(BUILDDIR)/$(PROJECT).bin
+.obfuscated-sentinel: $(BUILDDIR)/$(PROJECT).bin | $(FOLDER)
 	[ -z "$(POST_BUILD_SCRIPT)" ] || echo "Invoking POST_BUILD_SCRIPT $(POST_BUILD_SCRIPT)"
 	[ ! -z "$(POST_BUILD_SCRIPT)" ] || echo "Not Invoking POST_BUILD_SCRIPT"
 	[ -z "$(POST_BUILD_SCRIPT)" ] || bash $(POST_BUILD_SCRIPT) $(BUILDDIR)/$(PROJECT).bin $(OBFUSCATED_OUT)
@@ -260,18 +260,22 @@ $(BRANCH_REF_FILE):
 	echo "platform=$(BUNDLE_NAME)" >> $(BRANCH_REF_FILE) ; echo "release=$(BRANCH_REF_FOR_BUNDLE)" >> $(BRANCH_REF_FILE)
 
 $(ARTIFACTS)/$(WHITE_LABEL_BUNDLE_NAME).zip: $(BUNDLE_FILES) | $(ARTIFACTS)
+	rm -f $@
 	zip -r $@ $(BUNDLE_FILES)
 	[ -z "$(POST_ZIP_SCRIPT)" ] || bash $(POST_ZIP_SCRIPT)
 
 $(ARTIFACTS)/$(WHITE_LABEL_BUNDLE_NAME)_obfuscated_public.zip:  $(OBFUSCATED_OUT) $(BUNDLE_FILES) | $(ARTIFACTS)
+	rm -f $@
 	zip -r $@ $(FULL_BUNDLE_CONTENT) $(MOST_COMMON_BUNDLE_FILES) $(OBFUSCATED_SREC)
 	[ -z "$(POST_O_ZIP_SCRIPT)" ] || bash $(POST_O_ZIP_SCRIPT)
 
 # The autoupdate zip doesn't have a folder with the bundle contents
 $(ARTIFACTS)/$(WHITE_LABEL_BUNDLE_NAME)_autoupdate.zip: $(UPDATE_BUNDLE_FILES) | $(ARTIFACTS)
+	rm -f $@
 	cd $(FOLDER) &&	zip -r ../$@ $(subst $(FOLDER)/,,$(UPDATE_BUNDLE_FILES))
 
 $(ARTIFACTS)/$(WHITE_LABEL_BUNDLE_NAME)_obfuscated_public_autoupdate.zip:  $(OBFUSCATED_OUT) $(BUNDLE_FILES) | $(ARTIFACTS)
+	rm -f $@
 	cd $(FOLDER) &&	zip -r ../$@ $(subst $(FOLDER)/,,$(MOST_COMMON_BUNDLE_FILES)) $(subst $(FOLDER)/,,$(OBFUSCATED_SREC))
 
 .PHONY: bundle build_both_bundles autoupdate obfuscated bin hex dfu map elf list srec bootloader
@@ -305,7 +309,7 @@ PERCENT = %
 
 .SECONDEXPANSION:
 $(FOLDER_TARGETS) $(UPDATE_FOLDER_TARGETS) $(ROOT_FOLDER_TARGETS): $(FOLDER)/%: $$(filter $$(PERCENT)$$*,$(FOLDER_SOURCES) $(UPDATE_FOLDER_SOURCES) $(ROOT_FOLDER_SOURCES)) | $(FOLDER)
-	ln -rfs $< $@
+	cp -r $< $@
 
 $(CONSOLE_FOLDER_TARGETS) $(UPDATE_CONSOLE_FOLDER_TARGETS): $(CONSOLE_FOLDER)/%: $$(filter $$(PERCENT)$$*,$(CONSOLE_FOLDER_SOURCES) $(UPDATE_CONSOLE_FOLDER_SOURCES)) | $(CONSOLE_FOLDER)
-	ln -rfs $< $@
+	cp -r $< $@

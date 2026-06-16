@@ -39,6 +39,7 @@
 #include "speed_density.h"
 #include "local_version_holder.h"
 #include "alternator_controller.h"
+#include "fuel_pump.h"
 #include "can_bench_test.h"
 #include "engine_emulator.h"
 #include "fuel_math.h"
@@ -427,6 +428,10 @@ void commonInitEngineController() {
 	initAlternatorCtrl();
 #endif /* EFI_ALTERNATOR_CONTROL */
 
+#if EFI_ADVANCED_FUEL_PUMP
+	initFuelPumpPwm();
+#endif
+
 #if EFI_VVT_PID
 	initVvtActuators();
 #endif /* EFI_VVT_PID */
@@ -448,6 +453,7 @@ void commonInitEngineController() {
 	initScriptImpl();
 
 	initGpPwm();
+	initExhaustCutout();
 
 #if EFI_IDLE_CONTROL
 	startIdleThread();
@@ -477,7 +483,7 @@ void commonInitEngineController() {
 	initLaunchControl();
 #endif
 
-  initIgnitionAdvanceControl();
+  engine->tractionController.init();
 
 #if EFI_UNIT_TEST
 	engine->rpmCalculator.Register();
@@ -604,6 +610,7 @@ bool validateConfigOnStartUpOrBurn() {
 
 		ensureArrayIsAscendingOrDefault("TC slip", engineConfiguration->tractionControlSlipBins);
 		ensureArrayIsAscendingOrDefault("TC speed", engineConfiguration->tractionControlSpeedBins);
+		ensureArrayIsAscendingOrDefault("TC lua mult", engineConfiguration->tractionControlLuaMultBins);
 
 		ensureArrayIsAscending("TPS/TPS AE from", config->tpsTpsAccelFromRpmBins);
 		ensureArrayIsAscending("TPS/TPS AE to", config->tpsTpsAccelToRpmBins);

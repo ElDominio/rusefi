@@ -1,0 +1,220 @@
+meta: config/boards/hellen_meta.h
+
+pins:
+  - meta: H144_IGN_1
+    class: outputs
+    ts_name: Ignition Coil 1
+
+  - meta: H144_IGN_2
+    class: outputs
+    ts_name: Ignition Coil 2
+
+  - meta: H144_IGN_3
+    class: outputs
+    ts_name: Ignition Coil 3
+
+  - meta: H144_IGN_4
+    class: outputs
+    ts_name: Ignition Coil 4
+
+  - meta: H144_IGN_5
+    class: outputs
+    ts_name: Ignition Coil 5
+
+  - meta: H144_IGN_6
+    class: outputs
+    ts_name: Ignition Coil 6
+
+  - meta: H144_IGN_7
+    class: outputs
+    ts_name: Ignition Coil 7
+
+  - meta: H144_IGN_8
+    class: outputs
+    ts_name: Ignition Coil 8
+
+  - id: D3
+    class: outputs
+    ts_name: Injector 1
+
+  - id: A9
+    class: outputs
+    ts_name: Injector 2
+
+  - id: D11
+    class: outputs
+    ts_name: Injector 3
+
+  - id: D10
+    class: outputs
+    ts_name: Injector 4
+
+  - id: D2
+    class: outputs
+    ts_name: Injector 5
+
+  - id: A8
+    class: outputs
+    ts_name: Injector 6
+
+  - id: D15
+    class: outputs
+    ts_name: Injector 7
+
+  - id: D12
+    class: outputs
+    ts_name: Injector 8
+
+  - meta: H144_IN_D_1
+    class: event_inputs
+    ts_name: Crank Trigger
+
+  - meta: H144_IN_D_2
+    class: event_inputs
+    ts_name: Cam Position
+
+  - meta: H144_IN_D_3
+    class: event_inputs
+    ts_name: Digital Input 3
+
+  - meta: H144_IN_D_4
+    class: event_inputs
+    ts_name: Digital Input 4
+
+  - meta: H144_UART8_RX
+    class: event_inputs
+    ts_name: EVAP Sensor/Input
+
+  - meta: H144_UART8_TX
+    class: event_inputs
+    ts_name: Aux Solenoid/Input
+
+  - id: D7
+    class: outputs
+    ts_name: EGR Solenoid
+
+  - id: E8
+    class: outputs
+    ts_name: TCI Control
+
+  - id: A10
+    class: outputs
+    ts_name: IMRC Control
+
+  - id: B14
+    class: outputs
+    ts_name: Fuel Pump Relay
+
+  - id: B15
+    class: outputs
+    ts_name: Line Pressure Solenoid
+
+  - id: A15
+    class: outputs
+    ts_name: O2 Sensor Heater
+
+  - id: C11
+    class: outputs
+    ts_name: Torque Lockup Driver
+
+  - id: C12
+    class: outputs
+    ts_name: TLS115 Power Good (TLS115_PG)
+
+  - id: C10
+    class: outputs
+    ts_name: Purge Solenoid
+
+  - meta: H144_OUT_PWM1
+    class: outputs
+    ts_name: Idle Control
+
+  - meta: H144_OUT_PWM2
+    class: outputs
+    ts_name: A/C Clutch
+
+  - meta: H144_OUT_PWM3
+    class: outputs
+    ts_name: Tachometer Output
+
+  - meta: H144_OUT_PWM4
+    class: outputs
+    ts_name: Check Engine Light
+
+  - meta: H144_OUT_PWM5
+    class: outputs
+    ts_name: Solenoid A
+
+  - meta: H144_OUT_PWM6
+    class: outputs
+    ts_name: Solenoid B
+
+  - meta: H144_IN_MAP1
+    class: analog_inputs
+    ts_name: MAP Sensor
+
+  - meta: H144_IN_MAP2
+    class: analog_inputs
+    ts_name: Baro Sensor
+
+  - meta: H144_IN_CLT
+    class: analog_inputs
+    ts_name: Coolant Temperature
+
+  - meta: H144_IN_O2S2
+    class: analog_inputs
+    ts_name: Oxygen Sensor 2
+
+  - meta: H144_IN_O2S
+    class: analog_inputs
+    ts_name: Oxygen Sensor 1
+
+  - meta: H144_IN_IAT
+    class: analog_inputs
+    ts_name: Intake Air Temp
+
+  - meta: H144_IN_MAP3
+    class: analog_inputs
+    ts_name: Knock Sensor
+
+  - meta: H144_IN_TPS
+    class: analog_inputs
+    ts_name: Throttle Position Sensor
+
+  - meta: H144_IN_PPS
+    class: analog_inputs
+    ts_name: Pedal Position Sensor
+
+  - meta: H144_IN_CAM_ANALOG
+    class: analog_inputs
+    ts_name: Cam Sensor
+
+  - meta: H144_IN_AUX3_ANALOG
+    class: analog_inputs
+    ts_name: Aux Input 3
+
+  - meta: H144_IN_AUX2_ANALOG
+    class: analog_inputs
+    ts_name: Fuel Tank Pressure Sensor
+
+  - meta: H144_IN_AUX4_ANALOG
+    class: analog_inputs
+    ts_name: EGR Sensor
+
+  - meta: H144_IN_AUX1_ANALOG
+    class: analog_inputs
+    ts_name: Cylinder Head Temperature
+
+  - meta: H144_IN_CRANK_ANALOG
+    class: analog_inputs
+    ts_name: Crank Sensor
+
+  - meta: H144_IN_VBATT
+    class: analog_inputs
+    ts_name: Battery Voltage
+
+info:
+  cid: main
+  title: protorico-econoline
+  name: Protorico-Econoline Pinout
+  directory: hellen/protorico-econoline

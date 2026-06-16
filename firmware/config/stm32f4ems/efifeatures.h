@@ -554,3 +554,66 @@
 #ifndef EFI_SENT_SUPPORT
 #define EFI_SENT_SUPPORT        FALSE
 #endif
+
+#ifndef EFI_ADVANCED_FUEL_PUMP
+#define EFI_ADVANCED_FUEL_PUMP FALSE
+#endif
+
+#ifndef EFI_VVT_COMPENSATION
+#define EFI_VVT_COMPENSATION FALSE
+#endif
+
+// AlphaX custom subsystems (config lives in TS page 5). Default FALSE on F4 (limited flash);
+// F7/H7 override these to TRUE. A board may set -DEFI_<FEATURE>=TRUE in its board.mk to opt in.
+#ifndef EFI_EXHAUST_CUTOUT
+#define EFI_EXHAUST_CUTOUT FALSE
+#endif
+
+#ifndef EFI_DOWNSHIFT_BLIPPER
+#define EFI_DOWNSHIFT_BLIPPER FALSE
+#endif
+
+#ifndef EFI_ENGINE_STATE_MACHINE
+#define EFI_ENGINE_STATE_MACHINE FALSE
+#endif
+
+// Misfire Detection (Engine State Machine sub-feature, reads SM idle state)
+#ifndef EFI_MISFIRE_DETECTION
+#define EFI_MISFIRE_DETECTION FALSE
+#endif
+
+#ifndef EFI_CLUTCH_DELAY_VALVE
+#define EFI_CLUTCH_DELAY_VALVE FALSE
+#endif
+
+#ifndef EFI_LAUNCH_POWER_RAMP
+#define EFI_LAUNCH_POWER_RAMP FALSE
+#endif
+
+// Burst Knock (transient ignition timing pull on a TPS-rate stab)
+#ifndef EFI_BURST_KNOCK
+#define EFI_BURST_KNOCK FALSE
+#endif
+
+// WOT Time Enrichment (richen target AFR after prolonged WOT; needs Engine State Machine at runtime)
+#ifndef EFI_WOT_ENRICHMENT
+#define EFI_WOT_ENRICHMENT FALSE
+#endif
+
+// Sport Pedal (ETB pedal-to-throttle ratio shaping; needs EFI_ELECTRONIC_THROTTLE_BODY)
+#ifndef EFI_SPORT_PEDAL
+#define EFI_SPORT_PEDAL FALSE
+#endif
+
+// AC Pressure Fan Control (pressure-based fan on/off hysteresis when AC high-side pressure sensor is installed)
+#ifndef EFI_AC_PRESSURE_FAN
+#define EFI_AC_PRESSURE_FAN FALSE
+#endif
+
+#ifndef EFI_OFF_IDLE_RPM_ADDER
+#define EFI_OFF_IDLE_RPM_ADDER FALSE
+#endif
+
+#ifndef EFI_LUA_LIMITER
+#define EFI_LUA_LIMITER FALSE
+#endif

@@ -45,175 +45,284 @@ struct ignition_state_s {
 	 */
 	scaled_channel<int16_t, 100, 1> timingPidCorrection = (int16_t)0;
 	/**
-	 * DFCO: Timing retard
+	 * Ign: VVT Intake correction
 	 * units: deg
 	 * offset 18
 	 */
+	scaled_channel<int16_t, 100, 1> vvtIntakeTimingCorrection = (int16_t)0;
+	/**
+	 * Ign: VVT Exhaust correction
+	 * units: deg
+	 * offset 20
+	 */
+	scaled_channel<int16_t, 100, 1> vvtExhaustTimingCorrection = (int16_t)0;
+	/**
+	 * DFCO: Timing retard
+	 * units: deg
+	 * offset 22
+	 */
 	scaled_channel<int16_t, 100, 1> dfcoTimingRetard = (int16_t)0;
+	/**
+	 * P&B: timing override active
+	offset 24 bit 0 */
+	bool popsAndBangsTimingActive : 1 {};
+	/**
+	offset 24 bit 1 */
+	bool unusedBit_10_1 : 1 {};
+	/**
+	offset 24 bit 2 */
+	bool unusedBit_10_2 : 1 {};
+	/**
+	offset 24 bit 3 */
+	bool unusedBit_10_3 : 1 {};
+	/**
+	offset 24 bit 4 */
+	bool unusedBit_10_4 : 1 {};
+	/**
+	offset 24 bit 5 */
+	bool unusedBit_10_5 : 1 {};
+	/**
+	offset 24 bit 6 */
+	bool unusedBit_10_6 : 1 {};
+	/**
+	offset 24 bit 7 */
+	bool unusedBit_10_7 : 1 {};
+	/**
+	offset 24 bit 8 */
+	bool unusedBit_10_8 : 1 {};
+	/**
+	offset 24 bit 9 */
+	bool unusedBit_10_9 : 1 {};
+	/**
+	offset 24 bit 10 */
+	bool unusedBit_10_10 : 1 {};
+	/**
+	offset 24 bit 11 */
+	bool unusedBit_10_11 : 1 {};
+	/**
+	offset 24 bit 12 */
+	bool unusedBit_10_12 : 1 {};
+	/**
+	offset 24 bit 13 */
+	bool unusedBit_10_13 : 1 {};
+	/**
+	offset 24 bit 14 */
+	bool unusedBit_10_14 : 1 {};
+	/**
+	offset 24 bit 15 */
+	bool unusedBit_10_15 : 1 {};
+	/**
+	offset 24 bit 16 */
+	bool unusedBit_10_16 : 1 {};
+	/**
+	offset 24 bit 17 */
+	bool unusedBit_10_17 : 1 {};
+	/**
+	offset 24 bit 18 */
+	bool unusedBit_10_18 : 1 {};
+	/**
+	offset 24 bit 19 */
+	bool unusedBit_10_19 : 1 {};
+	/**
+	offset 24 bit 20 */
+	bool unusedBit_10_20 : 1 {};
+	/**
+	offset 24 bit 21 */
+	bool unusedBit_10_21 : 1 {};
+	/**
+	offset 24 bit 22 */
+	bool unusedBit_10_22 : 1 {};
+	/**
+	offset 24 bit 23 */
+	bool unusedBit_10_23 : 1 {};
+	/**
+	offset 24 bit 24 */
+	bool unusedBit_10_24 : 1 {};
+	/**
+	offset 24 bit 25 */
+	bool unusedBit_10_25 : 1 {};
+	/**
+	offset 24 bit 26 */
+	bool unusedBit_10_26 : 1 {};
+	/**
+	offset 24 bit 27 */
+	bool unusedBit_10_27 : 1 {};
+	/**
+	offset 24 bit 28 */
+	bool unusedBit_10_28 : 1 {};
+	/**
+	offset 24 bit 29 */
+	bool unusedBit_10_29 : 1 {};
+	/**
+	offset 24 bit 30 */
+	bool unusedBit_10_30 : 1 {};
+	/**
+	offset 24 bit 31 */
+	bool unusedBit_10_31 : 1 {};
 	/**
 	 * @@GAUGE_NAME_TIMING_ADVANCE@@
 	 * units: deg
-	 * offset 20
+	 * offset 28
 	 */
 	scaled_channel<int16_t, 50, 1> baseIgnitionAdvance = (int16_t)0;
 	/**
 	 * @@GAUGE_NAME_ADJUSTED_TIMING@@
 	 * units: deg
-	 * offset 22
+	 * offset 30
 	 */
 	scaled_channel<int16_t, 50, 1> correctedIgnitionAdvance = (int16_t)0;
 	/**
 	 * Traction: timing correction
 	 * units: deg
-	 * offset 24
+	 * offset 32
 	 */
 	scaled_channel<int16_t, 50, 1> tractionAdvanceDrop = (int16_t)0;
 	/**
 	 * need 4 byte alignment
 	 * units: units
-	 * offset 26
+	 * offset 34
 	 */
-	uint8_t alignmentFill_at_26[2] = {};
+	uint8_t alignmentFill_at_34[2] = {};
 	/**
 	 * Ign: Dwell voltage correction
-	 * offset 28
+	 * offset 36
 	 */
 	float dwellVoltageCorrection = (float)0;
 	/**
 	 * Ign: Lua timing add
 	 * units: deg
-	 * offset 32
+	 * offset 40
 	 */
 	float luaTimingAdd = (float)0;
 	/**
 	 * Ign: Lua timing mult
 	 * units: deg
-	 * offset 36
+	 * offset 44
 	 */
 	float luaTimingMult = (float)0;
 	/**
 	 * Ign: Lua Spark Skip
-	offset 40 bit 0 */
+	offset 48 bit 0 */
 	bool luaIgnitionSkip : 1 {};
 	/**
-	offset 40 bit 1 */
-	bool unusedBit_15_1 : 1 {};
+	offset 48 bit 1 */
+	bool unusedBit_49_1 : 1 {};
 	/**
-	offset 40 bit 2 */
-	bool unusedBit_15_2 : 1 {};
+	offset 48 bit 2 */
+	bool unusedBit_49_2 : 1 {};
 	/**
-	offset 40 bit 3 */
-	bool unusedBit_15_3 : 1 {};
+	offset 48 bit 3 */
+	bool unusedBit_49_3 : 1 {};
 	/**
-	offset 40 bit 4 */
-	bool unusedBit_15_4 : 1 {};
+	offset 48 bit 4 */
+	bool unusedBit_49_4 : 1 {};
 	/**
-	offset 40 bit 5 */
-	bool unusedBit_15_5 : 1 {};
+	offset 48 bit 5 */
+	bool unusedBit_49_5 : 1 {};
 	/**
-	offset 40 bit 6 */
-	bool unusedBit_15_6 : 1 {};
+	offset 48 bit 6 */
+	bool unusedBit_49_6 : 1 {};
 	/**
-	offset 40 bit 7 */
-	bool unusedBit_15_7 : 1 {};
+	offset 48 bit 7 */
+	bool unusedBit_49_7 : 1 {};
 	/**
-	offset 40 bit 8 */
-	bool unusedBit_15_8 : 1 {};
+	offset 48 bit 8 */
+	bool unusedBit_49_8 : 1 {};
 	/**
-	offset 40 bit 9 */
-	bool unusedBit_15_9 : 1 {};
+	offset 48 bit 9 */
+	bool unusedBit_49_9 : 1 {};
 	/**
-	offset 40 bit 10 */
-	bool unusedBit_15_10 : 1 {};
+	offset 48 bit 10 */
+	bool unusedBit_49_10 : 1 {};
 	/**
-	offset 40 bit 11 */
-	bool unusedBit_15_11 : 1 {};
+	offset 48 bit 11 */
+	bool unusedBit_49_11 : 1 {};
 	/**
-	offset 40 bit 12 */
-	bool unusedBit_15_12 : 1 {};
+	offset 48 bit 12 */
+	bool unusedBit_49_12 : 1 {};
 	/**
-	offset 40 bit 13 */
-	bool unusedBit_15_13 : 1 {};
+	offset 48 bit 13 */
+	bool unusedBit_49_13 : 1 {};
 	/**
-	offset 40 bit 14 */
-	bool unusedBit_15_14 : 1 {};
+	offset 48 bit 14 */
+	bool unusedBit_49_14 : 1 {};
 	/**
-	offset 40 bit 15 */
-	bool unusedBit_15_15 : 1 {};
+	offset 48 bit 15 */
+	bool unusedBit_49_15 : 1 {};
 	/**
-	offset 40 bit 16 */
-	bool unusedBit_15_16 : 1 {};
+	offset 48 bit 16 */
+	bool unusedBit_49_16 : 1 {};
 	/**
-	offset 40 bit 17 */
-	bool unusedBit_15_17 : 1 {};
+	offset 48 bit 17 */
+	bool unusedBit_49_17 : 1 {};
 	/**
-	offset 40 bit 18 */
-	bool unusedBit_15_18 : 1 {};
+	offset 48 bit 18 */
+	bool unusedBit_49_18 : 1 {};
 	/**
-	offset 40 bit 19 */
-	bool unusedBit_15_19 : 1 {};
+	offset 48 bit 19 */
+	bool unusedBit_49_19 : 1 {};
 	/**
-	offset 40 bit 20 */
-	bool unusedBit_15_20 : 1 {};
+	offset 48 bit 20 */
+	bool unusedBit_49_20 : 1 {};
 	/**
-	offset 40 bit 21 */
-	bool unusedBit_15_21 : 1 {};
+	offset 48 bit 21 */
+	bool unusedBit_49_21 : 1 {};
 	/**
-	offset 40 bit 22 */
-	bool unusedBit_15_22 : 1 {};
+	offset 48 bit 22 */
+	bool unusedBit_49_22 : 1 {};
 	/**
-	offset 40 bit 23 */
-	bool unusedBit_15_23 : 1 {};
+	offset 48 bit 23 */
+	bool unusedBit_49_23 : 1 {};
 	/**
-	offset 40 bit 24 */
-	bool unusedBit_15_24 : 1 {};
+	offset 48 bit 24 */
+	bool unusedBit_49_24 : 1 {};
 	/**
-	offset 40 bit 25 */
-	bool unusedBit_15_25 : 1 {};
+	offset 48 bit 25 */
+	bool unusedBit_49_25 : 1 {};
 	/**
-	offset 40 bit 26 */
-	bool unusedBit_15_26 : 1 {};
+	offset 48 bit 26 */
+	bool unusedBit_49_26 : 1 {};
 	/**
-	offset 40 bit 27 */
-	bool unusedBit_15_27 : 1 {};
+	offset 48 bit 27 */
+	bool unusedBit_49_27 : 1 {};
 	/**
-	offset 40 bit 28 */
-	bool unusedBit_15_28 : 1 {};
+	offset 48 bit 28 */
+	bool unusedBit_49_28 : 1 {};
 	/**
-	offset 40 bit 29 */
-	bool unusedBit_15_29 : 1 {};
+	offset 48 bit 29 */
+	bool unusedBit_49_29 : 1 {};
 	/**
-	offset 40 bit 30 */
-	bool unusedBit_15_30 : 1 {};
+	offset 48 bit 30 */
+	bool unusedBit_49_30 : 1 {};
 	/**
-	offset 40 bit 31 */
-	bool unusedBit_15_31 : 1 {};
+	offset 48 bit 31 */
+	bool unusedBit_49_31 : 1 {};
 	/**
 	 * Ign: Trailing spark deg
 	 * units: deg
-	 * offset 44
+	 * offset 52
 	 */
 	scaled_channel<int16_t, 100, 1> trailingSparkAngle = (int16_t)0;
 	/**
-	 * offset 46
+	 * offset 54
 	 */
 	int16_t rpmForIgnitionTableDot = (int16_t)0;
 	/**
-	 * offset 48
+	 * offset 56
 	 */
 	int16_t rpmForIgnitionIdleTableDot = (int16_t)0;
 	/**
 	 * need 4 byte alignment
 	 * units: units
-	 * offset 50
+	 * offset 58
 	 */
-	uint8_t alignmentFill_at_50[2] = {};
+	uint8_t alignmentFill_at_58[2] = {};
 	/**
-	 * offset 52
+	 * offset 60
 	 */
 	float loadForIgnitionTableDot = (float)0;
 };
-static_assert(sizeof(ignition_state_s) == 56);
+static_assert(sizeof(ignition_state_s) == 64);
 
 // end
 // this section was generated automatically by rusEFI tool config_definition_base-all.jar based on (unknown script) controllers/algo/ignition/ignition_state.txt

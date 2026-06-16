@@ -23,6 +23,7 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
 
 #if ! EFI_UNIT_TEST
 #include "dc_motors.h"
@@ -66,6 +67,10 @@ void startSwitchPins() {
 	startInputPinIfValid("Ignition Switch", engineConfiguration->ignitionKeyDigitalPin, engineConfiguration->ignitionKeyDigitalPinMode);
 	startInputPinIfValid("Torque Reduction Button", engineConfiguration->torqueReductionTriggerPin, engineConfiguration->torqueReductionTriggerPinMode);
 	startInputPinIfValid("Nitrous Button", engineConfiguration->nitrousControlTriggerPin, engineConfiguration->nitrousControlTriggerPinMode);
+	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
+		startInputPinIfValid("Idle Up Switch", engineConfiguration->idleUpSwitchPins[i], engineConfiguration->idleUpSwitchMode[i]);
+	}
+	startInputPinIfValid("Pops and Bangs Disable", getCustomPage()->popsAndBangsDisablePin, getCustomPage()->popsAndBangsDisablePinMode);
 #endif /* EFI_PROD_CODE */
 }
 
@@ -78,6 +83,11 @@ void stopSwitchPins() {
 	brain_pin_markUnused(activeConfiguration.ignitionKeyDigitalPin);
 	brain_pin_markUnused(activeConfiguration.torqueReductionTriggerPin);
 	brain_pin_markUnused(activeConfiguration.nitrousControlTriggerPin);
+	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
+		brain_pin_markUnused(activeConfiguration.idleUpSwitchPins[i]);
+	}
+	// popsAndBangsDisablePin now lives in TS page 5, which the page-1 activeConfiguration
+	// snapshot does not track. It is (re)marked each config change via startInputPinIfValid above.
 }
 
 #if ! EFI_UNIT_TEST
@@ -126,7 +136,6 @@ void setDefaultIdleParameters() {
 	engineConfiguration->idlePidRpmUpperLimit = 300;
 
 	engineConfiguration->idlePidRpmDeadZone = 50;
-	engineConfiguration->idleReturnTargetRampDuration = 3;
 }
 
 void startIdleThread() {

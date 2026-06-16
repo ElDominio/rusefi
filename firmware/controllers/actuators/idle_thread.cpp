@@ -11,6 +11,8 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
+#include "engine_state_machine.h"
 
 #if EFI_IDLE_CONTROL
 #include "idle_thread.h"
@@ -51,17 +53,6 @@ IIdleController::TargetInfo IdleController::getTargetRpm(float clt) {
 
   // Higher exit than entry to add some hysteresis to avoid bouncing around upper threshold
  	float exitRpm = target + 1.5 * rpmUpperLimit;
-
- 	// Ramp the target down from the transition RPM to normal over a few seconds
-  if (engineConfiguration->idleReturnTargetRamp) {
- 		// Ramp the target down from the transition RPM to normal over a few seconds
- 		float timeSinceIdleEntry = m_timeInIdlePhase.getElapsedSeconds();
- 		target += interpolateClamped(
- 			0, rpmUpperLimit,
- 			engineConfiguration->idleReturnTargetRampDuration, 0,
- 			timeSinceIdleEntry
- 		);
- 	}
 
  	idleTarget = target;
 	idleEntryRpm = entryRpm;
@@ -144,6 +135,66 @@ float IdleController::getCrankingTaperFraction(float clt) const {
 	return (float)engine->rpmCalculator.getRevolutionCounterSinceStart() / taperDuration;
 }
 
+float IdleController::getOffIdleAdder(Phase phase, float rpm) {
+#if EFI_OFF_IDLE_RPM_ADDER
+	float dRpmPerSec = std::abs(rpm - m_lastRpmForStability) / (FAST_CALLBACK_PERIOD_MS / 1000.0f);
+	m_lastRpmForStability = rpm;
+
+	if (getCustomPage()->offIdleRpmAdder <= 0) {
+		m_offIdlePhase = OffIdleAdderPhase::Inactive;
+		return m_offIdleAdderRpm = 0;
+	}
+
+	const float maxAdder  = getCustomPage()->offIdleRpmAdder;
+	const float stability = getCustomPage()->offIdleRpmStabilityThreshold;
+	const float waitTime  = getCustomPage()->offIdleWaitTime;
+	const float decayTime = getCustomPage()->offIdleRpmAdderDecayTime;
+
+	bool isOffIdle = (phase == Phase::Running || phase == Phase::Coasting);
+
+	if (isOffIdle) {
+		m_offIdlePhase = OffIdleAdderPhase::Armed;
+		return m_offIdleAdderRpm = maxAdder;
+	}
+
+	switch (m_offIdlePhase) {
+		case OffIdleAdderPhase::Inactive:
+			return m_offIdleAdderRpm = 0;
+
+		case OffIdleAdderPhase::Armed:
+			m_offIdlePhase = OffIdleAdderPhase::Stabilizing;
+			return m_offIdleAdderRpm = maxAdder;
+
+		case OffIdleAdderPhase::Stabilizing:
+			if (dRpmPerSec < stability) {
+				m_offIdlePhase = OffIdleAdderPhase::Waiting;
+				m_offIdleWaitTimer.reset();
+			}
+			return m_offIdleAdderRpm = maxAdder;
+
+		case OffIdleAdderPhase::Waiting:
+			if (m_offIdleWaitTimer.hasElapsedSec(waitTime)) {
+				m_offIdlePhase = OffIdleAdderPhase::Decaying;
+				m_offIdleDecayTimer.reset();
+			}
+			return m_offIdleAdderRpm = maxAdder;
+
+		case OffIdleAdderPhase::Decaying: {
+			float elapsed = m_offIdleDecayTimer.getElapsedSeconds();
+			if (decayTime <= 0 || elapsed >= decayTime) {
+				m_offIdlePhase = OffIdleAdderPhase::Inactive;
+				return m_offIdleAdderRpm = 0;
+			}
+			return m_offIdleAdderRpm = interpolateClamped(0, maxAdder, decayTime, 0.0f, elapsed);
+		}
+	}
+	return m_offIdleAdderRpm = 0;
+#else // !EFI_OFF_IDLE_RPM_ADDER
+	(void)phase; (void)rpm;
+	return m_offIdleAdderRpm = 0;
+#endif // EFI_OFF_IDLE_RPM_ADDER
+}
+
 /**
  * Open-loop IAC position while cranking - purely a function of coolant temperature.
  */
@@ -176,6 +227,14 @@ percent_t IdleController::getRunningOpenLoop(IIdleController::Phase phase, float
 
 	running += enginePins.fanRelay.getLogicValue() ? engineConfiguration->fan1ExtraIdle : 0;
 	running += enginePins.fanRelay2.getLogicValue() ? engineConfiguration->fan2ExtraIdle : 0;
+
+	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
+		if (isBrainPinValid(engineConfiguration->idleUpSwitchPins[i])) {
+			if (efiReadPin(engineConfiguration->idleUpSwitchPins[i], engineConfiguration->idleUpSwitchMode[i])) {
+				running += engineConfiguration->idleUpAdder[i];
+			}
+		}
+	}
 
 	running += luaAdd;
 
@@ -210,6 +269,7 @@ if (engine->antilagController.isAntilagCondition) {
 
 	running += iacByTpsTaper;
 
+
 	float airTaperRpmUpperLimit = engineConfiguration->idlePidRpmUpperLimit;
 	iacByRpmTaper = interpolateClamped(
 		engineConfiguration->idlePidRpmUpperLimit, 0,
@@ -229,14 +289,11 @@ if (engine->antilagController.isAntilagCondition) {
  *   - running open-loop, blended from cranking via the taper fraction
  */
 percent_t IdleController::getOpenLoop(Phase phase, float rpm, float clt, SensorResult tps, float crankingTaperFraction) {
-	percent_t crankingValvePosition = getCrankingOpenLoop(clt);
-
 	isCranking = phase == Phase::Cranking;
 	isIdleCoasting = phase == Phase::Coasting || (phase == Phase::Running && engineConfiguration->modeledFlowIdle);
 
-	// if we're cranking, nothing more to do.
-	if (isCranking) {
-		return crankingValvePosition;
+	if (isCranking && engineConfiguration->crankingAirAmountEnabled) {
+		return getCrankingOpenLoop(clt);
 	}
 
 	// If coasting (and enabled), use the coasting position table instead of normal open loop
@@ -256,9 +313,14 @@ percent_t IdleController::getOpenLoop(Phase phase, float rpm, float clt, SensorR
 
 	percent_t running = getRunningOpenLoop(phase, rpm, clt, tps);
 
-	// Interpolate between cranking and running over a short time
-	// This clamps once you fall off the end, so no explicit check for >1 required
-	return interpolateClamped(0, crankingValvePosition, 1, running, crankingTaperFraction);
+	// No air amount table: taper is handled via m_lastTargetRpm driving the 3D table; just return running.
+	if (!engineConfiguration->crankingAirAmountEnabled) {
+		return running;
+	}
+
+	// Air amount table enabled: interpolate between cranking duty and running over the crank taper.
+	// This clamps once you fall off the end, so no explicit check for >1 required.
+	return interpolateClamped(0, getCrankingOpenLoop(clt), 1, running, crankingTaperFraction);
 }
 
 float IdleController::getIdleTimingAdjustment(float rpm) {
@@ -430,7 +492,6 @@ float IdleController::getIdlePosition(float rpm) {
 
 		// Compute the target we're shooting for
 		auto targetRpm = getTargetRpm(clt);
-		m_lastTargetRpm = targetRpm.ClosedLoopTarget;
 
 		// Determine cranking taper (modeled flow does no taper of open loop)
 		float crankingTaper = useModeledFlow ? 1 : getCrankingTaperFraction(clt);
@@ -448,6 +509,32 @@ float IdleController::getIdlePosition(float rpm) {
  	  }
 
 		m_lastPhase = phase;
+
+		// CLT-based RPM adder during cranking, tapered to zero as crankingTaper → 1.
+		// Use targetRpm.ClosedLoopTarget (fresh from getTargetRpm() this call) as the base so
+		// the adder is not accumulated across iterations via m_lastTargetRpm.
+		if (engineConfiguration->crankingIdleRpmFlareEnabled &&
+		    (phase == Phase::Cranking || phase == Phase::CrankToIdleTaper)) {
+			float rpmAdder = interpolate2d(clt, config->cltCrankingCorrBins, config->cltCrankingRpmAdder);
+			float baseIdle = targetRpm.ClosedLoopTarget;
+			float crankingRpmTarget = baseIdle + rpmAdder;
+			m_lastTargetRpm = interpolateClamped(0, crankingRpmTarget, 1, baseIdle, crankingTaper);
+			targetRpm.ClosedLoopTarget = m_lastTargetRpm;
+		}
+
+		// Apply off-idle RPM adder to the closed-loop target
+		float offIdleAdder = getOffIdleAdder(phase, rpm);
+		targetRpm.ClosedLoopTarget += offIdleAdder;
+		m_lastTargetRpm = targetRpm.ClosedLoopTarget;
+		// Only update the displayed idleTarget when the engine is running. During key-off
+		// (Phase::Cranking) the flare block may have set targetRpm.ClosedLoopTarget to a
+		// garbage value from an uninitialised cltCrankingRpmAdder table, so we leave
+		// idleTarget at the base value written by getTargetRpm() instead.
+		if (phase != Phase::Cranking) {
+			idleTarget = static_cast<uint16_t>(targetRpm.ClosedLoopTarget);
+		}
+		offIdleAdderCurrentRpm = static_cast<int16_t>(offIdleAdder);
+		offIdleAdderStateIndex = static_cast<uint8_t>(m_offIdlePhase);
 
 		finishIdleTestIfNeeded();
 
@@ -468,6 +555,15 @@ float IdleController::getIdlePosition(float rpm) {
 				iacPosition += closedLoop;
 			} else {
 			  isIdleClosedLoop = false;
+			}
+
+			if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+				iacPosition += getCustomPage()->popsAndBangsAirAdd;
+			}
+
+			// Quick Warmup: feed-forward IAC offset to compensate for torque lost to timing retard + rich target.
+			if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+				iacPosition += getCustomPage()->quickWarmupEtbOffset;
 			}
 
 			iacPosition = clampPercentValue(iacPosition);

@@ -10,6 +10,8 @@
 #include "local_version_holder.h"
 #include "vvt.h"
 #include "bench_test.h"
+#include "custom_page.h"
+#include "engine_state_machine.h"
 
 using vvt_map_t = Map3D<VVT_TABLE_RPM_SIZE, VVT_TABLE_SIZE, int8_t, uint16_t, uint16_t>;
 
@@ -75,6 +77,13 @@ expected<angle_t> VvtController::getSetpoint() {
 
 	float load = getFuelingLoad();
 	float target = m_targetMap->getValue(rpm, load);
+
+	// Eco Mode: retarget the cams for economy while the overlay is active (intake = cam 0,
+	// exhaust = cam 1). Opt-in so non-VVT and untuned setups are unaffected.
+	if (getCustomPage()->ecoModeVvtOverride
+			&& engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
+		target = (m_cam == 0) ? getCustomPage()->ecoVvtIntakeTarget : getCustomPage()->ecoVvtExhaustTarget;
+	}
 
 #if EFI_TUNER_STUDIO
 	engine->outputChannels.vvtTargets[index] = target;

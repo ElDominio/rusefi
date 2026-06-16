@@ -145,6 +145,12 @@ This uses separate ignition timing and VE tables not only for idle conditions, a
 ### useRunningMathForCranking
 For cranking either use the specified fixed base fuel mass, or use the normal running math (VE table).
 
+### crankingAirAmountEnabled
+Enable CLT-based cranking air amount table. During cranking, open-loop valve position is taken from this table instead of the running idle tables.
+
+### crankingIdleRpmFlareEnabled
+Enable CLT-based cranking idle RPM flare. An RPM adder from the table is applied during cranking, tapering to zero as the engine transitions to idle.
+
 ### displayLogicLevelsInEngineSniffer
 Shall we display real life signal or just the part consumed by trigger decoder.\nApplies to both trigger and cam/vvt input.
 
@@ -457,6 +463,27 @@ Set this so your vehicle speed signal is responsive, but not noisy. Larger value
 ### vssToothCount
 Number of pulses output per revolution of the shaft where your VSS is mounted. For example, GM applications of the T56 output 17 pulses per revolution of the transmission output shaft.
 
+### fuelPumpControl.pFactor
+
+
+### fuelPumpControl.iFactor
+
+
+### fuelPumpControl.dFactor
+
+
+### fuelPumpControl.offset
+Linear addition to PID logic\nAlso known as feedforward.
+
+### fuelPumpControl.periodMs
+PID dTime
+
+### fuelPumpControl.minValue
+Output Min Duty Cycle
+
+### fuelPumpControl.maxValue
+Output Max Duty Cycle
+
 ### gapVvtTrackingLengthOverride
 How many consecutive VVT gap rations have to match expected ranges for sync to happen
 
@@ -624,9 +651,6 @@ Maximum time to crank starter when start/stop button is pressed
 
 ### lambdaProtectionTimeout
 Only respond once lambda is out of range for this period of time. Use to avoid transients triggering lambda protection when not needed
-
-### idleReturnTargetRamp
-Ramp the idle target down from the entry threshold over N seconds when returning to idle. Helps prevent overshooting (below) the idle target while returning to idle from coasting.
 
 ### useInjectorFlowLinearizationTable
 
@@ -858,6 +882,9 @@ Treat milliseconds value as duty cycle value, i.e. 0.5ms would become 50%
 
 ### isAlternatorControlEnabled
 This enables smart alternator control and activates the extra alternator settings.
+
+### alternatorBaseDutyUseTable
+Select base duty source: a 2D table (indexed by target voltage and RPM) or the legacy scalar offset in the PID settings.
 
 ### invertPrimaryTriggerSignal
 https://wiki.rusefi.com/Trigger-Configuration-Guide\nThis setting flips the signal from the primary engine speed sensor.
@@ -1173,6 +1200,9 @@ global_can_data performance hack
 
 ### useHardSkipInTraction
 
+
+### tractionControlUseLuaGauge
+Use a Lua gauge as a traction control multiplier input
 
 ### useAuxSpeedForSlipRatio
 Use Aux Speed 1 as one of speeds for wheel slip ratio?
@@ -1852,6 +1882,12 @@ Number of speedometer pulses per kilometer travelled.
 ### ignKeyAdcDivider
 null
 
+### tractionControlHoldTime
+Traction control hold time. When traction control is active, the peak drop values are held for this duration.
+
+### tractionControlDecayTime
+Traction control decay time. After the hold time expires, values decay back to the current table value over this duration.
+
 ### maxInjectorDutyInstant
 This sets an immediate limit on injector duty cycle. If this threshold is reached, the system will immediately cut the injectors.
 
@@ -1957,6 +1993,33 @@ This is the pressure at which your injector flow is known.\nFor example if your 
 ### vvlControlEnabled
 
 
+### exhaustCutoutEnabled
+
+
+### exhaustCutoutShowOpenState
+
+
+### exhaustCutoutInvertedOutput
+
+
+### exhaustCutoutKeyOnTestEnabled
+
+
+### exhaustCutoutEngineOnTestEnabled
+
+
+### useEngineStateMachine
+Centralized Engine State Machine. When enabled, state detection is driven by a single priority-ordered evaluator. When disabled, each controller manages its own state detection.
+
+### cdvControlEnabled
+
+
+### cdvUseClutchExit
+Deactivate CDV solenoid when clutch pedal is released
+
+### luaLimiterEnabled
+
+
 ### nitrousLuaGaugeArmingValue
 
 
@@ -2017,9 +2080,6 @@ Compensates for trigger delay due to belt stretch, or other electromechanical is
 ### maxOilPressureTimeout
 Delay before cutting fuel due to extra high oil pressure. Use this to ignore short pressure blips and sensor noise.
 
-### idleReturnTargetRampDuration
-idle return target ramp duration
-
 ### wastegatePositionOpenedVoltage
 Voltage when the wastegate is fully open
 
@@ -2067,6 +2127,9 @@ Rotational Idle Auto engage CLT
 
 ### rotationalIdleController.auto_engage_clt
 Rotational Idle Auto engage CLT.
+
+### popsAndBangsEnabled
+Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce turbocharger life.
 
 ### tcu_shiftTime
 

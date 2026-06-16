@@ -36,8 +36,10 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
 
 #include "electronic_throttle_impl.h"
+#include "engine_state_machine.h"
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
 
@@ -66,7 +68,6 @@
 
 static pedal2tps_t pedal2tpsMap{"p2t"};
 static Map3D<ETB2_TRIM_RPM_SIZE, ETB2_TRIM_SIZE, int8_t, uint8_t, uint8_t> throttle2TrimTable{"t2t"};
-static Map3D<TRACTION_CONTROL_ETB_DROP_SLIP_SIZE, TRACTION_CONTROL_ETB_DROP_SPEED_SIZE, int8_t, uint16_t, uint8_t> tcEtbDropTable{"tce"};
 
 constexpr float etbPeriodSeconds = 1.0f / ETB_LOOP_FREQUENCY;
 
@@ -300,6 +301,49 @@ PUBLIC_API_WEAK float boardAdjustEtbTarget(float currentEtbTarget) {
   return currentEtbTarget;
 }
 
+#if EFI_SPORT_PEDAL
+// Sport Pedal: returns true while the configured activation source (hardware switch or Lua gauge)
+// is asserting. Mirrors the Exhaust Cutout activation reading (see exhaust_cutout.cpp getInputHigh).
+static bool isSportPedalActive() {
+	auto& cfg = *getCustomPage();
+
+	if (cfg.sportPedalActivationMode == SPORT_PEDAL_SWITCH) {
+#if !EFI_UNIT_TEST
+		if (isBrainPinValid(cfg.sportPedalSwitchPin)) {
+			return efiReadPin(cfg.sportPedalSwitchPin, cfg.sportPedalSwitchPinMode);
+		}
+#endif // !EFI_UNIT_TEST
+		return false;
+	}
+
+	if (cfg.sportPedalActivationMode == SPORT_PEDAL_LUA_GAUGE) {
+		SensorType gauge;
+		switch (cfg.sportPedalLuaGauge) {
+			case LUA_GAUGE_2: gauge = SensorType::LuaGauge2; break;
+			case LUA_GAUGE_3: gauge = SensorType::LuaGauge3; break;
+			case LUA_GAUGE_4: gauge = SensorType::LuaGauge4; break;
+			case LUA_GAUGE_5: gauge = SensorType::LuaGauge5; break;
+			case LUA_GAUGE_6: gauge = SensorType::LuaGauge6; break;
+			case LUA_GAUGE_7: gauge = SensorType::LuaGauge7; break;
+			case LUA_GAUGE_8: gauge = SensorType::LuaGauge8; break;
+			default:          gauge = SensorType::LuaGauge1; break;
+		}
+		auto result = Sensor::get(gauge);
+		if (!result.Valid) {
+			return false;
+		}
+		if (cfg.sportPedalLuaGaugeMeaning == LUA_GAUGE_LOWER_BOUND) {
+			return result.Value >= cfg.sportPedalLuaGaugeThreshold;
+		} else {
+			return result.Value <= cfg.sportPedalLuaGaugeThreshold;
+		}
+	}
+
+	// SPORT_PEDAL_OFF
+	return false;
+}
+#endif // EFI_SPORT_PEDAL
+
 expected<percent_t> EtbController::getSetpointEtb() {
 	// Autotune runs with 50% target position
 	if (m_isAutotune) {
@@ -324,6 +368,19 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	etbCurrentTarget = boardAdjustEtbTarget(preBoard);
 	boardEtbAdjustment = etbCurrentTarget - preBoard;
 
+#if EFI_SPORT_PEDAL
+	// Sport Pedal: reshape the pedal-to-throttle ratio by multiplying the throttle target by a
+	// pedal-indexed curve. Applied before the idle-range compression below so 0% pedal still maps
+	// to the idle position, and clamped to 100% so an aggressive multiplier cannot command
+	// throttle over-travel.
+	if (isSportPedalActive()) {
+		float sportMult = interpolate2d(sanitizedPedal,
+			getCustomPage()->sportPedalPedalBins,
+			getCustomPage()->sportPedalMultValues);
+		etbCurrentTarget = clampPercentValue(etbCurrentTarget * sportMult);
+	}
+#endif // EFI_SPORT_PEDAL
+
 	percent_t etbIdlePosition = clampPercentValue(m_idlePosition);
 	percent_t etbIdleAddition = PERCENT_DIV * engineConfiguration->etbIdleThrottleRange * etbIdlePosition;
 
@@ -343,9 +400,21 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	}
 #endif /* EFI_ANTILAG_SYSTEM */
 
-  float vehicleSpeed = Sensor::getOrZero(SensorType::VehicleSpeed);
-  float wheelSlip = Sensor::getOrZero(SensorType::WheelSlipRatio);
-  tcEtbDrop = tcEtbDropTable.getValue(wheelSlip, vehicleSpeed);
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+		targetPosition += getCustomPage()->popsAndBangsAirAdd;
+	}
+
+	// Eco Mode: scale the throttle target (0.8-1.2) while the economy overlay is active.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
+		targetPosition *= clampF(0.8f, getCustomPage()->ecoThrottleMult, 1.2f);
+	}
+
+	// Quick Warmup: feed-forward ETB offset to compensate for torque lost to timing retard + rich target.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+		targetPosition += getCustomPage()->quickWarmupEtbOffset;
+	}
+
+  tcEtbDrop = engine->tractionController.getAppliedEtbDrop();
 
 	// Apply any adjustment that this throttle alone needs
 	// Clamped to +-10 to prevent anything too wild
@@ -354,6 +423,25 @@ expected<percent_t> EtbController::getSetpointEtb() {
 
 	// Clamp before rev limiter to avoid ineffective rev limit due to crazy out of range position target
 	targetPosition = clampPercentValue(targetPosition);
+
+#if EFI_ELECTRONIC_THROTTLE_BODY
+	// Downshift Blipper: during an active blip, fully replace the pedal-derived target so one
+	// or two ETBs rev-match to the same setpoint. Placed before the rev limiter below so the
+	// limiter still clamps the blip — the blipper cannot out-vote the rev limiter.
+	if (engine->module<DownshiftBlipper>().unmock().isActive()) {
+		targetPosition = engine->module<DownshiftBlipper>().unmock().getThrottleRequest();
+	}
+#endif // EFI_ELECTRONIC_THROTTLE_BODY
+
+	// Limp Mode ETB ceiling: cap throttle opening while limp is latched. Placed after the
+	// blipper (which fully replaces the target) so limp mode out-votes a rev-match blip, and
+	// before the rev limiter so the limiter can still pull the throttle further closed.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+		percent_t limpEtb = getCustomPage()->limpModeEtbLimit;
+		if (targetPosition > limpEtb) {
+			targetPosition = limpEtb;
+		}
+	}
 
 	// Lastly, apply ETB rev limiter
 	auto etbRpmLimit = engineConfiguration->etbRevLimitStart;
@@ -986,7 +1074,6 @@ void initElectronicThrottle() {
 
 	pedal2tpsMap.initTable(config->pedalToTpsTable, config->pedalToTpsRpmBins, config->pedalToTpsPedalBins);
 	throttle2TrimTable.initTable(config->throttle2TrimTable, config->throttle2TrimRpmBins, config->throttle2TrimTpsBins);
-	tcEtbDropTable.initTable(engineConfiguration->tractionControlEtbDrop, engineConfiguration->tractionControlSlipBins, engineConfiguration->tractionControlSpeedBins);
 
 	doInitElectronicThrottle(/*isStartupInit*/true);
 }

@@ -55,7 +55,13 @@ bool FanController::getState(bool acActive, bool lastState) {
 		// If CLT is broken, turn the fan on
 		radiatorFanStatus = (int)RadiatorFanState::CltBroken;
 		return true;
+#if EFI_AC_PRESSURE_FAN
+	} else if (useAcPressureMode() && enabledForAcByPressure(acActive, lastState)) {
+		return true;
+	} else if (!useAcPressureMode() && enabledForAc) {
+#else
 	} else if (enabledForAc) {
+#endif
 	  radiatorFanStatus = (int)RadiatorFanState::AC;
 		return true;
 	} else if (hot) {
@@ -70,6 +76,31 @@ bool FanController::getState(bool acActive, bool lastState) {
 		return lastState;
 	}
 }
+
+#if EFI_AC_PRESSURE_FAN
+bool FanController::enabledForAcByPressure(bool acActive, bool lastState) {
+	auto acPressure = Sensor::get(SensorType::AcPressure);
+	if (!acActive || !acPressure.Valid) {
+		enabledForAcPressure = false;
+		return false;
+	}
+
+	float pressure = acPressure.Value;
+	if (pressure >= getAcPressureFanOnThreshold()) {
+		enabledForAcPressure = true;
+	} else if (pressure < getAcPressureFanOffThreshold()) {
+		enabledForAcPressure = false;
+	} else {
+		// hysteresis band: maintain previous fan state
+		enabledForAcPressure = lastState;
+	}
+
+	if (enabledForAcPressure) {
+		radiatorFanStatus = (int)RadiatorFanState::AcPressure;
+	}
+	return enabledForAcPressure;
+}
+#endif
 
 void FanController::initPwm() {
 	if (m_pwmInitialized) {
@@ -110,6 +141,8 @@ void FanController::onSlowCallbackPwm(bool acActive) {
 	float target = pwmCurvePwm;
 	if (acActive) {
 		target += getPwmAcAdder();
+		// TODO EFI_AC_PRESSURE_FAN: add an adder curve vs A/C pressure (fanN_ac_pressure_pwm_bins /
+		// fanN_ac_pressure_pwm_values) so PWM fans can ramp up proportionally to condenser load.
 	}
 	target = clampF(getMinPwm(), target, getMaxPwm());
 	pwmTargetPwm = target;
@@ -181,4 +214,12 @@ void FanController::setDefaultConfiguration() {
 
 	engineConfiguration->fan1SoftStartSec = 2.0f;
 	engineConfiguration->fan2SoftStartSec = 2.0f;
+
+#if EFI_AC_PRESSURE_FAN
+	// Defaults suited for R134a/R1234yf high-side: fan 1 on at ~200 psi, fan 2 on at ~260 psi.
+	getCustomPage()->fan1AcPressureOn  = 1400;
+	getCustomPage()->fan1AcPressureOff = 1100;
+	getCustomPage()->fan2AcPressureOn  = 1800;
+	getCustomPage()->fan2AcPressureOff = 1400;
+#endif
 }

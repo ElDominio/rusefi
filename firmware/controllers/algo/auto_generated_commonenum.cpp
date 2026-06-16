@@ -1,6 +1,6 @@
 #include "global.h"
 #include "rusefi_enums.h"
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Fri May 15 12:26:08 UTC 2026
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Tue Jun 09 04:55:05 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -519,6 +519,8 @@ const char *getCranking_condition_e(cranking_condition_e value) {
 			return "CC_BRAKE";
 		case CC_CLUTCH:
 			return "CC_CLUTCH";
+		case CC_CLUTCH_DOWN:
+			return "CC_CLUTCH_DOWN";
 	}
 	return NULL;
 }
@@ -565,6 +567,39 @@ const char *getEgo_sensor_e(ego_sensor_e value) {
 	}
 	return NULL;
 }
+const char *getExhaust_cutout_activation_e(exhaust_cutout_activation_e value) {
+	switch (value) {
+		case EXHAUST_CUTOUT_LUA_GAUGE:
+			return "EXHAUST_CUTOUT_LUA_GAUGE";
+		case EXHAUST_CUTOUT_OFF:
+			return "EXHAUST_CUTOUT_OFF";
+		case EXHAUST_CUTOUT_SWITCH:
+			return "EXHAUST_CUTOUT_SWITCH";
+	}
+	return NULL;
+}
+const char *getExhaust_cutout_behavior_e(exhaust_cutout_behavior_e value) {
+	switch (value) {
+		case EXHAUST_CUTOUT_ALWAYS_CLOSED:
+			return "EXHAUST_CUTOUT_ALWAYS_CLOSED";
+		case EXHAUST_CUTOUT_ALWAYS_OPEN:
+			return "EXHAUST_CUTOUT_ALWAYS_OPEN";
+		case EXHAUST_CUTOUT_AUTO:
+			return "EXHAUST_CUTOUT_AUTO";
+	}
+	return NULL;
+}
+const char *getExhaust_cutout_output_mode_e(exhaust_cutout_output_mode_e value) {
+	switch (value) {
+		case EXHAUST_CUTOUT_OUTPUT_DIGITAL:
+			return "EXHAUST_CUTOUT_OUTPUT_DIGITAL";
+		case EXHAUST_CUTOUT_OUTPUT_HBRIDGE:
+			return "EXHAUST_CUTOUT_OUTPUT_HBRIDGE";
+		case EXHAUST_CUTOUT_OUTPUT_PWM:
+			return "EXHAUST_CUTOUT_OUTPUT_PWM";
+	}
+	return NULL;
+}
 const char *getFt_region_e(ft_region_e value) {
 	switch (value) {
 		case ftRegionCruise:
@@ -586,6 +621,17 @@ const char *getFuel_pressure_sensor_mode_e(fuel_pressure_sensor_mode_e value) {
 			return "FPM_Differential";
 		case FPM_Gauge:
 			return "FPM_Gauge";
+	}
+	return NULL;
+}
+const char *getFuel_pump_mode_e(fuel_pump_mode_e value) {
+	switch (value) {
+		case FP_MODE_DUAL:
+			return "FP_MODE_DUAL";
+		case FP_MODE_PWM:
+			return "FP_MODE_PWM";
+		case FP_MODE_SINGLE:
+			return "FP_MODE_SINGLE";
 	}
 	return NULL;
 }
@@ -937,6 +983,41 @@ const char *getPin_output_mode_e(pin_output_mode_e value) {
 	}
 	return NULL;
 }
+const char *getPops_and_bangs_disable_mode_e(pops_and_bangs_disable_mode_e value) {
+	switch (value) {
+		case POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE:
+			return "POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE";
+		case POPS_AND_BANGS_DISABLE_MODE_NONE:
+			return "POPS_AND_BANGS_DISABLE_MODE_NONE";
+		case POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT:
+			return "POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT";
+		case POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE:
+			return "POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE";
+	}
+	return NULL;
+}
+const char *getSm_clutch_switch_e(sm_clutch_switch_e value) {
+	switch (value) {
+		case sm_clutch_switch_e::ClutchDown:
+			return "ClutchDown";
+		case sm_clutch_switch_e::ClutchUp:
+			return "ClutchUp";
+		case sm_clutch_switch_e::None:
+			return "None";
+	}
+	return NULL;
+}
+const char *getSm_shift_detection_mode_e(sm_shift_detection_mode_e value) {
+	switch (value) {
+		case sm_shift_detection_mode_e::RpmRate:
+			return "RpmRate";
+		case sm_shift_detection_mode_e::SimpleThrottle:
+			return "SimpleThrottle";
+		case sm_shift_detection_mode_e::VssRate:
+			return "VssRate";
+	}
+	return NULL;
+}
 const char *getSpi_device_e(spi_device_e value) {
 	switch (value) {
 		case SPI_DEVICE_1:
@@ -1002,6 +1083,15 @@ const char *getTChargeMode_e(tChargeMode_e value) {
 			return "TCHARGE_MODE_AIR_INTERP_TABLE";
 		case TCHARGE_MODE_RPM_TPS:
 			return "TCHARGE_MODE_RPM_TPS";
+	}
+	return NULL;
+}
+const char *getTc_y_axis_e(tc_y_axis_e value) {
+	switch (value) {
+		case TC_Y_AXIS_RPM_ACCEL:
+			return "TC_Y_AXIS_RPM_ACCEL";
+		case TC_Y_AXIS_WHEEL_SLIP:
+			return "TC_Y_AXIS_WHEEL_SLIP";
 	}
 	return NULL;
 }

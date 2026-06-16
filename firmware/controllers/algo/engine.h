@@ -34,11 +34,19 @@
 #include "launch_control.h"
 #include "shift_torque_reduction_controller.h"
 #include "nitrous_controller.h"
+#include "engine_state_machine.h"
+#include "misfire_detection.h"
+#include "downshift_blipper.h"
 #include "antilag_system.h"
 #include "start_stop.h"
 #include "trigger_scheduler.h"
 #include "fuel_pump.h"
 #include "main_relay.h"
+#include "exhaust_cutout.h"
+#include "cdv_controller.h"
+#include "launch_power_ramp.h"
+#include "burst_knock.h"
+#include "wot_enrichment.h"
 #include "ac_control.h"
 #include "type_list.h"
 #include "boost_control.h"
@@ -49,6 +57,7 @@
 #include "fuel_computer.h"
 #include "advance_map.h"
 #include "ignition_state.h"
+#include "traction_control.h"
 #include "sensor_checker.h"
 #include "fuel_schedule.h"
 #include "prime_injection.h"
@@ -161,6 +170,17 @@ public:
         AlternatorController,
 #endif /* EFI_ALTERNATOR_CONTROL */
         MainRelayController,
+        ExhaustCutoutController,
+        CdvController,
+#if EFI_LAUNCH_POWER_RAMP
+        LaunchPowerRamp,
+#endif // EFI_LAUNCH_POWER_RAMP
+#if EFI_BURST_KNOCK
+        BurstKnock,
+#endif // EFI_BURST_KNOCK
+#if EFI_WOT_ENRICHMENT
+        WotEnrichment,
+#endif // EFI_WOT_ENRICHMENT
         Mockable<IgnitionController>,
         Mockable<AcController>,
         PrimeController,
@@ -187,6 +207,13 @@ public:
 #if EFI_LAUNCH_CONTROL
         NitrousController,
 #endif // EFI_LAUNCH_CONTROL
+        EngineStateMachine,
+#if EFI_MISFIRE_DETECTION
+        MisfireController,
+#endif // EFI_MISFIRE_DETECTION
+#if EFI_ELECTRONIC_THROTTLE_BODY
+        DownshiftBlipper,
+#endif // EFI_ELECTRONIC_THROTTLE_BODY
 #if EFI_LTFT_CONTROL
         LongTermFuelTrim,
 #endif
@@ -244,6 +271,7 @@ public:
     RotationalIdle rotationalIdleController{};
 #endif // ROTATIONAL_IDLE_CONTROLLER
 
+    TractionControlController tractionController{};
     IgnitionState ignitionState{};
     void resetLua();
     void reset();

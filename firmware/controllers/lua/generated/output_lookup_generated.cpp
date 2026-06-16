@@ -535,6 +535,12 @@ float getOutputValueByHash(const int hash) {
 // extiOverflowCount
 		case 1630166812:
 			return engine->outputChannels.extiOverflowCount;
+// alternatorVoltageTarget
+		case -1427440998:
+			return engine->outputChannels.alternatorVoltageTarget;
+// alternatorBaseDuty
+		case 1132648930:
+			return engine->outputChannels.alternatorBaseDuty;
 // alternatorStatus.pTerm
 		case -1097329029:
 			return engine->outputChannels.alternatorStatus.pTerm;
@@ -940,9 +946,18 @@ float getOutputValueByHash(const int hash) {
 // timingPidCorrection
 		case -319326974:
 			return engine->ignitionState.timingPidCorrection;
+// vvtIntakeTimingCorrection
+		case 2125279489:
+			return engine->ignitionState.vvtIntakeTimingCorrection;
+// vvtExhaustTimingCorrection
+		case -217942233:
+			return engine->ignitionState.vvtExhaustTimingCorrection;
 // dfcoTimingRetard
 		case -735105365:
 			return engine->ignitionState.dfcoTimingRetard;
+// popsAndBangsTimingActive
+		case -464450071:
+			return engine->ignitionState.popsAndBangsTimingActive;
 // baseIgnitionAdvance
 		case 493641747:
 			return engine->ignitionState.baseIgnitionAdvance;
@@ -1108,6 +1123,42 @@ float getOutputValueByHash(const int hash) {
 // ignitionOn
 		case -381519965:
 			return engine->module<FuelPumpController>()->ignitionOn;
+// isSecondaryPumpOn
+		case 2108021704:
+			return engine->module<FuelPumpController>()->isSecondaryPumpOn;
+// isFpPidActive
+		case -1198544592:
+			return engine->module<FuelPumpController>()->isFpPidActive;
+// fuelPumpDuty
+		case 456425721:
+			return engine->module<FuelPumpController>()->fuelPumpDuty;
+// fuelPressureTarget
+		case 1083687089:
+			return engine->module<FuelPumpController>()->fuelPressureTarget;
+// isTriggerRpm
+		case -526135420:
+			return engine->module<ExhaustCutoutController>()->isTriggerRpm;
+// isTriggerTps
+		case -526133236:
+			return engine->module<ExhaustCutoutController>()->isTriggerTps;
+// isTriggerMap
+		case -526141357:
+			return engine->module<ExhaustCutoutController>()->isTriggerMap;
+// isInputHigh
+		case -2124990543:
+			return engine->module<ExhaustCutoutController>()->isInputHigh;
+// targetOpen
+		case 1336449886:
+			return engine->module<ExhaustCutoutController>()->targetOpen;
+// isCutoutOpen
+		case -1446935465:
+			return engine->module<ExhaustCutoutController>()->isCutoutOpen;
+// isCutoutMoving
+		case 461428757:
+			return engine->module<ExhaustCutoutController>()->isCutoutMoving;
+// isTestActive
+		case 192366461:
+			return engine->module<ExhaustCutoutController>()->isTestActive;
 // lua.fuelAdd
 		case 1649801578:
 			return engine->engineState.lua.fuelAdd;
@@ -1249,6 +1300,9 @@ float getOutputValueByHash(const int hash) {
 // veTableYAxis
 		case 1568071542:
 			return engine->engineState.veTableYAxis;
+// tractionControlYAxisValue
+		case -386446315:
+			return engine->engineState.tractionControlYAxisValue;
 // veTableIdleYAxis
 		case -860328524:
 			return engine->engineState.veTableIdleYAxis;
@@ -1279,6 +1333,60 @@ float getOutputValueByHash(const int hash) {
 // isEnabled0
 		case 1691876092:
 			return engine->dc_motors.isEnabled0;
+// engineSmEnabled
+		case -1253164602:
+			return engine->module<EngineStateMachine>()->engineSmEnabled;
+// engineSmIsOff
+		case -193409774:
+			return engine->module<EngineStateMachine>()->engineSmIsOff;
+// engineSmIsCranking
+		case 1610341604:
+			return engine->module<EngineStateMachine>()->engineSmIsCranking;
+// engineSmIsAfterStart
+		case -1247857961:
+			return engine->module<EngineStateMachine>()->engineSmIsAfterStart;
+// engineSmIsIdle
+		case -2087772747:
+			return engine->module<EngineStateMachine>()->engineSmIsIdle;
+// engineSmIsCoasting
+		case 2037158031:
+			return engine->module<EngineStateMachine>()->engineSmIsCoasting;
+// engineSmIsTransient
+		case 474716559:
+			return engine->module<EngineStateMachine>()->engineSmIsTransient;
+// engineSmIsWot
+		case -193400751:
+			return engine->module<EngineStateMachine>()->engineSmIsWot;
+// engineSmIsCruising
+		case -1907559941:
+			return engine->module<EngineStateMachine>()->engineSmIsCruising;
+// engineSmIsOverrun
+		case 350089032:
+			return engine->module<EngineStateMachine>()->engineSmIsOverrun;
+// engineSmIsLaunchControl
+		case 148191603:
+			return engine->module<EngineStateMachine>()->engineSmIsLaunchControl;
+// engineSmIsTorqueReduction
+		case 2082760068:
+			return engine->module<EngineStateMachine>()->engineSmIsTorqueReduction;
+// engineSmIsUpshifting
+		case 2014464536:
+			return engine->module<EngineStateMachine>()->engineSmIsUpshifting;
+// engineSmIsDownshifting
+		case -2046339797:
+			return engine->module<EngineStateMachine>()->engineSmIsDownshifting;
+// engineSmIsLimp
+		case -2087659447:
+			return engine->module<EngineStateMachine>()->engineSmIsLimp;
+// engineSmIsPopsAndBangs
+		case 550757271:
+			return engine->module<EngineStateMachine>()->engineSmIsPopsAndBangs;
+// engineSmCurrentState
+		case 919099231:
+			return engine->module<EngineStateMachine>()->engineSmCurrentState;
+// dfcoCutActive
+		case 329258089:
+			return engine->module<DfcoController>()->dfcoCutActive;
 #if EFI_BOOST_CONTROL
 // isTpsInvalid
 		case -575666209:
@@ -1338,10 +1446,42 @@ float getOutputValueByHash(const int hash) {
 		case 1239062717:
 			return engine->module<BoostController>()->boostOutput;
 #endif
+#if EFI_ELECTRONIC_THROTTLE_BODY
+// downshiftBlipActive
+		case 491146174:
+			return engine->module<DownshiftBlipper>()->downshiftBlipActive;
+// downshiftBlipState
+		case -1394835389:
+			return engine->module<DownshiftBlipper>()->downshiftBlipState;
+// downshiftBlipPreShiftGear
+		case 686125510:
+			return engine->module<DownshiftBlipper>()->downshiftBlipPreShiftGear;
+// downshiftBlipTargetGear
+		case 1977331048:
+			return engine->module<DownshiftBlipper>()->downshiftBlipTargetGear;
+// downshiftBlipTargetRpm
+		case -1241573768:
+			return engine->module<DownshiftBlipper>()->downshiftBlipTargetRpm;
+// downshiftBlipThrottleRequest
+		case 428560257:
+			return engine->module<DownshiftBlipper>()->downshiftBlipThrottleRequest;
+// downshiftBlipPidOutput
+		case 607611952:
+			return engine->module<DownshiftBlipper>()->downshiftBlipPidOutput;
+// downshiftBlipLuaMult
+		case 1031247910:
+			return engine->module<DownshiftBlipper>()->downshiftBlipLuaMult;
+#endif
 #if EFI_ENGINE_CONTROL
 // totalFuelCorrection
 		case -1779658835:
 			return engine->fuelComputer.totalFuelCorrection;
+// vvtFuelIntakeCorrection
+		case -923682267:
+			return engine->fuelComputer.vvtFuelIntakeCorrection;
+// vvtFuelExhaustCorrection
+		case 1860625739:
+			return engine->fuelComputer.vvtFuelExhaustCorrection;
 // running.postCrankingFuelCorrection
 		case -1288205717:
 			return engine->fuelComputer.running.postCrankingFuelCorrection;
@@ -1636,9 +1776,6 @@ float getOutputValueByHash(const int hash) {
 // baseIdlePosition
 		case -580955469:
 			return engine->module<IdleController>().unmock().baseIdlePosition;
-// iacByTpsTaper
-		case -2065814304:
-			return engine->module<IdleController>().unmock().iacByTpsTaper;
 // mightResetPid
 		case 149945022:
 			return engine->module<IdleController>().unmock().mightResetPid;
@@ -1720,6 +1857,15 @@ float getOutputValueByHash(const int hash) {
 // idleTargetFlow
 		case -1190004798:
 			return engine->module<IdleController>().unmock().idleTargetFlow;
+// offIdleAdderActive
+		case -410616806:
+			return engine->module<IdleController>().unmock().offIdleAdderActive;
+// offIdleAdderCurrentRpm
+		case -292208624:
+			return engine->module<IdleController>().unmock().offIdleAdderCurrentRpm;
+// offIdleAdderStateIndex
+		case -1543948809:
+			return engine->module<IdleController>().unmock().offIdleAdderStateIndex;
 #endif
 #if EFI_SHAFT_POSITION_INPUT
 // vvtCamCounter
@@ -1920,6 +2066,20 @@ float getOutputValueByHash(const int hash) {
 // acPressureTooHigh
 		case -1220300524:
 			return engine->module<AcController>()->acPressureTooHigh;
+#endif
+#if MODULE_CDV_CONTROLLER
+// isCdvActive
+		case 702772922:
+			return engine->module<CdvController>()->isCdvActive;
+// isCdvTimeExitCondition
+		case 1158162766:
+			return engine->module<CdvController>()->isCdvTimeExitCondition;
+// isCdvVssExitCondition
+		case 1273430747:
+			return engine->module<CdvController>()->isCdvVssExitCondition;
+// isCdvClutchExitCondition
+		case 1117007842:
+			return engine->module<CdvController>()->isCdvClutchExitCondition;
 #endif
 #if MODULE_VVL_CONTROLLER
 // isVvlTpsCondition

@@ -12,6 +12,9 @@
 #include "closed_loop_idle_generated.h"
 #include "vvt_generated.h"
 #include "mc33810_state_generated.h"
+#include "exhaust_cutout.h"
+#include "dfco_state_generated.h"
+#include "dfco.h"
 #include <livedata_board_extra.h>
 
 template<>
@@ -321,10 +324,79 @@ const vvl_controller_state_s* getLiveData(size_t) {
 }
 
 template<>
+const engine_state_machine_state_s* getLiveData(size_t) {
+	return &engine->module<EngineStateMachine>().unmock();
+}
+
+template<>
+const misfire_detection_state_s* getLiveData(size_t) {
+#if EFI_MISFIRE_DETECTION
+	return &engine->module<MisfireController>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const downshift_blipper_state_s* getLiveData(size_t) {
+#if EFI_ELECTRONIC_THROTTLE_BODY
+	return &engine->module<DownshiftBlipper>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const cdv_controller_state_s* getLiveData(size_t) {
+#if MODULE_CDV_CONTROLLER
+	return &engine->module<CdvController>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const launch_power_ramp_state_s* getLiveData(size_t) {
+#if EFI_LAUNCH_POWER_RAMP
+	return &engine->module<LaunchPowerRamp>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const burst_knock_state_s* getLiveData(size_t) {
+#if EFI_BURST_KNOCK
+	return &engine->module<BurstKnock>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const wot_enrichment_state_s* getLiveData(size_t) {
+#if EFI_WOT_ENRICHMENT
+	return &engine->module<WotEnrichment>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const dfco_state_s* getLiveData(size_t) {
+	return &engine->module<DfcoController>().unmock();
+}
+
+template<>
 const live_data_rotational_idle_s* getLiveData(size_t) {
 #if ROTATIONAL_IDLE_CONTROLLER
 	return &engine->rotationalIdleController;
 #else
 	return nullptr;
 #endif
+}
+
+template<>
+const exhaust_cutout_s* getLiveData(size_t) {
+	return &engine->module<ExhaustCutoutController>().unmock();
 }

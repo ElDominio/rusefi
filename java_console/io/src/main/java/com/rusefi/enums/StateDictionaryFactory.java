@@ -1,5 +1,5 @@
 package com.rusefi.enums;
-//was generated automatically by rusEFI tool config_definition_base-all.jar based on StateDictionaryGenerator integration/LiveData.yaml on Tue Jan 20 22:49:13 UTC 2026
+//was generated automatically by rusEFI tool config_definition_base-all.jar based on StateDictionaryGenerator integration/LiveData.yaml on Thu Jun 11 02:31:32 AST 2026
 
 import com.rusefi.config.generated.*;
 import com.rusefi.ldmp.StateDictionary;
@@ -25,6 +25,7 @@ public class StateDictionaryFactory {
         stateDictionary.register(live_data_e.LDS_fan_control1, "fan_control");
         stateDictionary.register(live_data_e.LDS_fuel_pump_control, "fuel_pump");
         stateDictionary.register(live_data_e.LDS_main_relay, "main_relay");
+        stateDictionary.register(live_data_e.LDS_exhaust_cutout, "exhaust_cutout");
         stateDictionary.register(live_data_e.LDS_engine_state, "engine");
         stateDictionary.register(live_data_e.LDS_tps_accel_state, "accel_enrichment");
         stateDictionary.register(live_data_e.LDS_trigger_central, "trigger_central");
@@ -50,6 +51,10 @@ public class StateDictionaryFactory {
         stateDictionary.register(live_data_e.LDS_long_term_fuel_trim_state, "long_term_fuel_trim");
         stateDictionary.register(live_data_e.LDS_short_term_fuel_trim_state, "short_term_fuel_trim");
         stateDictionary.register(live_data_e.LDS_vvl_controller_state, "vvl_controller_state");
+        stateDictionary.register(live_data_e.LDS_cdv_controller_state, "cdv_controller_state");
         stateDictionary.register(live_data_e.LDS_live_data_rotational_idle, "live_data_rotational_idle");
+        stateDictionary.register(live_data_e.LDS_engine_state_machine_state, "engine_state_machine_state");
+        stateDictionary.register(live_data_e.LDS_downshift_blipper_state, "downshift_blipper_state");
+        stateDictionary.register(live_data_e.LDS_dfco_state, "dfco_state");
     }
 }

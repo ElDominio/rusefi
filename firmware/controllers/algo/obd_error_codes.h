@@ -347,19 +347,19 @@ enum class ObdCode : uint16_t {
 	//P0297 Vehicle Overspeed Condition
 	//P0298 Engine Oil Over Temperature Condition
 	//P0299 Turbocharger/Supercharger "A" Underboost Condition
-	//P0300 Random/Multiple Cylinder Misfire Detected
-	//P0301 Cylinder 1 Misfire Detected
-	//P0302 Cylinder 2 Misfire Detected
-	//P0303 Cylinder 3 Misfire Detected
-	//P0304 Cylinder 4 Misfire Detected
-	//P0305 Cylinder 5 Misfire Detected
-	//P0306 Cylinder 6 Misfire Detected
-	//P0307 Cylinder 7 Misfire Detected
-	//P0308 Cylinder 8 Misfire Detected
-	//P0309 Cylinder 9 Misfire Detected
-	//P0310 Cylinder 10 Misfire Detected
-	//P0311 Cylinder 11 Misfire Detected
-	//P0312 Cylinder 12 Misfire Detected
+	OBD_Random_Misfire = 300,       //P0300 Random/Multiple Cylinder Misfire Detected
+	OBD_Cylinder_1_Misfire = 301,   //P0301 Cylinder 1 Misfire Detected
+	OBD_Cylinder_2_Misfire = 302,   //P0302 Cylinder 2 Misfire Detected
+	OBD_Cylinder_3_Misfire = 303,   //P0303 Cylinder 3 Misfire Detected
+	OBD_Cylinder_4_Misfire = 304,   //P0304 Cylinder 4 Misfire Detected
+	OBD_Cylinder_5_Misfire = 305,   //P0305 Cylinder 5 Misfire Detected
+	OBD_Cylinder_6_Misfire = 306,   //P0306 Cylinder 6 Misfire Detected
+	OBD_Cylinder_7_Misfire = 307,   //P0307 Cylinder 7 Misfire Detected
+	OBD_Cylinder_8_Misfire = 308,   //P0308 Cylinder 8 Misfire Detected
+	OBD_Cylinder_9_Misfire = 309,   //P0309 Cylinder 9 Misfire Detected
+	OBD_Cylinder_10_Misfire = 310,  //P0310 Cylinder 10 Misfire Detected
+	OBD_Cylinder_11_Misfire = 311,  //P0311 Cylinder 11 Misfire Detected
+	OBD_Cylinder_12_Misfire = 312,  //P0312 Cylinder 12 Misfire Detected
 	//P0313 Misfire Detected with Low Fuel
 	//P0314 Single Cylinder Misfire (Cylinder not Specified)
 	//P0315 Crankshaft Position System Variation Not Learned

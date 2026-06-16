@@ -528,6 +528,7 @@ typedef enum __attribute__ ((__packed__)) {
 	CCNONE = 0,
 	CC_BRAKE = 1,
 	CC_CLUTCH = 2,
+	CC_CLUTCH_DOWN = 3,
 } cranking_condition_e;
 
 /**
@@ -610,6 +611,51 @@ typedef enum __attribute__ ((__packed__)) {
 	LUA_GAUGE_LOWER_BOUND = 0,
 	LUA_GAUGE_UPPER_BOUND = 1,
 } lua_gauge_meaning_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	TC_Y_AXIS_WHEEL_SLIP = 0,
+	TC_Y_AXIS_RPM_ACCEL = 1,
+} tc_y_axis_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	EXHAUST_CUTOUT_OFF = 0,
+	EXHAUST_CUTOUT_SWITCH = 1,
+	EXHAUST_CUTOUT_LUA_GAUGE = 2,
+} exhaust_cutout_activation_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	EXHAUST_CUTOUT_ALWAYS_CLOSED = 0,
+	EXHAUST_CUTOUT_ALWAYS_OPEN = 1,
+	EXHAUST_CUTOUT_AUTO = 2,
+} exhaust_cutout_behavior_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	EXHAUST_CUTOUT_OUTPUT_DIGITAL = 0,
+	EXHAUST_CUTOUT_OUTPUT_PWM = 1,
+	EXHAUST_CUTOUT_OUTPUT_HBRIDGE = 2,
+} exhaust_cutout_output_mode_e;
+
+// Sport Pedal activation source (mirrors exhaust_cutout_activation_e — opening cutouts and a
+// sportier pedal feel tend to be wanted together).
+typedef enum __attribute__ ((__packed__)) {
+	SPORT_PEDAL_OFF = 0,
+	SPORT_PEDAL_SWITCH = 1,
+	SPORT_PEDAL_LUA_GAUGE = 2,
+} sport_pedal_activation_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	POPS_AND_BANGS_DISABLE_MODE_NONE              = 0,
+	POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT      = 1,
+	POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE         = 2,
+	POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE = 3,
+} pops_and_bangs_disable_mode_e;
+
+// Eco Mode manual switch behaviour. Values must match eco_mode_switch_mode_e_enum order in config_page_5.txt
+enum class eco_mode_switch_mode_e : uint8_t {
+	Off     = 0, // switch ignored — eco engages purely on the cruise timer
+	ForceOn = 1, // asserted switch forces eco on regardless of the cruise timer
+	Inhibit = 2, // asserted switch blocks eco from engaging
+};
 
 // this one is "Rotational Idle", it's a naming mess https://github.com/rusefi/rusefi/issues/8435
 typedef enum __attribute__ ((__packed__)) {
@@ -894,6 +940,27 @@ typedef enum __attribute__((__packed__)) {
 	ftRegionPower = 2,
 	ftRegionCruise = 3,
 } ft_region_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	FP_MODE_SINGLE = 0,
+	FP_MODE_DUAL   = 1,
+	FP_MODE_PWM    = 2,
+} fuel_pump_mode_e;
+
+// Engine State Machine shift detection enums
+// Values must match sm_clutch_switch_e_enum order in rusefi_config.txt
+enum class sm_clutch_switch_e : uint8_t {
+	None      = 0,
+	ClutchUp  = 1,
+	ClutchDown = 2,
+};
+
+// Values must match sm_shift_detection_mode_e_enum order in rusefi_config.txt
+enum class sm_shift_detection_mode_e : uint8_t {
+	SimpleThrottle = 0,
+	RpmRate        = 1,
+	VssRate        = 2,
+};
 
 #endif // __cplusplus
 

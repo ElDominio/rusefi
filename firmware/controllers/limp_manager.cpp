@@ -1,6 +1,8 @@
 #include "pch.h"
+#include "custom_page.h"
 
 #include "limp_manager.h"
+#include "engine_state_machine.h"
 #include "fuel_math.h"
 #include "main_trigger_callback.h"
 
@@ -47,11 +49,34 @@ void LimpManager::onFastCallback() {
 	updateState(Sensor::getOrZero(SensorType::Rpm), getTimeNowNt());
 }
 
+#if EFI_LUA_LIMITER
+static float getLuaLimiterGaugeValue() {
+	int gaugeIndex = (int)getCustomPage()->luaLimiterGaugeSelect;
+	SensorType type = static_cast<SensorType>(static_cast<int>(SensorType::LuaGauge1) + gaugeIndex);
+	return Sensor::getOrZero(type);
+}
+#endif // EFI_LUA_LIMITER
+
 void LimpManager::updateRevLimit(float rpm) {
 	// User-configured hard RPM limit, either constant or CLT-lookup
 	m_revLimit = engineConfiguration->useCltBasedRpmLimit
 		? interpolate2d(Sensor::getOrZero(SensorType::Clt), config->cltRevLimitRpmBins, config->cltRevLimitRpm)
 		: (float)engineConfiguration->rpmHardLimit;
+
+#if EFI_LUA_LIMITER
+	if (engineConfiguration->luaLimiterEnabled) {
+		m_revLimit += interpolate2d(getLuaLimiterGaugeValue(), getCustomPage()->luaLimiterRpmAddBins, getCustomPage()->luaLimiterRpmAdd);
+	}
+#endif // EFI_LUA_LIMITER
+
+	// Limp Mode rev limit: while limp is latched, clamp the hard limit down to the
+	// configured limp value (only ever lowers it, never raises it).
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+		float limpRev = getCustomPage()->limpModeRevLimit;
+		if (limpRev > 0 && limpRev < m_revLimit) {
+			m_revLimit = limpRev;
+		}
+	}
 
 	// Require configurable rpm drop before resuming
 	resumeRpm = m_revLimit - engineConfiguration->rpmHardLimitHyst;
@@ -124,6 +149,11 @@ void LimpManager::updateState(float rpm, efitick_t nowNt) {
 	// Limit fuel only on boost pressure (limiting spark bends valves)
 	float mapCut = engineConfiguration->boostCutPressure;
 	if (mapCut != 0) {
+#if EFI_LUA_LIMITER
+		if (engineConfiguration->luaLimiterEnabled) {
+			mapCut += interpolate2d(getLuaLimiterGaugeValue(), getCustomPage()->luaLimiterBoostAddBins, getCustomPage()->luaLimiterBoostAdd);
+		}
+#endif // EFI_LUA_LIMITER
 		// require drop of 'boostCutPressureHyst' kPa to resume fuel
 		if (m_boostCutHysteresis.checkIfLimitIsExceeded(Sensor::getOrZero(SensorType::Map), mapCut, engineConfiguration->boostCutPressureHyst)) {
 			allowFuel.clear(ClearReason::BoostCut);
@@ -277,6 +307,16 @@ void LimpManager::onIgnitionStateChanged(bool ignitionOn) {
 }
 
 void LimpManager::reportEtbJammed() {
+	// When the Engine State Machine is active, an ETB jam latches its configurable Limp
+	// mode (rev / boost / ETB / timing / AFR limits) instead of the legacy fixed response.
+	// When the state machine is compiled out or disabled by the tune, fall back to the
+	// original protection so an ETB jam is never left completely unhandled.
+	auto& sm = engine->module<EngineStateMachine>().unmock();
+	if (sm.isEnabled()) {
+		sm.reportLimpCondition();
+		return;
+	}
+
 	m_allowEtb.clear(ClearReason::EtbProblem);
 	setFaultRevLimit(/*rpm*/1500, ClearReason::EtbJammedRevLimit);
 }

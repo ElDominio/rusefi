@@ -1,6 +1,8 @@
 struct_no_prefix fuel_computer_s
 
 	float totalFuelCorrection;Fuel: Total correction;"mult", 1,0, 0,3, 2,@@GAUGE_CATEGORY_FUEL_MATH@@
+	float vvtFuelIntakeCorrection;Fuel: VVT Intake correction;"%", 1,0, -50,50, 1,@@GAUGE_CATEGORY_FUEL_MATH@@
+	float vvtFuelExhaustCorrection;Fuel: VVT Exhaust correction;"%", 1,0, -50,50, 1,@@GAUGE_CATEGORY_FUEL_MATH@@
 	struct running_fuel_s
 		float postCrankingFuelCorrection;Fuel: Post cranking mult
 		float intakeTemperatureCoefficient;@@GAUGE_NAME_FUEL_IAT_CORR@@

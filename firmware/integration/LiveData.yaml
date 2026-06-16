@@ -141,6 +141,13 @@ Usages:
     folder: controllers/actuators
     output_name: mainRelay
 
+  - name: exhaust_cutout
+    java: ExhaustCutout.java
+    folder: controllers/actuators
+    prepend: integration/rusefi_config_shared.txt
+    output_name: exhaustCutout
+    engineModule: ExhaustCutoutController
+
   #todo: handle ETB pid and Idle pid which point at same pid_state.txt
   # - name: pid_state
   #   java: PidState.java
@@ -277,9 +284,71 @@ Usages:
     engineModule: VvlController
     conditional_compilation: "MODULE_VVL_CONTROLLER"
 
+  - name: cdv_controller_state
+    java: CdvController.java
+    folder: controllers/modules/cdv_controller
+    prepend: integration/rusefi_config_shared.txt
+    output_name: cdv
+    engineModule: CdvController
+    conditional_compilation: "MODULE_CDV_CONTROLLER"
+
+  - name: launch_power_ramp_state
+    java: LaunchPowerRamp.java
+    folder: controllers/modules/launch_power_ramp
+    prepend: integration/rusefi_config_shared.txt
+    output_name: launch_power_ramp
+    engineModule: LaunchPowerRamp
+    conditional_compilation: "EFI_LAUNCH_POWER_RAMP"
+
+  - name: burst_knock_state
+    java: BurstKnock.java
+    folder: controllers/modules/burst_knock
+    prepend: integration/rusefi_config_shared.txt
+    output_name: burst_knock
+    engineModule: BurstKnock
+    conditional_compilation: "EFI_BURST_KNOCK"
+
+  - name: wot_enrichment_state
+    java: WotEnrichment.java
+    folder: controllers/modules/wot_enrichment
+    prepend: integration/rusefi_config_shared.txt
+    output_name: wot_enrichment
+    engineModule: WotEnrichment
+    conditional_compilation: "EFI_WOT_ENRICHMENT"
+
   - name: live_data_rotational_idle
     java: RotationalIdle.java
     folder: controllers/engine_cycle
     prepend: integration/rusefi_config_shared.txt
     output_name: live_data_rotational_idle
     conditional_compilation: "ROTATIONAL_IDLE_CONTROLLER"
+
+  - name: engine_state_machine_state
+    java: EngineStateMachine.java
+    folder: controllers/algo
+    prepend: integration/rusefi_config_shared.txt
+    output_name: esm
+    engineModule: EngineStateMachine
+
+  - name: misfire_detection_state
+    java: MisfireDetection.java
+    folder: controllers/algo
+    prepend: integration/rusefi_config_shared.txt
+    output_name: misfire
+    engineModule: MisfireController
+    conditional_compilation: "EFI_MISFIRE_DETECTION"
+
+  - name: downshift_blipper_state
+    java: DownshiftBlipper.java
+    folder: controllers/actuators
+    prepend: integration/rusefi_config_shared.txt
+    output_name: dsb
+    engineModule: DownshiftBlipper
+    conditional_compilation: "EFI_ELECTRONIC_THROTTLE_BODY"
+
+  - name: dfco_state
+    java: DfcoState.java
+    folder: controllers/algo/fuel
+    prepend: integration/rusefi_config_shared.txt
+    output_name: dfco
+    engineModule: DfcoController

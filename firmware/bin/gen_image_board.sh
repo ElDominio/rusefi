@@ -30,5 +30,15 @@ echo "BOARD_SPECIFIC_URL=[$BOARD_SPECIFIC_URL]"
 # 1) using unique file name for each configuration?
 # 2) leverage consistent caching mechanism so that image is generated only in case of fresh .ini. Laziest approach would be to return exit code from java process above
 #
-hw_layer/mass_storage/create_ini_image.sh            ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image.h             128 ${SHORT_BOARD_NAME} ${BOARD_SPECIFIC_URL}
+
+# Skip the 128KB uncompressed ramdisk for boards that explicitly disable EFI_EMBED_INI_MSD.
+# Such boards never compile ramdisk_image.h into firmware, so we just write a placeholder
+# to satisfy the Makefile target rather than risk a "Disk full" failure when the INI is large.
+BOARD_MK_FILE="${BOARD_DIR}/board.mk"
+if grep -q "EFI_EMBED_INI_MSD=FALSE" "${BOARD_MK_FILE}" 2>/dev/null; then
+  echo "gen_image_board: EFI_EMBED_INI_MSD=FALSE in ${BOARD_MK_FILE} — skipping uncompressed ramdisk"
+  echo "// placeholder: EFI_EMBED_INI_MSD=FALSE for ${SHORT_BOARD_NAME}" > ./hw_layer/mass_storage/ramdisk_image.h
+else
+  hw_layer/mass_storage/create_ini_image.sh            ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image.h             128 ${SHORT_BOARD_NAME} ${BOARD_SPECIFIC_URL}
+fi
 hw_layer/mass_storage/create_ini_image_compressed.sh ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image_compressed.h 1088 ${SHORT_BOARD_NAME} ${BOARD_SPECIFIC_URL}

@@ -19,17 +19,16 @@
  */
 
 #include "pch.h"
+#include "custom_page.h"
 
 #include "idle_thread.h"
 #include "launch_control.h"
 #include "gppwm_channel.h"
+#include "dfco.h"
+#include "engine_state_machine.h"
 
 #if EFI_ENGINE_CONTROL
-
-static Map3D<TRACTION_CONTROL_ETB_DROP_SLIP_SIZE, TRACTION_CONTROL_ETB_DROP_SPEED_SIZE, int8_t, uint16_t, uint8_t> tcTimingDropTable{"tct"};
-static Map3D<TRACTION_CONTROL_ETB_DROP_SLIP_SIZE, TRACTION_CONTROL_ETB_DROP_SPEED_SIZE, int8_t, uint16_t, uint8_t> tcSparkSkipTable{"tcs"};
-
-#if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
+#if EFI_SHAFT_POSITION_INPUT
 
 /**
  * @return ignition timing angle advance before TDC
@@ -77,10 +76,8 @@ angle_t getRunningAdvance(float rpm, float engineLoad) {
 	engine->engineState.isSecondIgnitionTableActive = secondIgnitionTableActive;
 #endif // EFI_PROD_CODE || EFI_UNIT_TEST
 
-  float vehicleSpeed = Sensor::getOrZero(SensorType::VehicleSpeed);
-  float wheelSlip = Sensor::getOrZero(SensorType::WheelSlipRatio);
-  engine->ignitionState.tractionAdvanceDrop = tcTimingDropTable.getValue(wheelSlip, vehicleSpeed);
-  engine->engineState.tractionControlSparkSkip = tcSparkSkipTable.getValue(wheelSlip, vehicleSpeed);
+  engine->ignitionState.tractionAdvanceDrop = engine->tractionController.getAppliedTimingDrop();
+  engine->engineState.tractionControlSparkSkip = engine->tractionController.getAppliedSparkSkip();
   engine->engineState.updateSparkSkip();
 
   advanceAngle += engine->ignitionState.tractionAdvanceDrop;
@@ -214,14 +211,41 @@ angle_t getAdvanceCorrections(float engineLoad) {
 
 	engine->ignitionState.dfcoTimingRetard = engine->module<DfcoController>()->getTimingRetard();
 
+#if EFI_VVT_COMPENSATION
+	{
+		float intakeAngle = engine->triggerCentral.getVVTPosition(0, 0);
+		engine->ignitionState.vvtIntakeTimingCorrection = std::isnan(intakeAngle) ? 0 :
+			interpolate3d(config->vvtIgnIntakeCorrTable,
+				config->vvtIgnIntakeCorrVvtBins, intakeAngle,
+				config->vvtIgnIntakeCorrRpmBins, Sensor::getOrZero(SensorType::Rpm));
+
+		float exhaustAngle = engine->triggerCentral.getVVTPosition(0, 1);
+		engine->ignitionState.vvtExhaustTimingCorrection = std::isnan(exhaustAngle) ? 0 :
+			interpolate3d(config->vvtIgnExhaustCorrTable,
+				config->vvtIgnExhaustCorrVvtBins, exhaustAngle,
+				config->vvtIgnExhaustCorrRpmBins, Sensor::getOrZero(SensorType::Rpm));
+	}
+#endif // EFI_VVT_COMPENSATION
+
 #if EFI_TUNER_STUDIO
 	engine->outputChannels.multiSparkCounter = engine->engineState.multispark.count;
 #endif /* EFI_TUNER_STUDIO */
 
 	return engine->ignitionState.timingIatCorrection
 		+ engine->ignitionState.cltTimingCorrection
+#if EFI_VVT_COMPENSATION
+		+ engine->ignitionState.vvtIntakeTimingCorrection
+		+ engine->ignitionState.vvtExhaustTimingCorrection
+#endif
 		+ engine->ignitionState.timingPidCorrection
-		- engine->ignitionState.dfcoTimingRetard;
+		- engine->ignitionState.dfcoTimingRetard
+#if EFI_LAUNCH_POWER_RAMP
+		- engine->module<LaunchPowerRamp>().unmock().getTimingRetard()
+#endif // EFI_LAUNCH_POWER_RAMP
+#if EFI_BURST_KNOCK
+		- engine->module<BurstKnock>().unmock().getTimingRetard()
+#endif // EFI_BURST_KNOCK
+		;
 }
 
 /**
@@ -280,7 +304,27 @@ angle_t IgnitionState::getAdvance(float rpm, float engineLoad) {
 }
 
 angle_t IgnitionState::getWrappedAdvance(const float rpm, const float engineLoad) {
+	bool isCranking = engine->rpmCalculator.isCranking();
+	if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+		popsAndBangsTimingActive = true;
+		angle_t angle = getCustomPage()->popsAndBangsTimingOverride * luaTimingMult + luaTimingAdd;
+		wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
+		return angle;
+	}
+	popsAndBangsTimingActive = false;
     angle_t angle = getAdvance(rpm, engineLoad) * luaTimingMult + luaTimingAdd;
+    // Limp Mode: pull timing while limp is latched (skipped during cranking above).
+    if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+        angle -= getCustomPage()->limpModeTimingReduction;
+    }
+    // Eco Mode: add (or pull) timing while the economy overlay is active.
+    if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
+        angle += getCustomPage()->ecoTimingAdder;
+    }
+    // Quick Warmup: pull timing when cold + idle to heat the exhaust and aid catalyst light-off.
+    if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+        angle += getCustomPage()->quickWarmupTimingRetard;
+    }
     wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
     return angle;
 }
@@ -335,8 +379,6 @@ size_t getMultiSparkCount(float rpm) {
 }
 
 void initIgnitionAdvanceControl() {
-	tcTimingDropTable.initTable(engineConfiguration->tractionControlTimingDrop, engineConfiguration->tractionControlSlipBins, engineConfiguration->tractionControlSpeedBins);
-	tcSparkSkipTable.initTable(engineConfiguration->tractionControlIgnitionSkip, engineConfiguration->tractionControlSlipBins, engineConfiguration->tractionControlSpeedBins);
 }
 
 /**
