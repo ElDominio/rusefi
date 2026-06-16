@@ -101,6 +101,15 @@ void EngineStateMachine::onSlowCallback() {
 	// this cycle. Depends on m_currentState (set above) and engineSmIsLimp (limp wins).
 	updateEcoMode(m_currentState);
 
+	// Temperature overlay — three mutually-exclusive CLT bands published as bits.
+	// Independent of all other state; falls back to Operating when no CLT sensor is valid.
+	updateTempOverlay();
+
+	// Quick Warmup overlay — active when Cold AND Idle (not cranking, not after-start).
+	engineSmIsQuickWarmup = getCustomPage()->quickWarmupEnabled
+	                     && engineSmIsCold
+	                     && engineSmIsIdle;
+
 	// Override the display integer for overlay priority: Limp > Upshifting > Downshifting > LaunchControl > Eco
 	if (engineSmIsLimp) {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Limp);
@@ -136,6 +145,22 @@ void EngineStateMachine::updateEcoMode(EngineStateMachineState currentState) {
 
 	// Force-On engages regardless of the timer; Inhibit blocks the timer-based engage.
 	engineSmIsEcoMode = isEcoModeForced() || (cruiseElapsed && !isEcoModeInhibited());
+}
+
+void EngineStateMachine::updateTempOverlay() {
+	auto clt = Sensor::get(SensorType::Clt);
+	if (!clt) {
+		// No valid CLT — treat as Operating so no false Cold/Hot trigger.
+		engineSmIsCold      = false;
+		engineSmIsOperating = true;
+		engineSmIsHot       = false;
+		return;
+	}
+
+	float temp = clt.Value;
+	engineSmIsCold      = (temp < getCustomPage()->smColdTempThreshold);
+	engineSmIsHot       = (temp > getCustomPage()->smHotTempThreshold);
+	engineSmIsOperating = !engineSmIsCold && !engineSmIsHot;
 }
 
 // Reads the configured manual switch source (hardware pin and/or Lua gauge). Either asserting
@@ -609,6 +634,6 @@ void EngineStateMachine::reportLimpCondition() { /* state machine compiled out �
 void EngineStateMachine::onSlowCallback() { }
 void EngineStateMachine::updatePopsAndBangs(bool /*isOverrun*/) { engineSmIsPopsAndBangs = false; }
 void EngineStateMachine::updateEcoMode(EngineStateMachineState /*currentState*/) { engineSmIsEcoMode = false; }
-float EngineStateMachine::getPopsAndBangsSparkSkipRatio() { engineSmPnbSparkCut = false; return 0.0f; }
+void EngineStateMachine::updateTempOverlay() { engineSmIsCold = false; engineSmIsOperating = false; engineSmIsHot = false; }float EngineStateMachine::getPopsAndBangsSparkSkipRatio() { engineSmPnbSparkCut = false; return 0.0f; }
 
 #endif // EFI_ENGINE_STATE_MACHINE

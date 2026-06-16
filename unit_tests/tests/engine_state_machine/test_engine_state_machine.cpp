@@ -671,3 +671,84 @@ TEST(EngineStateMachine, limpPriorityOverUpshifting) {
 	// Limp (12) must beat Upshifting (10) in the display integer
 	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), getSm().engineSmCurrentState);
 }
+
+// ---- Temperature overlay ----
+
+TEST(EngineStateMachine, tempOverlay_cold) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	getCustomPage()->smColdTempThreshold = 60;
+	getCustomPage()->smHotTempThreshold  = 100;
+	enterRunning();
+
+	Sensor::setMockValue(SensorType::Clt, 30.0f);
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_TRUE(sm.engineSmIsCold);
+	EXPECT_FALSE(sm.engineSmIsOperating);
+	EXPECT_FALSE(sm.engineSmIsHot);
+}
+
+TEST(EngineStateMachine, tempOverlay_operating) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	getCustomPage()->smColdTempThreshold = 60;
+	getCustomPage()->smHotTempThreshold  = 100;
+	enterRunning();
+
+	Sensor::setMockValue(SensorType::Clt, 80.0f);
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_FALSE(sm.engineSmIsCold);
+	EXPECT_TRUE(sm.engineSmIsOperating);
+	EXPECT_FALSE(sm.engineSmIsHot);
+}
+
+TEST(EngineStateMachine, tempOverlay_hot) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	getCustomPage()->smColdTempThreshold = 60;
+	getCustomPage()->smHotTempThreshold  = 100;
+	enterRunning();
+
+	Sensor::setMockValue(SensorType::Clt, 110.0f);
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_FALSE(sm.engineSmIsCold);
+	EXPECT_FALSE(sm.engineSmIsOperating);
+	EXPECT_TRUE(sm.engineSmIsHot);
+}
+
+TEST(EngineStateMachine, tempOverlay_noSensor_treatsAsOperating) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning();
+
+	// No CLT sensor set — should not false-trigger Cold or Hot
+	Sensor::resetMockValue(SensorType::Clt);
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_FALSE(sm.engineSmIsCold);
+	EXPECT_TRUE(sm.engineSmIsOperating);
+	EXPECT_FALSE(sm.engineSmIsHot);
+}
+
+TEST(EngineStateMachine, tempOverlay_exactlyAtColdThreshold_isNotCold) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	getCustomPage()->smColdTempThreshold = 60;
+	getCustomPage()->smHotTempThreshold  = 100;
+	enterRunning();
+
+	// Exactly at the threshold is Operating, not Cold (strict less-than)
+	Sensor::setMockValue(SensorType::Clt, 60.0f);
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_FALSE(sm.engineSmIsCold);
+	EXPECT_TRUE(sm.engineSmIsOperating);
+}

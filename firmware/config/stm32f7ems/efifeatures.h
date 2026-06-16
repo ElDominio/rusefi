@@ -60,6 +60,11 @@
 #define EFI_SPORT_PEDAL TRUE
 #endif
 
+// AC Pressure Fan Control (pressure-based fan on/off hysteresis when AC high-side pressure sensor is installed)
+#ifndef EFI_AC_PRESSURE_FAN
+#define EFI_AC_PRESSURE_FAN TRUE
+#endif
+
 #ifndef EFI_OFF_IDLE_RPM_ADDER
 #define EFI_OFF_IDLE_RPM_ADDER TRUE
 #endif

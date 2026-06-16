@@ -409,6 +409,11 @@ expected<percent_t> EtbController::getSetpointEtb() {
 		targetPosition *= clampF(0.8f, getCustomPage()->ecoThrottleMult, 1.2f);
 	}
 
+	// Quick Warmup: feed-forward ETB offset to compensate for torque lost to timing retard + rich target.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+		targetPosition += getCustomPage()->quickWarmupEtbOffset;
+	}
+
   tcEtbDrop = engine->tractionController.getAppliedEtbDrop();
 
 	// Apply any adjustment that this throttle alone needs

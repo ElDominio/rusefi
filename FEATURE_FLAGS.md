@@ -82,6 +82,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_BURST_KNOCK` | Burst knock (transient ignition timing pull on a TPS-rate stab, decays over time) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_WOT_ENRICHMENT` | WOT time enrichment (AFR adder applied to the target after prolonged WOT; needs `EFI_ENGINE_STATE_MACHINE` at runtime for WOT state) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_SPORT_PEDAL` | Sport Pedal (ETB pedal-to-throttle ratio shaping via a pedal-indexed multiplier curve; switch/Lua-gauge activated; needs `EFI_ELECTRONIC_THROTTLE_BODY`) | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_AC_PRESSURE_FAN` | AC Pressure Fan Control (per-fan pressure on/off thresholds with hysteresis replace the simple "enable with A/C" toggle when a high-side pressure sensor is installed) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_OFF_IDLE_RPM_ADDER` | Off-idle RPM adder | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_LUA_LIMITER` | Lua limiter | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_ADVANCED_FUEL_PUMP` | Advanced / PWM secondary fuel pump | FALSE (f4) / TRUE (f7,h7) |
@@ -90,6 +91,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 ## All flags
 
 ```
+EFI_AC_PRESSURE_FAN              ← AlphaX (AC pressure-based fan on/off hysteresis)
 EFI_ACTIVE_CONFIGURATION_IN_FLASH
 EFI_ADVANCED_FUEL_PUMP            ← AlphaX (PWM/secondary fuel pump)
 EFI_ALTERNATOR_CONTROL

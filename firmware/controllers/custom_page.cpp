@@ -110,6 +110,16 @@ void customPageSetDefaults() {
 		d.sportPedalMultValues[i] = 1.0f;            // 1.0 = pass-through until the user tunes it
 	}
 
+	// Engine Temperature Overlay (Engine State Machine sub-feature).
+	d.smColdTempThreshold = 60;   // below 60°C = Cold (not yet at operating temp)
+	d.smHotTempThreshold  = 100;  // above 100°C = Hot (typical thermostat-open range)
+
+	// Quick Warmup (Engine State Machine sub-feature) — disabled by default; safe inert calibration.
+	d.quickWarmupEnabled      = false;
+	d.quickWarmupTimingRetard = -8.0f;   // 8 deg retard — heats exhaust for catalyst light-off
+	d.quickWarmupLambdaTarget = 0.95f;   // 5% rich — improves combustion stability when cold
+	d.quickWarmupEtbOffset    = 3;       // 3% extra throttle — compensates for reduced torque
+
 	// Eco Mode (Engine State Machine sub-feature) — disabled by default; inert calibration.
 	d.ecoModeEnabled       = false;
 	d.ecoModeVvtOverride   = false;

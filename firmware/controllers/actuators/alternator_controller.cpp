@@ -72,7 +72,7 @@ expected<float> AlternatorController::observePlant() {
 }
 
 expected<percent_t> AlternatorController::getOpenLoop(float target) {
-	percent_t baseDuty = 0;
+	percent_t baseDuty;
 
 	if (engineConfiguration->alternatorBaseDutyUseTable) {
 		const float rpm = Sensor::getOrZero(SensorType::Rpm);
@@ -81,6 +81,9 @@ expected<percent_t> AlternatorController::getOpenLoop(float target) {
 			config->alternatorBaseDutyVoltageBins, target,
 			config->alternatorBaseDutyRpmBins, rpm
 		);
+	} else {
+		// Single-value mode: the PID offset field serves as a fixed feedforward duty
+		baseDuty = engineConfiguration->alternatorControl.offset;
 	}
 
 	engine->outputChannels.alternatorBaseDuty = baseDuty;
@@ -93,9 +96,12 @@ expected<percent_t> AlternatorController::getOpenLoop(float target) {
 }
 
 expected<percent_t> AlternatorController::getClosedLoop(float setpoint, float observation) {
-		alternatorPid.iTermMin = engineConfiguration->alternator_iTermMin;
-		alternatorPid.iTermMax = engineConfiguration->alternator_iTermMax;
-	return alternatorPid.getOutput(setpoint, observation, FAST_CALLBACK_PERIOD_MS / 1000.0f);
+	alternatorPid.iTermMin = engineConfiguration->alternator_iTermMin;
+	alternatorPid.iTermMax = engineConfiguration->alternator_iTermMax;
+	// The PID offset is owned by getOpenLoop; subtract it here so it doesn't double-feed
+	// regardless of whether table or single-value mode is active.
+	float pidOutput = alternatorPid.getOutput(setpoint, observation, FAST_CALLBACK_PERIOD_MS / 1000.0f);
+	return pidOutput - engineConfiguration->alternatorControl.offset;
 }
 
 void AlternatorController::setOutput(expected<percent_t> outputValue) {

@@ -308,4 +308,36 @@ struct_no_prefix page5_s
 	float[LUA_LIMITER_CURVE_SIZE] luaLimiterBoostAddBins;;"value", 1, 0, -10000, 10000, 2
 	float[LUA_LIMITER_CURVE_SIZE] luaLimiterBoostAdd;;"kPa", 1, 0, -1000, 1000, 1
 
+	! --- Engine Temperature Overlay (Engine State Machine sub-feature) ---
+	! Classifies CLT into three mutually-exclusive bands published as overlay bits each slow
+	! callback: engineSmIsCold (below smColdTempThreshold), engineSmIsOperating (between the
+	! two thresholds), engineSmIsHot (above smHotTempThreshold). When no CLT sensor is valid
+	! the engine is treated as Operating (no false Cold/Hot triggering).
+	int16_t smColdTempThreshold;Engine Temperature Overlay: CLT below this is Cold engine. Between this and smHotTempThreshold is Operating temperature.;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -40 : -40}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
+	int16_t smHotTempThreshold;Engine Temperature Overlay: CLT above this is Hot engine. Below smColdTempThreshold is Cold, between both is Operating temperature.;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -40 : -40}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
+
+	! --- Quick Warmup (Engine State Machine sub-feature) ---
+	! Active only while the SM reports Cold AND Idle simultaneously. Retards ignition timing,
+	! overrides the closed-loop lambda target, and adds a feed-forward throttle offset so the
+	! idle controller can hold the RPM target even when closed-loop idle is disabled. Exits
+	! automatically when the SM leaves the Cold state (CLT rises above smColdTempThreshold).
+	! The Idle SM state excludes cranking and the after-start stabilization window, so this
+	! never fires until the engine has settled. With no valid CLT sensor the SM treats the
+	! engine as Operating, so the feature stays inactive.
+	bit quickWarmupEnabled,"enabled","disabled";Quick Warmup: master enable. Retards timing, richens the lambda target, and adds a throttle feed-forward at cold idle to heat the exhaust and aid catalyst light-off.
+	uint8_t quickWarmupEtbOffset;Quick Warmup: feed-forward throttle position (%) added to the open-loop idle target while active. Compensates for the torque loss from timing retard and a richer mixture. Applied even when closed-loop idle is disabled.;"%", 1, 0, 0, 30, 0
+	float quickWarmupTimingRetard;Quick Warmup: ignition timing pulled while active. Use a negative value to retard (e.g. -8 deg retards timing by 8 degrees). Positive values advance timing.;"deg", 1, 0, -30, 10, 1
+	float quickWarmupLambdaTarget;Quick Warmup: absolute lambda target while active. Values below 1.0 richen the mixture (e.g. 0.95 = 5 percent rich). Applied as a hard override over the normal lambda table.;"lambda", 1, 0, 0.7, 1.2, 2
+
+	! --- AC Pressure Fan Control (EFI_AC_PRESSURE_FAN) ---
+	! When an A/C high-side pressure sensor (SensorType::AcPressure) is installed and
+	! A/C compressor output is active, the per-fan pressure thresholds below replace the
+	! simple "Enable Fan with A/C" toggle. Without a sensor the plain toggle remains active.
+	! Fan turns ON when A/C pressure rises above fanNAcPressureOn, turns OFF when it falls
+	! below fanNAcPressureOff (hysteresis band between the two prevents rapid cycling).
+	uint16_t fan1AcPressureOn;Fan 1: A/C high-side pressure above which fan 1 turns on while A/C is active. Requires A/C pressure sensor. Falls back to Enable Fan with A/C toggle when no sensor is installed.;"kPa", 1, 0, 0, 4000, 0
+	uint16_t fan1AcPressureOff;Fan 1: A/C high-side pressure below which fan 1 turns off (hysteresis lower bound). Must be less than fan1AcPressureOn.;"kPa", 1, 0, 0, 4000, 0
+	uint16_t fan2AcPressureOn;Fan 2: A/C high-side pressure above which fan 2 turns on while A/C is active. Requires A/C pressure sensor.;"kPa", 1, 0, 0, 4000, 0
+	uint16_t fan2AcPressureOff;Fan 2: A/C high-side pressure below which fan 2 turns off (hysteresis lower bound). Must be less than fan2AcPressureOn.;"kPa", 1, 0, 0, 4000, 0
+
 end_struct

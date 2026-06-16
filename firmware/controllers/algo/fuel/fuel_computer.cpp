@@ -40,6 +40,12 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 		lambda = afr / stoich; // keep published targetLambda consistent with the eco target
 	}
 
+	// Quick Warmup: override lambda target when cold + idle to aid catalyst light-off.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+		lambda = getCustomPage()->quickWarmupLambdaTarget;
+		afr = lambda * stoich;
+	}
+
 	afrTableYAxis = load;
 	targetLambda = lambda;
 	targetAFR = afr;

@@ -321,6 +321,10 @@ angle_t IgnitionState::getWrappedAdvance(const float rpm, const float engineLoad
     if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
         angle += getCustomPage()->ecoTimingAdder;
     }
+    // Quick Warmup: pull timing when cold + idle to heat the exhaust and aid catalyst light-off.
+    if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+        angle += getCustomPage()->quickWarmupTimingRetard;
+    }
     wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
     return angle;
 }

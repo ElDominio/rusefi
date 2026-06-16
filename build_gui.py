@@ -888,13 +888,21 @@ class App(tk.Tk):
             self.append_log("\n--- Copying OpenBLT update image (.srec) ---\n", "info")
             build_srec = os.path.join(self.firmware_dir, "build", "rusefi.srec")
             if os.path.exists(build_srec):
-                dest_srec = os.path.join(dest, f"rusefi_{short_name}_update.srec")
-                self.append_log(f"Copying {build_srec}\n  -> {dest_srec}\n", "info")
-                shutil.copy2(build_srec, dest_srec)
-                # Also drop it into the extracted bundle folder using the canonical name
-                # so the rusEFI console can detect it alongside rusefi.bin.
                 if extract_zip:
-                    shutil.copy2(build_srec, os.path.join(extract_path, "rusefi_update.srec"))
+                    updater_sh = None
+                    for _root, _dirs, _files in os.walk(extract_path):
+                        if "rusefi_updater.sh" in _files:
+                            updater_sh = os.path.join(_root, "rusefi_updater.sh")
+                            break
+                    if updater_sh:
+                        srec_dest = os.path.join(os.path.dirname(updater_sh), "rusefi_update.srec")
+                    else:
+                        self.append_log("[WARNING] rusefi_updater.sh not found in extracted bundle; placing srec at bundle root.\n", "stderr")
+                        srec_dest = os.path.join(extract_path, "rusefi_update.srec")
+                    self.append_log(f"Copying {build_srec}\n  -> {srec_dest}\n", "info")
+                    shutil.copy2(build_srec, srec_dest)
+                else:
+                    self.append_log("[INFO] Zip not extracted; skipping srec placement.\n", "info")
             else:
                 self.append_log(f"[WARNING] Expected srec not found at {build_srec}; OpenBLT image not copied.\n", "stderr")
 

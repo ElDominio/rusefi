@@ -561,6 +561,11 @@ float IdleController::getIdlePosition(float rpm) {
 				iacPosition += getCustomPage()->popsAndBangsAirAdd;
 			}
 
+			// Quick Warmup: feed-forward IAC offset to compensate for torque lost to timing retard + rich target.
+			if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+				iacPosition += getCustomPage()->quickWarmupEtbOffset;
+			}
+
 			iacPosition = clampPercentValue(iacPosition);
 
 // todo: while is below disabled for unit tests?

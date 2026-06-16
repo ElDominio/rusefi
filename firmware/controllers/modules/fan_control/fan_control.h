@@ -2,6 +2,7 @@
 
 #include "fan_control_generated.h"
 #include "pwm_generator_logic.h"
+#include "custom_page.h"
 
 enum class RadiatorFanState : uint8_t {
   None, // 0
@@ -15,7 +16,8 @@ enum class RadiatorFanState : uint8_t {
   Cold, // 8
   Previous, // 9
   Bench, // 10
-  BoardForcedOn // 11
+  BoardForcedOn, // 11
+  AcPressure // 12
 };
 
 struct FanController : public EngineModule, public fan_control_s {
@@ -26,6 +28,10 @@ private:
 	bool getState(bool acActive, bool lastState);
 	void initPwm();
 	void onSlowCallbackPwm(bool acActive);
+
+#if EFI_AC_PRESSURE_FAN
+	bool enabledForAcByPressure(bool acActive, bool lastState);
+#endif
 
 	SimplePwm m_pwm;
 	bool m_pwmInitialized = false;
@@ -48,6 +54,11 @@ protected:
 	virtual float getMaxPwm() const = 0;
 	virtual float getPwmAcAdder() const = 0;
 	virtual float getSoftStartSec() const = 0;
+
+#if EFI_AC_PRESSURE_FAN
+	virtual float getAcPressureFanOnThreshold() const = 0;
+	virtual float getAcPressureFanOffThreshold() const = 0;
+#endif
 };
 
 struct FanControl1 : public FanController {
@@ -106,6 +117,16 @@ struct FanControl1 : public FanController {
 	float getSoftStartSec() const override {
 		return engineConfiguration->fan1SoftStartSec;
 	}
+
+#if EFI_AC_PRESSURE_FAN
+	float getAcPressureFanOnThreshold() const override {
+		return getCustomPage()->fan1AcPressureOn;
+	}
+
+	float getAcPressureFanOffThreshold() const override {
+		return getCustomPage()->fan1AcPressureOff;
+	}
+#endif
 };
 
 struct FanControl2 : public FanController {
@@ -164,4 +185,14 @@ struct FanControl2 : public FanController {
 	float getSoftStartSec() const override {
 		return engineConfiguration->fan2SoftStartSec;
 	}
+
+#if EFI_AC_PRESSURE_FAN
+	float getAcPressureFanOnThreshold() const override {
+		return getCustomPage()->fan2AcPressureOn;
+	}
+
+	float getAcPressureFanOffThreshold() const override {
+		return getCustomPage()->fan2AcPressureOff;
+	}
+#endif
 };

@@ -18,6 +18,10 @@ struct_no_prefix engine_state_machine_state_s
 	bit engineSmIsPopsAndBangs;Engine SM: Pops and Bangs active
 	bit engineSmPnbSparkCut;Engine SM: P&B spark cut
 	bit engineSmIsEcoMode;Engine SM: Eco mode active
+	bit engineSmIsCold;Engine SM: Cold engine
+	bit engineSmIsOperating;Engine SM: At operating temp
+	bit engineSmIsHot;Engine SM: Hot engine
+	bit engineSmIsQuickWarmup;Engine SM: Quick Warmup active
 
 	uint8_t engineSmCurrentState;Engine SM: primary state
 

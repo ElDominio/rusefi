@@ -99,6 +99,8 @@ private:
 	bool         m_prevUpTrigger     = false;
 	bool         m_prevDnTrigger     = false;
 
+	void updateTempOverlay();
+
 	// Suppresses repeated VSS-unavailable warnings once emitted
 	bool m_vssRateWarningEmitted = false;
 
