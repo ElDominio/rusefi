@@ -8,6 +8,8 @@
 
 ! The isolated page generator does not inherit page-1 #defines, so re-declare the ones we use.
 #define CLT_UPPER_LIMIT 250
+#define MAP_UPPER_LIMIT 650
+#define UNITS_KMH_TO_MPH 0.62137119
 #define LUA_LIMITER_CURVE_SIZE 8
 #define LAUNCH_POWER_RAMP_CURVE_SIZE 8
 #define BURST_KNOCK_RPM_SIZE 8
