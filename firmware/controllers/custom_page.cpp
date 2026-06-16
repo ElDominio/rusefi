@@ -169,6 +169,10 @@ void customPageSetDefaults() {
 	d.fuelPumpPwmFrequency = 100;
 	d.fuelPump_iTermMin = -30;
 	d.fuelPump_iTermMax = 30;
+
+	// Dwell Duty Mode — disabled by default; 50% is the standard TFI module target.
+	d.dwellDutyModeEnabled = false;
+	d.dwellDutyPercent = 50;
 }
 
 void loadCustomPage() {
