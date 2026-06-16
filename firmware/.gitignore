@@ -16,5 +16,9 @@ arm-gnu*
 # bundle temp folder
 rusefi.snapshot.*
 rusefi.ini.7z
+rusefi.ini.zip
+
+# mass storage build artifacts
+hw_layer/mass_storage/*.url
 
 quick-self-test.xml
