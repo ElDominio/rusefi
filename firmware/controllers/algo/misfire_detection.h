@@ -81,4 +81,9 @@ private:
 
 	// Tracks idle<->non-idle transitions so we can reset baselines when re-entering idle.
 	bool m_wasMonitoring = false;
+
+	// Latches the "window narrower than one trigger tooth" configError so it is reported
+	// once on entry into the bad-config state instead of re-formatted every tooth. Cleared
+	// when the window widens to a valid size or detection state is reset.
+	bool m_windowTooNarrow = false;
 };

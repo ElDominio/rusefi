@@ -30,6 +30,7 @@ void MisfireController::resetDetectionState() {
 	m_settleCount = 0;
 	m_windowHead = 0;
 	m_windowFill = 0;
+	m_windowTooNarrow = false;
 }
 
 bool MisfireController::isSettled() const {
@@ -209,6 +210,27 @@ void MisfireController::onEnginePhase(float /*rpm*/, efitick_t edgeTimestamp,
 	const auto* page = getCustomPage();
 	float windowStartOffset = page->misfireWindowStart;
 	float windowEndOffset = page->misfireWindowEnd;
+
+	// The segment is timed between the trigger edges that bracket windowStart and windowEnd,
+	// so the crank only provides a real velocity sample at each tooth. If the whole window
+	// fits inside one tooth interval, both ends land on the same edge and segUs collapses to
+	// zero — evaluateSegment() then bails on every firing and all live data freezes. Refuse to
+	// run (and tell the user) when the window is narrower than the average tooth spacing rather
+	// than measuring silently-degenerate segments. getLength() is events per engine cycle, so
+	// engineCycle / getLength() is the mean tooth pitch in the same degree space as the offsets.
+	float windowWidth = windowEndOffset - windowStartOffset;
+	size_t triggerEvents = getTriggerCentral()->triggerShape.getLength();
+	float toothSpacing = (triggerEvents > 0) ? (getEngineState()->engineCycle / triggerEvents) : 0.0f;
+	if (windowWidth < toothSpacing) {
+		misfireDetectionActive = false;
+		if (!m_windowTooNarrow) {
+			m_windowTooNarrow = true;
+			configError("misfire window %.0f deg too narrow for trigger, need >= %.0f deg",
+						windowWidth, toothSpacing);
+		}
+		return;
+	}
+	m_windowTooNarrow = false;
 
 	size_t cylCount = engineConfiguration->cylindersCount;
 	for (size_t i = 0; i < cylCount; i++) {

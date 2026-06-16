@@ -14,8 +14,16 @@ static MisfireController& getMc() {
 	return engine->module<MisfireController>().unmock();
 }
 
-static void setupMisfireConfig() {
+static void setupMisfireConfig(EngineTestHelper& eth) {
 	engineConfiguration->useEngineStateMachine = true;
+
+	// The tests feed synthetic kToothDeg teeth straight into onEnginePhase, but the misfire
+	// guard reads the *configured* trigger to reject sub-tooth windows. Give it a fine wheel so
+	// the configured tooth pitch matches the synthetic feed (otherwise the coarse default
+	// TEST_ENGINE trigger makes the guard refuse every realistic window).
+	engineConfiguration->trigger.customTotalToothCount = 60;
+	engineConfiguration->trigger.customSkippedToothCount = 2;
+	eth.setTriggerType(trigger_type_e::TT_TOOTHED_WHEEL);
 
 	auto* d = getCustomPage();
 	d->misfireDetectionEnabled = true;
@@ -100,7 +108,7 @@ TEST(MisfireDetection, disabledByDefault) {
 
 TEST(MisfireDetection, healthyIdleNoMisfire) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupMisfireConfig();
+	setupMisfireConfig(eth);
 	engine->module<EngineStateMachine>().unmock().engineSmIsIdle = true;
 
 	ToothDriver d;
@@ -117,7 +125,7 @@ TEST(MisfireDetection, healthyIdleNoMisfire) {
 
 TEST(MisfireDetection, repeatedMisfireLatchesMil) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupMisfireConfig();
+	setupMisfireConfig(eth);
 	engine->module<EngineStateMachine>().unmock().engineSmIsIdle = true;
 
 	ToothDriver d;
@@ -142,7 +150,7 @@ TEST(MisfireDetection, repeatedMisfireLatchesMil) {
 
 TEST(MisfireDetection, thresholdZeroMonitorOnly) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupMisfireConfig();
+	setupMisfireConfig(eth);
 	getCustomPage()->misfireCountThreshold = 0; // monitor-only
 	engine->module<EngineStateMachine>().unmock().engineSmIsIdle = true;
 
@@ -162,7 +170,7 @@ TEST(MisfireDetection, thresholdZeroMonitorOnly) {
 
 TEST(MisfireDetection, leavingIdleStopsMonitoring) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupMisfireConfig();
+	setupMisfireConfig(eth);
 	auto& sm = engine->module<EngineStateMachine>().unmock();
 	sm.engineSmIsIdle = true;
 
@@ -178,4 +186,41 @@ TEST(MisfireDetection, leavingIdleStopsMonitoring) {
 
 	EXPECT_FALSE(getMc().misfireDetectionActive);
 	EXPECT_EQ(0, getMc().misfireTotalCount);
+}
+
+// ---- Window narrower than one trigger tooth: refuse + configError, never freeze ----
+
+TEST(MisfireDetection, narrowWindowBelowToothSpacingRefuses) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupMisfireConfig(eth);
+	engine->module<EngineStateMachine>().unmock().engineSmIsIdle = true;
+
+	// A sub-tooth window: both ends fall inside one trigger interval, so the timed segment
+	// would collapse to zero and every live-data field would silently freeze. The guard must
+	// refuse to run and raise a configError instead of measuring degenerate segments.
+	clearConfigErrorMessage();
+	getCustomPage()->misfireWindowStart = 20;
+	getCustomPage()->misfireWindowEnd   = 21; // 1 deg wide, far below any real tooth pitch
+
+	ToothDriver d;
+	for (int i = 0; i < 6; i++) {
+		d.feedCycle(0, 1.6f); // even with big slowdowns, nothing should be measured
+	}
+
+	EXPECT_FALSE(getMc().misfireDetectionActive);
+	EXPECT_EQ(0, getMc().misfireTotalCount);
+	EXPECT_FALSE(getMc().misfireLatched);
+	EXPECT_TRUE(hasConfigError());
+
+	// Widening back to a valid window must clear the refusal and resume detection — and the
+	// guard must not keep re-raising the configError once the window is large enough.
+	clearConfigErrorMessage();
+	getCustomPage()->misfireWindowStart = 20;
+	getCustomPage()->misfireWindowEnd   = 120;
+	for (int i = 0; i < 3; i++) {
+		d.feedHealthyCycle();
+	}
+
+	EXPECT_TRUE(getMc().misfireDetectionActive);
+	EXPECT_FALSE(hasConfigError());
 }
