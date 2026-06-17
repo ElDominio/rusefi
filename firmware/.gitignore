@@ -17,6 +17,7 @@ arm-gnu*
 rusefi.snapshot.*
 rusefi.ini.7z
 rusefi.ini.zip
+rusefi.*.*/
 
 # mass storage build artifacts
 hw_layer/mass_storage/*.url
