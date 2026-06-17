@@ -85,6 +85,7 @@ public:
 EngineState * getEngineState();
 
 bool getClutchDownState();
+bool getClutchUpState();
 // 0 not pressed
 // 1 pressed
 bool getBrakePedalState();

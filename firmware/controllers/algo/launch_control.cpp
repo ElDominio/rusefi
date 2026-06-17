@@ -21,7 +21,8 @@
  */
 bool LaunchControlBase::isInsideSwitchCondition() {
 	isSwitchActivated = engineConfiguration->launchActivationMode == SWITCH_INPUT_LAUNCH;
-	isClutchActivated = engineConfiguration->launchActivationMode == CLUTCH_INPUT_LAUNCH;
+	isClutchDownActivated = engineConfiguration->launchActivationMode == CLUTCH_INPUT_LAUNCH;
+	isClutchUpActivated = engineConfiguration->launchActivationMode == CLUTCH_UP_INPUT_LAUNCH;
 	isBrakePedalActivated = engineConfiguration->launchActivationMode == STOP_INPUT_LAUNCH;
 
 	if (isSwitchActivated) {
@@ -31,8 +32,10 @@ bool LaunchControlBase::isInsideSwitchCondition() {
 		}
 #endif // EFI_PROD_CODE
 		return launchActivatePinState;
-	} else if (isClutchActivated) {
+	} else if (isClutchDownActivated) {
 		return getClutchDownState();
+	} else if (isClutchUpActivated) {
+		return getClutchUpState();
 	} else if (isBrakePedalActivated) {
 		return getBrakePedalState();
 	} else if (engineConfiguration->launchActivationMode == LUA_LAUNCH) {

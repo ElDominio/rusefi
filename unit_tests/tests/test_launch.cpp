@@ -127,6 +127,18 @@ TEST(LaunchControl, SwitchInputCondition) {
 	engine->updateSwitchInputs();
 	EXPECT_FALSE(dut.isInsideSwitchCondition());
 
+	//by clutch up
+	engineConfiguration->launchActivationMode = CLUTCH_UP_INPUT_LAUNCH;
+	engineConfiguration->clutchUpPin = Gpio::G3;
+	engineConfiguration->clutchUpPinMode = PI_PULLUP;
+	setMockState(engineConfiguration->clutchUpPin, true);
+	engine->updateSwitchInputs();
+	EXPECT_TRUE(dut.isInsideSwitchCondition());
+
+	setMockState(engineConfiguration->clutchUpPin, false);
+	engine->updateSwitchInputs();
+	EXPECT_FALSE(dut.isInsideSwitchCondition());
+
 }
 
 TEST(LaunchControl, CombinedCondition) {

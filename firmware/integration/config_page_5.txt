@@ -327,7 +327,7 @@ struct_no_prefix page5_s
 	! never fires until the engine has settled. With no valid CLT sensor the SM treats the
 	! engine as Operating, so the feature stays inactive.
 	bit quickWarmupEnabled,"enabled","disabled";Quick Warmup: master enable. Retards timing, richens the lambda target, and adds a throttle feed-forward at cold idle to heat the exhaust and aid catalyst light-off.
-	uint8_t quickWarmupEtbOffset;Quick Warmup: feed-forward throttle position (%) added to the open-loop idle target while active. Compensates for the torque loss from timing retard and a richer mixture. Applied even when closed-loop idle is disabled.;"%", 1, 0, 0, 30, 0
+	int8_t autoscale quickWarmupEtbOffset;Quick Warmup: feed-forward throttle position (%) added to the open-loop idle target while active. Compensates for the torque loss from timing retard and a richer mixture. Applied even when closed-loop idle is disabled.;"%", 0.1, 0, -12.5, 12.5, 1
 	float quickWarmupTimingRetard;Quick Warmup: ignition timing pulled while active. Use a negative value to retard (e.g. -8 deg retards timing by 8 degrees). Positive values advance timing.;"deg", 1, 0, -30, 10, 1
 	float quickWarmupLambdaTarget;Quick Warmup: absolute lambda target while active. Values below 1.0 richen the mixture (e.g. 0.95 = 5 percent rich). Applied as a hard override over the normal lambda table.;"lambda", 1, 0, 0.7, 1.2, 2
 

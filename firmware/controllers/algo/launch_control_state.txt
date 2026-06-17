@@ -5,7 +5,8 @@ bit launchActivatePinState
 bit isPreLaunchCondition
 	bit isLaunchCondition;Launch: isLaunchCondition
 	bit isSwitchActivated;Launch: isSwitchActivated
-	bit isClutchActivated;Launch: isClutchActivated
+	bit isClutchDownActivated;Launch: isClutchDownActivated
+	bit isClutchUpActivated;Launch: isClutchUpActivated
 bit isBrakePedalActivated
 	bit isValidInputPin;Launch: isValidInputPin
 

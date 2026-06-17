@@ -233,7 +233,7 @@ bool getClutchDownState() {
 	return engine->engineState.lua.clutchDownState;
 }
 
-static bool getClutchUpState() {
+bool getClutchUpState() {
 #if EFI_GPIO_HARDWARE
 	if (isBrainPinValid(engineConfiguration->clutchUpPin)) {
 		return efiReadPin(engineConfiguration->clutchUpPin, engineConfiguration->clutchUpPinMode);
