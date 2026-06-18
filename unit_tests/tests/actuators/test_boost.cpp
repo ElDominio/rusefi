@@ -264,6 +264,58 @@ TEST(BoostControl, BoostOpenLoopYAxis)
 	EXPECT_FLOAT_EQ(bc.getOpenLoop(0).value_or(-1), EGT2_TEST_VALUE);
 }
 
+TEST(BoostControl, OpenLoopBlendBias) {
+	MockVp3d openMap;
+	// base open loop duty cycle, controlled per-test below
+	float baseDuty = 0;
+	EXPECT_CALL(openMap, getValue(_, _))
+		.WillRepeatedly([&](float, float) { return baseDuty; });
+
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	BoostController bc;
+
+	testBoostCltCorr.initTable(config->cltBoostCorr, config->cltBoostCorrBins);
+	testBoostIatCorr.initTable(config->iatBoostCorr, config->iatBoostCorrBins);
+	testBoostCltAdder.initTable(config->cltBoostAdder, config->cltBoostAdderBins);
+	testBoostIatAdder.initTable(config->iatBoostAdder, config->iatBoostAdderBins);
+
+	bc.init(
+		nullptr,
+		&openMap,
+		nullptr,
+		testBoostCltCorr,
+		testBoostIatCorr,
+		testBoostCltAdder,
+		testBoostIatAdder,
+		nullptr
+	);
+
+	Sensor::setMockValue(SensorType::Tps1, 47.0f);
+
+	// Configure blend #1: bias = 100%, table = 20%
+	auto& blend = config->boostOpenLoopBlends[0];
+	blend.blendParameter = GPPWM_Tps;
+	blend.yAxisOverride = GPPWM_Zero;
+	setTable(blend.table, 20);
+	setLinearCurve(blend.loadBins, 0, 100, 1);
+	setRpmTableBin(blend.rpmBins);
+	setLinearCurve(blend.blendBins, 0, 100, 1);
+	setArrayValues(blend.blendValues, 100);
+
+	// base duty 0, bias 100%, blend table 20% -> 0 + 1.0 * 20 = 20%
+	baseDuty = 0;
+	EXPECT_FLOAT_EQ(bc.getOpenLoop(0).value_or(-1), 20.0f);
+
+	// raise base duty to 20% -> 20 + 1.0 * 20 = 40%
+	baseDuty = 20;
+	EXPECT_FLOAT_EQ(bc.getOpenLoop(0).value_or(-1), 40.0f);
+
+	// halve the bias -> 20 + 0.5 * 20 = 30%
+	setArrayValues(blend.blendValues, 50);
+	EXPECT_FLOAT_EQ(bc.getOpenLoop(0).value_or(-1), 30.0f);
+}
+
 TEST(BoostControl, TestClosedLoop) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
