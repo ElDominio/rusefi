@@ -35,6 +35,8 @@ namespace {
             .setTorqueReductionArmingRpm(TEST_TORQUE_REDUCTION_ARMING_RPM)
             .setTorqueReductionArmingApp(TEST_TORQUE_REDUCTION_ARMING_APP)
         );
+
+        getTestEngineConfiguration().configureLaunchSpeedThreshold(0); // to satisfy isSpeedConditionSatisfied
     }
 
     void ShiftTorqueReductionFlatShiftConditionTest::triggerPin() {
@@ -92,6 +94,26 @@ namespace {
         satisfyRpmCondition();
         //satisfyAppCondition();
         waitAndCheckFlatShiftCondition(IMMEDIATELY, false, "Without app condition");
+    }
+
+    TEST_F(ShiftTorqueReductionFlatShiftConditionTest, checkSpeedCondition) {
+        // launchSpeedThreshold is shared with Launch Control: STR is allowed at/above it,
+        // Launch Control is allowed strictly below it, so the two stay mutually exclusive
+        // when sharing the same clutch/switch input.
+        engineConfiguration->launchSpeedThreshold = 30;
+
+        triggerPin();
+        satisfyRpmCondition();
+        satisfyAppCondition();
+
+        Sensor::setMockValue(SensorType::VehicleSpeed, 10.0f);
+        waitAndCheckFlatShiftCondition(IMMEDIATELY, false, "Below speed threshold");
+
+        Sensor::setMockValue(SensorType::VehicleSpeed, 40.0f);
+        waitAndCheckFlatShiftCondition(IMMEDIATELY, true, "Above speed threshold");
+
+        Sensor::setMockValue(SensorType::VehicleSpeed, 30.0f);
+        waitAndCheckFlatShiftCondition(IMMEDIATELY, true, "At speed threshold");
     }
 
     TEST_F(ShiftTorqueReductionFlatShiftConditionTest, checkSatisfiedFlatShiftConditionExpiration) {

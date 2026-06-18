@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260617
+#define FLASH_DATA_VERSION 260618
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -1090,7 +1090,7 @@ bit verboseCan2,"Print all","Do not print";Print incoming and outgoing second bu
     Gpio ignitionKeyDigitalPin
     int boostPwmFrequency;;"Hz", 1, 0, 0, 3000, 0
 
-	#define launchActivationMode_e_enum "Launch Button", "Speed Based", "Brake Pedal", "Clutch Up", "Clutch Down", "Lua"
+	#define launchActivationMode_e_enum "Launch Button", "Clutch Down Switch", "Speed Based", "Brake Pedal", "Lua", "Clutch Up"
     custom launchActivationMode_e  1 bits, S08, @OFFSET@, [0:2], @@launchActivationMode_e_enum@@
     launchActivationMode_e launchActivationMode;
 
@@ -1107,7 +1107,7 @@ include_file controllers/algo/accel_enrichment.engineConfiguration.txt
 	uint8_t autoscale noFuelTrimAfterDfcoTime;Pause closed loop fueling after deceleration fuel cut occurs. Set this to a little longer than however long is required for normal fueling behavior to resume after fuel cut.;"sec", 0.1, 0, 0, 10, 1
 	uint8_t autoscale noFuelTrimAfterAccelTime;Pause closed loop fueling after acceleration fuel occurs. Set this to a little longer than however long is required for normal fueling behavior to resume after fuel accel.;"sec", 0.1, 0, 0, 10, 1
 
-    int launchSpeedThreshold;Launch disabled above this speed if setting is above zero;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 300 : 186}, 0
+    int launchSpeedThreshold;Launch Control disabled above this speed, and Shift Torque Reduction disabled below this speed, if setting is above zero. Shares one threshold so the two features cannot both be active off the same clutch/switch input at the same time.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 300 : 186}, 0
     int launchRpmWindow;The RPM window before the Launch RPM where launch control strategies (like retard/cut) begin to activate. For example, if Launch RPM is 4000 and Window is 500, activation starts at 3500 RPM.;"RPM", 1, 0, 0, 8000, 0
     float triggerEventsTimeoutMs;;"ms", 1, 0, 0, 3000, 3
     float ppsExpAverageAlpha;A higher alpha (closer to 1) means the EMA reacts more quickly to changes in the data.\n'100%' means no filtering, 98% would be some filtering.;"percent", 100, 0, 0, 100, 1
@@ -1810,6 +1810,8 @@ int anotherCiTest
     uint16_t minAcPressure;value of A/C pressure in kPa/psi before that compressor is disengaged;{bitStringValue(pressureUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KPA_TO_PSI@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 500 : 72.5}, 0
     uint16_t maxAcPressure;value of A/C pressure in kPa/psi after that compressor is disengaged;{bitStringValue(pressureUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KPA_TO_PSI@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 500 : 72.5}, 0
 
+    linear_sensor_s clutchPressure
+
 	uint8_t autoscale minimumOilPressureTimeout;Delay before cutting fuel due to low oil pressure. Use this to ignore short pressure blips and sensor noise.;"sec", 0.1, 0, 0, 5, 1
 
 linear_sensor_s auxLinear3
@@ -1848,7 +1850,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit cdvControlEnabled,"enabled","disabled"
 	bit cdvUseClutchExit,"enabled","disabled";Deactivate CDV solenoid when clutch pedal is released
 	bit luaLimiterEnabled,"enabled","disabled"
-	bit unusedBit_Fancy12
+	bit cdvSmartMode,"Smart","Simple";Clutch Delay Valve activation mode. Simple: activate on launch/pre-launch entry. Smart: also require clutch pressure to be inside the configured window (cdvSmartMinPressure/cdvSmartMaxPressure) before activating, and deactivate immediately on leaving the window.
 	bit unusedBit_Fancy13
 	bit unusedBit_Fancy14
 	bit unusedBit_Fancy15
@@ -2606,6 +2608,7 @@ end_struct
 #define ts_show_launch_power_ramp true
 #define ts_show_downshift_blipper true
 #define ts_show_sport_pedal true
+#define ts_show_wot_enrichment true
 #define ts_show_hbridge_function true
 #define ts_show_aux_sensors true
 #define ts_show_clutch_up true
@@ -2824,6 +2827,7 @@ end_struct
 #define ts_show_oil_temp_sensor true
 #define ts_show_compressor_sensor true
 #define ts_show_fuel_pressure_sensor true
+#define ts_show_clutch_pressure_sensor true
 #define ts_show_fuel_temp_sensor true
 #define ts_show_wastegate_sensor true
 #define ts_show_aux_connections true

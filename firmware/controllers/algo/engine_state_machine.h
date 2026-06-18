@@ -47,9 +47,10 @@ public:
 	void updatePopsAndBangs(bool isOverrun);
 
 	// Drives the Eco mode overlay: engages after the engine has been Cruising continuously for
-	// ecoModeCruisingTime, drops instantly on leaving Cruising, and can be forced on or inhibited
-	// by a manual switch / Lua gauge. Takes the current state directly so unit tests can drive it
-	// without standing up the full state determination.
+	// ecoModeCruisingTime with MAP at or below ecoModeMapLimit, drops instantly on leaving Cruising
+	// or exceeding the MAP limit, and can be inhibited by a manual switch / Lua gauge. Takes the
+	// current state directly so unit tests can drive it without standing up the full state
+	// determination.
 	void updateEcoMode(EngineStateMachineState currentState);
 
 	// P&B spark-cut overlay: returns the spark skip ratio (0..1) to feed the hard spark
@@ -111,7 +112,6 @@ private:
 
 	// Eco mode overlay state
 	bool isEcoModeSwitchAsserted() const; // manual switch / Lua gauge currently asserting
-	bool isEcoModeForced() const;         // asserted in Force-On mode
 	bool isEcoModeInhibited() const;      // asserted in Inhibit mode
 	Timer m_ecoCruiseTimer;               // measures continuous time in the Cruising state
 

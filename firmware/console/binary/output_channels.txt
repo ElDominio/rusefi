@@ -189,6 +189,7 @@ int16_t rpmAcceleration;dRPM;"RPM acceleration/Rate of Change/ROC",1, 0, 0, 5, 2
 	int16_t autoscale rawIat;;"V",{1/@@PACK_MULT_VOLTAGE@@}, 0, 0, 5, 3
 	int16_t autoscale rawOilPressure;;"V",{1/@@PACK_MULT_VOLTAGE@@}, 0, 0, 5, 3
 	int16_t autoscale rawAcPressure;;"V",{1/@@PACK_MULT_VOLTAGE@@}, 0, 0, 5, 3
+	int16_t autoscale rawClutchPressure;;"V",{1/@@PACK_MULT_VOLTAGE@@}, 0, 0, 5, 3
 	int16_t autoscale rawFuelLevel;;"V",{1/@@PACK_MULT_VOLTAGE@@}, 0, 0, 5, 3
 
 !	int16_t autoscale rawPpsPrimary;;"V",{1/@@PACK_MULT_VOLTAGE@@}, 0, 0, 5, 3
@@ -429,6 +430,7 @@ float mapFast
 	uint8_t tempLogging2
 
 	float acPressure;@@GAUGE_NAME_AC_PRESSURE@@;"kPa", 1, 0, 0, 0, 0
+	float clutchPressure;@@GAUGE_NAME_CLUTCH_PRESSURE@@;"kPa", 1, 0, 0, 0, 0
 
  	int16_t autoscale rawAuxAnalog1;;"V",{1/@@PACK_MULT_VOLTAGE@@}, 0, 0, 5, 3
  	int16_t autoscale rawAuxAnalog2;;"V",{1/@@PACK_MULT_VOLTAGE@@}, 0, 0, 5, 3

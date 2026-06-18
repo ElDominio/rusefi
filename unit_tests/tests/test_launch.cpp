@@ -127,17 +127,18 @@ TEST(LaunchControl, SwitchInputCondition) {
 	engine->updateSwitchInputs();
 	EXPECT_FALSE(dut.isInsideSwitchCondition());
 
-	//by clutch up
+	//by clutch up: pin reads true when the pedal is up/released, so launch should
+	//be active when the pin is NOT true (i.e. clutch held down)
 	engineConfiguration->launchActivationMode = CLUTCH_UP_INPUT_LAUNCH;
 	engineConfiguration->clutchUpPin = Gpio::G3;
 	engineConfiguration->clutchUpPinMode = PI_PULLUP;
 	setMockState(engineConfiguration->clutchUpPin, true);
 	engine->updateSwitchInputs();
-	EXPECT_TRUE(dut.isInsideSwitchCondition());
+	EXPECT_FALSE(dut.isInsideSwitchCondition());
 
 	setMockState(engineConfiguration->clutchUpPin, false);
 	engine->updateSwitchInputs();
-	EXPECT_FALSE(dut.isInsideSwitchCondition());
+	EXPECT_TRUE(dut.isInsideSwitchCondition());
 
 }
 

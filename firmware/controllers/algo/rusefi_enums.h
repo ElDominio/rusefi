@@ -578,11 +578,11 @@ typedef enum __attribute__ ((__packed__)) {
 
 typedef enum __attribute__ ((__packed__)) {
 	SWITCH_INPUT_LAUNCH = 0,
-	ALWAYS_ACTIVE_LAUNCH = 1,
-	STOP_INPUT_LAUNCH = 2,
-	CLUTCH_UP_INPUT_LAUNCH = 3,
-	CLUTCH_INPUT_LAUNCH = 4,
-	LUA_LAUNCH = 5,
+	CLUTCH_INPUT_LAUNCH = 1,
+	ALWAYS_ACTIVE_LAUNCH = 2,
+	STOP_INPUT_LAUNCH = 3,
+	LUA_LAUNCH = 4,
+	CLUTCH_UP_INPUT_LAUNCH = 5,
 } launchActivationMode_e;
 
 typedef enum __attribute__ ((__packed__)) {
@@ -653,9 +653,8 @@ typedef enum __attribute__ ((__packed__)) {
 
 // Eco Mode manual switch behaviour. Values must match eco_mode_switch_mode_e_enum order in config_page_5.txt
 enum class eco_mode_switch_mode_e : uint8_t {
-	Off     = 0, // switch ignored — eco engages purely on the cruise timer
-	ForceOn = 1, // asserted switch forces eco on regardless of the cruise timer
-	Inhibit = 2, // asserted switch blocks eco from engaging
+	Off     = 0, // switch ignored — eco engages purely on the cruise timer / MAP gate
+	Inhibit = 1, // asserted switch blocks eco from engaging
 };
 
 // this one is "Rotational Idle", it's a naming mess https://github.com/rusefi/rusefi/issues/8435

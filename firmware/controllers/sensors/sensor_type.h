@@ -158,6 +158,8 @@ enum class SensorType : unsigned char {
 
   AcPressure,
 
+  ClutchPressure,
+
 	AuxLinear1,
 	AuxLinear2,
 	AuxLinear3,

@@ -486,6 +486,7 @@ static void updateRawSensors() {
 	engine->outputChannels.rawOilPressure = Sensor::getRaw(SensorType::OilPressure);
 	engine->outputChannels.rawFuelLevel = Sensor::getRaw(SensorType::FuelLevel);
   engine->outputChannels.rawAcPressure = Sensor::getRaw(SensorType::AcPressure);
+	engine->outputChannels.rawClutchPressure = Sensor::getRaw(SensorType::ClutchPressure);
 	engine->outputChannels.rawLowFuelPressure = Sensor::getRaw(SensorType::FuelPressureLow);
 	engine->outputChannels.rawHighFuelPressure = Sensor::getRaw(SensorType::FuelPressureHigh);
 	engine->outputChannels.rawMaf = Sensor::getRaw(SensorType::Maf);
@@ -521,6 +522,7 @@ static void updatePressures() {
 	engine->outputChannels.mapFast = Sensor::getOrZero(SensorType::MapFast);
 	engine->outputChannels.oilPressure = Sensor::getOrZero(SensorType::OilPressure);
   engine->outputChannels.acPressure = Sensor::getOrZero(SensorType::AcPressure);
+	engine->outputChannels.clutchPressure = Sensor::getOrZero(SensorType::ClutchPressure);
 
  	engine->outputChannels.compressorDischargePressure = Sensor::getOrZero(SensorType::CompressorDischargePressure);
  	engine->outputChannels.throttleInletPressure = Sensor::getOrZero(SensorType::ThrottleInletPressure);

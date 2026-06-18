@@ -4,5 +4,7 @@ bit isCdvActive
 bit isCdvTimeExitCondition
 bit isCdvVssExitCondition
 bit isCdvClutchExitCondition
+bit isCdvWindowExitCondition
+bit isCdvPressureInWindow
 
 end_struct

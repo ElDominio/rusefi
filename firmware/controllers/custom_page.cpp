@@ -130,6 +130,7 @@ void customPageSetDefaults() {
 	d.ecoModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
 	d.ecoModeLuaGaugeValue = 0.0f;
 	d.ecoModeCruisingTime  = 10;     // 10 s of steady cruise before eco engages
+	d.ecoModeMapLimit      = 0;      // disabled by default — no MAP gate
 	d.ecoTargetAfr         = 15.5f;  // slightly leaner than stoich for economy
 	d.ecoTimingAdder       = 0.0f;   // no timing change until the user tunes it
 	d.ecoVvtIntakeTarget   = 0.0f;

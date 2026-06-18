@@ -235,6 +235,9 @@ void setDefaultBaseEngine() {
 	engineConfiguration->acPressure.v2 = 5;
 	engineConfiguration->acPressure.value2 = 100;
 
+	engineConfiguration->clutchPressure.v2 = 5;
+	engineConfiguration->clutchPressure.value2 = 100;
+
 	engineConfiguration->lowPressureFuel.v2 = 5;
 	engineConfiguration->lowPressureFuel.value2 = 100;
 

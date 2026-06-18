@@ -11,6 +11,7 @@ public:
 
 private:
     Timer m_sinceExitTimer;
+    Timer m_sinceActiveTimer;
     bool m_prevLaunchActive = false;
     bool m_prevClutchDown = false;
 };

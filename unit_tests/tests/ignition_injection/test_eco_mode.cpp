@@ -5,15 +5,17 @@
 #if FUEL_RPM_COUNT == 16
 
 // Eco mode is an Engine State Machine overlay: it engages once the engine has been in the
-// Cruising state continuously for ecoModeCruisingTime, drops instantly on leaving Cruising, and
-// can be forced on or inhibited by a manual switch / Lua gauge. The output overrides (target AFR,
-// timing adder, VVT target, throttle multiplier) are one-liners mirroring the existing Limp/P&B
-// reads at their respective sites; these tests cover the new engagement/switch logic itself.
+// Cruising state continuously for ecoModeCruisingTime with MAP at or below ecoModeMapLimit, drops
+// instantly on leaving Cruising or exceeding the MAP limit, and can be inhibited by a manual
+// switch / Lua gauge. The output overrides (target AFR, timing adder, VVT target, throttle
+// multiplier) are one-liners mirroring the existing Limp/P&B reads at their respective sites;
+// these tests cover the new engagement/switch/MAP-gate logic itself.
 
 static void setupEco() {
 	getCustomPage()->ecoModeEnabled        = true;
 	getCustomPage()->ecoModeVvtOverride    = false;
 	getCustomPage()->ecoModeCruisingTime   = 2; // 2 s of steady cruise before engaging
+	getCustomPage()->ecoModeMapLimit       = 0; // disabled unless a test overrides it
 	getCustomPage()->ecoTargetAfr          = 15.5f;
 	getCustomPage()->ecoTimingAdder        = 3.0f;
 	getCustomPage()->ecoThrottleMult       = 0.9f;
@@ -89,15 +91,66 @@ TEST(EcoMode, LimpModeOutVotesEco) {
 	EXPECT_FALSE(ecoActive(eth));
 }
 
-TEST(EcoMode, ForceOnSwitchEngagesRegardlessOfTimer) {
+TEST(EcoMode, MapAboveLimitBlocksEngagement) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupEco();
-	getCustomPage()->ecoModeSwitchMode = eco_mode_switch_mode_e::ForceOn;
-	Sensor::setMockValue(SensorType::LuaGauge1, 1.0f); // >= 0.5 threshold -> asserted
+	getCustomPage()->ecoModeMapLimit = 60; // kPa
+	Sensor::setMockValue(SensorType::Map, 70.0f); // above the limit
 
 	setTimeNowUs(1e6);
-	// Not cruising and no time accumulated, but the switch forces eco on.
+	tickEco(eth, EngineStateMachineState::Idle);    // arm: timer reset at t=1s
+	advanceTimeUs(3e6);                              // well past the cruise time
+	tickEco(eth, EngineStateMachineState::Cruising);
+	EXPECT_FALSE(ecoActive(eth));
+}
+
+TEST(EcoMode, MapAtOrBelowLimitAllowsEngagement) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupEco();
+	getCustomPage()->ecoModeMapLimit = 60; // kPa
+	Sensor::setMockValue(SensorType::Map, 60.0f); // at the limit -> allowed
+
+	setTimeNowUs(1e6);
 	tickEco(eth, EngineStateMachineState::Idle);
+	advanceTimeUs(3e6);
+	tickEco(eth, EngineStateMachineState::Cruising);
+	EXPECT_TRUE(ecoActive(eth));
+}
+
+TEST(EcoMode, MapRisingAboveLimitDropsAlreadyActiveEco) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupEco();
+	getCustomPage()->ecoModeMapLimit = 60; // kPa
+	Sensor::setMockValue(SensorType::Map, 40.0f);
+
+	setTimeNowUs(1e6);
+	tickEco(eth, EngineStateMachineState::Idle);
+	advanceTimeUs(3e6);
+	tickEco(eth, EngineStateMachineState::Cruising);
+	ASSERT_TRUE(ecoActive(eth));
+
+	// Load creeps up past the limit while still nominally Cruising -> instant drop.
+	Sensor::setMockValue(SensorType::Map, 80.0f);
+	tickEco(eth, EngineStateMachineState::Cruising);
+	EXPECT_FALSE(ecoActive(eth));
+
+	// ...and the cruise timer was reset, so it must re-accumulate before re-engaging even once
+	// MAP drops back down.
+	Sensor::setMockValue(SensorType::Map, 40.0f);
+	tickEco(eth, EngineStateMachineState::Cruising);
+	EXPECT_FALSE(ecoActive(eth));
+}
+
+TEST(EcoMode, ZeroMapLimitDisablesTheGate) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupEco();
+	getCustomPage()->ecoModeMapLimit = 0; // disabled
+	Sensor::setMockValue(SensorType::Map, 250.0f); // would block if the gate were active
+
+	setTimeNowUs(1e6);
+	tickEco(eth, EngineStateMachineState::Idle);
+	advanceTimeUs(3e6);
+	tickEco(eth, EngineStateMachineState::Cruising);
 	EXPECT_TRUE(ecoActive(eth));
 }
 

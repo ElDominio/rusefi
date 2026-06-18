@@ -21,6 +21,9 @@ static ProxySensor injectorPressure(SensorType::FuelPressureInjector);
 static LinearFunc acPressureFunc;
 static FunctionalSensor acPressureSensor(SensorType::AcPressure, /* timeout = */ MS2NT(50));
 
+static LinearFunc clutchPressureFunc;
+static FunctionalSensor clutchPressureSensor(SensorType::ClutchPressure, /* timeout = */ MS2NT(50));
+
 static LinearFunc auxLinear1Func;
 static FunctionalSensor auxLinear1Sensor(SensorType::AuxLinear1, /* timeout = */ MS2NT(50));
 
@@ -103,6 +106,7 @@ void initFluidPressure() {
 		initFluidPressure(fuelPressureFuncHigh, fuelPressureSensorHigh, engineConfiguration->highPressureFuel, 100);
 	}
 	initFluidPressure(acPressureFunc, acPressureSensor, engineConfiguration->acPressure, 10);
+	initFluidPressure(clutchPressureFunc, clutchPressureSensor, engineConfiguration->clutchPressure, 10);
 	initFluidPressure(auxLinear1Func, auxLinear1Sensor, engineConfiguration->auxLinear1, 10);
 	initFluidPressure(auxLinear2Func, auxLinear2Sensor, engineConfiguration->auxLinear2, 10);
 	initFluidPressure(auxLinear3Func, auxLinear3Sensor, engineConfiguration->auxLinear3, 10);

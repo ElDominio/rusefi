@@ -143,8 +143,16 @@ void EngineStateMachine::updateEcoMode(EngineStateMachineState currentState) {
 		m_ecoCruiseTimer.reset();
 	}
 
-	// Force-On engages regardless of the timer; Inhibit blocks the timer-based engage.
-	engineSmIsEcoMode = isEcoModeForced() || (cruiseElapsed && !isEcoModeInhibited());
+	// MAP gate: load creeping up above the limit drops eco exactly like leaving Cruising, even if
+	// the state machine still reports Cruising (TPS-based) this cycle. 0 disables the gate.
+	uint16_t mapLimit = getCustomPage()->ecoModeMapLimit;
+	if (mapLimit > 0 && Sensor::get(SensorType::Map).value_or(0) > mapLimit) {
+		m_ecoCruiseTimer.reset();
+		cruiseElapsed = false;
+	}
+
+	// Inhibit blocks the timer-based engage; there is no Force-On override of the timer/MAP gate.
+	engineSmIsEcoMode = cruiseElapsed && !isEcoModeInhibited();
 }
 
 void EngineStateMachine::updateTempOverlay() {
@@ -198,11 +206,6 @@ bool EngineStateMachine::isEcoModeSwitchAsserted() const {
 	}
 
 	return pinAsserted || gaugeAsserted;
-}
-
-bool EngineStateMachine::isEcoModeForced() const {
-	return getCustomPage()->ecoModeSwitchMode == eco_mode_switch_mode_e::ForceOn
-		&& isEcoModeSwitchAsserted();
 }
 
 bool EngineStateMachine::isEcoModeInhibited() const {

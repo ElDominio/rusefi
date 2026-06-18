@@ -43,7 +43,7 @@ custom sm_clutch_switch_e 1 bits, U08, @OFFSET@, [0:1], @@sm_clutch_switch_e_enu
 custom sm_shift_detection_mode_e 1 bits, U08, @OFFSET@, [0:1], @@sm_shift_detection_mode_e_enum@@
 #define pops_and_bangs_disable_mode_e_enum "None", "Switch Input", "Lua Gauge", "Switch or Lua Gauge"
 custom pops_and_bangs_disable_mode_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_disable_mode_e_enum@@
-#define eco_mode_switch_mode_e_enum "Off", "Force On", "Inhibit", "INVALID"
+#define eco_mode_switch_mode_e_enum "Off", "Inhibit"
 custom eco_mode_switch_mode_e 1 bits, U08, @OFFSET@, [0:1], @@eco_mode_switch_mode_e_enum@@
 #define sport_pedal_activation_e_enum "OFF", "Switch", "LuaGauge"
 custom sport_pedal_activation_e 1 bits, U08, @OFFSET@, [0:1], @@sport_pedal_activation_e_enum@@
@@ -174,21 +174,23 @@ struct_no_prefix page5_s
 
 	! --- Eco Mode (Engine State Machine sub-feature) ---
 	! Fuel-economy overlay. Engages once the engine has been in the Cruising state continuously for
-	! ecoModeCruisingTime, and drops instantly on leaving Cruising (a tip-in into Transient/WOT).
-	! While active it overrides target AFR, adds/pulls ignition timing, optionally retargets the
-	! intake/exhaust VVT cams, scales the throttle target, and can hold a lower absolute alternator
-	! charging target (when smart alternator control is enabled). A manual switch / Lua gauge can Force
-	! On (engage regardless of the timer) or Inhibit (block) eco. Limp mode out-votes eco entirely.
+	! ecoModeCruisingTime AND MAP is at or below ecoModeMapLimit, and drops instantly on leaving
+	! Cruising or exceeding the MAP limit (a tip-in into Transient/WOT, or load creeping up while
+	! still nominally "cruising"). While active it overrides target AFR, adds/pulls ignition timing,
+	! optionally retargets the intake/exhaust VVT cams, scales the throttle target, and can hold a
+	! lower absolute alternator charging target (when smart alternator control is enabled). A manual
+	! switch / Lua gauge can Inhibit (block) eco; Limp mode out-votes eco entirely.
 	bit ecoModeEnabled,"enabled","disabled";Eco Mode: master enable. Engages after sustained cruising to bias fuel/timing/throttle for economy.
 	bit ecoModeVvtOverride,"enabled","disabled";Eco Mode: also override the intake/exhaust VVT cam targets while active (engines with VVT only).
 
-	eco_mode_switch_mode_e ecoModeSwitchMode;Eco Mode: how the manual switch / Lua gauge acts. Force On engages eco regardless of the cruise timer; Inhibit blocks eco while asserted.
-	switch_input_pin_e ecoModeSwitchPin;Eco Mode: hardware switch input pin (used by Force On / Inhibit).
+	eco_mode_switch_mode_e ecoModeSwitchMode;Eco Mode: how the manual switch / Lua gauge acts. Off ignores the switch. Inhibit blocks eco while asserted.
+	switch_input_pin_e ecoModeSwitchPin;Eco Mode: hardware switch input pin (used by Inhibit).
 	pin_input_mode_e ecoModeSwitchPinMode;
 	lua_gauge_e ecoModeLuaGauge;Eco Mode: Lua gauge used as the switch source.
 	lua_gauge_meaning_e ecoModeLuaGaugeMeaning;
 
 	uint16_t ecoModeCruisingTime;Eco Mode: continuous time in the Cruising state before eco engages.;"sec", 1, 0, 0, 600, 0
+	uint16_t ecoModeMapLimit;Eco Mode: MAP must be at or below this for eco to engage. Exceeding it drops eco instantly, just like leaving Cruising. 0 disables the MAP gate.;"kPa", 1, 0, 0, @@MAP_UPPER_LIMIT@@, 0
 
 	float ecoModeLuaGaugeValue;Eco Mode: Lua gauge threshold for the switch source.;"", 1, 0, -30000, 30000, 3
 	float ecoTargetAfr;Eco Mode: absolute target AFR while active (leaner = more economy).;"afr", 1, 0, 10, 20, 1
@@ -231,9 +233,16 @@ struct_no_prefix page5_s
 	uint8_t popsAndBangsCutPercent;P&B spark cut: fraction of sparks to cut while a window is open (hard cut, consecutive skips allowed so fuel can accumulate). 0 = no cut.;"%", 1, 0, 0, 100, 0
 	uint16_t popsAndBangsCutDurationMs;P&B spark cut: how long each spark-cut window lasts (ignored when automatic).;"ms", 1, 0, 20, 500, 0
 
-	! --- Clutch Delay Valve (enable/clutch-exit bits + solenoid pin stay in page 1) ---
-	uint8_t autoscale cdvExitDelay;Seconds after launch control exits before deactivating CDV solenoid. Set 0 to deactivate immediately.;"s", 0.1, 0, 0, 10, 1
+	! --- Clutch Delay Valve (enable/clutch-exit/smart-mode bits + solenoid pin stay in page 1) ---
+	! Simple mode: CDV activates on launch/pre-launch entry. Smart mode: additionally requires
+	! clutch pressure (SensorType::ClutchPressure) to be inside [cdvSmartMinPressure,
+	! cdvSmartMaxPressure] before activating, and leaving that window deactivates it immediately.
+	! In Smart mode cdvExitDelay is instead a max-active-duration safety timer counting from
+	! when the CDV solenoid turned on (Simple mode keeps counting from launch exit).
+	uint8_t autoscale cdvExitDelay;Simple mode: seconds after launch control exits before deactivating CDV solenoid (0 = deactivate immediately). Smart mode: maximum seconds the CDV solenoid may stay active before a safety timeout forces it off (0 = deactivate immediately).;"s", 0.1, 0, 0, 10, 1
 	uint16_t cdvExitVss;Deactivate CDV above this vehicle speed. Set 0 to disable.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
+	uint16_t cdvSmartMinPressure;Smart mode: clutch pressure must be at or above this for the CDV to activate/stay active.;"kPa", 1, 0, 0, 4000, 0
+	uint16_t cdvSmartMaxPressure;Smart mode: clutch pressure must be at or below this for the CDV to activate/stay active.;"kPa", 1, 0, 0, 4000, 0
 
 	! --- Off-Idle RPM Adder ---
 	int16_t offIdleRpmAdder;RPM added to closed-loop idle target when returning from off-idle (Running/Coasting) conditions. PID chases this elevated target to prevent stalling.;"RPM", 1, 0, 0, 1000, 0

@@ -5,6 +5,7 @@ bit torqueReductionTriggerPinState
 bit isTimeConditionSatisfied
 bit isRpmConditionSatisfied
 bit isAppConditionSatisfied
+bit isSpeedConditionSatisfied
 bit isFlatShiftConditionSatisfied
 bit isBelowTemperatureThreshold
 

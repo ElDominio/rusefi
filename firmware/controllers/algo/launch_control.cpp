@@ -35,7 +35,9 @@ bool LaunchControlBase::isInsideSwitchCondition() {
 	} else if (isClutchDownActivated) {
 		return getClutchDownState();
 	} else if (isClutchUpActivated) {
-		return getClutchUpState();
+		// Clutch Up switch reads true when the pedal is released (at rest); launch
+		// should be active while the driver is holding the clutch down, i.e. NOT up.
+		return !getClutchUpState();
 	} else if (isBrakePedalActivated) {
 		return getBrakePedalState();
 	} else if (engineConfiguration->launchActivationMode == LUA_LAUNCH) {
