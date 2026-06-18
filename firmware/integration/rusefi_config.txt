@@ -2606,6 +2606,7 @@ end_struct
 #define ts_show_vvl_control true
 #define ts_show_cdv_control true
 #define ts_show_launch_power_ramp true
+#define ts_show_burst_knock true
 #define ts_show_downshift_blipper true
 #define ts_show_sport_pedal true
 #define ts_show_wot_enrichment true
