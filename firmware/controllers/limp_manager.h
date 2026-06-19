@@ -110,6 +110,10 @@ public:
 	bool allowTriggerInput() const;
 
 	void updateRevLimit(float rpm);
+	// The effective hard RPM limit right now: accounts for CLT-based limit, Lua limiter
+	// adders, and any Limp Mode reduced cap. Used by the ETB rev limiter to target
+	// "just under the real limit" instead of duplicating this logic.
+	float getRevLimit() const { return m_revLimit; }
 	angle_t getLimitingTimingRetard() const;
 	float getLimitingFuelCorrection() const;
 

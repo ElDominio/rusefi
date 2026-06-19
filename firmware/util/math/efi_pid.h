@@ -56,6 +56,9 @@ public:
 	float getOffset() const;
 	float getMinValue() const;
 	float getIntegration(void) const;
+	// Seeds the integrator so the controller starts near a known-good output instead of
+	// ramping up from zero. Used when a PID engages partway through a maneuver.
+	void setIntegration(float value);
 	float getPrevError(void) const;
 	void setErrorAmplification(float coef);
 #if EFI_TUNER_STUDIO

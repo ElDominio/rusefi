@@ -466,9 +466,15 @@ TEST(etb, setpointIdle) {
 TEST(etb, setpointRevLimit) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	// Configure 5000 limit start, with 750 rpm taper
-	engineConfiguration->etbRevLimitStart = 5000;
+	// Hard limit 5750, managed for 750rpm below that, i.e. starting at 5000
+	engineConfiguration->rpmHardLimit = 5750;
 	engineConfiguration->etbRevLimitRange = 750;
+	engineConfiguration->cutEtbOnRpmLimit = true;
+	// Zero gains isolate the seed value: PID output is just the configured seed regardless of error
+	engineConfiguration->etbRevLimitSeedTps = 15;
+	engineConfiguration->etbRevLimitKp = 0;
+	engineConfiguration->etbRevLimitKi = 0;
+	engineConfiguration->etbRevLimitKd = 0;
 
 	// Must have TPS & PPS initialized for ETB setup
 	Sensor::setMockValue(SensorType::Tps1Primary, 0);
@@ -487,23 +493,51 @@ TEST(etb, setpointRevLimit) {
 
 	// Below threshold, should return unadjusted throttle
 	Sensor::setMockValue(SensorType::Rpm,  1000);
+	eth.engine.periodicFastCallback();
 	EXPECT_NEAR(80, etb.getSetpoint().value_or(-1), 1e-4);
 
-	// At threshold, should return unadjusted throttle
-	Sensor::setMockValue(SensorType::Rpm,  5000);
+	// Just below threshold, should return unadjusted throttle
+	Sensor::setMockValue(SensorType::Rpm,  4999);
+	eth.engine.periodicFastCallback();
 	EXPECT_NEAR(80, etb.getSetpoint().value_or(-1), 1e-4);
 
-	// Middle of range, should return half of unadjusted
+	// At/above threshold: PID has just engaged and is seeded with the configured TPS
 	Sensor::setMockValue(SensorType::Rpm, 5375);
-	EXPECT_NEAR(40, etb.getSetpoint().value_or(-1), 1e-4);
+	eth.engine.periodicFastCallback();
+	EXPECT_NEAR(15, etb.getSetpoint().value_or(-1), 1e-4);
 
-	// At limit+range, should return 0
-	Sensor::setMockValue(SensorType::Rpm, 5750);
-	EXPECT_NEAR(1, etb.getSetpoint().value_or(-1), 1e-4);
-
-	// Above limit+range, should return 0
+	// Past the hard limit, still managed by the (seeded) PID, not a hard cut to zero.
+	// With zero gains the PID output doesn't move from the seed regardless of dt/error.
+	eth.moveTimeForwardMs(10);
 	Sensor::setMockValue(SensorType::Rpm, 6000);
-	EXPECT_NEAR(1, etb.getSetpoint().value_or(-1), 1e-4);
+	eth.engine.periodicFastCallback();
+	EXPECT_NEAR(15, etb.getSetpoint().value_or(-1), 1e-4);
+}
+
+TEST(etb, setpointRevLimitDisabledByDefault) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	// Even configured, the ETB rev limiter PID must stay out of the way unless explicitly enabled
+	engineConfiguration->rpmHardLimit = 5750;
+	engineConfiguration->etbRevLimitRange = 750;
+	engineConfiguration->cutEtbOnRpmLimit = false;
+
+	Sensor::setMockValue(SensorType::Tps1Primary, 0);
+	Sensor::setMockValue(SensorType::Tps1, 0.0f, true);
+	Sensor::setMockValue(SensorType::AcceleratorPedal, 0.0f, true);
+
+	EtbController etb;
+
+	StrictMock<MockVp3d> pedalMap;
+	EXPECT_CALL(pedalMap, getValue(_, _))
+		.WillRepeatedly([](float, float) {
+			return 80;
+		});
+	etb.init(DC_Throttle1, nullptr, nullptr, &pedalMap);
+
+	Sensor::setMockValue(SensorType::Rpm, 6000);
+	eth.engine.periodicFastCallback();
+	EXPECT_NEAR(80, etb.getSetpoint().value_or(-1), 1e-4);
 }
 
 TEST(etb, setpointNoPedalMap) {

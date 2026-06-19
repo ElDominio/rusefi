@@ -96,6 +96,14 @@ private:
 	Pid m_pid;
 	bool m_shouldResetPid = false;
 
+	// ETB rev limiter PID (see 'cutEtbOnRpmLimit'): holds RPM just under the hard limit
+	// instead of the throttle simply tapering closed.
+	pid_s m_revLimitPidCfg{};
+	Pid m_revLimitPid;
+	bool m_revLimitPidInited = false;
+	bool m_revLimitManaging = false;
+	Timer m_revLimitDtTimer;
+
 	ErrorAccumulator m_targetErrorAccumulator;
 
 	/**

@@ -134,6 +134,7 @@ TEST(limp, revSoftLimit) {
 
 	engineConfiguration->rpmHardLimit = 2500;
 	engineConfiguration->rpmHardLimitHyst = 200;
+	engineConfiguration->rpmSoftLimitRange = 200;
 	engineConfiguration->rpmSoftLimitTimingRetard = 10; // 10 deg
 	engineConfiguration->rpmSoftLimitFuelAdded = 20;	// 20%
 	engineConfiguration->cutSparkOnHardLimit = true;

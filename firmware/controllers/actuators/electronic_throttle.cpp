@@ -66,6 +66,10 @@
 #define ETB_INTERMITTENT_LIMIT 50
 #endif
 
+// 'cutEtbOnRpmLimit': the ETB rev limiter PID targets this far below the real hard RPM
+// limit, so it's a real distinction from the hard limit (which only cuts fuel/spark).
+#define ETB_REV_LIMIT_TARGET_MARGIN_RPM 50
+
 static pedal2tps_t pedal2tpsMap{"p2t"};
 static Map3D<ETB2_TRIM_RPM_SIZE, ETB2_TRIM_SIZE, int8_t, uint8_t, uint8_t> throttle2TrimTable{"t2t"};
 
@@ -450,17 +454,47 @@ expected<percent_t> EtbController::getSetpointEtb() {
 		}
 	}
 
-	// Lastly, apply ETB rev limiter
-	auto etbRpmLimit = engineConfiguration->etbRevLimitStart;
-	if (etbRpmLimit != 0) {
-		auto fullyLimitedRpm = etbRpmLimit + engineConfiguration->etbRevLimitRange;
+	// Lastly, apply ETB rev limiter: a PID that actively manages throttle to hold RPM just
+	// under the hard limit, instead of just cutting fuel/spark at the limit. Gated by
+	// 'cutEtbOnRpmLimit' so this real distinction between the hard limit and the ETB limit
+	// is opt-in.
+	if (engineConfiguration->cutEtbOnRpmLimit) {
+		float revLimit = getLimpManager()->getRevLimit();
+		float manageStartRpm = revLimit - engineConfiguration->etbRevLimitRange;
+		bool shouldManage = revLimit > 0 && rpm >= manageStartRpm;
 
-		float targetPositionBefore = targetPosition;
-		// Linearly taper throttle to closed from the limit across the range
-		targetPosition = interpolateClamped(etbRpmLimit, targetPosition, fullyLimitedRpm, 0, rpm);
+		if (shouldManage) {
+			if (!m_revLimitPidInited) {
+				m_revLimitPidCfg.offset = 0;
+				m_revLimitPidCfg.periodMs = 0;
+				m_revLimitPidCfg.minValue = 0;
+				m_revLimitPidCfg.maxValue = 100;
+				m_revLimitPid.initPidClass(&m_revLimitPidCfg);
+				m_revLimitPidInited = true;
+			}
+			m_revLimitPidCfg.pFactor = engineConfiguration->etbRevLimitKp;
+			m_revLimitPidCfg.iFactor = engineConfiguration->etbRevLimitKi;
+			m_revLimitPidCfg.dFactor = engineConfiguration->etbRevLimitKd;
 
-		// rev limit active if the position was changed by rev limiter
-		etbRevLimitActive = std::abs(targetPosition - targetPositionBefore) > 0.1f;
+			if (!m_revLimitManaging) {
+				// Just engaged: seed the PID with the configured starting throttle position
+				// instead of ramping up from zero. Don't reset the dt timer here - a brand new
+				// Timer (and one left over from a prior engagement) already reports a large
+				// elapsed time on its next read, same as this file's other PID dt timers.
+				m_revLimitPid.reset();
+				m_revLimitPid.setIntegration(engineConfiguration->etbRevLimitSeedTps);
+			}
+
+			float targetRpm = revLimit - ETB_REV_LIMIT_TARGET_MARGIN_RPM;
+			float dt = m_revLimitDtTimer.getElapsedSecondsAndReset(getTimeNowNt());
+			targetPosition = std::min(targetPosition, m_revLimitPid.getOutput(targetRpm, rpm, dt));
+		}
+
+		etbRevLimitActive = shouldManage;
+		m_revLimitManaging = shouldManage;
+	} else {
+		etbRevLimitActive = false;
+		m_revLimitManaging = false;
 	}
 
 	float minPosition = engineConfiguration->etbMinimumPosition;

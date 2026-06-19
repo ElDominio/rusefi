@@ -123,6 +123,10 @@ float Pid::getIntegration() const {
 	return iTerm;
 }
 
+void Pid::setIntegration(float value) {
+	iTerm = value;
+}
+
 float Pid::getD() const {
 	return parameters->dFactor;
 }

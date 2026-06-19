@@ -182,6 +182,11 @@ void defaultsOrFixOnBurn() {
 	if (engineConfiguration->vvtControlMinRpm < engineConfiguration->cranking.rpm) {
 		engineConfiguration->vvtControlMinRpm = engineConfiguration->cranking.rpm;
 	}
+
+	if (engineConfiguration->rpmSoftLimitRange == 0) {
+		// preserve pre-existing behavior for old tunes: soft limit window used to be rpmHardLimitHyst-wide
+		engineConfiguration->rpmSoftLimitRange = engineConfiguration->rpmHardLimitHyst;
+	}
 }
 
 void setDefaultBaseEngine() {
@@ -283,9 +288,14 @@ void setDefaultBaseEngine() {
 	// Limits and Fallbacks
 	engineConfiguration->rpmHardLimit = 7000;
 	engineConfiguration->rpmHardLimitHyst = 50;
+	engineConfiguration->rpmSoftLimitRange = 50;
 	engineConfiguration->cutFuelOnHardLimit = true;
 	engineConfiguration->cutSparkOnHardLimit = true;
 	engineConfiguration->etbRevLimitRange = 250;
+	engineConfiguration->etbRevLimitSeedTps = 10;
+	engineConfiguration->etbRevLimitKp = 0.05;
+	engineConfiguration->etbRevLimitKi = 0.002;
+	engineConfiguration->etbRevLimitKd = 0;
 
   engineConfiguration->tpsAccelFractionDivisor = 1;
 

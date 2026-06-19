@@ -81,9 +81,12 @@ void LimpManager::updateRevLimit(float rpm) {
 	// Require configurable rpm drop before resuming
 	resumeRpm = m_revLimit - engineConfiguration->rpmHardLimitHyst;
 
-	m_timingRetard = interpolateClamped(resumeRpm, 0, m_revLimit, engineConfiguration->rpmSoftLimitTimingRetard, rpm);
+	// Soft RPM limit ramps in over its own configurable window, independent of the hard limit hysteresis above
+	float softLimitStartRpm = m_revLimit - engineConfiguration->rpmSoftLimitRange;
 
-	percent_t fuelAdded = interpolateClamped(resumeRpm, 0, m_revLimit, engineConfiguration->rpmSoftLimitFuelAdded, rpm);
+	m_timingRetard = interpolateClamped(softLimitStartRpm, 0, m_revLimit, engineConfiguration->rpmSoftLimitTimingRetard, rpm);
+
+	percent_t fuelAdded = interpolateClamped(softLimitStartRpm, 0, m_revLimit, engineConfiguration->rpmSoftLimitFuelAdded, rpm);
 	m_fuelCorrection = 1.0f + fuelAdded / 100;
 }
 
