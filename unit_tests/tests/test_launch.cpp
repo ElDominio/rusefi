@@ -142,6 +142,45 @@ TEST(LaunchControl, SwitchInputCondition) {
 
 }
 
+TEST(LaunchControl, DisableWithClutchUp) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	LaunchControlBase dut;
+
+	engineConfiguration->clutchUpPin = Gpio::G3;
+	engineConfiguration->clutchUpPinMode = PI_PULLUP;
+	engineConfiguration->disableLaunchWithClutchUp = true;
+
+	// Activated by switch, unrelated to clutch up
+	engineConfiguration->launchActivationMode = SWITCH_INPUT_LAUNCH;
+	engineConfiguration->launchActivatePin = Gpio::G1;
+	setMockState(engineConfiguration->launchActivatePin, true);
+
+	// Clutch up reads "down" (not up): switch condition still active
+	setMockState(engineConfiguration->clutchUpPin, false);
+	engine->updateSwitchInputs();
+	EXPECT_TRUE(dut.isInsideSwitchCondition());
+	EXPECT_FALSE(dut.isClutchUpDisabled);
+
+	// Clutch up reads "up": forcibly disables launch regardless of switch state
+	setMockState(engineConfiguration->clutchUpPin, true);
+	engine->updateSwitchInputs();
+	EXPECT_FALSE(dut.isInsideSwitchCondition());
+	EXPECT_TRUE(dut.isClutchUpDisabled);
+
+	// Feature disabled: clutch up no longer overrides the switch
+	engineConfiguration->disableLaunchWithClutchUp = false;
+	EXPECT_TRUE(dut.isInsideSwitchCondition());
+	EXPECT_FALSE(dut.isClutchUpDisabled);
+
+	// When Clutch Up IS the activation mode, this override never applies
+	engineConfiguration->disableLaunchWithClutchUp = true;
+	engineConfiguration->launchActivationMode = CLUTCH_UP_INPUT_LAUNCH;
+	setMockState(engineConfiguration->clutchUpPin, true);
+	engine->updateSwitchInputs();
+	EXPECT_FALSE(dut.isClutchUpDisabled);
+}
+
 TEST(LaunchControl, CombinedCondition) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 

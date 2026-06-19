@@ -1,0 +1,14 @@
+struct_no_prefix upshift_rpm_hold_state_s
+
+	bit upshiftHoldActive;Upshift Hold: active
+
+	uint8_t upshiftHoldState;Upshift Hold: state
+	uint8_t upshiftHoldPreShiftGear;Upshift Hold: pre-shift gear
+	uint8_t upshiftHoldTargetGear;Upshift Hold: target gear
+
+	uint16_t upshiftHoldTargetRpm;Upshift Hold: target RPM
+
+	float upshiftHoldThrottleRequest;Upshift Hold: throttle req
+	float upshiftHoldPidOutput;Upshift Hold: PID output
+
+end_struct

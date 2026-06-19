@@ -145,9 +145,15 @@ bool DownshiftBlipper::shouldTerminate(float rpm, float driverTps, bool downshif
 }
 
 float DownshiftBlipper::runPid(float rpm, float dt) {
+	auto cfg = getCustomPage();
+	// Feed-forward seed: throttle needed at neutral to reach the target RPM. The PID then
+	// only corrects the residual error instead of building the throttle from zero. With an
+	// unconfigured (all-zero) curve ff is 0 and behavior is identical to before.
+	float ff = interpolate2d((float)downshiftBlipTargetRpm,
+		cfg->tpsRpmFeedForwardBins, cfg->tpsRpmFeedForwardValues);
 	// Error normalized to per-100-RPM so gains live in the same range as the idle PID.
-	float out = m_pid.getOutput(downshiftBlipTargetRpm / 100.0f, rpm / 100.0f, dt);
-	out = clampF(0, out, getCustomPage()->downshiftBlipperMaxTpsLimit);
+	float out = ff + m_pid.getOutput(downshiftBlipTargetRpm / 100.0f, rpm / 100.0f, dt);
+	out = clampF(0, out, cfg->downshiftBlipperMaxTpsLimit);
 	downshiftBlipPidOutput = out;
 	return out;
 }

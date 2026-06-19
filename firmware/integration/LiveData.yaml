@@ -346,6 +346,14 @@ Usages:
     engineModule: DownshiftBlipper
     conditional_compilation: "EFI_ELECTRONIC_THROTTLE_BODY"
 
+  - name: upshift_rpm_hold_state
+    java: UpshiftRpmHold.java
+    folder: controllers/actuators
+    prepend: integration/rusefi_config_shared.txt
+    output_name: ush
+    engineModule: UpshiftRpmHold
+    conditional_compilation: "EFI_ELECTRONIC_THROTTLE_BODY"
+
   - name: dfco_state
     java: DfcoState.java
     folder: controllers/algo/fuel

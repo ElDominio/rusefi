@@ -74,6 +74,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | Flag | Subsystem | Default |
 |---|---|---|
 | `EFI_DOWNSHIFT_BLIPPER` | Downshift blipper (also needs `EFI_ELECTRONIC_THROTTLE_BODY`) | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_UPSHIFT_RPM_HOLD` | Upshift RPM hold (also needs `EFI_ELECTRONIC_THROTTLE_BODY`) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_EXHAUST_CUTOUT` | Exhaust cutout | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_ENGINE_STATE_MACHINE` | Engine state machine + pops & bangs | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_MISFIRE_DETECTION` | Idle misfire detection (ESM sub-feature; needs `EFI_ENGINE_STATE_MACHINE` at runtime) | FALSE (f4) / TRUE (f7,h7) |
@@ -187,6 +188,7 @@ EFI_TUNER_STUDIO
 EFI_TUNER_STUDIO_VERBOSE
 EFI_UART_ECHO_TEST_MODE
 EFI_UART_GPS
+EFI_UPSHIFT_RPM_HOLD             ← AlphaX (upshift RPM hold)
 EFI_USB_SERIAL
 EFI_USE_COMPRESSED_INI_MSD
 EFI_USE_FAST_ADC

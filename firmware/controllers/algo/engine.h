@@ -37,6 +37,7 @@
 #include "engine_state_machine.h"
 #include "misfire_detection.h"
 #include "downshift_blipper.h"
+#include "upshift_rpm_hold.h"
 #include "antilag_system.h"
 #include "start_stop.h"
 #include "trigger_scheduler.h"
@@ -213,6 +214,7 @@ public:
 #endif // EFI_MISFIRE_DETECTION
 #if EFI_ELECTRONIC_THROTTLE_BODY
         DownshiftBlipper,
+        UpshiftRpmHold,
 #endif // EFI_ELECTRONIC_THROTTLE_BODY
 #if EFI_LTFT_CONTROL
         LongTermFuelTrim,

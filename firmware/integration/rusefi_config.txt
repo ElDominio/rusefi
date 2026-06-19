@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260618
+#define FLASH_DATA_VERSION 260619
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -1075,6 +1075,8 @@ bit canBroadcastUseChannelTwo,"second","first"
 	bit useRawOutputToDriveIdleStepper,"yes","no";If enabled we use four Push-Pull outputs to directly drive stepper idle air valve coils
 ! bit 29
 bit verboseCan2,"Print all","Do not print";Print incoming and outgoing second bus CAN messages in rusEFI console
+! bit 30
+bit disableLaunchWithClutchUp,"yes","no";When Launch Control is NOT activated by Clutch Up, use the Clutch Up switch to positively confirm the clutch has been released and disable launch.
 
 
 	dc_io[ETB_COUNT iterate] etbIo
@@ -2608,6 +2610,7 @@ end_struct
 #define ts_show_launch_power_ramp true
 #define ts_show_burst_knock true
 #define ts_show_downshift_blipper true
+#define ts_show_upshift_rpm_hold true
 #define ts_show_sport_pedal true
 #define ts_show_wot_enrichment true
 #define ts_show_hbridge_function true

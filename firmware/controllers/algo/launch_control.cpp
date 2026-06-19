@@ -25,6 +25,17 @@ bool LaunchControlBase::isInsideSwitchCondition() {
 	isClutchUpActivated = engineConfiguration->launchActivationMode == CLUTCH_UP_INPUT_LAUNCH;
 	isBrakePedalActivated = engineConfiguration->launchActivationMode == STOP_INPUT_LAUNCH;
 
+	// When Clutch Up is the activation mode, "not up" only means "probably down" - a
+	// disconnected or stuck-low switch reads the same way, so we can't assert the clutch
+	// is actually held. But a switch reading "up" is unambiguous, since the only way to
+	// read up is to be up. So when Clutch Up is NOT the activation mode, that unambiguous
+	// reading can instead be used to positively confirm the clutch has been released and
+	// force launch off, regardless of whatever other condition is otherwise active.
+	isClutchUpDisabled = !isClutchUpActivated && engineConfiguration->disableLaunchWithClutchUp && getClutchUpState();
+	if (isClutchUpDisabled) {
+		return false;
+	}
+
 	if (isSwitchActivated) {
 #if !EFI_SIMULATOR
 		if (isBrainPinValid(engineConfiguration->launchActivatePin)) {

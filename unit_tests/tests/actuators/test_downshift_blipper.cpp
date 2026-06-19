@@ -177,6 +177,35 @@ TEST(DownshiftBlipper, abortsWhenDriverOnThrottle) {
 	EXPECT_FALSE(dut().isActive());
 }
 
+// The TPS-to-RPM feed-forward curve is added on top of the PID output. With the PID gains
+// zeroed, the commanded throttle should equal the looked-up feed-forward value at the target.
+TEST(DownshiftBlipper, feedForwardSeedsThrottle) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBlipper();
+
+	auto cfg = getCustomPage();
+	cfg->downshiftBlipperKp = 0;
+	cfg->downshiftBlipperKi = 0;
+	cfg->downshiftBlipperKd = 0;
+	// Flat 25% feed-forward across the whole RPM range.
+	for (size_t i = 0; i < 10; i++) {
+		cfg->tpsRpmFeedForwardBins[i] = i * 2000.0f;
+		cfg->tpsRpmFeedForwardValues[i] = 25;
+	}
+
+	setSensors(2700, 80, 0);
+	latchGear(eth, 4);
+
+	setDownshifting(true);
+	dut().onFastCallback();  // RampOpen
+
+	eth.moveTimeForwardMs(20);
+	dut().onFastCallback();  // ActivePID: PID contributes 0, output is pure feed-forward
+
+	EXPECT_FLOAT_EQ(25, dut().downshiftBlipPidOutput);
+	EXPECT_NEAR(25, dut().getThrottleRequest(), 0.01);
+}
+
 TEST(DownshiftBlipper, cutsWhenClutchReleased) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupBlipper();

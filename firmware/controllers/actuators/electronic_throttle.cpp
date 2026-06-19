@@ -431,6 +431,13 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	if (engine->module<DownshiftBlipper>().unmock().isActive()) {
 		targetPosition = engine->module<DownshiftBlipper>().unmock().getThrottleRequest();
 	}
+
+	// Upshift RPM Hold: inverse of the blipper — during an active hold, fully replace the
+	// pedal-derived target so the ETB holds RPM at the next-higher gear's matched speed.
+	// Same ordering rationale: before the rev limiter, after the limp ceiling below.
+	if (engine->module<UpshiftRpmHold>().unmock().isActive()) {
+		targetPosition = engine->module<UpshiftRpmHold>().unmock().getThrottleRequest();
+	}
 #endif // EFI_ELECTRONIC_THROTTLE_BODY
 
 	// Limp Mode ETB ceiling: cap throttle opening while limp is latched. Placed after the
