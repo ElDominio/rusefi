@@ -8,6 +8,11 @@
 #include "ignition_controller.h"
 
 #if EFI_SHAFT_POSITION_INPUT
+
+// How long a start-button press waits for a delayed Lua/security authorization
+// before the request is abandoned. Covers CAN handshakes that grant cranking a
+// moment after the button is pressed.
+#define START_REQUEST_LATCH_SEC 1.0f
 void initStartStopButton() {
 	/* startCrankingDuration is efitimesec_t, so we need to multiply it by 1000 to get milliseconds*/
 	engine->startStopState.startStopButtonDebounce.init((engineConfiguration->startCrankingDuration*1000),
@@ -57,6 +62,33 @@ PUBLIC_API_WEAK bool isCrankingSuppressed() {
   return false;
 }
 
+// Returns true when a start-button press must not engage the starter.
+// IMPORTANT: this only suppresses the cranking *output* - the button edge is
+// still sampled and tracked by the caller so the firmware stays in sync with
+// the physical button. We disable the starter, not the check.
+static bool isStartCrankingBlocked() {
+	if (!engine->rpmCalculator.isStopped()) {
+		// engine is already running: a button press stops it, that is never blocked here
+		return false;
+	}
+	if (engineConfiguration->crankingCondition == CC_BRAKE && !engine->brakePedalSwitchedState) {
+		return true;
+	}
+	if (engineConfiguration->crankingCondition == CC_CLUTCH && !engine->clutchUpSwitchedState) {
+		return true;
+	}
+	if (engineConfiguration->crankingCondition == CC_CLUTCH_DOWN && !engine->engineState.clutchDownState) {
+		return true;
+	}
+	if (isCrankingSuppressed()) {
+		return true;
+	}
+	if (engine->startStopState.startDisabledByLua) {
+		return true;
+	}
+	return false;
+}
+
 void slowStartStopButtonCallback() {
   if (!isIgnVoltage()) {
     // nothing to crank if we are powered only via USB
@@ -73,34 +105,39 @@ void slowStartStopButtonCallback() {
         return;
     }
 
-  if (engine->rpmCalculator.isStopped()) {
-    if (engineConfiguration->crankingCondition == CC_BRAKE && !engine->brakePedalSwitchedState) {
-      return;
-    }
-    if (engineConfiguration->crankingCondition == CC_CLUTCH && !engine->clutchUpSwitchedState) {
-      return;
-    }
-    if (engineConfiguration->crankingCondition == CC_CLUTCH_DOWN && !engine->engineState.clutchDownState) {
-      return;
-    }
-
-    if (isCrankingSuppressed()) {
-      return;
-    }
-    if (engine->startStopState.startDisabledByLua) {
-      return;
-    }
-  }
-
+	// Always sample the button and track its edge - even when cranking is suppressed -
+	// so engineState.startStopState stays in sync with the physical button. Only the
+	// cranking action below is gated by isStartCrankingBlocked().
 	bool startStopState = engine->startStopState.startStopButtonDebounce.readPinEvent();
 
 	if (startStopState && !engine->engineState.startStopState) {
 		// we are here on transition from 0 to 1
-		startStopButtonToggle();
+		if (!isStartCrankingBlocked()) {
+			startStopButtonToggle();
+		} else if (engine->rpmCalculator.isStopped() && engine->startStopState.startDisabledByLua) {
+			// Valid start request, but Lua (e.g. a CAN security handshake) has not authorized
+			// yet. The authorization often arrives a moment *after* the press, so remember the
+			// request for a short window instead of dropping it.
+			engine->startStopState.hasPendingStartRequest = true;
+			engine->startStopState.pendingStartRequestTimer.reset();
+		}
 	}
 	// todo: we shall extract start_stop.txt from engine_state.txt
 	engine->engineState.startStopState = startStopState;
 	engine->engineState.startStopPhysicalState = engine->startStopState.startStopButtonDebounce.getPhysicalState();
+
+	// Service a pending (authorization-delayed) start request.
+	if (engine->startStopState.hasPendingStartRequest) {
+		if (!engine->rpmCalculator.isStopped()
+				|| engine->startStopState.pendingStartRequestTimer.hasElapsedSec(START_REQUEST_LATCH_SEC)) {
+			// engine already cranking/running, or the latch window expired - give up on this request
+			engine->startStopState.hasPendingStartRequest = false;
+		} else if (!isStartCrankingBlocked()) {
+			// authorization arrived in time - honor the original press
+			engine->startStopState.hasPendingStartRequest = false;
+			doStartCranking();
+		}
+	}
 
     bool isStarterEngaged = enginePins.starterControl.getLogicValue();
 

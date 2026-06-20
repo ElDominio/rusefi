@@ -205,11 +205,11 @@ pins:
 
   - id: EFI_ADC_38
     class: analog_inputs
-    ts_name: TPSA (PF4 mux=0)
+    ts_name: TPSB (PF4 mux=0)
 
   - id: EFI_ADC_46
     class: analog_inputs
-    ts_name: TPSB (PF4 mux=1)
+    ts_name: TPSA (PF4 mux=1)
 
   - id: EFI_ADC_39
     class: analog_inputs
@@ -229,11 +229,11 @@ pins:
 
   - id: EFI_ADC_33
     class: analog_inputs
-    ts_name: Oil Pressure (PF7 mux=0)
+    ts_name: Fuel Rail Temp (PF7 mux=0)
 
   - id: EFI_ADC_41
     class: analog_inputs
-    ts_name: Fuel Rail Temp (PF7 mux=1)
+    ts_name: Oil Pressure (PF7 mux=1)
 
   - id: EFI_ADC_34
     class: analog_inputs
@@ -245,11 +245,11 @@ pins:
 
   - id: EFI_ADC_35
     class: analog_inputs
-    ts_name: AC Pressure (PF9 mux=0)
+    ts_name: Fuel Rail Pressure (PF9 mux=0)
 
   - id: EFI_ADC_43
     class: analog_inputs
-    ts_name: Fuel Rail Pressure (PF9 mux=1)
+    ts_name: AC Pressure (PF9 mux=1)
 
   - id: EFI_ADC_36
     class: analog_inputs

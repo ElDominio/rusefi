@@ -13,25 +13,29 @@
 
 static void setInjectorPins() {
 	// Mapped to injector low-side drivers
+	// Reordered per bench test results: harness pairs cylinder N with the coil/injector
+	// physically wired for cylinder M (test->actual): 4->2, 2->3, 7->4, 6->5, 5->6, 3->7
 	engineConfiguration->injectionPins[0] = Gpio::D3;   // H144_OUT_IO1 / STM32_INJ1
-	engineConfiguration->injectionPins[1] = Gpio::A9;   // H144_OUT_IO2 / STM32_INJ2
-	engineConfiguration->injectionPins[2] = Gpio::D11;  // H144_LS_3     / STM32_INJ3
-	engineConfiguration->injectionPins[3] = Gpio::D10;  // H144_LS_4     / STM32_INJ4
-	engineConfiguration->injectionPins[4] = Gpio::D2;   // H144_OUT_IO5 / STM32_INJ5
-	engineConfiguration->injectionPins[5] = Gpio::A8;   // H144_OUT_IO12 / STM32_INJ6
-	engineConfiguration->injectionPins[6] = Gpio::D15;  // H144_OUT_PWM7 / STM32_INJ7
+	engineConfiguration->injectionPins[1] = Gpio::D10;  // H144_LS_4     / STM32_INJ4
+	engineConfiguration->injectionPins[2] = Gpio::A9;   // H144_OUT_IO2 / STM32_INJ2
+	engineConfiguration->injectionPins[3] = Gpio::D15;  // H144_OUT_PWM7 / STM32_INJ7
+	engineConfiguration->injectionPins[4] = Gpio::A8;   // H144_OUT_IO12 / STM32_INJ6
+	engineConfiguration->injectionPins[5] = Gpio::D2;   // H144_OUT_IO5 / STM32_INJ5
+	engineConfiguration->injectionPins[6] = Gpio::D11;  // H144_LS_3     / STM32_INJ3
 	engineConfiguration->injectionPins[7] = Gpio::D12;  // H144_OUT_PWM8 / STM32_INJ8
 }
 
 static void setIgnitionPins() {
 	// Mapped to 5V ignition coil outputs
+	// Reordered per bench test results: harness pairs cylinder N with the coil/injector
+	// physically wired for cylinder M (test->actual): 4->2, 2->3, 7->4, 6->5, 5->6, 3->7
 	engineConfiguration->ignitionPins[0] = Gpio::H144_IGN_1;  // PC13 / STM32_IGN1
-	engineConfiguration->ignitionPins[1] = Gpio::H144_IGN_2;  // PE5  / STM32_IGN2
-	engineConfiguration->ignitionPins[2] = Gpio::H144_IGN_3;  // PE4  / STM32_IGN3
-	engineConfiguration->ignitionPins[3] = Gpio::H144_IGN_4;  // PE3  / STM32_IGN4
-	engineConfiguration->ignitionPins[4] = Gpio::H144_IGN_5;  // PE2  / STM32_IGN5
-	engineConfiguration->ignitionPins[5] = Gpio::H144_IGN_6;  // PB8  / STM32_IGN6
-	engineConfiguration->ignitionPins[6] = Gpio::H144_IGN_7;  // PB9  / STM32_IGN7
+	engineConfiguration->ignitionPins[1] = Gpio::H144_IGN_4;  // PE3  / STM32_IGN4
+	engineConfiguration->ignitionPins[2] = Gpio::H144_IGN_2;  // PE5  / STM32_IGN2
+	engineConfiguration->ignitionPins[3] = Gpio::H144_IGN_7;  // PB9  / STM32_IGN7
+	engineConfiguration->ignitionPins[4] = Gpio::H144_IGN_6;  // PB8  / STM32_IGN6
+	engineConfiguration->ignitionPins[5] = Gpio::H144_IGN_5;  // PE2  / STM32_IGN5
+	engineConfiguration->ignitionPins[6] = Gpio::H144_IGN_3;  // PE4  / STM32_IGN3
 	engineConfiguration->ignitionPins[7] = Gpio::H144_IGN_8;  // PE6  / STM32_IGN8
 }
 

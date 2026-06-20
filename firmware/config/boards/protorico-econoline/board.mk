@@ -94,3 +94,6 @@ DDEFS += -DEFI_WOT_ENRICHMENT=TRUE
 
 # Added by Board Configuration Editor
 DDEFS += -DEFI_ENGINE_STATE_MACHINE=TRUE
+
+# TCU support
+DDEFS += -DEFI_TCU=TRUE

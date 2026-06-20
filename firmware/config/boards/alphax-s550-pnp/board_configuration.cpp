@@ -43,7 +43,7 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
 	engineConfiguration->vvtMode[1] = VVT_SINGLE_TOOTH;
 
-	setTPS1Inputs(EFI_ADC_38, EFI_ADC_46);   // PF4, mux=0/mux=1
+	setTPS1Inputs(EFI_ADC_46, EFI_ADC_38);   // PF4, mux=1/mux=0 (inverted mux)
 
 	setPPSInputs(EFI_ADC_37, EFI_ADC_45);    // PF3, mux=0/mux=1
 
@@ -240,8 +240,8 @@ int boardGetAnalogInputDiagnostic(adc_channel_e hwChannel, float voltage) {
 
 	switch (hwChannel) {
 		/* inputs that may be affected by incorrect reference voltage */
-		case EFI_ADC_38:  // TPSA PF4 mux=0
-		case EFI_ADC_46:  // TPSB PF4 mux=1
+		case EFI_ADC_38:  // TPSB PF4 mux=0
+		case EFI_ADC_46:  // TPSA PF4 mux=1
 		case EFI_ADC_37:  // PPSA PF3 mux=0
 		case EFI_ADC_45:  // PPSB PF3 mux=1
 		//case MM176_IN_O2S_ANALOG:

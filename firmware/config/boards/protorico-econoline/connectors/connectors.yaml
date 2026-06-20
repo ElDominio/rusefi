@@ -7,27 +7,27 @@ pins:
 
   - meta: H144_IGN_2
     class: outputs
-    ts_name: Ignition Coil 2
+    ts_name: Ignition Coil 3
 
   - meta: H144_IGN_3
     class: outputs
-    ts_name: Ignition Coil 3
+    ts_name: Ignition Coil 7
 
   - meta: H144_IGN_4
     class: outputs
-    ts_name: Ignition Coil 4
+    ts_name: Ignition Coil 2
 
   - meta: H144_IGN_5
     class: outputs
-    ts_name: Ignition Coil 5
+    ts_name: Ignition Coil 6
 
   - meta: H144_IGN_6
     class: outputs
-    ts_name: Ignition Coil 6
+    ts_name: Ignition Coil 5
 
   - meta: H144_IGN_7
     class: outputs
-    ts_name: Ignition Coil 7
+    ts_name: Ignition Coil 4
 
   - meta: H144_IGN_8
     class: outputs
@@ -39,27 +39,27 @@ pins:
 
   - id: A9
     class: outputs
-    ts_name: Injector 2
+    ts_name: Injector 3
 
   - id: D11
     class: outputs
-    ts_name: Injector 3
+    ts_name: Injector 7
 
   - id: D10
     class: outputs
-    ts_name: Injector 4
+    ts_name: Injector 2
 
   - id: D2
     class: outputs
-    ts_name: Injector 5
+    ts_name: Injector 6
 
   - id: A8
     class: outputs
-    ts_name: Injector 6
+    ts_name: Injector 5
 
   - id: D15
     class: outputs
-    ts_name: Injector 7
+    ts_name: Injector 4
 
   - id: D12
     class: outputs

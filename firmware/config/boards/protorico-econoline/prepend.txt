@@ -1,1 +1,2 @@
 #define MAIN_HELP_URL "https://rusefi.com/s/uaefi"
+#define ts_show_tcu true
