@@ -69,6 +69,11 @@
 #define EFI_AC_PRESSURE_FAN TRUE
 #endif
 
+// Check Engine Triggering (TS-configurable threshold checks with a points-gated CEL)
+#ifndef EFI_CHECK_ENGINE_TRIGGERING
+#define EFI_CHECK_ENGINE_TRIGGERING TRUE
+#endif
+
 #ifndef EFI_OFF_IDLE_RPM_ADDER
 #define EFI_OFF_IDLE_RPM_ADDER TRUE
 #endif

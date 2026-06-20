@@ -392,6 +392,15 @@ const wot_enrichment_state_s* getLiveData(size_t) {
 }
 
 template<>
+const check_engine_light_state_s* getLiveData(size_t) {
+#if EFI_CHECK_ENGINE_TRIGGERING
+	return &engine->module<CheckEngineTriggering>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
 const dfco_state_s* getLiveData(size_t) {
 	return &engine->module<DfcoController>().unmock();
 }

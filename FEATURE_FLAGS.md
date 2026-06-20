@@ -88,6 +88,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_LUA_LIMITER` | Lua limiter | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_ADVANCED_FUEL_PUMP` | Advanced / PWM secondary fuel pump | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_VVT_COMPENSATION` | VVT timing/fuel compensation | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_CHECK_ENGINE_TRIGGERING` | Check Engine Triggering (TS-configurable threshold checks with a points-gated CEL; TPS Stuck High/Low implemented, others reserved) | FALSE (f4) / TRUE (f7,h7) |
 
 ## All flags
 
@@ -109,6 +110,7 @@ EFI_CAN_GPIO
 EFI_CAN_SERIAL
 EFI_CAN_SUPPORT
 EFI_CDM_INTEGRATION
+EFI_CHECK_ENGINE_TRIGGERING      ← AlphaX (Check Engine Triggering)
 EFI_CLI_SUPPORT
 EFI_CLOCK_LOCKS
 EFI_CLUTCH_DELAY_VALVE           ← AlphaX (CDV)

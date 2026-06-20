@@ -395,4 +395,44 @@ struct_no_prefix page5_s
 	uint8_t dwellDutyPercent;Dwell Duty Mode: percentage of the inter-spark interval used as coil dwell time. 50 = half the interval between pulses (standard TFI target).;"%", 1, 0, 1, 90, 0
 	uint8_t[3] dwellDutyPad;unused
 
+	! --- Check Engine Triggering (EFI_CHECK_ENGINE_TRIGGERING) ---
+	! Each check below has its own enable bit and a "points" weight. Every slow-callback tick the
+	! points of all currently-tripped, enabled checks are summed. Reaching celBlinkPointsThreshold
+	! blinks the CEL pin directly as a pre-warning (no DTC stored). Reaching celPointsThreshold
+	! raises the matching OBD code(s) via addError(), handing off to the standard MIL digit-blink
+	! path. Set either threshold to 0 to disable that stage. See check_engine_light.md.
+	!
+	! TPS Stuck High/Low (P2111/P2112) is implemented now -- requires an Electronic Throttle Body.
+	! It compares the actual TPS reading against driver pedal intent: "stuck high" trips when TPS
+	! is at/above tpsStuckHighThreshold while the pedal is at/below tpsStuckLowThreshold (throttle
+	! staying open with no driver request); "stuck low" trips when TPS is at/below
+	! tpsStuckLowThreshold while the pedal is at/above tpsStuckHighThreshold (throttle not
+	! responding to driver input). Either condition must hold continuously for
+	! tpsStuckCelTimeoutSec before it counts as tripped. This intentionally never fires at idle
+	! (pedal and TPS both low) or at WOT (both high). Once tripped, the SAME timeout (the same
+	! timer, run in the opposite direction) is required with the gate continuously clear before
+	! it un-trips -- but only if tpsStuckCelAutoClear is enabled. If disabled, a tripped code
+	! latches until power cycle, matching the existing Misfire Detection latch behavior.
+	!
+	! Oil Pressure Low, Coolant Temp High, AFR/Lambda Lean-or-Rich, and System Voltage Low-or-High
+	! are reserved here (enable + points only) but not yet evaluated -- their check-specific
+	! threshold fields will be added when each is implemented.
+	bit tpsStuckCelEnable,"enabled","disabled";Check Engine Triggering: TPS Stuck High/Low. Detects the throttle plate stuck away from driver pedal intent (P2111/P2112). Requires an Electronic Throttle Body.
+	bit tpsStuckCelAutoClear,"enabled","disabled";Check Engine Triggering: TPS Stuck -- automatically clear the code once the condition has been continuously gone for tpsStuckCelTimeoutSec. If disabled, a tripped code latches until power cycle.
+	bit oilPressureLowCelEnable,"enabled","disabled";Check Engine Triggering: Oil Pressure Low. Not yet implemented -- reserved.
+	bit cltHighCelEnable,"enabled","disabled";Check Engine Triggering: Coolant Temp High. Not yet implemented -- reserved.
+	bit afrCelEnable,"enabled","disabled";Check Engine Triggering: AFR/Lambda Lean or Rich. Not yet implemented -- reserved.
+	bit voltageCelEnable,"enabled","disabled";Check Engine Triggering: System Voltage Low or High. Not yet implemented -- reserved.
+
+	uint8_t tpsStuckCelPoints;Check Engine Triggering: points contributed to the CEL total while TPS Stuck High/Low is tripped.;"points", 1, 0, 0, 100, 0
+	uint8_t oilPressureLowCelPoints;Check Engine Triggering: points contributed while Oil Pressure Low is tripped (reserved, not yet evaluated).;"points", 1, 0, 0, 100, 0
+	uint8_t cltHighCelPoints;Check Engine Triggering: points contributed while Coolant Temp High is tripped (reserved, not yet evaluated).;"points", 1, 0, 0, 100, 0
+	uint8_t afrCelPoints;Check Engine Triggering: points contributed while AFR/Lambda Lean or Rich is tripped (reserved, not yet evaluated).;"points", 1, 0, 0, 100, 0
+	uint8_t voltageCelPoints;Check Engine Triggering: points contributed while System Voltage Low or High is tripped (reserved, not yet evaluated).;"points", 1, 0, 0, 100, 0
+	uint8_t celPointsThreshold;Check Engine Triggering: total tripped-check points required to raise the OBD code(s) and fully light the CEL. 0 = never trigger from points.;"points", 1, 0, 0, 100, 0
+	uint8_t celBlinkPointsThreshold;Check Engine Triggering: total tripped-check points required to blink the CEL pin as a pre-warning, before celPointsThreshold is reached. 0 = never blink from points.;"points", 1, 0, 0, 100, 0
+	uint8_t tpsStuckHighThreshold;Check Engine Triggering -- TPS Stuck: throttle % considered "open" for the stuck-high check, and the pedal-pressed gate for the stuck-low check.;"%", 1, 0, 50, 100, 0
+	uint8_t tpsStuckLowThreshold;Check Engine Triggering -- TPS Stuck: throttle % considered "closed" for the stuck-low check, and the pedal-released gate for the stuck-high check.;"%", 1, 0, 0, 50, 0
+	uint8_t autoscale tpsStuckCelTimeoutSec;Check Engine Triggering -- TPS Stuck: how long the TPS/pedal mismatch must hold continuously before it counts as tripped.;"s", 0.1, 0, 0, 25, 1
+
 end_struct

@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE5_DATA_VERSION = 2;
+static constexpr uint32_t PAGE5_DATA_VERSION = 4;
 
 using page5_container_s = ExtraPageContainer<page5_s, PAGE5_DATA_VERSION>;
 
@@ -174,6 +174,24 @@ void customPageSetDefaults() {
 	// Dwell Duty Mode — disabled by default; 50% is the standard TFI module target.
 	d.dwellDutyModeEnabled = false;
 	d.dwellDutyPercent = 50;
+
+	// Check Engine Triggering — all checks disabled by default; conservative TPS Stuck calibration.
+	d.tpsStuckCelEnable = false;
+	d.tpsStuckCelAutoClear = true;   // self-heals once the condition clears, instead of latching
+	d.oilPressureLowCelEnable = false;
+	d.cltHighCelEnable = false;
+	d.afrCelEnable = false;
+	d.voltageCelEnable = false;
+	d.tpsStuckCelPoints = 10;
+	d.oilPressureLowCelPoints = 10;
+	d.cltHighCelPoints = 10;
+	d.afrCelPoints = 10;
+	d.voltageCelPoints = 10;
+	d.celPointsThreshold = 10;       // one tripped check (10 pts) latches the CEL
+	d.celBlinkPointsThreshold = 5;   // half that pre-warns by blinking the CEL
+	d.tpsStuckHighThreshold = 90;    // TPS >= 90% counts as "open" / pedal >= 90% counts as "pressed"
+	d.tpsStuckLowThreshold = 10;     // TPS <= 10% counts as "closed" / pedal <= 10% counts as "released"
+	d.tpsStuckCelTimeoutSec = 5.0f;  // mismatch must hold for 5s before it counts as tripped
 }
 
 void loadCustomPage() {

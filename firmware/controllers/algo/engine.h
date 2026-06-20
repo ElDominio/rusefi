@@ -48,6 +48,7 @@
 #include "launch_power_ramp.h"
 #include "burst_knock.h"
 #include "wot_enrichment.h"
+#include "check_engine_light.h"
 #include "ac_control.h"
 #include "type_list.h"
 #include "boost_control.h"
@@ -182,6 +183,9 @@ public:
 #if EFI_WOT_ENRICHMENT
         WotEnrichment,
 #endif // EFI_WOT_ENRICHMENT
+#if EFI_CHECK_ENGINE_TRIGGERING
+        CheckEngineTriggering,
+#endif // EFI_CHECK_ENGINE_TRIGGERING
         Mockable<IgnitionController>,
         Mockable<AcController>,
         PrimeController,

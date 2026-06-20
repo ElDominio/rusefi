@@ -316,6 +316,14 @@ Usages:
     engineModule: WotEnrichment
     conditional_compilation: "EFI_WOT_ENRICHMENT"
 
+  - name: check_engine_light_state
+    java: CheckEngineTriggering.java
+    folder: controllers/modules/check_engine_light
+    prepend: integration/rusefi_config_shared.txt
+    output_name: check_engine_light
+    engineModule: CheckEngineTriggering
+    conditional_compilation: "EFI_CHECK_ENGINE_TRIGGERING"
+
   - name: live_data_rotational_idle
     java: RotationalIdle.java
     folder: controllers/engine_cycle

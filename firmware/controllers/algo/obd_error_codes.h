@@ -1056,8 +1056,8 @@ enum class ObdCode : uint16_t {
 	//P2108 Throttle Actuator Ctrl Mod Perf
 	//P2109 Throttle/Pedal Pos SensorA Minimum Stop Perf
 	//P2110 Throttle Actuator Ctrl Sys-Forced Limited RPM
-	//P2111 Throttle Actuator Ctrl Sys-Stuck Open
-	//P2112 Throttle Actuator Ctrl Sys-Stuck Closed
+	OBD_Throttle_Actuator_Stuck_Open = 2111,
+	OBD_Throttle_Actuator_Stuck_Closed = 2112,
 	//P2113 Throttle/Pedal Pos SensorB Minimum Stop Perf
 	//P2114 Throttle/Pedal Pos Sensor C Minimum Stop Perf
 	//P2115 Throttle/Pedal Pos Sensor D Minimum Stop Perf
