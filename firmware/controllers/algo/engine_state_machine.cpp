@@ -482,6 +482,7 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 
 	sm_clutch_switch_e upSw = getCustomPage()->smUpshiftClutchSwitch;
 	sm_clutch_switch_e dnSw = getCustomPage()->smDownshiftClutchSwitch;
+	bool secondSwitch = getCustomPage()->smSecondClutchSwitchAvailable;
 
 	// No direction configured → disable shift detection
 	if (upSw == sm_clutch_switch_e::None && dnSw == sm_clutch_switch_e::None) {
@@ -490,39 +491,63 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 		return;
 	}
 
-	// Map the configured switch enum to a live boolean
-	auto switchActive = [&](sm_clutch_switch_e sw) -> bool {
-		if (sw == sm_clutch_switch_e::ClutchUp)   { return clutchUpActive;   }
-		if (sw == sm_clutch_switch_e::ClutchDown) { return clutchDownActive; }
-		return false; // None
+	// Raw physical edges, independent of which direction (if any) a switch is assigned to, so a
+	// switch can be consulted even when it isn't the one a given direction is configured with.
+	// Clutch-Up reads true with the pedal at rest, so its FALLING edge is the pedal leaving rest
+	// (clutch starting to disengage, drivetrain still locked) and its RISING edge is the pedal
+	// fully back at rest (clutch re-engaged). Clutch-Down is the inverse: RISING edge is full
+	// press (clutch fully disengaged), FALLING edge is release starting.
+	bool rawUpFell = !clutchUpActive   && m_prevClutchUp;
+	bool rawUpRose =  clutchUpActive   && !m_prevClutchUp;
+	bool rawDnFell = !clutchDownActive && m_prevClutchDown;
+	bool rawDnRose =  clutchDownActive && !m_prevClutchDown;
+
+	m_prevClutchUp   = clutchUpActive;
+	m_prevClutchDown = clutchDownActive;
+
+	// A switch type is usable for open/close timing if some direction is configured to use it,
+	// or the operator has told us a second switch is wired alongside whichever one is selected.
+	bool upWired = (upSw == sm_clutch_switch_e::ClutchUp)   || (dnSw == sm_clutch_switch_e::ClutchUp)   || secondSwitch;
+	bool dnWired = (upSw == sm_clutch_switch_e::ClutchDown) || (dnSw == sm_clutch_switch_e::ClutchDown) || secondSwitch;
+
+	auto openFired  = [&](sm_clutch_switch_e sw) {
+		if (sw == sm_clutch_switch_e::ClutchUp)   { return rawUpFell; }
+		if (sw == sm_clutch_switch_e::ClutchDown) { return rawDnRose; }
+		return false;
+	};
+	auto closeFired = [&](sm_clutch_switch_e sw) {
+		if (sw == sm_clutch_switch_e::ClutchUp)   { return rawUpRose; }
+		if (sw == sm_clutch_switch_e::ClutchDown) { return rawDnFell; }
+		return false;
 	};
 
-	bool upTrigger = switchActive(upSw);
-	bool dnTrigger = switchActive(dnSw);
+	// Open the shift detection window on the earliest available "clutch starting to disengage"
+	// edge among the switch(es) actually wired.
+	bool upTypeOpens = upWired && rawUpFell;
+	bool dnTypeOpens = dnWired && rawDnRose;
 
-	bool upRose = upTrigger && !m_prevUpTrigger;
-	bool dnRose = dnTrigger && !m_prevDnTrigger;
-	bool upFell = !upTrigger && m_prevUpTrigger;
-	bool dnFell = !dnTrigger && m_prevDnTrigger;
-
-	m_prevUpTrigger = upTrigger;
-	m_prevDnTrigger = dnTrigger;
-
-	// Open a shift detection window on a rising switch edge
-	if (!m_shiftWindowOpen && (upRose || dnRose)) {
+	if (!m_shiftWindowOpen && (upTypeOpens || dnTypeOpens)) {
 		m_shiftWindowOpen   = true;
 		m_shiftWindowOpenMs = nowMs;
 
-		if (upRose && dnRose) {
-			// Both directions share the same physical switch. Use current TPS to disambiguate:
-			// above idle threshold = driver was on throttle = upshift.
-			m_shiftIsUpshift = (tps >= (float)getCustomPage()->smShiftTpsThreshold);
+		if (upSw != sm_clutch_switch_e::None && dnSw != sm_clutch_switch_e::None) {
+			if (upSw == dnSw) {
+				// Both directions share the same physical switch. Use current TPS to disambiguate:
+				// above idle threshold = driver was on throttle = upshift.
+				m_shiftIsUpshift = (tps >= (float)getCustomPage()->smShiftTpsThreshold);
+			} else {
+				// Different switch types assigned per direction: whichever type's open edge
+				// actually fired identifies the direction.
+				m_shiftIsUpshift = openFired(upSw);
+			}
 		} else {
-			m_shiftIsUpshift = upRose;
+			// Only one direction configured at all.
+			m_shiftIsUpshift = (upSw != sm_clutch_switch_e::None);
 		}
 
-		// Clutch-Up switch fires when the pedal releases, which may lag mechanical disengagement.
-		// Apply the configured delay before evaluating sensor data.
+		// Clutch-Up's falling edge fires as soon as the pedal leaves rest, which may lag the
+		// clutch plate actually being mechanically disengaged. Apply the configured delay
+		// before evaluating sensor data.
 		sm_clutch_switch_e dirSwitch = m_shiftIsUpshift ? upSw : dnSw;
 		bool usingClutchUpSwitch = (dirSwitch == sm_clutch_switch_e::ClutchUp);
 		efitimems_t delay = usingClutchUpSwitch
@@ -536,8 +561,13 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 		return;
 	}
 
-	// Close the window when the triggering switch falls (clutch re-engages) or on timeout
-	bool triggerFell    = m_shiftIsUpshift ? upFell : dnFell;
+	// Close the window when the clutch re-engages, or on timeout. With a second switch wired,
+	// Clutch-Down's falling edge (release starting) is an earlier, equally valid "re-engaging"
+	// signal than waiting for Clutch-Up to fully return to rest.
+	sm_clutch_switch_e dirSwitch = m_shiftIsUpshift ? upSw : dnSw;
+	bool ownClose   = closeFired(dirSwitch);
+	bool earlyClose = secondSwitch && dirSwitch == sm_clutch_switch_e::ClutchUp && rawDnFell;
+	bool triggerFell    = ownClose || earlyClose;
 	efitimems_t elapsed = nowMs - m_shiftWindowOpenMs;
 
 	if (triggerFell || elapsed > SM_SHIFT_TIMEOUT_MS) {

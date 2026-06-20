@@ -154,12 +154,13 @@ struct_no_prefix page5_s
 	uint8_t smTransientHoldoffCallbacks;Engine SM: slow-callback periods (50 ms each) to hold the Transient state after the accel-enrichment threshold drops. 0 = no hold-off.;"callbacks", 1, 0, 0, 20, 0
 
 	bit stateBasedStft,"enabled","disabled";Engine SM: drive STFT region selection from the live SM state (Idle/Overrun/WOT/Cruise) instead of the RPM/load region thresholds. The per-region STFT settings (time constant, max add/remove) are reused unchanged.
+	bit smSecondClutchSwitchAvailable,"yes","no";Engine SM: a second clutch switch is also wired (e.g. both Clutch-Up and Clutch-Down, not just whichever is selected below). Lets shift detection open the window on the earliest available press edge and close it on the earliest available release edge, instead of relying solely on the configured switch's own edges.
 
-	sm_clutch_switch_e smUpshiftClutchSwitch;Engine SM: Clutch switch that signals an upshift. 'Clutch Up' fires on pedal release; 'Clutch Down' fires on full press. Flat-shift torque reduction always overrides this.
+	sm_clutch_switch_e smUpshiftClutchSwitch;Engine SM: Clutch switch that signals an upshift. 'Clutch Up' opens the shift window when the pedal leaves rest (falling edge, drivetrain still locked) and closes it when the pedal returns to rest; 'Clutch Down' opens the window on full press and closes it on release. Flat-shift torque reduction always overrides this.
 	sm_clutch_switch_e smDownshiftClutchSwitch;Engine SM: Clutch switch that signals a downshift.
 	sm_shift_detection_mode_e smShiftDetectionMode;Engine SM: Method used to confirm shift direction. RPM Rate: upshift=RPM drops, downshift=RPM rises. VSS Rate: upshift=VSS rises (accel), downshift=VSS falls (decel). Both require configured rate thresholds.
 	uint16_t smShiftLookbackMs;Engine SM: Sensor history window used for shift direction evaluation (100-1000ms).;"ms", 1, 0, 100, 1000, 0
-	uint16_t smClutchUpDisengagementDelayMs;Engine SM: Delay after Clutch-Up switch fires before evaluating shift direction. Compensates for the time between electrical and mechanical clutch disengagement.;"ms", 1, 0, 0, 1000, 0
+	uint16_t smClutchUpDisengagementDelayMs;Engine SM: Delay after the Clutch-Up switch leaves rest (shift window opens) before evaluating shift direction. Compensates for the time between the electrical switch opening and the clutch plate actually being mechanically disengaged.;"ms", 1, 0, 0, 1000, 0
 	int16_t smUpshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm upshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s drop. VSS mode: km/h/s rise.;"/s", 1, 0, 0, 10000, 0
 	int16_t smDownshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm downshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s rise. VSS mode: km/h/s fall.;"/s", 1, 0, 0, 10000, 0
 

@@ -97,8 +97,12 @@ private:
 	bool         m_shiftIsUpshift    = false;
 	efitimems_t  m_shiftWindowOpenMs = 0;
 	efitimems_t  m_shiftEvaluateAtMs = 0;
-	bool         m_prevUpTrigger     = false;
-	bool         m_prevDnTrigger     = false;
+	// Raw physical clutch switch states from the previous call, used for edge detection.
+	// Tracked independently of which direction(s) are configured to use which switch, so a
+	// switch can be consulted for early-open/early-close even when it isn't the one assigned
+	// to the direction currently being evaluated (see smSecondClutchSwitchAvailable).
+	bool         m_prevClutchUp      = false;
+	bool         m_prevClutchDown    = false;
 
 	void updateTempOverlay();
 

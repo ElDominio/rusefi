@@ -569,6 +569,186 @@ TEST(EngineStateMachine, noShiftBitsWithoutClutchSwitch) {
 	EXPECT_FALSE(getSm().engineSmIsDownshifting);
 }
 
+// ---- Clutch-Up-only shift detection (single switch, no Clutch-Down wired) ----
+
+static void setupClutchUpOnlyConfig() {
+	setupSmConfig();
+	getCustomPage()->smUpshiftClutchSwitch          = sm_clutch_switch_e::ClutchUp;
+	getCustomPage()->smDownshiftClutchSwitch        = sm_clutch_switch_e::None;
+	getCustomPage()->smShiftDetectionMode           = sm_shift_detection_mode_e::SimpleThrottle;
+	getCustomPage()->smShiftLookbackMs              = 300;
+	getCustomPage()->smClutchUpDisengagementDelayMs = 0;
+	getCustomPage()->smSecondClutchSwitchAvailable  = false;
+}
+
+// The pedal leaving rest (falling edge) is the moment the drivetrain is still locked, which is
+// when the window must open. This is the edge that was previously missed entirely.
+TEST(EngineStateMachine, clutchUpOnlyOpensOnFallingEdge) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupClutchUpOnlyConfig();
+	enterRunning();
+
+	// Pedal at rest while history is seeded.
+	engine->engineState.lua.clutchUpState = true;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	// Pedal leaves rest — window should open and confirm immediately (no second direction to
+	// disambiguate, zero delay).
+	engine->engineState.lua.clutchUpState = false;
+	engine->periodicSlowCallback();
+
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
+// Regression guard for the original bug: the pedal returning to rest (rising edge) must NOT by
+// itself open a new shift window.
+TEST(EngineStateMachine, clutchUpOnlyDoesNotOpenOnRisingEdge) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupClutchUpOnlyConfig();
+	enterRunning();
+
+	// Pedal already pressed (not at rest) while history is seeded.
+	engine->engineState.lua.clutchUpState = false;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	// Pedal returns to rest — must not open the window.
+	engine->engineState.lua.clutchUpState = true;
+	engine->periodicSlowCallback();
+
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
+TEST(EngineStateMachine, clutchUpOnlyClosesOnRisingEdge) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupClutchUpOnlyConfig();
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState = true;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchUpState = false; // falling edge: window opens
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	engine->engineState.lua.clutchUpState = true; // rising edge: clutch re-engaged, window closes
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
+// smClutchUpDisengagementDelayMs is measured from the (now-corrected) falling-edge open, not
+// from the release. Confirmation must wait for the configured delay to elapse.
+TEST(EngineStateMachine, clutchUpDisengagementDelayGatesConfirmation) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupClutchUpOnlyConfig();
+	getCustomPage()->smClutchUpDisengagementDelayMs = 200;
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState = true;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchUpState = false; // falling edge: window opens
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting) << "must not confirm before the delay elapses";
+
+	advanceTimeUs(250 * 1000);
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+}
+
+// ---- smSecondClutchSwitchAvailable: using the complementary switch to refine timing ----
+
+// Shared-switch configuration (both directions keyed to Clutch Down, TPS-disambiguated) but a
+// Clutch-Up switch is also physically wired. The window should open on the earlier Clutch-Up
+// falling edge instead of waiting for the (later) Clutch-Down rising edge.
+TEST(EngineStateMachine, secondSwitchOpensEarlyOnComplementaryFallingEdge) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupShiftDetectionConfig(); // up & down both ClutchDown
+	getCustomPage()->smSecondClutchSwitchAvailable = true;
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState   = true;
+	engine->engineState.lua.clutchDownState = false;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	// Pedal leaves rest (Clutch-Up falling) well before reaching full press (Clutch-Down still
+	// false) — the window must open here, not wait for the Down switch.
+	engine->engineState.lua.clutchUpState = false;
+	engine->periodicSlowCallback();
+
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
+static void setupSecondSwitchUpPrimaryConfig() {
+	setupSmConfig();
+	getCustomPage()->smUpshiftClutchSwitch          = sm_clutch_switch_e::ClutchUp;
+	getCustomPage()->smDownshiftClutchSwitch        = sm_clutch_switch_e::None;
+	getCustomPage()->smShiftDetectionMode           = sm_shift_detection_mode_e::SimpleThrottle;
+	getCustomPage()->smShiftLookbackMs              = 300;
+	getCustomPage()->smClutchUpDisengagementDelayMs = 0;
+}
+
+// With a Clutch-Down switch also wired, its falling edge (release starting) should close the
+// window earlier than waiting for Clutch-Up to fully return to rest.
+TEST(EngineStateMachine, secondSwitchClosesEarlyOnComplementaryFallingEdge) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSecondSwitchUpPrimaryConfig();
+	getCustomPage()->smSecondClutchSwitchAvailable = true;
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState   = true;
+	engine->engineState.lua.clutchDownState = false;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchUpState = false; // press begins: window opens
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	engine->engineState.lua.clutchDownState = true; // full press reached
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting) << "still mid-shift, no close edge yet";
+
+	// Release starts (Clutch-Down falling) while Clutch-Up has NOT yet returned to rest.
+	engine->engineState.lua.clutchDownState = false;
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
+// Without the second-switch flag, the same Clutch-Down falling edge must NOT close the window —
+// only Clutch-Up returning to rest (or the timeout) may close it.
+TEST(EngineStateMachine, withoutSecondSwitchFlagComplementaryEdgeDoesNotCloseEarly) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSecondSwitchUpPrimaryConfig();
+	getCustomPage()->smSecondClutchSwitchAvailable = false;
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState   = true;
+	engine->engineState.lua.clutchDownState = false;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchUpState = false; // press begins: window opens
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	engine->engineState.lua.clutchDownState = true; // full press reached
+	engine->periodicSlowCallback();
+
+	// Release starts (Clutch-Down falling) — must NOT close without the second-switch flag.
+	engine->engineState.lua.clutchDownState = false;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting) << "must stay open until Clutch-Up itself returns to rest";
+
+	// Clutch-Up finally returns to rest — now it closes.
+	engine->engineState.lua.clutchUpState = true;
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
 TEST(EngineStateMachine, flatShiftOverridesClutchDetection) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupShiftDetectionConfig();
