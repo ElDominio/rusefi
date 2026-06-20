@@ -1858,7 +1858,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit luaLimiterEnabled,"enabled","disabled"
 	bit cdvSmartMode,"Smart","Simple";Clutch Delay Valve activation mode. Simple: activate on launch/pre-launch entry. Smart: also require clutch pressure to be inside the configured window (cdvSmartMinPressure/cdvSmartMaxPressure) before activating, and deactivate immediately on leaving the window.
 	bit cutEtbOnRpmLimit,"enabled","disabled";Uses Electronic Throttle Limiting (a PID) to try to hold engine RPM about 50rpm below the hard RPM limit, instead of (or in addition to) cutting fuel/spark at the limit. This is a real distinction from the hard RPM limit: the hard limit only cuts, while this tries to actively manage throttle to stay just under it.
-	bit unusedBit_Fancy14
+	bit coastingFuelCutRequiresGear,"enabled","disabled";When enabled, overrun fuel cut will not engage while the transmission is in neutral (DetectedGear sensor reads neutral).\nRequires the gear ratio table (Total Gear Count / gear ratios) to be configured: if it is not set up, the detected gear always reads neutral and fuel cut will never engage.
 	bit unusedBit_Fancy15
 	bit unusedBit_Fancy16
 	bit unusedBit_Fancy17

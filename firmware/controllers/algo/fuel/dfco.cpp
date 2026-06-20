@@ -49,6 +49,11 @@ bool DfcoController::getState() const {
 		return false;
 	}
 
+	if (engineConfiguration->coastingFuelCutRequiresGear && Sensor::getOrZero(SensorType::DetectedGear) <= 0) {
+		// Neutral (or gear not detected): don't cut fuel, we'd just be revving with no load.
+		return false;
+	}
+
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
 	float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
 
