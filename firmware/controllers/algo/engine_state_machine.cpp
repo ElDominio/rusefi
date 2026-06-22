@@ -3,6 +3,7 @@
 #include "engine_state_machine.h"
 #include "malfunction_central.h"
 #include "dfco.h"
+#include "exhaust_cutout.h"
 #include "tinymt32.h" // basic 'random' for the P&B automatic cut duration
 
 #if EFI_ENGINE_STATE_MACHINE
@@ -382,7 +383,13 @@ bool EngineStateMachine::isPopsAndBangsBlocked() const {
 		}
 	}
 
-	return pinBlocked || gaugeBlocked;
+	bool cutoutBlocked = false;
+	if (getCustomPage()->popsAndBangsCutoutInhibitMode == pops_and_bangs_cutout_inhibit_e::Inhibit) {
+		// Gate (not a trigger): blocked unless the cutout is actually open.
+		cutoutBlocked = !engine->module<ExhaustCutoutController>()->isCutoutOpen;
+	}
+
+	return pinBlocked || gaugeBlocked || cutoutBlocked;
 }
 
 EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps) {

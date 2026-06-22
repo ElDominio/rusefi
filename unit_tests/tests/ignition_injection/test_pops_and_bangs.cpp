@@ -2,6 +2,7 @@
 #include "custom_page.h"
 #include "engine_state_machine.h"
 #include "dfco.h"
+#include "exhaust_cutout.h"
 
 #if FUEL_RPM_COUNT == 16
 
@@ -295,6 +296,59 @@ TEST(PopsAndBangs, SparkCutPercentClampedTo100) {
 	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
 	advanceRevs(eth, 3);
 	EXPECT_FLOAT_EQ(1.0f, esm.getPopsAndBangsSparkSkipRatio());
+}
+
+// ---- Exhaust cutout inhibit gate ----
+
+TEST(PopsAndBangs, CutoutInhibitOffIgnoresCutoutState) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSensors();
+	setupPopsAndBangs();
+	getCustomPage()->popsAndBangsCutoutInhibitMode = pops_and_bangs_cutout_inhibit_e::Off;
+	eth.engine.module<ExhaustCutoutController>().unmock().isCutoutOpen = false;
+	setTimeNowUs(1e6);
+	tickPnb(eth);
+	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+}
+
+TEST(PopsAndBangs, CutoutInhibitBlocksActivationWhenCutoutClosed) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSensors();
+	setupPopsAndBangs();
+	getCustomPage()->popsAndBangsCutoutInhibitMode = pops_and_bangs_cutout_inhibit_e::Inhibit;
+	eth.engine.module<ExhaustCutoutController>().unmock().isCutoutOpen = false;
+	setTimeNowUs(1e6);
+	tickPnb(eth);
+	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+}
+
+TEST(PopsAndBangs, CutoutInhibitAllowsActivationWhenCutoutOpen) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSensors();
+	setupPopsAndBangs();
+	getCustomPage()->popsAndBangsCutoutInhibitMode = pops_and_bangs_cutout_inhibit_e::Inhibit;
+	eth.engine.module<ExhaustCutoutController>().unmock().isCutoutOpen = true;
+	setTimeNowUs(1e6);
+	tickPnb(eth);
+	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+}
+
+TEST(PopsAndBangs, CutoutInhibitExpiresActiveWindowWhenCutoutCloses) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSensors();
+	setupPopsAndBangs();
+	getCustomPage()->popsAndBangsCutoutInhibitMode = pops_and_bangs_cutout_inhibit_e::Inhibit;
+	auto& cutout = eth.engine.module<ExhaustCutoutController>().unmock();
+	cutout.isCutoutOpen = true;
+	setTimeNowUs(1e6);
+	tickPnb(eth);
+
+	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	ASSERT_TRUE(esm.engineSmIsPopsAndBangs);
+
+	cutout.isCutoutOpen = false;
+	tickPnb(eth);
+	EXPECT_FALSE(esm.engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, SparkCutAutoDurationInRange) {

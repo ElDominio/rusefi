@@ -26,6 +26,9 @@ void setupBlipper() {
 	engineConfiguration->gearRatio[4] = 0.80f;
 	engineConfiguration->rpmHardLimit = 8000;
 
+	// Distinct from 100 so tests can tell "open-loop ramp target" apart from a stray default.
+	engineConfiguration->etbMaximumPosition = 90;
+
 	auto cfg = getCustomPage();
 	cfg->downshiftBlipperEnabled = true;
 	cfg->downshiftBlipperRequireBrake = false;
@@ -39,7 +42,7 @@ void setupBlipper() {
 	cfg->downshiftBlipperLockoutTimeMs = 500;
 	cfg->downshiftBlipRampOpenMs = 15;
 	cfg->downshiftBlipRampCloseMs = 30;
-	cfg->downshiftBlipRpmOffset = 100;
+	cfg->downshiftBlipOpenLoopWindowRpm = 100;
 
 	// Strong proportional gain; error is normalized per-100-RPM so this drives to clamp quickly.
 	cfg->downshiftBlipperKp = 5;
@@ -81,7 +84,7 @@ TEST(DownshiftBlipper, latchesTargetFromRatios) {
 	EXPECT_NEAR(3645, dut().downshiftBlipTargetRpm, 2);
 }
 
-TEST(DownshiftBlipper, opensThrottleThenCutsOnRpmMatch) {
+TEST(DownshiftBlipper, opensLoopToEtbMaxBeforeRpmMatch) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupBlipper();
 
@@ -91,17 +94,64 @@ TEST(DownshiftBlipper, opensThrottleThenCutsOnRpmMatch) {
 	setDownshifting(true);
 	dut().onFastCallback(); // RampOpen
 
-	// Push past the ramp-open window into closed-loop PID
+	// RPM is nowhere near the target (3645 - 100 window), so we're still ramping open loop.
+	// Past the ramp-open window, throttle should sit at etbMaximumPosition, NOT the blipper's
+	// own (lower) maxTpsLimit -- the open-loop phase is not subject to that ceiling.
 	eth.moveTimeForwardMs(20);
 	dut().onFastCallback();
-	EXPECT_GT(dut().getThrottleRequest(), 0);
-	EXPECT_LE(dut().getThrottleRequest(), 40); // clamped to maxTpsLimit
+	EXPECT_TRUE(dut().isActive());
+	EXPECT_NEAR(90, dut().getThrottleRequest(), 0.01); // etbMaximumPosition, > maxTpsLimit (40)
+}
 
-	// RPM reaches target minus the early-cut offset -> terminate
+TEST(DownshiftBlipper, handsOffToPidHoldWithinOpenLoopWindow) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBlipper();
+
+	setSensors(2700, 80, 0);
+	latchGear(eth, 4);
+
+	setDownshifting(true);
+	dut().onFastCallback(); // RampOpen
+	eth.moveTimeForwardMs(20);
+	dut().onFastCallback(); // open loop, holding at etbMaximumPosition
+
+	// RPM rises into the open-loop window (target 3645, window 100) -> hand off to PID hold,
+	// which is clamped to the (lower) maxTpsLimit.
 	setSensors(3600, 80, 0); // >= 3645 - 100
 	dut().onFastCallback();
+	EXPECT_TRUE(dut().isActive());
+	EXPECT_GT(dut().getThrottleRequest(), 0);
+	EXPECT_LE(dut().getThrottleRequest(), 40); // clamped to maxTpsLimit, not etbMaximumPosition
 
-	// Ramp closed, then lockout drops it inactive
+	// Holding the matched RPM is the point of the blip: it must NOT cut just because RPM is at
+	// (or above) target. It keeps holding through further ticks while still downshifting.
+	dut().onFastCallback();
+	dut().onFastCallback();
+	EXPECT_TRUE(dut().isActive());
+	EXPECT_GT(dut().getThrottleRequest(), 0);
+}
+
+TEST(DownshiftBlipper, holdsThroughMaxTimeThenCuts) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBlipper();
+
+	setSensors(2700, 80, 0);
+	latchGear(eth, 4);
+
+	setDownshifting(true);
+	dut().onFastCallback(); // RampOpen
+	setSensors(3600, 80, 0); // immediately within the open-loop window -> PID hold
+	dut().onFastCallback();
+	ASSERT_TRUE(dut().isActive());
+
+	// Keep holding at the matched RPM right up to (just under) the safety timeout.
+	eth.moveTimeForwardMs(200);
+	dut().onFastCallback();
+	EXPECT_TRUE(dut().isActive());
+
+	// Safety timeout (250ms from blip start) elapses -> ramp closed, then lockout.
+	eth.moveTimeForwardMs(100);
+	dut().onFastCallback();
 	eth.moveTimeForwardMs(40);
 	dut().onFastCallback();
 	EXPECT_FALSE(dut().isActive());
@@ -117,7 +167,12 @@ TEST(DownshiftBlipper, lockoutBlocksReTrigger) {
 
 	setDownshifting(true);
 	dut().onFastCallback();
-	setSensors(3600, 80, 0); // immediate match -> close
+	eth.moveTimeForwardMs(20);
+	dut().onFastCallback();
+	ASSERT_TRUE(dut().isActive());
+
+	// Clutch re-engages -> ramp closed, then lockout
+	setDownshifting(false);
 	dut().onFastCallback();
 	eth.moveTimeForwardMs(40);
 	dut().onFastCallback(); // now in lockout
@@ -177,6 +232,56 @@ TEST(DownshiftBlipper, abortsWhenDriverOnThrottle) {
 	EXPECT_FALSE(dut().isActive());
 }
 
+// Lua gauge gate is an inhibit, not a throttle multiplier: while it trips, a blip cannot start.
+TEST(DownshiftBlipper, luaGateBlocksEntry) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBlipper();
+
+	auto cfg = getCustomPage();
+	cfg->downshiftBlipperUseLuaGauge = true;
+	cfg->downshiftBlipperLuaGauge = 0; // LuaGauge1
+	cfg->downshiftBlipperLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND; // trips when gauge >= threshold
+	cfg->downshiftBlipperLuaGaugeThreshold = 50;
+	Sensor::setMockValue(SensorType::LuaGauge1, 60); // >= 50 -> gate is blocking
+
+	setSensors(2700, 80, 0);
+	latchGear(eth, 4);
+
+	setDownshifting(true);
+	dut().onFastCallback();
+	EXPECT_FALSE(dut().isActive());
+}
+
+// If the gauge crosses the threshold mid-blip, the gate must cut the blip short, same as the
+// driver retaking the pedal or the clutch re-engaging.
+TEST(DownshiftBlipper, luaGateCutsActiveBlip) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBlipper();
+
+	auto cfg = getCustomPage();
+	cfg->downshiftBlipperUseLuaGauge = true;
+	cfg->downshiftBlipperLuaGauge = 0; // LuaGauge1
+	cfg->downshiftBlipperLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
+	cfg->downshiftBlipperLuaGaugeThreshold = 50;
+	Sensor::setMockValue(SensorType::LuaGauge1, 0); // below threshold -> not blocking yet
+
+	setSensors(2700, 80, 0);
+	latchGear(eth, 4);
+
+	setDownshifting(true);
+	dut().onFastCallback();
+	eth.moveTimeForwardMs(20);
+	dut().onFastCallback();
+	ASSERT_TRUE(dut().isActive());
+
+	// Gauge crosses the threshold mid-blip -> gate trips -> ramp closed, then lockout.
+	Sensor::setMockValue(SensorType::LuaGauge1, 60);
+	dut().onFastCallback();
+	eth.moveTimeForwardMs(40);
+	dut().onFastCallback();
+	EXPECT_FALSE(dut().isActive());
+}
+
 // The TPS-to-RPM feed-forward curve is added on top of the PID output. With the PID gains
 // zeroed, the commanded throttle should equal the looked-up feed-forward value at the target.
 TEST(DownshiftBlipper, feedForwardSeedsThrottle) {
@@ -197,9 +302,10 @@ TEST(DownshiftBlipper, feedForwardSeedsThrottle) {
 	latchGear(eth, 4);
 
 	setDownshifting(true);
-	dut().onFastCallback();  // RampOpen
+	dut().onFastCallback();  // RampOpen, latches target 3645
 
-	eth.moveTimeForwardMs(20);
+	// Push RPM into the open-loop window so it hands off into the PID hold this tick.
+	setSensors(3600, 80, 0);
 	dut().onFastCallback();  // ActivePID: PID contributes 0, output is pure feed-forward
 
 	EXPECT_FLOAT_EQ(25, dut().downshiftBlipPidOutput);

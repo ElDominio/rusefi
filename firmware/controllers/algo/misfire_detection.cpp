@@ -40,7 +40,7 @@ bool MisfireController::isSettled() const {
 
 void MisfireController::onEngineStop() {
 	// Prepare for the next start: drop the baseline, rate-test window and segment timers.
-	// misfireTotalCount and the MIL latch persist until power cycle.
+	// misfireTotalCount and the DTC-thrown latch persist until power cycle.
 	resetDetectionState();
 }
 

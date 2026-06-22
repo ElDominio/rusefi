@@ -43,9 +43,9 @@ private:
 	// Returns target engine RPM for the downshift, or 0 if the blip should be aborted.
 	float computeTargetRpm() const;
 	bool passesEntryGate(float rpm, float vss, float driverTps) const;
-	bool shouldTerminate(float rpm, float driverTps, bool downshifting) const;
+	bool shouldTerminate(float driverTps, bool downshifting) const;
 	float runPid(float rpm, float dt);
-	float getLuaMultiplier() const;
+	bool isLuaGateBlocking() const;
 
 	Pid m_pid;
 	bool m_pidInited = false;

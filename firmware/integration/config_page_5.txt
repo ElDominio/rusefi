@@ -43,6 +43,8 @@ custom sm_clutch_switch_e 1 bits, U08, @OFFSET@, [0:1], @@sm_clutch_switch_e_enu
 custom sm_shift_detection_mode_e 1 bits, U08, @OFFSET@, [0:1], @@sm_shift_detection_mode_e_enum@@
 #define pops_and_bangs_disable_mode_e_enum "None", "Switch Input", "Lua Gauge", "Switch or Lua Gauge"
 custom pops_and_bangs_disable_mode_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_disable_mode_e_enum@@
+#define pops_and_bangs_cutout_inhibit_e_enum "Off", "Inhibit Unless Cutout Open"
+custom pops_and_bangs_cutout_inhibit_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_cutout_inhibit_e_enum@@
 #define eco_mode_switch_mode_e_enum "Off", "Inhibit"
 custom eco_mode_switch_mode_e 1 bits, U08, @OFFSET@, [0:1], @@eco_mode_switch_mode_e_enum@@
 #define sport_pedal_activation_e_enum "OFF", "Switch", "LuaGauge"
@@ -57,28 +59,28 @@ struct_no_prefix page5_s
 	! drive), a VSS sensor, and the Engine State Machine downshift detection.
 	bit downshiftBlipperEnabled,"enabled","disabled";Downshift Blipper: master enable. Blips the ETB to rev-match a single-gear (N to N-1) downshift.
 	bit downshiftBlipperRequireBrake,"yes","no";Downshift Blipper: require the brake pedal to be pressed before a blip is allowed (heel-and-toe behavior).
-	bit downshiftBlipperUseLuaGauge,"enabled","disabled";Downshift Blipper: scale the commanded throttle by a Lua gauge multiplier curve.
+	bit downshiftBlipperUseLuaGauge,"enabled","disabled";Downshift Blipper: gate the blip with a Lua gauge. While the gauge trips the comparison below, a blip cannot start, and an in-progress blip is immediately ramped closed -- same idea as the Exhaust Cutout / Pops and Bangs Lua gauge inhibits.
 
-	uint8_t downshiftBlipperLuaGauge;Downshift Blipper: Lua gauge index (0-7 for LuaGauge1-8) used as the throttle multiplier input.;"", 1, 0, 0, 7, 0
+	uint8_t downshiftBlipperLuaGauge;Downshift Blipper: Lua gauge index (0-7 for LuaGauge1-8) used as the gate input.;"", 1, 0, 0, 7, 0
 	uint8_t downshiftBlipperDriverTpsThreshold;Downshift Blipper: driver pedal % above which the blipper disables (driver is manually blipping).;"%", 1, 0, 0, 100, 0
-	uint8_t downshiftBlipperMaxTpsLimit;Downshift Blipper: maximum throttle % the PID is allowed to command.;"%", 1, 0, 0, 100, 0
+	uint8_t downshiftBlipperMaxTpsLimit;Downshift Blipper: maximum throttle % the closed-loop PID hold is allowed to command. Does not limit the open-loop ramp-up phase, which targets etbMaximumPosition.;"%", 1, 0, 0, 100, 0
 	uint8_t downshiftBlipperAlignmentPad;unused
 
 	uint16_t downshiftBlipperMaxTimeMs;Downshift Blipper: maximum duration of an active blip before it is force-terminated (safety timeout).;"ms", 1, 0, 0, 2000, 0
 	uint16_t downshiftBlipperLockoutTimeMs;Downshift Blipper: lockout after a blip during which another blip cannot start (anti-chatter).;"ms", 1, 0, 0, 5000, 0
 	uint16_t downshiftBlipperMinRpm;Downshift Blipper: minimum engine RPM required to start a blip.;"rpm", 1, 0, 0, 15000, 0
 	uint16_t downshiftBlipperMaxRpm;Downshift Blipper: blip is blocked when the computed target RPM exceeds this, to prevent over-rev.;"rpm", 1, 0, 0, 15000, 0
-	uint16_t downshiftBlipRampOpenMs;Downshift Blipper: time to ramp the ETB up to the first PID value at blip start.;"ms", 1, 0, 0, 500, 0
+	uint16_t downshiftBlipRampOpenMs;Downshift Blipper: time to ramp the ETB open to etbMaximumPosition (open-loop) at blip start.;"ms", 1, 0, 0, 500, 0
 	uint16_t downshiftBlipRampCloseMs;Downshift Blipper: time to ramp the ETB back to the pedal target after the blip cuts.;"ms", 1, 0, 0, 500, 0
-	uint16_t downshiftBlipRpmOffset;Downshift Blipper: cut the blip this many RPM below the target (early-cut buffer).;"rpm", 1, 0, 0, 2000, 0
+	uint16_t downshiftBlipOpenLoopWindowRpm;Downshift Blipper: once RPM is within this many RPM of the target, hand off from the open-loop ramp (etbMaximumPosition) to the closed-loop PID hold.;"rpm", 1, 0, 0, 2000, 0
 	uint16_t downshiftBlipperMinVss;Downshift Blipper: minimum vehicle speed to allow blipping.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
 
 	float downshiftBlipperKp;Downshift Blipper: PID proportional gain. Error is normalized to per-100-RPM units, output is throttle %.;"", 1, 0, 0, 1000, 3
 	float downshiftBlipperKi;Downshift Blipper: PID integral gain.;"", 1, 0, 0, 1000, 3
 	float downshiftBlipperKd;Downshift Blipper: PID derivative gain.;"", 1, 0, 0, 1000, 3
 
-	float[8] downshiftBlipperLuaMultBins;Downshift Blipper: Lua gauge value bins for the throttle multiplier curve.;"x", 1, 0, -30000, 30000, 3
-	float[8] downshiftBlipperLuaMultValues;Downshift Blipper: throttle multiplier values (0-1) interpolated against the bins.;"mult", 1, 0, 0, 1, 3
+	lua_gauge_meaning_e downshiftBlipperLuaGaugeMeaning;Downshift Blipper: Lua gate comparison direction.
+	float downshiftBlipperLuaGaugeThreshold;Downshift Blipper: Lua gate threshold the gauge is compared against.;"", 1, 0, -30000, 30000, 3
 
 	! --- TPS-to-RPM Feed Forward Curve (shared by Downshift Blipper + Upshift RPM Hold) ---
 	! Throttle % required at neutral (clutch in) to sustain each RPM. Used as an additive
@@ -189,13 +191,15 @@ struct_no_prefix page5_s
 	! idle (high wobble) gets a looser threshold and avoids false positives. To reject one-off
 	! noise, a flagged firing is only counted once at least misfireConsecutiveCount flagged
 	! firings have occurred within the last misfireWindowFirings firings (any cylinder). When
-	! the cumulative counted total reaches misfireCountThreshold the malfunction indicator
-	! light latches (generic OBD P0300, random/multiple-cylinder misfire) until power cycle.
-	! Set misfireCountThreshold to 0 to disable latching entirely (monitor-only mode).
-	bit misfireDetectionEnabled,"enabled","disabled";Misfire Detection: master enable. Detects misfires at idle (only while the Engine State Machine reports the Idle state) and latches the check-engine light (OBD P0300) once the count threshold is reached. Detection is engine-wide, not per-cylinder.
+	! the cumulative counted total reaches misfireCountThreshold the generic OBD random/
+	! multiple-cylinder misfire DTC (P0300) is thrown and held until power cycle. Misfire
+	! detection's job ends at throwing that DTC -- whether/how the check-engine light itself
+	! reacts to an active DTC is handled generically elsewhere (see Check Engine Triggering).
+	! Set misfireCountThreshold to 0 to disable throwing the DTC entirely (monitor-only mode).
+	bit misfireDetectionEnabled,"enabled","disabled";Misfire Detection: master enable. Detects misfires at idle (only while the Engine State Machine reports the Idle state) and throws the generic misfire DTC (OBD P0300) once the count threshold is reached. Detection is engine-wide, not per-cylinder.
 	uint8_t misfireConsecutiveCount;Misfire Detection: minimum number of flagged firings that must fall within the recent-firings window (misfireWindowFirings) before a misfire is actually counted. This is a rate test over the whole engine, not one cylinder. Higher rejects more sporadic noise, but it must stay low enough relative to the window size and cylinder count to still trip on a single dead cylinder (a single dead cylinder produces roughly misfireWindowFirings divided by cylindersCount flags per window). Recommended N (with the matching window below) -- 4-cyl: 3, 6-cyl: 2, 8-cyl: 2.;"events", 1, 0, 1, 20, 0
 	uint8_t misfireWindowFirings;Misfire Detection: length, in recent firings across all cylinders, of the sliding window the misfireConsecutiveCount rate test runs over. About two engine cycles is a good starting point. Recommended M (with the matching N above) -- 4-cyl: 12, 6-cyl: 12, 8-cyl: 16.;"firings", 1, 0, 1, 32, 0
-	uint16_t misfireCountThreshold;Misfire Detection: total counted misfire events (engine-wide, accumulated since key-on) required before the check-engine light latches. Set to 0 to monitor only -- the misfireTotalCount gauge still accumulates but no MIL or DTC is ever set.;"events", 1, 0, 0, 10000, 0
+	uint16_t misfireCountThreshold;Misfire Detection: total counted misfire events (engine-wide, accumulated since key-on) required before the misfire DTC (P0300) is thrown. Set to 0 to monitor only -- the misfireTotalCount gauge still accumulates but no DTC is ever set.;"events", 1, 0, 0, 10000, 0
 	float misfireK;Misfire Detection: K multiplier for the wobble-based threshold. Threshold = baseline + K * wobble, where wobble is the engine's own rolling spread of clean-firing durations. Lower K is more sensitive. 3.0 is a good starting point for most engines.;"", 1, 0, 0.5, 20, 1
 	float misfireWindowStart;Misfire Detection: window start, in degrees after each cylinder's TDC, where the expansion-torque deceleration is measured.;"deg", 1, 0, 0, 360, 0
 	float misfireWindowEnd;Misfire Detection: window end, in degrees after each cylinder's TDC.;"deg", 1, 0, 0, 360, 0
@@ -256,6 +260,8 @@ struct_no_prefix page5_s
 	lua_gauge_e popsAndBangsLuaGauge;Lua gauge used to disable pops and bangs.
 	lua_gauge_meaning_e popsAndBangsLuaGaugeMeaning;
 	float popsAndBangsLuaGaugeValue;Lua gauge threshold for disabling pops and bangs.;"", 1, 0, -30000, 30000, 3
+
+	pops_and_bangs_cutout_inhibit_e popsAndBangsCutoutInhibitMode;Off ignores exhaust cutout state. Inhibit blocks pops and bangs unless the exhaust cutout is open. Requires Exhaust Cutout to be enabled.
 
 	! --- Pops and Bangs spark cut (charge the exhaust with raw fuel, then re-light) ---
 	! While P&B is active fuel keeps flowing (DFCO is inhibited); these settings periodically
@@ -396,43 +402,40 @@ struct_no_prefix page5_s
 	uint8_t[3] dwellDutyPad;unused
 
 	! --- Check Engine Triggering (EFI_CHECK_ENGINE_TRIGGERING) ---
-	! Each check below has its own enable bit and a "points" weight. Every slow-callback tick the
-	! points of all currently-tripped, enabled checks are summed. Reaching celBlinkPointsThreshold
-	! blinks the CEL pin directly as a pre-warning (no DTC stored). Reaching celPointsThreshold
-	! raises the matching OBD code(s) via addError(), handing off to the standard MIL digit-blink
-	! path. Set either threshold to 0 to disable that stage. See check_engine_light.md.
+	! Each check below has its own enable bit and is worth a flat 1 point -- this page is only for
+	! checks that don't already have a severity of their own elsewhere (e.g. Misfire Detection
+	! keeps its own latch/severity path; it does not feed celPointsTotal). Every slow-callback tick
+	! the points of all currently-tripped, enabled checks here are summed. Reaching
+	! celPointsThreshold (the lower of the two) raises the matching OBD code(s) via addError() and
+	! lights the CEL solid -- the standard, less-urgent fault path. Reaching celBlinkPointsThreshold
+	! (must be set higher) escalates that already-active DTC to a flashing CEL instead of the
+	! normal digit-blink-out, matching OBD-II convention where a flashing MIL signals a more
+	! critical, actively-damaging condition than a steady one. Set either threshold to 0 to disable
+	! that stage. See check_engine_light.md.
 	!
-	! TPS Stuck High/Low (P2111/P2112) is implemented now -- requires an Electronic Throttle Body.
-	! It compares the actual TPS reading against driver pedal intent: "stuck high" trips when TPS
-	! is at/above tpsStuckHighThreshold while the pedal is at/below tpsStuckLowThreshold (throttle
-	! staying open with no driver request); "stuck low" trips when TPS is at/below
-	! tpsStuckLowThreshold while the pedal is at/above tpsStuckHighThreshold (throttle not
-	! responding to driver input). Either condition must hold continuously for
-	! tpsStuckCelTimeoutSec before it counts as tripped. This intentionally never fires at idle
-	! (pedal and TPS both low) or at WOT (both high). Once tripped, the SAME timeout (the same
-	! timer, run in the opposite direction) is required with the gate continuously clear before
-	! it un-trips -- but only if tpsStuckCelAutoClear is enabled. If disabled, a tripped code
-	! latches until power cycle, matching the existing Misfire Detection latch behavior.
+	! celDebounceTimeSec is shared by every check on this page: each check's trip condition must
+	! hold continuously for this long before it trips, and be continuously clear for this long
+	! before it untrips. TPS Circuit Intermittent also uses it as its flip-counting window.
+	!
+	! TPS Circuit Low/High (P0122/P0123) is implemented -- reuses the same TPS1 signal-out-of-range
+	! detection as the existing sensor_checker.cpp warning, just debounced through celDebounceTimeSec
+	! and wired into addError()/celPointsTotal instead of only the transient warning log.
+	! TPS Circuit Intermittent (P0124) is implemented -- trips when the TPS1 signal flips between
+	! ok/fault at least tpsIntermittentFlipCount times within celDebounceTimeSec.
 	!
 	! Oil Pressure Low, Coolant Temp High, AFR/Lambda Lean-or-Rich, and System Voltage Low-or-High
-	! are reserved here (enable + points only) but not yet evaluated -- their check-specific
-	! threshold fields will be added when each is implemented.
-	bit tpsStuckCelEnable,"enabled","disabled";Check Engine Triggering: TPS Stuck High/Low. Detects the throttle plate stuck away from driver pedal intent (P2111/P2112). Requires an Electronic Throttle Body.
-	bit tpsStuckCelAutoClear,"enabled","disabled";Check Engine Triggering: TPS Stuck -- automatically clear the code once the condition has been continuously gone for tpsStuckCelTimeoutSec. If disabled, a tripped code latches until power cycle.
+	! are reserved here (enable bit only) but not yet evaluated -- their check-specific threshold
+	! fields will be added when each is implemented.
+	bit tpsCircuitCelEnable,"enabled","disabled";Check Engine Triggering: TPS Circuit Low/High (P0122/P0123). Detects the TPS1 signal stuck out of its expected electrical range.
+	bit tpsIntermittentCelEnable,"enabled","disabled";Check Engine Triggering: TPS Circuit Intermittent (P0124). Detects the TPS1 signal repeatedly flipping in/out of range.
 	bit oilPressureLowCelEnable,"enabled","disabled";Check Engine Triggering: Oil Pressure Low. Not yet implemented -- reserved.
 	bit cltHighCelEnable,"enabled","disabled";Check Engine Triggering: Coolant Temp High. Not yet implemented -- reserved.
 	bit afrCelEnable,"enabled","disabled";Check Engine Triggering: AFR/Lambda Lean or Rich. Not yet implemented -- reserved.
 	bit voltageCelEnable,"enabled","disabled";Check Engine Triggering: System Voltage Low or High. Not yet implemented -- reserved.
 
-	uint8_t tpsStuckCelPoints;Check Engine Triggering: points contributed to the CEL total while TPS Stuck High/Low is tripped.;"points", 1, 0, 0, 100, 0
-	uint8_t oilPressureLowCelPoints;Check Engine Triggering: points contributed while Oil Pressure Low is tripped (reserved, not yet evaluated).;"points", 1, 0, 0, 100, 0
-	uint8_t cltHighCelPoints;Check Engine Triggering: points contributed while Coolant Temp High is tripped (reserved, not yet evaluated).;"points", 1, 0, 0, 100, 0
-	uint8_t afrCelPoints;Check Engine Triggering: points contributed while AFR/Lambda Lean or Rich is tripped (reserved, not yet evaluated).;"points", 1, 0, 0, 100, 0
-	uint8_t voltageCelPoints;Check Engine Triggering: points contributed while System Voltage Low or High is tripped (reserved, not yet evaluated).;"points", 1, 0, 0, 100, 0
-	uint8_t celPointsThreshold;Check Engine Triggering: total tripped-check points required to raise the OBD code(s) and fully light the CEL. 0 = never trigger from points.;"points", 1, 0, 0, 100, 0
-	uint8_t celBlinkPointsThreshold;Check Engine Triggering: total tripped-check points required to blink the CEL pin as a pre-warning, before celPointsThreshold is reached. 0 = never blink from points.;"points", 1, 0, 0, 100, 0
-	uint8_t tpsStuckHighThreshold;Check Engine Triggering -- TPS Stuck: throttle % considered "open" for the stuck-high check, and the pedal-pressed gate for the stuck-low check.;"%", 1, 0, 50, 100, 0
-	uint8_t tpsStuckLowThreshold;Check Engine Triggering -- TPS Stuck: throttle % considered "closed" for the stuck-low check, and the pedal-released gate for the stuck-high check.;"%", 1, 0, 0, 50, 0
-	uint8_t autoscale tpsStuckCelTimeoutSec;Check Engine Triggering -- TPS Stuck: how long the TPS/pedal mismatch must hold continuously before it counts as tripped.;"s", 0.1, 0, 0, 25, 1
+	uint8_t celPointsThreshold;Check Engine Triggering: total tripped-check points required to raise the OBD code(s) and light the CEL solid (the standard, less-urgent fault path). 0 = never trigger from points.;"points", 1, 0, 0, 100, 0
+	uint8_t celBlinkPointsThreshold;Check Engine Triggering: total tripped-check points required to escalate an already-active DTC to a flashing CEL -- more critical than solid. Should be set higher than celPointsThreshold. 0 = never escalate to blink.;"points", 1, 0, 0, 100, 0
+	uint8_t autoscale celDebounceTimeSec;Check Engine Triggering: shared continuous-confirm time for every check on this page (trip and untrip both require the condition to hold for this long). Also the flip-counting window for TPS Circuit Intermittent.;"s", 0.1, 0, 0, 25, 1
+	uint8_t tpsIntermittentFlipCount;Check Engine Triggering -- TPS Circuit Intermittent: number of ok/fault flips within celDebounceTimeSec required to trip.;"flips", 1, 0, 2, 10, 0
 
 end_struct

@@ -121,9 +121,9 @@ TEST(MisfireDetection, healthyIdleNoMisfire) {
 	EXPECT_FALSE(getMc().misfireLatched);
 }
 
-// ---- Repeated misfires on one cylinder latch the MIL ----
+// ---- Repeated misfires on one cylinder throw the misfire DTC ----
 
-TEST(MisfireDetection, repeatedMisfireLatchesMil) {
+TEST(MisfireDetection, repeatedMisfireThrowsDtc) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupMisfireConfig(eth);
 	engine->module<EngineStateMachine>().unmock().engineSmIsIdle = true;
@@ -137,7 +137,7 @@ TEST(MisfireDetection, repeatedMisfireLatchesMil) {
 
 	// Now misfire cylinder 0 every cycle (1.6x slower segment >> 1.15 ratio). Even though the
 	// other cylinders fire cleanly in between, a single dead cylinder puts >=2 flagged firings
-	// in the 16-firing window, so the engine-wide rate test counts it and the MIL latches.
+	// in the 16-firing window, so the engine-wide rate test counts it and the DTC is thrown.
 	for (int i = 0; i < 12; i++) {
 		d.feedCycle(0, 1.6f);
 	}

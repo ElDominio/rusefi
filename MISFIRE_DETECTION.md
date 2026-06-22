@@ -47,7 +47,7 @@ To allow for user calibration, the following fields should be added to `rusefi_c
 
 *   `misfireThresholdRatio`: The `gapRatio` limit above which a misfire is suspected (e.g., 1.15).
 *   `misfireMaxRpm`: RPM ceiling for detection (e.g., 4500 RPM). Inertia makes high-RPM detection unreliable.
-*   `misfireCountThreshold`: Consecutive misfires before logging an error or triggering a MIL.
+*   `misfireCountThreshold`: Consecutive misfires before throwing the misfire DTC.
 *   `misfireWindowStart / End`: Degree offsets from TDC.
 
 ## 5. Implementation Path
@@ -91,8 +91,10 @@ inertia ⇒ highest combustion-torque signal). Sub-feature of the SM, gated by
   outlier yet still catches a single dead cylinder (whose misses recur every few firings) as
   well as a whole-engine breakup. The baseline is frozen on flagged firings so a sustained
   misfire cannot drag it upward. Counts are cumulative since key-on.
-* **Trip** — when the engine-wide total reaches `misfireCountThreshold` (default 50), the MIL
-  is **latched until power cycle** via the generic OBD random/multiple-misfire code (`P0300`).
+* **Trip** — when the engine-wide total reaches `misfireCountThreshold` (default 50), the
+  generic OBD random/multiple-misfire DTC (`P0300`) is **thrown and held until power cycle**.
+  Throwing the DTC is the extent of this module's job; whether/how the check-engine light
+  reacts to an active DTC is generic system behavior handled elsewhere.
 * **Config (TS page 5)** — `misfireDetectionEnabled`, `misfireCountThreshold`,
   `misfireConsecutiveCount` (min flagged firings in the window), `misfireWindowFirings`
   (window size), `misfireThresholdRatio`, `misfireWindowStart/End`. TS dialog under Setup →

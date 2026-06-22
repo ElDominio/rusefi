@@ -1,7 +1,7 @@
 struct_no_prefix misfire_detection_state_s
 
 	bit misfireDetectionActive;Misfire: active
-	bit misfireLatched;Misfire: MIL latched
+	bit misfireLatched;Misfire: DTC latched
 
 	uint8_t misfireTotalCount;Misfire: total count;"events", 1, 0, 0, 0, 0
 

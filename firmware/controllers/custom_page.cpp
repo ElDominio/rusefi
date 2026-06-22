@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE5_DATA_VERSION = 4;
+static constexpr uint32_t PAGE5_DATA_VERSION = 7;
 
 using page5_container_s = ExtraPageContainer<page5_s, PAGE5_DATA_VERSION>;
 
@@ -33,18 +33,12 @@ void customPageSetDefaults() {
 	d.downshiftBlipperMaxRpm = 6200;
 	d.downshiftBlipRampOpenMs = 15;
 	d.downshiftBlipRampCloseMs = 30;
-	d.downshiftBlipRpmOffset = 100;
+	d.downshiftBlipOpenLoopWindowRpm = 100;
 	d.downshiftBlipperMinVss = 15;
 
 	d.downshiftBlipperKp = 2;
 	d.downshiftBlipperKi = 0;
 	d.downshiftBlipperKd = 0;
-
-	// Default multiplier curve: pass-through (always 1.0).
-	for (size_t i = 0; i < efi::size(d.downshiftBlipperLuaMultBins); i++) {
-		d.downshiftBlipperLuaMultBins[i] = i;
-		d.downshiftBlipperLuaMultValues[i] = 1.0f;
-	}
 
 	// Engine State Machine thresholds + shift detection (enable bit lives in page 1).
 	d.smShiftTpsThreshold = 5;          // 5% TPS — matches idlePidDeactivationTpsThreshold default
@@ -70,7 +64,7 @@ void customPageSetDefaults() {
 	d.misfireDetectionEnabled = false;
 	d.misfireConsecutiveCount  = 2;     // need >=2 flagged firings within the window to count one
 	d.misfireWindowFirings     = 12;   // sliding window: last 12 firings, any cylinder (~3 cycles on a 4-cyl)
-	d.misfireCountThreshold    = 50;   // 50 counted events latch the MIL
+	d.misfireCountThreshold    = 50;   // 50 counted events throws the misfire DTC (P0300)
 	d.misfireK                 = 3.0f; // threshold = baseline + 3 * wobble
 	d.misfireEmaAlphaDecel     = 0.05f;  // positive delta (engine slowing): track RPM drops quickly
 	d.misfireEmaAlphaAccel     = 0.005f; // negative delta (engine faster): resist upward drift during misfires
@@ -175,23 +169,17 @@ void customPageSetDefaults() {
 	d.dwellDutyModeEnabled = false;
 	d.dwellDutyPercent = 50;
 
-	// Check Engine Triggering — all checks disabled by default; conservative TPS Stuck calibration.
-	d.tpsStuckCelEnable = false;
-	d.tpsStuckCelAutoClear = true;   // self-heals once the condition clears, instead of latching
+	// Check Engine Triggering — all checks disabled by default; each check is worth 1 point.
+	d.tpsCircuitCelEnable = false;
+	d.tpsIntermittentCelEnable = false;
 	d.oilPressureLowCelEnable = false;
 	d.cltHighCelEnable = false;
 	d.afrCelEnable = false;
 	d.voltageCelEnable = false;
-	d.tpsStuckCelPoints = 10;
-	d.oilPressureLowCelPoints = 10;
-	d.cltHighCelPoints = 10;
-	d.afrCelPoints = 10;
-	d.voltageCelPoints = 10;
-	d.celPointsThreshold = 10;       // one tripped check (10 pts) latches the CEL
-	d.celBlinkPointsThreshold = 5;   // half that pre-warns by blinking the CEL
-	d.tpsStuckHighThreshold = 90;    // TPS >= 90% counts as "open" / pedal >= 90% counts as "pressed"
-	d.tpsStuckLowThreshold = 10;     // TPS <= 10% counts as "closed" / pedal <= 10% counts as "released"
-	d.tpsStuckCelTimeoutSec = 5.0f;  // mismatch must hold for 5s before it counts as tripped
+	d.celPointsThreshold = 1;       // one tripped, enabled check raises the DTC, CEL solid
+	d.celBlinkPointsThreshold = 2;  // two simultaneously tripped checks escalate to a flashing CEL
+	d.celDebounceTimeSec = 5.0f;    // every check's condition must hold for 5s before tripping/clearing
+	d.tpsIntermittentFlipCount = 3; // 3+ ok/fault flips within celDebounceTimeSec trips Intermittent
 }
 
 void loadCustomPage() {

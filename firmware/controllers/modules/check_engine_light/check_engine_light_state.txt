@@ -1,8 +1,9 @@
 struct_no_prefix check_engine_light_state_s
 
-	bit isTpsStuckHigh;CEL Trig: TPS Stuck High
-	bit isTpsStuckLow;CEL Trig: TPS Stuck Low
-	bit isCelPreWarning;CEL Trig: CEL pre-warning
+	bit isTpsCircuitLow;CEL Trig: TPS Low (P0122)
+	bit isTpsCircuitHigh;CEL Trig: TPS High (P0123)
+	bit isTpsIntermittent;CEL Trig: TPS Intermit (P0124)
+	bit isCelBlinking;CEL Trig: CEL blinking
 
 	uint8_t celPointsTotal;CEL Trig: points total;"points", 1, 0, 0, 0, 0
 

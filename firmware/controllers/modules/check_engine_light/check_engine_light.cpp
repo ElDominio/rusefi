@@ -6,96 +6,110 @@
 #if EFI_CHECK_ENGINE_TRIGGERING
 
 void CheckEngineTriggering::initNoConfiguration() {
-	m_tpsHighTimer.reset();
-	m_tpsLowTimer.reset();
-	m_wasStuckHighGate = false;
-	m_wasStuckLowGate = false;
+	m_tpsCircuitLowGate.reset();
+	m_tpsCircuitHighGate.reset();
+	m_tpsIntermittentGate.reset();
+	for (auto& t : m_tps1FlipTimers) {
+		t.reset();
+	}
+	m_tps1FlipIndex = 0;
+	m_wasTps1Faulted = false;
 }
 
 void CheckEngineTriggering::onSlowCallback() {
 	auto cfg = getCustomPage();
+	float debounceSec = cfg->celDebounceTimeSec;
 
-	if (cfg->tpsStuckCelEnable) {
+	// TPS Circuit Low/High (P0122/P0123): reuses the same TPS1 signal-out-of-range detection as
+	// sensor_checker.cpp's warning(), just debounced through celDebounceTimeSec on both ends.
+	bool tps1Low = false;
+	bool tps1High = false;
+	bool tps1Faulted = false;
+	if (Sensor::hasSensor(SensorType::Tps1)) {
 		auto tps = Sensor::get(SensorType::Tps1);
-		auto pedal = Sensor::get(SensorType::AcceleratorPedal);
-
-		if (tps && pedal) {
-			// "Stuck high": throttle reads open while the driver pedal is released.
-			bool stuckHighGate = tps.Value >= cfg->tpsStuckHighThreshold && pedal.Value <= cfg->tpsStuckLowThreshold;
-			// "Stuck low": throttle reads closed while the driver pedal is pressed.
-			bool stuckLowGate = tps.Value <= cfg->tpsStuckLowThreshold && pedal.Value >= cfg->tpsStuckHighThreshold;
-
-			// One timer, run in both directions: it resets whenever the gate flips, and the flag
-			// only follows the gate once tpsStuckCelTimeoutSec has passed since the last flip --
-			// debouncing trip and untrip with the same timer and the same timeout. Untripping is
-			// additionally gated by tpsStuckCelAutoClear: if disabled, once tripped the flag is
-			// never set back to false here (latches until power cycle).
-			if (stuckHighGate != m_wasStuckHighGate) {
-				m_tpsHighTimer.reset();
-				m_wasStuckHighGate = stuckHighGate;
-			}
-			if (m_tpsHighTimer.hasElapsedSec(cfg->tpsStuckCelTimeoutSec)) {
-				if (stuckHighGate) {
-					isTpsStuckHigh = true;
-				} else if (cfg->tpsStuckCelAutoClear) {
-					isTpsStuckHigh = false;
-				}
-			}
-
-			if (stuckLowGate != m_wasStuckLowGate) {
-				m_tpsLowTimer.reset();
-				m_wasStuckLowGate = stuckLowGate;
-			}
-			if (m_tpsLowTimer.hasElapsedSec(cfg->tpsStuckCelTimeoutSec)) {
-				if (stuckLowGate) {
-					isTpsStuckLow = true;
-				} else if (cfg->tpsStuckCelAutoClear) {
-					isTpsStuckLow = false;
-				}
-			}
-		} else {
-			// No Electronic Throttle Body / pedal sensor: nothing to compare against.
-			isTpsStuckHigh = false;
-			isTpsStuckLow = false;
-			initNoConfiguration();
+		if (!tps) {
+			tps1Faulted = true;
+			tps1Low = tps.Code == UnexpectedCode::Low;
+			tps1High = tps.Code == UnexpectedCode::High;
 		}
+	}
+
+	if (cfg->tpsCircuitCelEnable) {
+		isTpsCircuitLow = m_tpsCircuitLowGate.update(tps1Low, debounceSec);
+		isTpsCircuitHigh = m_tpsCircuitHighGate.update(tps1High, debounceSec);
 	} else {
-		isTpsStuckHigh = false;
-		isTpsStuckLow = false;
-		initNoConfiguration();
+		m_tpsCircuitLowGate.reset();
+		m_tpsCircuitHighGate.reset();
+		isTpsCircuitLow = false;
+		isTpsCircuitHigh = false;
+	}
+
+	// TPS Circuit Intermittent (P0124): count TPS1 ok<->fault transitions in a ring buffer, then
+	// trip once enough of them land within the last celDebounceTimeSec (same shared window).
+	if (tps1Faulted != m_wasTps1Faulted) {
+		m_wasTps1Faulted = tps1Faulted;
+		m_tps1FlipTimers[m_tps1FlipIndex].reset();
+		m_tps1FlipIndex = (m_tps1FlipIndex + 1) % TPS_FLIP_HISTORY_SIZE;
+	}
+
+	uint8_t flipsInWindow = 0;
+	for (auto& t : m_tps1FlipTimers) {
+		if (!t.hasElapsedSec(debounceSec)) {
+			flipsInWindow++;
+		}
+	}
+
+	if (cfg->tpsIntermittentCelEnable) {
+		isTpsIntermittent = m_tpsIntermittentGate.update(flipsInWindow >= cfg->tpsIntermittentFlipCount, debounceSec);
+	} else {
+		m_tpsIntermittentGate.reset();
+		isTpsIntermittent = false;
 	}
 
 	uint8_t points = 0;
-	if (isTpsStuckHigh || isTpsStuckLow) {
-		points += cfg->tpsStuckCelPoints;
+	if (isTpsCircuitLow || isTpsCircuitHigh) {
+		points += 1;
+	}
+	if (isTpsIntermittent) {
+		points += 1;
 	}
 	celPointsTotal = points;
 
-	bool latchCel = cfg->celPointsThreshold > 0 && points >= cfg->celPointsThreshold;
-	isCelPreWarning = !latchCel && cfg->celBlinkPointsThreshold > 0 && points >= cfg->celBlinkPointsThreshold;
+	// celPointsThreshold (lower) raises the DTC and lights the CEL solid -- the standard,
+	// less-urgent fault path. celBlinkPointsThreshold (higher) escalates an already-active DTC
+	// to a flashing CEL, matching OBD-II convention where a flashing MIL signals a more critical,
+	// actively-damaging condition than a steady one. The DTC stays raised while blinking.
+	bool dtcActive = cfg->celPointsThreshold > 0 && points >= cfg->celPointsThreshold;
+	isCelBlinking = dtcActive && cfg->celBlinkPointsThreshold > 0 && points >= cfg->celBlinkPointsThreshold;
 
-	if (latchCel && isTpsStuckHigh) {
-		addError(ObdCode::OBD_Throttle_Actuator_Stuck_Open);
+	if (dtcActive && isTpsCircuitLow) {
+		addError(ObdCode::OBD_TPS1_Primary_Low);
 	} else {
-		removeError(ObdCode::OBD_Throttle_Actuator_Stuck_Open);
+		removeError(ObdCode::OBD_TPS1_Primary_Low);
 	}
 
-	if (latchCel && isTpsStuckLow) {
-		addError(ObdCode::OBD_Throttle_Actuator_Stuck_Closed);
+	if (dtcActive && isTpsCircuitHigh) {
+		addError(ObdCode::OBD_TPS1_Primary_High);
 	} else {
-		removeError(ObdCode::OBD_Throttle_Actuator_Stuck_Closed);
+		removeError(ObdCode::OBD_TPS1_Primary_High);
+	}
+
+	if (dtcActive && isTpsIntermittent) {
+		addError(ObdCode::OBD_TPS1_Intermittent);
+	} else {
+		removeError(ObdCode::OBD_TPS1_Intermittent);
 	}
 }
 
-bool isCelPreWarningActive() {
-	return engine->module<CheckEngineTriggering>().unmock().isCelPreWarning;
+bool isCelBlinkingActive() {
+	return engine->module<CheckEngineTriggering>().unmock().isCelBlinking;
 }
 
 #else // !EFI_CHECK_ENGINE_TRIGGERING
 
 void CheckEngineTriggering::onSlowCallback() { }
 
-bool isCelPreWarningActive() {
+bool isCelBlinkingActive() {
 	return false;
 }
 

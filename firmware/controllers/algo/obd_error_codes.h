@@ -160,7 +160,7 @@ enum class ObdCode : uint16_t {
 
 	//P0122 Throttle Position Sensor/Switch A Circuit Low Input
 	//P0123 Throttle Position Sensor/Switch A Circuit High Input
-	//P0124 Throttle Position Sensor/Switch A Circuit Intermittent
+	OBD_TPS1_Intermittent = 124,
 	//P0125 Insufficient Coolant Temperature for Closed Loop Fuel Control
 	//P0126 Insufficient Coolant Temperature for Stable Operation
 	//P0128 Coolant Thermostat (Coolant Temperature Below Thermostat Regulating Temperature)
@@ -1056,8 +1056,8 @@ enum class ObdCode : uint16_t {
 	//P2108 Throttle Actuator Ctrl Mod Perf
 	//P2109 Throttle/Pedal Pos SensorA Minimum Stop Perf
 	//P2110 Throttle Actuator Ctrl Sys-Forced Limited RPM
-	OBD_Throttle_Actuator_Stuck_Open = 2111,
-	OBD_Throttle_Actuator_Stuck_Closed = 2112,
+	//P2111 Throttle Actuator Stuck Open
+	//P2112 Throttle Actuator Stuck Closed
 	//P2113 Throttle/Pedal Pos SensorB Minimum Stop Perf
 	//P2114 Throttle/Pedal Pos Sensor C Minimum Stop Perf
 	//P2115 Throttle/Pedal Pos Sensor D Minimum Stop Perf

@@ -98,19 +98,21 @@ private:
 		// todo: why do I not see this on a real vehicle? is this whole blinking logic not used?
 		getErrorCodes(&localErrorCopy);
 
-		// Check Engine Triggering pre-warning: blink the CEL directly (no DTC stored) once points
-		// reach celBlinkPointsThreshold. Only while no real error code is already driving the pin.
-		if (localErrorCopy.count == 0 && isCelPreWarningActive()) {
+		// Check Engine Triggering escalation: once points reach celBlinkPointsThreshold (on top of
+		// an already-active DTC at celPointsThreshold), flash the CEL plainly instead of blinking
+		// out the code digits this cycle -- a flashing MIL signals a more critical, actively
+		// damaging condition than a steady one, per OBD-II convention.
+		if (isCelBlinkingActive()) {
 			enginePins.checkEnginePin.setValue(1);
 			chThdSleepMilliseconds(200);
 			enginePins.checkEnginePin.setValue(0);
 			chThdSleepMilliseconds(200);
-		}
-
-		for (int p = 0; p < localErrorCopy.count; p++) {
-			// Calculate how many digits in this integer and display error code from start to end
-			int code = (int)localErrorCopy.error_codes[p];
-			DisplayErrorCode(DigitLength(code), code);
+		} else {
+			for (int p = 0; p < localErrorCopy.count; p++) {
+				// Calculate how many digits in this integer and display error code from start to end
+				int code = (int)localErrorCopy.error_codes[p];
+				DisplayErrorCode(DigitLength(code), code);
+			}
 		}
 	}
 };

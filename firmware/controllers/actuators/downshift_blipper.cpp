@@ -120,15 +120,14 @@ bool DownshiftBlipper::passesEntryGate(float rpm, float vss, float driverTps) co
 	if (cfg->downshiftBlipperRequireBrake && engine->engineState.brakePedalState == 0) {
 		return false;
 	}
+	if (isLuaGateBlocking()) {
+		return false;
+	}
 	return true;
 }
 
-bool DownshiftBlipper::shouldTerminate(float rpm, float driverTps, bool downshifting) const {
+bool DownshiftBlipper::shouldTerminate(float driverTps, bool downshifting) const {
 	auto cfg = getCustomPage();
-	// RPM matched (within the early-cut offset)
-	if (rpm >= (downshiftBlipTargetRpm - cfg->downshiftBlipRpmOffset)) {
-		return true;
-	}
 	// Clutch re-engaging
 	if (!downshifting) {
 		return true;
@@ -139,6 +138,10 @@ bool DownshiftBlipper::shouldTerminate(float rpm, float driverTps, bool downshif
 	}
 	// Driver took over the pedal
 	if (driverTps > cfg->downshiftBlipperDriverTpsThreshold) {
+		return true;
+	}
+	// Lua gate flipped to blocking mid-blip
+	if (isLuaGateBlocking()) {
 		return true;
 	}
 	return false;
@@ -158,17 +161,25 @@ float DownshiftBlipper::runPid(float rpm, float dt) {
 	return out;
 }
 
-float DownshiftBlipper::getLuaMultiplier() const {
+// Inhibit gate (not a throttle multiplier): while the gauge trips the comparison, the blip
+// cannot start, and an active blip is treated as a termination condition. Same pattern as
+// ExhaustCutoutController::getInputHigh() / EngineStateMachine::isPopsAndBangsBlocked().
+bool DownshiftBlipper::isLuaGateBlocking() const {
 	auto cfg = getCustomPage();
 	if (!cfg->downshiftBlipperUseLuaGauge) {
-		return 1.0f;
+		return false;
 	}
 	SensorType gauge = mapLuaGauge(cfg->downshiftBlipperLuaGauge);
-	float value = Sensor::getOrZero(gauge);
-	float mult = interpolate2d(value,
-		cfg->downshiftBlipperLuaMultBins,
-		cfg->downshiftBlipperLuaMultValues);
-	return clampF(0, mult, 1.0f);
+	auto result = Sensor::get(gauge);
+	if (!result.Valid) {
+		return false;
+	}
+	float threshold = cfg->downshiftBlipperLuaGaugeThreshold;
+	if (cfg->downshiftBlipperLuaGaugeMeaning == LUA_GAUGE_LOWER_BOUND) {
+		return result.Value >= threshold;
+	} else {
+		return result.Value <= threshold;
+	}
 }
 
 void DownshiftBlipper::onFastCallback() {
@@ -218,25 +229,32 @@ void DownshiftBlipper::onFastCallback() {
 		}
 
 		case DownshiftBlipState::RampOpen: {
-			float pidOut = runPid(rpm, dt);
-			if (shouldTerminate(rpm, driverTps, downshifting)) {
+			// Open loop: snap towards the engine's max ETB position (not the blip's own PID
+			// ceiling) so RPM rises as fast as the throttle body allows. Once RPM is within
+			// the configured window of the target, hand off to the closed-loop PID hold below.
+			if (shouldTerminate(driverTps, downshifting)) {
 				m_rampCloseStart = downshiftBlipThrottleRequest;
 				setState(DownshiftBlipState::RampClose);
 				phaseThrottle = m_rampCloseStart;
+			} else if (rpm >= (downshiftBlipTargetRpm - cfg->downshiftBlipOpenLoopWindowRpm)) {
+				setState(DownshiftBlipState::ActivePID);
+				phaseThrottle = runPid(rpm, dt);
 			} else {
 				float rampMs = cfg->downshiftBlipRampOpenMs;
 				float frac = (rampMs > 0) ? clampF(0, m_stateTimer.getElapsedSeconds() * 1000.0f / rampMs, 1) : 1;
-				phaseThrottle = interpolateClamped(0, m_rampStartTps, 1, pidOut, frac);
-				if (frac >= 1) {
-					setState(DownshiftBlipState::ActivePID);
-				}
+				float openLoopMax = std::min<float>(engineConfiguration->etbMaximumPosition, 100.0f);
+				phaseThrottle = interpolateClamped(0, m_rampStartTps, 1, openLoopMax, frac);
 			}
 			break;
 		}
 
 		case DownshiftBlipState::ActivePID: {
+			// Closed-loop hold: PID (+feed-forward) keeps RPM at the target, clamped to
+			// downshiftBlipperMaxTpsLimit, until the clutch re-engages, the driver takes over,
+			// or the safety timeout elapses. We deliberately do NOT exit just because RPM is
+			// near target -- holding the matched RPM is the point of the blip.
 			phaseThrottle = runPid(rpm, dt);
-			if (shouldTerminate(rpm, driverTps, downshifting)) {
+			if (shouldTerminate(driverTps, downshifting)) {
 				m_rampCloseStart = downshiftBlipThrottleRequest;
 				setState(DownshiftBlipState::RampClose);
 				phaseThrottle = m_rampCloseStart;
@@ -265,11 +283,12 @@ void DownshiftBlipper::onFastCallback() {
 		}
 	}
 
-	float luaMult = getLuaMultiplier();
-	downshiftBlipLuaMult = luaMult;
+	downshiftBlipLuaGateBlocked = isLuaGateBlocking();
 
-	downshiftBlipThrottleRequest = clampF(0, phaseThrottle * luaMult,
-		cfg->downshiftBlipperMaxTpsLimit);
+	// Ceiling is per-phase: runPid() already clamps to downshiftBlipperMaxTpsLimit for the
+	// closed-loop hold, and the open-loop ramp is bounded by etbMaximumPosition above. Only
+	// clamp to a sane [0, 100] here so the open-loop phase isn't squeezed to the PID's limit.
+	downshiftBlipThrottleRequest = clampF(0, phaseThrottle, 100);
 	downshiftBlipActive = isActive();
 }
 

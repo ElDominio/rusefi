@@ -651,6 +651,12 @@ typedef enum __attribute__ ((__packed__)) {
 	POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE = 3,
 } pops_and_bangs_disable_mode_e;
 
+// Pops & Bangs exhaust cutout gate. Values must match pops_and_bangs_cutout_inhibit_e_enum order in config_page_5.txt
+enum class pops_and_bangs_cutout_inhibit_e : uint8_t {
+	Off     = 0, // exhaust cutout state ignored
+	Inhibit = 1, // pops and bangs blocked unless the exhaust cutout is open
+};
+
 // Eco Mode manual switch behaviour. Values must match eco_mode_switch_mode_e_enum order in config_page_5.txt
 enum class eco_mode_switch_mode_e : uint8_t {
 	Off     = 0, // switch ignored — eco engages purely on the cruise timer / MAP gate

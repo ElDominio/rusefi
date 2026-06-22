@@ -10,10 +10,12 @@
  * deceleration (a real misfire) is flagged. To reject one-off noise, a flagged firing is
  * only counted once at least misfireConsecutiveCount flagged firings fall within the last
  * misfireWindowFirings firings (any cylinder) — an "N of last M" rate test. Once the
- * cumulative counted total reaches misfireCountThreshold the malfunction indicator light
- * is latched (until power cycle) via the generic OBD random-misfire code (P0300).
- * Setting misfireCountThreshold to 0 disables latching entirely — misfireTotalCount still
- * accumulates so the gauge reflects real activity, but no MIL or DTC is ever set.
+ * cumulative counted total reaches misfireCountThreshold, the generic OBD random-misfire
+ * DTC (P0300) is thrown (held until power cycle). That is the extent of this module's job —
+ * whether/how the check-engine light reacts to an active DTC is generic system behavior
+ * handled elsewhere, not something misfire detection controls.
+ * Setting misfireCountThreshold to 0 disables throwing the DTC entirely — misfireTotalCount
+ * still accumulates so the gauge reflects real activity, but no DTC is ever set.
  *
  * Sub-feature of the Engine State Machine — gated by EFI_MISFIRE_DETECTION (FALSE on the
  * F4 base, TRUE on F7/H7). Reads the SM idle state, so it is only useful when the SM is
@@ -34,7 +36,7 @@ public:
 					   angle_t currentPhase, angle_t nextPhase) override;
 
 	// Engine stopped: discard transient detection state (baselines/streaks/timers).
-	// Cumulative counters and the MIL latch persist until power cycle ("since key-on").
+	// Cumulative counters and the DTC-thrown latch persist until power cycle ("since key-on").
 	void onEngineStop() override;
 
 	// Upper bound on the sliding rate-test window (config field misfireWindowFirings is

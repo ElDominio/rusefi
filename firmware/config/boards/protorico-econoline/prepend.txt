@@ -1,2 +1,5 @@
 #define MAIN_HELP_URL "https://rusefi.com/s/uaefi"
 #define ts_show_tcu true
+#define CLT_IDLE_TABLE_CLT_SIZE 8
+#define CLT_IDLE_TABLE_RPM_SIZE 6
+#define ts_show_check_engine true
