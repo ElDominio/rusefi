@@ -29,14 +29,12 @@ void setupHold() {
 	cfg->upshiftRpmHoldEnabled = true;
 	cfg->upshiftRpmHoldMinVss = 10;
 	cfg->upshiftRpmHoldMinRpm = 1500;
-	cfg->upshiftRpmHoldMaxRpm = 7000;
 	cfg->upshiftRpmHoldDriverTpsThreshold = 15;
 	cfg->upshiftRpmHoldMaxTpsLimit = 40;
 	cfg->upshiftRpmHoldMaxTimeMs = 250;
 	cfg->upshiftRpmHoldLockoutTimeMs = 500;
 	cfg->upshiftRpmHoldRampDownMs = 15;
 	cfg->upshiftRpmHoldRampUpMs = 30;
-	cfg->upshiftRpmHoldRpmOffset = 0; // precise termination at the target for these tests
 
 	cfg->upshiftRpmHoldKp = 5;
 	cfg->upshiftRpmHoldKi = 0;
@@ -83,7 +81,7 @@ TEST(UpshiftRpmHold, latchesTargetFromRatios) {
 	EXPECT_NEAR(2000, dut().upshiftHoldTargetRpm, 2);
 }
 
-TEST(UpshiftRpmHold, holdsThrottleThenReleasesOnRpmMatch) {
+TEST(UpshiftRpmHold, holdsThroughMaxTimeThenReleases) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupHold();
 
@@ -100,11 +98,17 @@ TEST(UpshiftRpmHold, holdsThrottleThenReleasesOnRpmMatch) {
 	EXPECT_GT(dut().getThrottleRequest(), 0);
 	EXPECT_LE(dut().getThrottleRequest(), 40); // clamped to maxTpsLimit
 
-	// RPM falls to/below the target -> release
+	// RPM falls to/below the target: holding the matched RPM is the point of the hold, so it
+	// must NOT release just because RPM reached target. It keeps holding through more ticks.
 	setSensors(1900, 80, 0);
 	dut().onFastCallback();
+	dut().onFastCallback();
+	EXPECT_TRUE(dut().isActive());
+	EXPECT_GT(dut().getThrottleRequest(), 0);
 
-	// Ramp back to pedal, then lockout drops it inactive
+	// Safety timeout (250ms from hold start) elapses -> ramp back to pedal, then lockout.
+	eth.moveTimeForwardMs(250);
+	dut().onFastCallback();
 	eth.moveTimeForwardMs(40);
 	dut().onFastCallback();
 	EXPECT_FALSE(dut().isActive());
@@ -120,7 +124,12 @@ TEST(UpshiftRpmHold, lockoutBlocksReTrigger) {
 
 	setUpshifting(true);
 	dut().onFastCallback();
-	setSensors(1900, 80, 0); // immediate match (below target 1999) -> release
+	eth.moveTimeForwardMs(20);
+	dut().onFastCallback();
+	ASSERT_TRUE(dut().isActive());
+
+	// Clutch re-engages -> ramp back to pedal, then lockout
+	setUpshifting(false);
 	dut().onFastCallback();
 	eth.moveTimeForwardMs(40);
 	dut().onFastCallback(); // now in lockout
@@ -149,19 +158,6 @@ TEST(UpshiftRpmHold, abortsFromTopGear) {
 
 	setSensors(2700, 80, 0);
 	latchGear(eth, 5); // cannot upshift above top gear
-
-	setUpshifting(true);
-	dut().onFastCallback();
-	EXPECT_FALSE(dut().isActive());
-}
-
-TEST(UpshiftRpmHold, abortsWhenAboveMaxRpm) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupHold();
-	getCustomPage()->upshiftRpmHoldMaxRpm = 2000; // shift RPM 2700 exceeds this
-
-	setSensors(2700, 80, 0);
-	latchGear(eth, 3);
 
 	setUpshifting(true);
 	dut().onFastCallback();

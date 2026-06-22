@@ -45,7 +45,7 @@ private:
 	// Returns target engine RPM for the upshift, or 0 if the hold should be aborted.
 	float computeTargetRpm() const;
 	bool passesEntryGate(float rpm, float vss, float driverTps) const;
-	bool shouldTerminate(float rpm, float driverTps, bool upshifting) const;
+	bool shouldTerminate(float driverTps, bool upshifting) const;
 	float runPid(float rpm, float dt);
 
 	Pid m_pid;

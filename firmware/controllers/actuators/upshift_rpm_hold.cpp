@@ -91,23 +91,14 @@ bool UpshiftRpmHold::passesEntryGate(float rpm, float vss, float driverTps) cons
 	if (rpm < cfg->upshiftRpmHoldMinRpm) {
 		return false;
 	}
-	// Over-rev guard: do not start a hold if engine RPM at the shift is already too high.
-	if (cfg->upshiftRpmHoldMaxRpm != 0 && rpm > cfg->upshiftRpmHoldMaxRpm) {
-		return false;
-	}
 	if (driverTps > cfg->upshiftRpmHoldDriverTpsThreshold) {
 		return false;
 	}
 	return true;
 }
 
-bool UpshiftRpmHold::shouldTerminate(float rpm, float driverTps, bool upshifting) const {
+bool UpshiftRpmHold::shouldTerminate(float driverTps, bool upshifting) const {
 	auto cfg = getCustomPage();
-	// RPM has fallen to the target (within the early-release offset). Inverse of the
-	// downshift blipper: there RPM rises to the target, here it falls to it.
-	if (rpm <= (upshiftHoldTargetRpm + cfg->upshiftRpmHoldRpmOffset)) {
-		return true;
-	}
 	// Clutch re-engaging
 	if (!upshifting) {
 		return true;
@@ -184,7 +175,7 @@ void UpshiftRpmHold::onFastCallback() {
 
 		case UpshiftHoldState::RampDown: {
 			float pidOut = runPid(rpm, dt);
-			if (shouldTerminate(rpm, driverTps, upshifting)) {
+			if (shouldTerminate(driverTps, upshifting)) {
 				m_rampUpStart = upshiftHoldThrottleRequest;
 				setState(UpshiftHoldState::RampUp);
 				phaseThrottle = m_rampUpStart;
@@ -200,8 +191,11 @@ void UpshiftRpmHold::onFastCallback() {
 		}
 
 		case UpshiftHoldState::ActivePID: {
+			// Hold the target RPM until the clutch re-engages, the driver takes over, or the
+			// safety timeout elapses. We deliberately do NOT exit just because RPM has fallen
+			// to the target -- holding it there is the point of the hold.
 			phaseThrottle = runPid(rpm, dt);
-			if (shouldTerminate(rpm, driverTps, upshifting)) {
+			if (shouldTerminate(driverTps, upshifting)) {
 				m_rampUpStart = upshiftHoldThrottleRequest;
 				setState(UpshiftHoldState::RampUp);
 				phaseThrottle = m_rampUpStart;
