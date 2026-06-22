@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import re
 import sys
 
 # Force XWayland mode on Linux/Wayland to fix Tkinter popdown positioning bug (top-left of screen)
@@ -16,6 +17,40 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from datetime import datetime
 
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".rusefi_build_gui.json")
+ERROR_LOG_FILE = os.path.join(os.path.expanduser("~"), "rusefi_build_gui_last_error.log")
+ERROR_PATTERN = re.compile(r"error|fatal|failed|undefined reference|exception|cannot find|no such file|\*\*\* \[", re.IGNORECASE)
+
+
+def get_git_branch(repo_path):
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def get_git_commit(repo_path):
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_path, "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def sanitize_branch_for_filename(branch):
+    if not branch:
+        return ""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", branch)
 
 # Color Palette (Catppuccin Mocha inspired dark theme)
 BG_MAIN = "#1e1e2e"
@@ -40,6 +75,9 @@ class App(tk.Tk):
         self.workspace_root = tk.StringVar()
         self.firmware_dir = ""
         self.boards_dir = ""
+        self.current_branch = None
+        self.current_commit = None
+        self.last_jar_commit = None
         
         self.use_custom_board = tk.BooleanVar(value=False)
         self.custom_board_dir = tk.StringVar()
@@ -109,11 +147,23 @@ class App(tk.Tk):
             self.firmware_dir = f_dir
             self.boards_dir = os.path.join(f_dir, "config", "boards")
             self.update_repo_status(True)
+            self.current_branch = get_git_branch(path)
+            self.current_commit = get_git_commit(path)
+            self.update_branch_label()
             if not self.use_custom_board.get():
                 self.scan_boards()
         else:
             self.update_repo_status(False)
+            self.current_branch = None
+            self.current_commit = None
+            self.update_branch_label()
             self.append_log(f"[ERROR] Invalid repository path. Could not find {compile_script}\n", "stderr")
+
+    def update_branch_label(self):
+        if self.current_branch:
+            self.branch_lbl.configure(text=f"Branch: {self.current_branch}", foreground=HIGHLIGHT)
+        else:
+            self.branch_lbl.configure(text="Branch: unknown (not a git repo?)", foreground=FG_MUTED)
 
     def update_repo_status(self, is_valid):
         if is_valid:
@@ -212,8 +262,14 @@ class App(tk.Tk):
         repo_browse_btn = ttk.Button(repo_grid, text="Browse...", command=self.browse_repo)
         repo_browse_btn.grid(row=0, column=2, sticky=tk.W, pady=5, padx=(5, 0))
         
-        self.repo_status_lbl = ttk.Label(repo_frame, text="Checking...", font=("Helvetica", 9, "bold"))
-        self.repo_status_lbl.pack(anchor=tk.W, padx=(115, 0))
+        status_row = ttk.Frame(repo_frame)
+        status_row.pack(fill=tk.X, padx=(115, 0))
+
+        self.repo_status_lbl = ttk.Label(status_row, text="Checking...", font=("Helvetica", 9, "bold"))
+        self.repo_status_lbl.pack(side=tk.LEFT)
+
+        self.branch_lbl = ttk.Label(status_row, text="", font=("Helvetica", 9, "bold"))
+        self.branch_lbl.pack(side=tk.LEFT, padx=(15, 0))
 
         # Horizontal separator
         ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=15)
@@ -588,6 +644,12 @@ class App(tk.Tk):
             messagebox.showwarning("Warning", "Please specify a destination output directory.")
             return
 
+        # Re-detect the branch/commit in case they changed (e.g. via terminal, rebase, or
+        # amend) since the repo was last selected
+        self.current_branch = get_git_branch(repo) or self.current_branch
+        self.current_commit = get_git_commit(repo) or self.current_commit
+        self.update_branch_label()
+
         build_meta_info_path = ""
         board_dir_path = ""
         short_name = ""
@@ -644,15 +706,18 @@ class App(tk.Tk):
         self.append_log(f"--- Starting Build for {display_name} ---\n", "info")
         self.append_log(f"Meta-info file: {build_meta_info_path}\n", "info")
         self.append_log(f"Short Board Name: {short_name}\n", "info")
+        self.append_log(f"Branch: {self.current_branch or 'unknown'}\n", "info")
         self.append_log(f"Destination: {dest}\n\n", "info")
-        
+
         clean_build = self.clean_build.get()
         extract_zip = self.extract_zip.get()
         delete_zip = self.delete_zip.get()
         workspace_root = self.workspace_root.get()
+        branch = self.current_branch
+        commit = self.current_commit
         self.build_thread = threading.Thread(
             target=self.build_worker,
-            args=(build_meta_info_path, board_dir_path, short_name, dest, clean_build, extract_zip, delete_zip, workspace_root)
+            args=(build_meta_info_path, board_dir_path, short_name, dest, clean_build, extract_zip, delete_zip, workspace_root, branch, commit)
         )
         self.build_thread.start()
 
@@ -665,8 +730,72 @@ class App(tk.Tk):
             except Exception:
                 pass
                 
-    def build_worker(self, meta_info_file, board_dir, short_name, dest, clean_build, extract_zip, delete_zip, workspace_root):
+    def run_logged_process(self, cmd, cwd, env, trackable=False):
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env
+        )
+        if trackable:
+            self.process = proc
+
+        lines = []
+        while True:
+            line = proc.stdout.readline()
+            if not line:
+                break
+            self.append_log(line)
+            lines.append(line)
+
+        proc.wait()
+        if trackable:
+            self.process = None
+        return proc.returncode, lines
+
+    def write_error_summary(self, lines, step_label):
+        error_lines = [l for l in lines if ERROR_PATTERN.search(l)]
+        if not error_lines:
+            # No obvious error keyword matched; fall back to the tail of the output.
+            error_lines = lines[-40:]
+        summary = f"=== Build error summary ({step_label}) ===\n" + "".join(error_lines)
         try:
+            with open(ERROR_LOG_FILE, "w") as f:
+                f.write(summary)
+        except Exception:
+            pass
+        self.append_log(f"\n[ERROR SUMMARY] Filtered errors saved to: {ERROR_LOG_FILE}\n", "stderr")
+        self.append_log(summary, "stderr")
+
+    def build_worker(self, meta_info_file, board_dir, short_name, dest, clean_build, extract_zip, delete_zip, workspace_root, branch, commit):
+        try:
+            # Set up environment variables, ensuring BUNDLE_SIMULATOR=false
+            # to prevent trying to compile Windows simulator on Linux/macOS
+            build_env = {**os.environ, "BUNDLE_SIMULATOR": "false"}
+
+            # 0. gen_config_board.sh runs the pre-built config_definition.jar directly without
+            # rebuilding it. If it was last built against a different commit (e.g. config_page_*.txt
+            # or ConfigDefinition.java changed since), it can throw stale errors -- like an undefined
+            # PAGE_SIZE_N variable, or FileNotFoundError -- against the current commit's integration/*.txt
+            # files. We key this off the commit hash rather than the branch name: branches like
+            # "alphax-rebase" get amended/rebased repeatedly without being renamed, so a branch-name
+            # check alone misses those updates and leaves the jar stale.
+            if commit and commit != self.last_jar_commit:
+                self.append_log(f"[INFO] Commit changed ({self.last_jar_commit or 'unknown'} -> {commit}); rebuilding config_definition.jar...\n", "info")
+                jar_cmd = ["./gradlew", ":config_definition:shadowJar"]
+                jar_returncode, jar_lines = self.run_logged_process(jar_cmd, workspace_root, build_env)
+                if jar_returncode != 0:
+                    self.append_log(f"\n[ERROR] config_definition.jar rebuild failed with code {jar_returncode}\n", "stderr")
+                    self.write_error_summary(jar_lines, "config_definition.jar rebuild")
+                    self.build_failed()
+                    return
+                self.last_jar_commit = commit
+                self.save_config()
+            else:
+                self.append_log(f"[INFO] Commit unchanged ({commit or 'unknown'}); skipping config_definition.jar rebuild.\n", "info")
+
             # Clean the deliver directory to prevent packing stale .srec files with different signature hashes
             deliver_dir = os.path.join(self.firmware_dir, "deliver")
             if os.path.exists(deliver_dir):
@@ -702,33 +831,15 @@ class App(tk.Tk):
             rel_meta_info = os.path.relpath(meta_info_file, self.firmware_dir)
             rel_board_dir = os.path.relpath(board_dir, self.firmware_dir)
 
-            # Set up environment variables, ensuring BUNDLE_SIMULATOR=false
-            # to prevent trying to compile Windows simulator on Linux/macOS
-            build_env = {**os.environ, "BUNDLE_SIMULATOR": "false"}
-
             # 1. Generate signature
             self.append_log("[STEP 1/3] Generating TunerStudio signatures...\n", "info")
             sig_cmd = ["bash", "gen_signature.sh", short_name]
             self.append_log(f"Running: {' '.join(sig_cmd)}\n", "info")
             
-            sig_process = subprocess.Popen(
-                sig_cmd,
-                cwd=self.firmware_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                env=build_env
-            )
-            
-            while True:
-                line = sig_process.stdout.readline()
-                if not line:
-                    break
-                self.append_log(line)
-                
-            sig_process.wait()
-            if sig_process.returncode != 0:
-                self.append_log(f"\n[ERROR] Signature generation failed with code {sig_process.returncode}\n", "stderr")
+            sig_returncode, sig_lines = self.run_logged_process(sig_cmd, self.firmware_dir, build_env)
+            if sig_returncode != 0:
+                self.append_log(f"\n[ERROR] Signature generation failed with code {sig_returncode}\n", "stderr")
+                self.write_error_summary(sig_lines, "Signature generation")
                 self.build_failed()
                 return
 
@@ -737,24 +848,10 @@ class App(tk.Tk):
             gen_cmd = ["bash", "gen_config_board.sh", rel_board_dir, short_name]
             self.append_log(f"Running: {' '.join(gen_cmd)}\n", "info")
             
-            gen_process = subprocess.Popen(
-                gen_cmd,
-                cwd=self.firmware_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                env=build_env
-            )
-            
-            while True:
-                line = gen_process.stdout.readline()
-                if not line:
-                    break
-                self.append_log(line)
-                
-            gen_process.wait()
-            if gen_process.returncode != 0:
-                self.append_log(f"\n[ERROR] Config generation failed with code {gen_process.returncode}\n", "stderr")
+            gen_returncode, gen_lines = self.run_logged_process(gen_cmd, self.firmware_dir, build_env)
+            if gen_returncode != 0:
+                self.append_log(f"\n[ERROR] Config generation failed with code {gen_returncode}\n", "stderr")
+                self.write_error_summary(gen_lines, "Config generation")
                 self.build_failed()
                 return
 
@@ -764,32 +861,16 @@ class App(tk.Tk):
                 clean_cmd = ["make", "clean"]
                 self.append_log(f"Running: {' '.join(clean_cmd)}\n", "info")
                 
-                self.process = subprocess.Popen(
-                    clean_cmd,
-                    cwd=self.firmware_dir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    env=build_env
-                )
-                
-                while True:
-                    line = self.process.stdout.readline()
-                    if not line:
-                        break
-                    self.append_log(line)
-                    
-                self.process.wait()
-                clean_code = self.process.returncode
-                self.process = None
-                
+                clean_code, clean_lines = self.run_logged_process(clean_cmd, self.firmware_dir, build_env, trackable=True)
+
                 if self.stop_build_flag:
                     self.append_log("\n[INFO] Build cancelled by user.\n", "stderr")
                     self.build_failed("Cancelled")
                     return
-                    
+
                 if clean_code != 0:
                     self.append_log(f"\n[WARNING] Make clean failed with code {clean_code}. Proceeding with build anyway...\n", "stderr")
+                    self.write_error_summary(clean_lines, "make clean")
 
             # 3. Main bundle compilation
             self.append_log("\n[STEP 3/3] Compiling firmware & building console bundle...\n", "info")
@@ -798,32 +879,16 @@ class App(tk.Tk):
             cmd = ["bash", "bin/compile.sh", "-b", rel_meta_info, "BUNDLE_SIMULATOR=false"]
             self.append_log(f"Running: {' '.join(cmd)}\n", "info")
             
-            self.process = subprocess.Popen(
-                cmd,
-                cwd=self.firmware_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                env=build_env
-            )
-            
-            while True:
-                line = self.process.stdout.readline()
-                if not line:
-                    break
-                self.append_log(line)
-                
-            self.process.wait()
-            ret_code = self.process.returncode
-            self.process = None
-            
+            ret_code, compile_lines = self.run_logged_process(cmd, self.firmware_dir, build_env, trackable=True)
+
             if self.stop_build_flag:
                 self.append_log("\n[INFO] Build cancelled by user.\n", "stderr")
                 self.build_failed("Cancelled")
                 return
-                
+
             if ret_code != 0:
                 self.append_log(f"\n[ERROR] Build failed with exit code {ret_code}\n", "stderr")
+                self.write_error_summary(compile_lines, "Firmware compile")
                 self.build_failed()
                 return
                 
@@ -848,9 +913,14 @@ class App(tk.Tk):
             
             # Make sure destination folder exists
             os.makedirs(dest, exist_ok=True)
-            
+
+            # Tag the copied/extracted output with the branch name so builds from different
+            # branches don't get mixed up in the destination folder.
+            branch_tag = sanitize_branch_for_filename(branch)
+            dest_basename = f"rusefi_bundle_{short_name}" + (f"_{branch_tag}" if branch_tag else "")
+
             # Copy ZIP file
-            dest_zip = os.path.join(dest, zip_filename)
+            dest_zip = os.path.join(dest, f"{dest_basename}.zip")
             if os.path.exists(dest_zip):
                 self.append_log(f"Removing existing bundle ZIP: {dest_zip}\n", "info")
                 if os.path.isdir(dest_zip):
@@ -862,7 +932,7 @@ class App(tk.Tk):
             
             # Extract ZIP if checked
             if extract_zip:
-                extract_path = os.path.join(dest, f"rusefi_bundle_{short_name}")
+                extract_path = os.path.join(dest, dest_basename)
                 self.append_log(f"Extracting package to: {extract_path}\n", "info")
                 if os.path.exists(extract_path):
                     self.append_log(f"Removing existing extraction folder: {extract_path}\n", "info")
@@ -939,6 +1009,7 @@ class App(tk.Tk):
             
         except Exception as e:
             self.append_log(f"\n[FATAL ERROR] An unexpected exception occurred: {str(e)}\n", "stderr")
+            self.write_error_summary([str(e)], "Unexpected exception")
             self.build_failed()
         finally:
             self.build_complete()
@@ -951,13 +1022,14 @@ class App(tk.Tk):
                 saved = cfg.get("dest_dir", "")
                 if saved:
                     self.dest_dir.set(saved)
+                self.last_jar_commit = cfg.get("last_jar_commit")
         except Exception:
             pass
 
     def save_config(self, *args):
         try:
             with open(CONFIG_FILE, "w") as f:
-                json.dump({"dest_dir": self.dest_dir.get()}, f)
+                json.dump({"dest_dir": self.dest_dir.get(), "last_jar_commit": self.last_jar_commit}, f)
         except Exception:
             pass
 
