@@ -8,31 +8,31 @@
 #include "pch.h"
 #include "extra_flash_pages.h"
 #include "second_tables.h"
+#include "lua_config_page.h"
 #include "custom_page.h"
 #include "flash_main.h"
 #include "persistent_configuration.h"
 
-// Page 4 lives at a fixed offset within the primary settings sector.
-// A fixed offset is critical: if the offset were derived from sizeof(persistent_config_container_s)
-// it would shift whenever the config struct grows, causing the read address to change across
-// firmware updates and corrupting stored page 4 data.
-// 72 KB (73728 bytes) satisfies STM32H7's 32-byte flash-word alignment (73728 % 32 == 0),
-// fits within a 128 KB flash sector alongside page 4 (73728 + ~1216 < 131072),
-// and leaves ~8 KB of headroom above the current largest config (proteus_f7 at 65308 bytes).
-static constexpr size_t PAGE4_SECTOR_OFFSET = 72u * 1024u;
+// Extra pages live at fixed offsets within the primary settings sector (defined in
+// extra_flash_pages.h). A fixed offset is critical: if it were derived from
+// sizeof(persistent_config_container_s) it would shift whenever the config struct grows,
+// causing the read address to change across firmware updates and corrupting stored data.
+// PAGE4_SECTOR_OFFSET (72 KB) satisfies STM32H7's 32-byte flash-word alignment and leaves
+// headroom above the current largest config; the Lua page sits above it (see header).
 static_assert(sizeof(persistent_config_container_s) <= PAGE4_SECTOR_OFFSET,
 	"persistent_config_container_s exceeds PAGE4_SECTOR_OFFSET — increase the offset");
 
 // Page 6 (AlphaX custom) lives above page 4 in the same shared settings sector. 80 KB (81920) is
 // 32-byte aligned, clears page 4 (72 KB + page-4 container), and fits within a
 // 128 KB sector alongside its small container.
-// Page 5 (Lua script) will be mapped by lua_config_page.cpp when that page is added.
+// Page 5 (Lua script) is mapped by lua_config_page.cpp (LUA_PAGE_SECTOR_OFFSET in its header).
 static constexpr size_t PAGE6_SECTOR_OFFSET = 80u * 1024u;
 static_assert(PAGE4_SECTOR_OFFSET + sizeof(ExtraPageContainer<page4_s, 1>) <= PAGE6_SECTOR_OFFSET,
 	"page 4 region overlaps PAGE6_SECTOR_OFFSET — increase the offset");
 
 void resetExtraPages() {
 	secondTablesSetDefaults();
+	luaConfigPageSetDefaults();
 	customPageSetDefaults();
 
 	// When extracting a new config page from the main config, add a
@@ -41,6 +41,7 @@ void resetExtraPages() {
 
 void loadExtraPages() {
 	loadSecondTables();
+	loadLuaConfigPage();
 	loadCustomPage();
 
 	// When extracting a new config page from the main config, add a
@@ -50,6 +51,8 @@ void loadExtraPages() {
 void loadExtraPage(StorageItemId id) {
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		loadSecondTables();
+	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
+		loadLuaConfigPage();
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		loadCustomPage();
 	}
@@ -65,6 +68,11 @@ void burnExtraFlashPages() {
 		secondTablesGetStoragePtr(),
 		secondTablesGetStorageSize());
 
+	luaConfigPagePrepareForStorage();
+	storageWrite(EFI_LUA_PAGE_RECORD_ID,
+		luaConfigPageGetStoragePtr(),
+		luaConfigPageGetStorageSize());
+
 	customPagePrepareForStorage();
 	storageWrite(EFI_CUSTOM_PAGE_RECORD_ID,
 		customPageGetStoragePtr(),
@@ -78,6 +86,8 @@ void burnExtraFlashPages() {
 void* getExtraPageAddr(StorageItemId id) {
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		return secondTablesGetTsPage();
+	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
+		return luaConfigPageGetTsPage();
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		return customPageGetTsPage();
 	}
@@ -90,6 +100,8 @@ void* getExtraPageAddr(StorageItemId id) {
 size_t getExtraPageSize(StorageItemId id) {
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		return secondTablesGetTsPageSize();
+	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
+		return luaConfigPageGetTsPageSize();
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		return customPageGetTsPageSize();
 	}
@@ -119,6 +131,11 @@ void burnExtraFlashPage(StorageItemId id) {
 		storageWrite(EFI_SECOND_TABLES_RECORD_ID,
 			secondTablesGetStoragePtr(),
 			secondTablesGetStorageSize());
+	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
+		luaConfigPagePrepareForStorage();
+		storageWrite(EFI_LUA_PAGE_RECORD_ID,
+			luaConfigPageGetStoragePtr(),
+			luaConfigPageGetStorageSize());
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		customPagePrepareForStorage();
 		storageWrite(EFI_CUSTOM_PAGE_RECORD_ID,
@@ -137,6 +154,8 @@ void burnExtraFlashPage(StorageItemId id) {
 size_t getExtraPageFlashOffset(StorageItemId id) {
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		return PAGE4_SECTOR_OFFSET;
+	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
+		return LUA_PAGE_SECTOR_OFFSET;
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		return PAGE6_SECTOR_OFFSET;
 	}

@@ -9,6 +9,7 @@
 #include "lua_heap.h"
 #include "lua_hooks.h"
 #include "can_filter.h"
+#include "lua_config_page.h"
 
 #define TAG "LUA "
 
@@ -250,7 +251,7 @@ static bool runOneLua(lua_Alloc alloc, const char* script) {
 
 void LuaThread::ThreadTask() {
 	while (!chThdShouldTerminateX()) {
-		bool wasOk = runOneLua(luaHeapAlloc, config->luaScript);
+		bool wasOk = runOneLua(luaHeapAlloc, luaConfigPageGetState()->luaScript);
 
 		auto usedAfterRun = luaHeapUsed();
 		if (usedAfterRun != 0) {
