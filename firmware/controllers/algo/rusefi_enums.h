@@ -663,6 +663,14 @@ enum class eco_mode_switch_mode_e : uint8_t {
 	Inhibit = 1, // asserted switch blocks eco from engaging
 };
 
+// Radiator fan A/C control mode — the single place that decides whether a fan follows the
+// A/C compressor. Values must match fan_ac_mode_e_enum order in config_page_5.txt
+enum class fan_ac_mode_e : uint8_t {
+	Disabled = 0, // fan never runs for A/C
+	Relay    = 1, // fan turns on whenever the A/C compressor relay is active
+	Pressure = 2, // fan follows high-side pressure thresholds (requires an A/C pressure sensor)
+};
+
 // this one is "Rotational Idle", it's a naming mess https://github.com/rusefi/rusefi/issues/8435
 typedef enum __attribute__ ((__packed__)) {
 	SWITCH_INPUT_ANTILAG = 0,

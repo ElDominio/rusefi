@@ -41,7 +41,7 @@ protected:
 	virtual OutputPin& getPin() = 0;
 	virtual float getFanOnTemp() = 0;
 	virtual float getFanOffTemp() = 0;
-	virtual bool enableWithAc() = 0;
+	virtual fan_ac_mode_e getAcMode() const = 0;
 	virtual bool disableWhenStopped() = 0;
 	virtual int disableAtSpeed() = 0;
 
@@ -56,7 +56,6 @@ protected:
 	virtual float getSoftStartSec() const = 0;
 
 #if EFI_AC_PRESSURE_FAN
-	virtual bool useAcPressureMode() const = 0;
 	virtual float getAcPressureFanOnThreshold() const = 0;
 	virtual float getAcPressureFanOffThreshold() const = 0;
 #endif
@@ -75,8 +74,8 @@ struct FanControl1 : public FanController {
 		return engineConfiguration->fanOffTemperature;
 	}
 
-	bool enableWithAc() {
-		return engineConfiguration->enableFan1WithAc;
+	fan_ac_mode_e getAcMode() const override {
+		return getCustomPage()->fan1AcMode;
 	}
 
 	bool disableWhenStopped() {
@@ -120,10 +119,6 @@ struct FanControl1 : public FanController {
 	}
 
 #if EFI_AC_PRESSURE_FAN
-	bool useAcPressureMode() const override {
-		return getCustomPage()->fan1UseAcPressure;
-	}
-
 	float getAcPressureFanOnThreshold() const override {
 		return getCustomPage()->fan1AcPressureOn;
 	}
@@ -147,8 +142,8 @@ struct FanControl2 : public FanController {
 		return engineConfiguration->fan2OffTemperature;
 	}
 
-	bool enableWithAc() {
-		return engineConfiguration->enableFan2WithAc;
+	fan_ac_mode_e getAcMode() const override {
+		return getCustomPage()->fan2AcMode;
 	}
 
 	bool disableWhenStopped() {
@@ -192,10 +187,6 @@ struct FanControl2 : public FanController {
 	}
 
 #if EFI_AC_PRESSURE_FAN
-	bool useAcPressureMode() const override {
-		return getCustomPage()->fan2UseAcPressure;
-	}
-
 	float getAcPressureFanOnThreshold() const override {
 		return getCustomPage()->fan2AcPressureOn;
 	}

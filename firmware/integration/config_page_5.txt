@@ -49,6 +49,8 @@ custom pops_and_bangs_cutout_inhibit_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_
 custom eco_mode_switch_mode_e 1 bits, U08, @OFFSET@, [0:1], @@eco_mode_switch_mode_e_enum@@
 #define sport_pedal_activation_e_enum "OFF", "Switch", "LuaGauge"
 custom sport_pedal_activation_e 1 bits, U08, @OFFSET@, [0:1], @@sport_pedal_activation_e_enum@@
+#define fan_ac_mode_e_enum "Disabled", "Relay", "Pressure"
+custom fan_ac_mode_e 1 bits, U08, @OFFSET@, [0:1], @@fan_ac_mode_e_enum@@
 
 custom fuel_pump_mode_e 1 bits, U08, @OFFSET@, [0:1], "Single", "Dual", "PWM"
 
@@ -155,6 +157,7 @@ struct_no_prefix page5_s
 
 	bit stateBasedStft,"enabled","disabled";Engine SM: drive STFT region selection from the live SM state (Idle/Overrun/WOT/Cruise) instead of the RPM/load region thresholds. The per-region STFT settings (time constant, max add/remove) are reused unchanged.
 	bit smSecondClutchSwitchAvailable,"yes","no";Engine SM: a second clutch switch is also wired (e.g. both Clutch-Up and Clutch-Down, not just whichever is selected below). Lets shift detection open the window on the earliest available press edge and close it on the earliest available release edge, instead of relying solely on the configured switch's own edges.
+	bit smRelatchOnClutchDown,"enabled","disabled";Engine SM: while the shift latch (smShiftLatchTimeMs) is active, a fresh Clutch-Down full-press resets it back to the full duration instead of letting it expire -- keeps Upshifting/Downshifting asserted through a flurry of quick consecutive shifts. Requires smSecondClutchSwitchAvailable (both Clutch-Up and Clutch-Down wired).
 
 	sm_clutch_switch_e smUpshiftClutchSwitch;Engine SM: Clutch switch that signals an upshift. 'Clutch Up' opens the shift window when the pedal leaves rest (falling edge, drivetrain still locked) and closes it when the pedal returns to rest; 'Clutch Down' opens the window on full press and closes it on release. Flat-shift torque reduction always overrides this.
 	sm_clutch_switch_e smDownshiftClutchSwitch;Engine SM: Clutch switch that signals a downshift.
@@ -163,6 +166,8 @@ struct_no_prefix page5_s
 	uint16_t smClutchUpDisengagementDelayMs;Engine SM: Delay after the Clutch-Up switch leaves rest (shift window opens) before evaluating shift direction. Compensates for the time between the electrical switch opening and the clutch plate actually being mechanically disengaged.;"ms", 1, 0, 0, 1000, 0
 	int16_t smUpshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm upshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s drop. VSS mode: km/h/s rise.;"/s", 1, 0, 0, 10000, 0
 	int16_t smDownshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm downshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s rise. VSS mode: km/h/s fall.;"/s", 1, 0, 0, 10000, 0
+	uint16_t smShiftLatchTimeMs;Engine SM: once shift direction is confirmed, hold Upshifting/Downshifting true for at least this long, masking rapid on/off flicker from the instantaneous rate check. 0 = no latch (raw instantaneous signal, legacy behavior).;"ms", 1, 0, 0, 2000, 0
+	uint16_t smShiftMinVss;Engine SM: VSS Rate mode only -- minimum vehicle speed required to confirm/engage a shift, below which Upshifting/Downshifting cannot engage. 0 = no minimum.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
 
 	! --- Limp Mode (Engine State Machine sub-feature) ---
 	! These limits are enforced only while the state machine has latched the Limp state.
@@ -377,13 +382,15 @@ struct_no_prefix page5_s
 	float quickWarmupTimingRetard;Quick Warmup: ignition timing pulled while active. Use a negative value to retard (e.g. -8 deg retards timing by 8 degrees). Positive values advance timing.;"deg", 1, 0, -30, 10, 1
 	float quickWarmupLambdaTarget;Quick Warmup: absolute lambda target while active. Values below 1.0 richen the mixture (e.g. 0.95 = 5 percent rich). Applied as a hard override over the normal lambda table.;"lambda", 1, 0, 0.7, 1.2, 2
 
-	! --- AC Pressure Fan Control (EFI_AC_PRESSURE_FAN) ---
-	! Each fan can be set to follow the A/C compressor relay (fanNUseAcPressure=0) or to
-	! use a high-side pressure sensor threshold instead (fanNUseAcPressure=1). In pressure
-	! mode the fan turns ON above fanNAcPressureOn and OFF below fanNAcPressureOff
-	! (hysteresis band prevents rapid cycling). Requires SensorType::AcPressure to be wired.
-	bit fan1UseAcPressure,"pressure","relay";Fan 1: A/C fan control mode. 'relay' turns the fan on whenever the A/C compressor is active. 'pressure' uses the high-side pressure thresholds below and requires an A/C pressure sensor.
-	bit fan2UseAcPressure,"pressure","relay";Fan 2: A/C fan control mode. 'relay' turns the fan on whenever the A/C compressor is active. 'pressure' uses the high-side pressure thresholds below and requires an A/C pressure sensor.
+	! --- Fan A/C Control Mode ---
+	! This is the single switch that decides whether each radiator fan reacts to the A/C
+	! compressor — there is no separate "enable for AC" elsewhere. 'Disabled' never runs the
+	! fan for A/C. 'Relay' turns the fan on whenever the A/C compressor relay is active.
+	! 'Pressure' (EFI_AC_PRESSURE_FAN) uses a high-side pressure sensor threshold instead: the
+	! fan turns ON above fanNAcPressureOn and OFF below fanNAcPressureOff (hysteresis band
+	! prevents rapid cycling). Requires SensorType::AcPressure to be wired.
+	fan_ac_mode_e fan1AcMode;Fan 1: A/C fan control mode. 'Disabled' never runs the fan for A/C. 'Relay' turns the fan on whenever the A/C compressor is active. 'Pressure' uses the high-side pressure thresholds below and requires an A/C pressure sensor.
+	fan_ac_mode_e fan2AcMode;Fan 2: A/C fan control mode. 'Disabled' never runs the fan for A/C. 'Relay' turns the fan on whenever the A/C compressor is active. 'Pressure' uses the high-side pressure thresholds below and requires an A/C pressure sensor.
 	uint16_t fan1AcPressureOn;Fan 1: A/C high-side pressure above which fan 1 turns on (pressure mode only).;"kPa", 1, 0, 0, 4000, 0
 	uint16_t fan1AcPressureOff;Fan 1: A/C high-side pressure below which fan 1 turns off (hysteresis lower bound). Must be less than fan1AcPressureOn.;"kPa", 1, 0, 0, 4000, 0
 	uint16_t fan2AcPressureOn;Fan 2: A/C high-side pressure above which fan 2 turns on (pressure mode only).;"kPa", 1, 0, 0, 4000, 0

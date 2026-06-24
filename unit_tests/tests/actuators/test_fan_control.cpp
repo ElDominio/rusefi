@@ -29,7 +29,7 @@ TEST(Actuators, Fan) {
 
 	engineConfiguration->fanOnTemperature = 90;
 	engineConfiguration->fanOffTemperature = 80;
-	engineConfiguration->enableFan1WithAc = false;
+	getCustomPage()->fan1AcMode = fan_ac_mode_e::Disabled;
 
 	// Cold, fan should be off
 	Sensor::setMockValue(SensorType::Clt, 75);
@@ -66,7 +66,7 @@ TEST(Actuators, Fan) {
 	updateFans();
 	EXPECT_EQ(false, enginePins.fanRelay.getLogicValue());
 
-	engineConfiguration->enableFan1WithAc = true;
+	getCustomPage()->fan1AcMode = fan_ac_mode_e::Relay;
 	// Now AC is on, fan should turn on!
 	mockAc.acState = true;
 	updateFans();

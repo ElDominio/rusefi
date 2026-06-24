@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE5_DATA_VERSION = 8;
+static constexpr uint32_t PAGE5_DATA_VERSION = 10;
 
 using page5_container_s = ExtraPageContainer<page5_s, PAGE5_DATA_VERSION>;
 
@@ -51,6 +51,9 @@ void customPageSetDefaults() {
 	d.smClutchUpDisengagementDelayMs = 0;
 	d.smUpshiftRateThreshold   = 0;
 	d.smDownshiftRateThreshold = 0;
+	d.smRelatchOnClutchDown    = false;
+	d.smShiftLatchTimeMs       = 0;  // 0 = no latch, raw instantaneous signal (legacy behavior)
+	d.smShiftMinVss            = 0;  // 0 = no minimum-speed gate
 
 	// Limp Mode (Engine State Machine sub-feature) — conservative "get-home" defaults.
 	d.limpSeverityThreshold  = 5;    // one latched misfire (5 severity pts) latches limp

@@ -50,6 +50,7 @@
 
 #include "mazda_miata_vvt.h"
 #include "custom_engine.h"
+#include "custom_page.h"
 #include "mazda_miata_base_maps.h"
 
 
@@ -290,7 +291,7 @@ static void setCommonMazdaNB() {
 	engineConfiguration->idlerpmpid_iTermMax =  30;
 
 	// Fan
-	engineConfiguration->enableFan1WithAc = true;
+	getCustomPage()->fan1AcMode = fan_ac_mode_e::Relay;
 
 	// Alternator
 	engineConfiguration->isAlternatorControlEnabled = true;

@@ -26,10 +26,12 @@ bool FanController::getState(bool acActive, bool lastState) {
 	notRunning = true;
 #endif
 
+	auto acMode = getAcMode();
+
 	disabledBySpeed = disableAtSpeed() > 0 && vss.Valid && vss.Value > disableAtSpeed();
 	disabledWhileEngineStopped = notRunning && disableWhenStopped();
 	brokenClt = !clt;
-	enabledForAc = enableWithAc() && acActive;
+	enabledForAc = (acMode == fan_ac_mode_e::Relay) && acActive;
 	hot = clt.value_or(0) > getFanOnTemp();
 	cold = clt.value_or(0) < getFanOffTemp();
 
@@ -56,9 +58,9 @@ bool FanController::getState(bool acActive, bool lastState) {
 		radiatorFanStatus = (int)RadiatorFanState::CltBroken;
 		return true;
 #if EFI_AC_PRESSURE_FAN
-	} else if (useAcPressureMode() && enabledForAcByPressure(acActive, lastState)) {
+	} else if (acMode == fan_ac_mode_e::Pressure && enabledForAcByPressure(acActive, lastState)) {
 		return true;
-	} else if (!useAcPressureMode() && enabledForAc) {
+	} else if (acMode == fan_ac_mode_e::Relay && enabledForAc) {
 #else
 	} else if (enabledForAc) {
 #endif
