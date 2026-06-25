@@ -48,7 +48,7 @@ TEST(engine, testSymmetricalCrank) {
 
 	// this test is not about isFasterEngineSpinUpEnabled so let's disable it to simplify things
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	ASSERT_EQ(FOUR_STROKE_SYMMETRICAL_CRANK_SENSOR, getEngineRotationState()->getOperationMode());
 

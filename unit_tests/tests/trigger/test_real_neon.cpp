@@ -11,7 +11,7 @@ TEST(realNeon, srt4_looks_like_cam) {
 
 	engineConfiguration->vvtMode[0] = VVT_INACTIVE;
 	eth.setTriggerType(trigger_type_e::TT_DODGE_NEON_2003_CAM);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	while (reader.haveMore()) {
 		reader.processLine(&eth);
@@ -33,7 +33,7 @@ TEST(realNeon, srt4_crank) {
 
 	engineConfiguration->vvtMode[0] = VVT_INACTIVE;
 	eth.setTriggerType(trigger_type_e::TT_DODGE_NEON_2003_CRANK);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	while (reader.haveMore()) {
 		reader.processLine(&eth);

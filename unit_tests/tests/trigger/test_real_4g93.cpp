@@ -13,7 +13,7 @@ TEST(real4g93, cranking) {
 	reader.open("tests/trigger/resources/4g93-cranking.csv");
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	engineConfiguration->isPhaseSyncRequiredForIgnition = true;
 
@@ -87,7 +87,7 @@ TEST(real4g93, crankingCamOnly) {
 	reader.open("tests/trigger/resources/4g93-cranking-cam-only.csv");
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	eth.setTriggerType(trigger_type_e::TT_MITSU_4G63_CAM);
 

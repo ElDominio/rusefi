@@ -19,7 +19,7 @@ void testTwelvePlusOne(
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	engineConfiguration->isPhaseSyncRequiredForIgnition = true;
 

@@ -11,7 +11,7 @@ TEST(trigger, testQuadCamInput) {
 	engineConfiguration->crankingTimingAngle = 3;
 	engineConfiguration->triggerInputPins[1] = Gpio::Unassigned;
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	setCrankOperationMode();
 

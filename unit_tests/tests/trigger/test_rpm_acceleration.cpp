@@ -25,11 +25,11 @@ TEST(engine, testRpmAcceleration) {
     ASSERT_EQ(0u,  engine->triggerCentral.triggerState.totalTriggerErrorCounter);
 }
 
-// dRPM (rpmRate) must still be computed from the cycle-averaged RPM even when alwaysInstantRpm
+// dRPM (rpmRate) must still be computed from the cycle-averaged RPM even when RPM_UPDATE_INSTANT
 // publishes instant RPM as the reported value - otherwise getRpmAcceleration() is stuck at 0.
 TEST(engine, testRpmAccelerationAlwaysInstantRpm) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 	eth.setTriggerType(trigger_type_e::TT_HALF_MOON);
 
 	// first revolution - no acceleration info yet

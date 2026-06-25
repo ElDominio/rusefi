@@ -5,7 +5,7 @@
 static void prepare(EngineTestHelper *eth, trigger_type_e trigger) {
 
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 	engineConfiguration->invertPrimaryTriggerSignal = false;
 
 	engineConfiguration->isPhaseSyncRequiredForIgnition = true;
@@ -103,7 +103,7 @@ void generateLog(const char* filename) {
 
     engineConfiguration->globalTriggerAngleOffset = 125;
     engineConfiguration->isFasterEngineSpinUpEnabled = true;
-    engineConfiguration->alwaysInstantRpm = true;
+    engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
     engineConfiguration->isPhaseSyncRequiredForIgnition = true;
 
     int n = 0;

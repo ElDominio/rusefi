@@ -290,7 +290,7 @@ void RpmCalculator::setSpinningUp(efitick_t nowNt) {
 void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 		uint32_t trgEventIndex, efitick_t nowNt) {
 
-	bool alwaysInstantRpm = engineConfiguration->alwaysInstantRpm;
+	rpmUpdateMode_e rpmMode = engineConfiguration->rpmUpdateMode;
 
 	RpmCalculator *rpmState = &engine->rpmCalculator;
 
@@ -312,15 +312,14 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 		 * and each revolution of crankshaft consists of two engine cycles revolutions
 		 *
 		 */
-			// rpmRate (dRPM) is always derived from the cycle-averaged RPM and the full-cycle
-			// period, independent of which value we publish as the reported RPM. Computing it
-			// from instant RPM would mean differentiating per-tooth values over microsecond
-			// intervals - pure noise - so we keep this cycle-to-cycle even when alwaysInstantRpm
-			// publishes instant RPM as the reported value.
+			// rpmRate is always derived from the cycle-averaged RPM and the full-cycle period,
+			// independent of which mode is active. Per-tooth differentiation would be pure noise.
+			// An EMA filter is applied to attenuate cycle-to-cycle jitter (needed so First Order
+			// extrapolation does not amplify single-cycle outliers over the inter-TDC window).
 			if (periodSeconds == 0) {
 				rpmState->rpmRate = 0;
 				rpmState->prevCycleRpm = 0;
-				if (!alwaysInstantRpm) {
+				if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE) {
 					rpmState->setRpmValue(0);
 				}
 			} else {
@@ -328,11 +327,18 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 				int mult = (int)getEngineCycle(getEngineRotationState()->getOperationMode()) / 360;
 				float cycleRpm = 60 * mult / periodSeconds;
 
-				float rpmDelta = cycleRpm - rpmState->prevCycleRpm;
-				rpmState->rpmRate = rpmDelta / (mult * periodSeconds);
+				float rawRpmRate = (cycleRpm - rpmState->prevCycleRpm) / (mult * periodSeconds);
+				// EMA alpha=0.5: only applied in FIRST_ORDER mode to smooth the extrapolation slope.
+				// Skipped on the first real measurement (prevCycleRpm==0) to avoid initializing at
+				// half the true rate. Other modes leave rpmRate unfiltered (it is a display gauge there).
+				if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER && rpmState->prevCycleRpm != 0) {
+					rpmState->rpmRate = 0.5f * rpmState->rpmRate + 0.5f * rawRpmRate;
+				} else {
+					rpmState->rpmRate = rawRpmRate;
+				}
 				rpmState->prevCycleRpm = cycleRpm;
 
-				if (!alwaysInstantRpm) {
+				if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE) {
 					rpmState->setRpmValue(cycleRpm);
 				}
 			}
@@ -354,15 +360,28 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 		trgEventIndex, nowNt);
 
 	float instantRpm = engine->triggerCentral.instantRpm.getInstantRpm();
-	if (alwaysInstantRpm) {
-		rpmState->setRpmValue(instantRpm);
-	} else if (rpmState->isSpinningUp()) {
-		rpmState->assignRpmValue(instantRpm);
+	switch (rpmMode) {
+		case rpmUpdateMode_e::RPM_UPDATE_INSTANT:
+			rpmState->setRpmValue(instantRpm);
+			break;
+		case rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER: {
+			float timeSinceTdc = rpmState->lastTdcTimer.getElapsedSeconds(nowNt);
+			float extrapolatedRpm = rpmState->prevCycleRpm + rpmState->rpmRate * timeSinceTdc;
+			rpmState->setRpmValue(extrapolatedRpm);
+			break;
+		}
+		case rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE:
+		default:
+			// RPM was already set at TDC (trgEventIndex == 0) above; nothing to do per-tooth.
+			if (rpmState->isSpinningUp()) {
+				rpmState->assignRpmValue(instantRpm);
+			}
 #if 0
-		efiPrintf("** RPM: idx=%d sig=%d iRPM=%d", trgEventIndex, ckpSignalType, instantRpm);
+			efiPrintf("** RPM: idx=%d sig=%d iRPM=%d", trgEventIndex, ckpSignalType, instantRpm);
 #else
-		UNUSED(ckpSignalType);
+			UNUSED(ckpSignalType);
 #endif
+			break;
 	}
 }
 

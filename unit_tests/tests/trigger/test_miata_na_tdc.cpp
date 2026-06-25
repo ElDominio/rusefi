@@ -5,7 +5,7 @@
 
 TEST(miata, miata_na_tdc) {
 	EngineTestHelper eth(engine_type_e::FRANKENSO_MIATA_NA6_MAP);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 #define TEST_REVOLUTIONS 6
 

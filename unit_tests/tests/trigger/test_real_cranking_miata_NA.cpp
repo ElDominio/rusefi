@@ -19,7 +19,7 @@ TEST(cranking, realCrankingFromFile) {
 	Sensor::setMockValue(SensorType::BatteryVoltage, 13);
 
 	EngineTestHelper eth (engine_type_e::FRANKENSO_MIATA_NA6_MAP);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	ssize_t read;
 

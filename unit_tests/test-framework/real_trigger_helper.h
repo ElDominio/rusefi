@@ -10,7 +10,7 @@ public:
         : eth(engineType)
     {
         engineConfiguration->isFasterEngineSpinUpEnabled = true;
-        engineConfiguration->alwaysInstantRpm = true;
+        engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
     }
 
     void runTest(const char* csvFileName, trigger_type_e triggerType, bool flipOnRead = false) {

@@ -7,7 +7,7 @@ static void testNoOverdwell(const char* file, bool instantRpm, const int expecte
 	reader.open(file);
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-	engineConfiguration->alwaysInstantRpm = instantRpm;
+	engineConfiguration->rpmUpdateMode = instantRpm ? rpmUpdateMode_e::RPM_UPDATE_INSTANT : rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE;
 
 	engineConfiguration->cylindersCount = 6;
 	engineConfiguration->firingOrder = FO_1_5_3_6_2_4;

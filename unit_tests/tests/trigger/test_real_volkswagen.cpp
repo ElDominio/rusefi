@@ -16,7 +16,7 @@ TEST(crankingVW, vwRealCrankingFromFile) {
 
 	reader.open("tests/trigger/resources/nick_1.csv");
 	EngineTestHelper eth (engine_type_e::VW_ABA);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 	eth.setTriggerType(trigger_type_e::TT_60_2_WRONG_POLARITY);
 
 	while (reader.haveMore()) {
@@ -33,7 +33,7 @@ TEST(crankingVW, crankingTwiceWithGap) {
 	EngineTestHelper eth (engine_type_e::VW_ABA);
 	extern bool unitTestTaskNoFastCallWhileAdvancingTimeHack;
 	unitTestTaskNoFastCallWhileAdvancingTimeHack = true;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 	eth.setTriggerType(trigger_type_e::TT_60_2_WRONG_POLARITY);
 
 	{

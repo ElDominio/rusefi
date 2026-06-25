@@ -127,12 +127,12 @@ public:
 
 	Timer lastTdcTimer;
 
-	// RPM rate of change, in RPM per second
+	// RPM rate of change, in RPM per second — EMA-filtered to reduce cycle-to-cycle noise
 	float rpmRate = 0;
 
 	/**
 	 * Cycle-averaged RPM from the previous engine cycle, used solely to compute rpmRate.
-	 * Kept separate from previousRpmValue because the alwaysInstantRpm path overwrites
+	 * Kept separate from previousRpmValue because the rpmUpdateMode path overwrites
 	 * previousRpmValue on every trigger tooth, which would corrupt the cycle-to-cycle derivative.
 	 */
 	float prevCycleRpm = 0;

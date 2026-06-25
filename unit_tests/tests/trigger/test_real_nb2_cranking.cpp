@@ -13,7 +13,7 @@ TEST(realCrankingNB2, normalCranking) {
 
 	reader.open("tests/trigger/resources/nb2-cranking-good.csv");
 	EngineTestHelper eth (engine_type_e::MAZDA_MIATA_NB2);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	while (reader.haveMore()) {
 		reader.processLine(&eth);
@@ -38,7 +38,7 @@ TEST(realCrankingNB2, crankingMissingInjector) {
 
 	reader.open("tests/trigger/resources/nb2-cranking-good-missing-injector-1.csv");
 	EngineTestHelper eth (engine_type_e::MAZDA_MIATA_NB2);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	while (reader.haveMore()) {
 		reader.processLine(&eth);

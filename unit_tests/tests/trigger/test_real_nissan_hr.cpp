@@ -8,7 +8,7 @@ TEST(nissan, realFromFile) {
 	reader.open("tests/trigger/resources/nissan-HR12DDR-with-spark-plugs.csv");
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 //	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-//	engineConfiguration->alwaysInstantRpm = true;
+//	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	eth.setTriggerType(trigger_type_e::TT_NISSAN_HR);
 
@@ -28,7 +28,7 @@ TEST(nissan, realNoSparkPlugsFromFile) {
 	reader.open("tests/trigger/resources/nissan-HR12DDR-no-spark-plugs.csv");
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 //	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-//	engineConfiguration->alwaysInstantRpm = true;
+//	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	eth.setTriggerType(trigger_type_e::TT_NISSAN_HR);
 
@@ -49,7 +49,7 @@ TEST(nissan, realFromFile4seconds) {
 	reader.open("tests/trigger/resources/nissan-HR12DDR-with-spark-plugs-4-seconds.csv");
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 //	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-//	engineConfiguration->alwaysInstantRpm = true;
+//	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	eth.setTriggerType(trigger_type_e::TT_NISSAN_HR);
 

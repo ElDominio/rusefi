@@ -168,6 +168,12 @@ typedef enum __attribute__ ((__packed__)) {
 
 } mc33810maxDwellTimer_e;
 
+enum class rpmUpdateMode_e : uint8_t {
+	RPM_UPDATE_PER_CYCLE = 0,
+	RPM_UPDATE_FIRST_ORDER = 1,
+	RPM_UPDATE_INSTANT = 2,
+};
+
 enum class idle_mode_e : uint8_t {
 	/**
 	 * In auto mode we currently have some pid-like-but-not really PID logic which is trying
