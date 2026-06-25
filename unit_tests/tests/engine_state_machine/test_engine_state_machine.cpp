@@ -2,6 +2,7 @@
 #include "custom_page.h"
 
 #include "engine_state_machine.h"
+#include "dfco.h"
 
 // Default cranking RPM threshold used by TEST_ENGINE
 static constexpr float TEST_CRANKING_RPM = 400.0f;
@@ -763,6 +764,252 @@ TEST(EngineStateMachine, flatShiftOverridesClutchDetection) {
 	EXPECT_TRUE(getSm().engineSmIsUpshifting);
 	EXPECT_FALSE(getSm().engineSmIsDownshifting);
 	EXPECT_TRUE(getSm().engineSmIsTorqueReduction);
+}
+
+// ---- VSS Rate mode: minimum-speed gate (smShiftMinVss) ----
+
+static void setupVssRateModeConfig() {
+	setupSmConfig();
+	getCustomPage()->smUpshiftClutchSwitch    = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smDownshiftClutchSwitch  = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smShiftDetectionMode     = sm_shift_detection_mode_e::VssRate;
+	getCustomPage()->smShiftLookbackMs        = 300;
+	getCustomPage()->smUpshiftRateThreshold   = 5;  // km/h per second
+	getCustomPage()->smDownshiftRateThreshold = 5;
+}
+
+// Seed the history buffer with linearly ramping VSS, mirroring seedRampedRpm.
+static void seedRampedVss(float startVss, float vssPerCallback, int callbacks, float tps) {
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, tps);
+	for (int i = 0; i < callbacks; i++) {
+		Sensor::setMockValue(SensorType::VehicleSpeed, startVss + vssPerCallback * i);
+		engine->periodicSlowCallback();
+		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	}
+}
+
+// VSS rises fast enough to clear the rate threshold, but current speed is still below
+// smShiftMinVss — engagement must be blocked despite the rate condition being satisfied.
+TEST(EngineStateMachine, vssRateModeBlockedBelowMinVss) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupVssRateModeConfig();
+	getCustomPage()->smShiftMinVss = 15; // require at least 15 km/h
+	enterRunning();
+
+	// Ends at ~9.5 km/h: rate ≈ 8.3 km/h/s (>5 threshold), but final speed stays under the 15 km/h gate.
+	seedRampedVss(0.0f, 0.5f, 20, 80.0f);
+
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_FALSE(sm.engineSmIsUpshifting);
+	EXPECT_FALSE(sm.engineSmIsDownshifting);
+}
+
+// Same ramp, but with the gate disabled (0 = no minimum) — confirmation proceeds normally.
+TEST(EngineStateMachine, vssRateModeAllowedAboveMinVss) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupVssRateModeConfig();
+	getCustomPage()->smShiftMinVss = 0;
+	enterRunning();
+
+	seedRampedVss(0.0f, 0.5f, 20, 80.0f);
+
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_TRUE(sm.engineSmIsUpshifting);
+	EXPECT_FALSE(sm.engineSmIsDownshifting);
+}
+
+// ---- Shift latch (smShiftLatchTimeMs): masks rapid on/off flicker ----
+
+TEST(EngineStateMachine, latchDefaultIsZeroAndClearsInstantly) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupClutchUpOnlyConfig(); // smShiftLatchTimeMs left at its 0 default
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState = true;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchUpState = false; // window opens and confirms immediately
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	engine->engineState.lua.clutchUpState = true; // window closes
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting)
+		<< "0ms latch must behave exactly like the old instantaneous signal";
+}
+
+// Clutch-Up returning to rest must force the overlay off immediately, overriding any still-active
+// latch. The blipper/RPM-hold modules trust this flag with no clutch check of their own, so the
+// latch may never outlive the pedal actually being back up.
+TEST(EngineStateMachine, clutchUpForceOffOverridesActiveLatch) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupClutchUpOnlyConfig();
+	getCustomPage()->smShiftLatchTimeMs = 200;
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState = true;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchUpState = false; // window opens, confirms, latch armed for 200ms
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	engine->engineState.lua.clutchUpState = true; // pedal back at rest: force-off wins despite the latch
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting) << "Clutch-Up true must force the overlay off even with an active latch";
+	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+
+	// Stays cleared rather than reappearing on a later tick.
+	advanceTimeUs(50 * 1000);
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+}
+
+// A later Clutch-Down full-press must not resurrect an overlay already killed by Clutch-Up — the
+// force-off clears the latch outright, so relatch-on-clutch-down has nothing left to extend.
+TEST(EngineStateMachine, clutchUpForceOffSurvivesSubsequentRelatchAttempt) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupClutchUpOnlyConfig();
+	getCustomPage()->smSecondClutchSwitchAvailable = true;
+	getCustomPage()->smShiftLatchTimeMs = 100;
+	getCustomPage()->smRelatchOnClutchDown = true;
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState   = true;
+	engine->engineState.lua.clutchDownState = false;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchUpState = false; // window opens, confirms, latch until +100ms
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	engine->engineState.lua.clutchUpState = true; // pedal back at rest: force-off wins, latch destroyed
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting);
+
+	advanceTimeUs(10 * 1000);
+	engine->engineState.lua.clutchDownState = true; // fresh full-press
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting)
+		<< "relatch-on-clutch-down must not be able to resurrect an overlay already killed by Clutch-Up";
+}
+
+// ---- smRelatchOnClutchDown: a fresh Clutch-Down press refreshes an active latch ----
+
+static void setupRelatchConfig() {
+	setupClutchUpOnlyConfig();
+	getCustomPage()->smSecondClutchSwitchAvailable = true;
+	getCustomPage()->smShiftLatchTimeMs = 100;
+}
+
+TEST(EngineStateMachine, repeatedConfirmationDoesNotExtendLatchWithoutRelatch) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupRelatchConfig();
+	getCustomPage()->smRelatchOnClutchDown = false;
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState   = true;
+	engine->engineState.lua.clutchDownState = false;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchUpState = false; // window opens, confirms, latch until +100ms
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	engine->engineState.lua.clutchDownState = true; // full press, well short of Clutch-Up returning to rest
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	// Release starts (Clutch-Down falling): earlyClose shuts the window early. Clutch-Up is still
+	// false (pedal not yet at rest), so the latch — not the Clutch-Up force-off — covers us here.
+	engine->engineState.lua.clutchDownState = false;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	// 90ms later, a fresh Clutch-Down full-press reconfirms (opens a new window, same direction)
+	// but must NOT push the original 100ms deadline back out.
+	advanceTimeUs(90 * 1000);
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	// 15ms later (105ms after the original confirmation) the original deadline has passed.
+	advanceTimeUs(15 * 1000);
+	engine->engineState.lua.clutchDownState = false;
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsUpshifting)
+		<< "without smRelatchOnClutchDown, the latch must not be extended by a later confirmation";
+}
+
+TEST(EngineStateMachine, relatchOnClutchDownExtendsLatch) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupRelatchConfig();
+	getCustomPage()->smRelatchOnClutchDown = true;
+	enterRunning();
+
+	engine->engineState.lua.clutchUpState   = true;
+	engine->engineState.lua.clutchDownState = false;
+	seedHistory(10, 3000.0f, 80.0f);
+
+	engine->engineState.lua.clutchUpState = false; // window opens, confirms, latch until +100ms
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	engine->engineState.lua.clutchDownState = true; // full press, well short of Clutch-Up returning to rest
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	// Release starts (Clutch-Down falling): earlyClose shuts the window early. Clutch-Up is still
+	// false (pedal not yet at rest), so the latch — not the Clutch-Up force-off — covers us here.
+	engine->engineState.lua.clutchDownState = false;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	// 90ms later, a fresh Clutch-Down full-press relatches: deadline becomes (now + 100ms).
+	advanceTimeUs(90 * 1000);
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting);
+
+	// 15ms later (105ms after the original confirmation) — past the ORIGINAL deadline, but the
+	// relatch pushed it out to 190ms, so the overlay must still be asserted. Clutch-Up stays false
+	// throughout, so the force-off override never engages here.
+	advanceTimeUs(15 * 1000);
+	engine->engineState.lua.clutchDownState = false;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsUpshifting) << "smRelatchOnClutchDown should have pushed the deadline out";
+}
+
+// ---- Shifting states block the overrun (DFCO) fuel cut ----
+
+TEST(EngineStateMachine, shiftingBlocksOverrunFuelCut) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupShiftDetectionConfig(); // up & down both ClutchDown, Simple Throttle
+	enterRunning();
+
+	engineConfiguration->coastingFuelCutEnabled = true;
+	engineConfiguration->coastingFuelCutTps     = 5;
+	engineConfiguration->coastingFuelCutRpmHigh = 1500;
+	engineConfiguration->coastingFuelCutVssHigh = 0;
+	engineConfiguration->coastingFuelCutClt     = 40.0f;
+	Sensor::setMockValue(SensorType::Clt, 80.0f);
+
+	// Closed throttle + high RPM history → DFCO's own conditions are met (would normally cut fuel).
+	seedHistory(10, 3000.0f, 2.0f);
+
+	engine->engineState.lua.clutchDownState = true;
+	engine->periodicSlowCallback();
+	engine->periodicFastCallback(); // runs DfcoController::update()
+
+	EXPECT_TRUE(getSm().engineSmIsDownshifting);
+	EXPECT_FALSE(eth.engine.module<DfcoController>().unmock().cutFuel())
+		<< "overrun fuel cut must be blocked while a shift is in progress";
 }
 
 TEST(EngineStateMachine, liveDataFieldsPopulated) {

@@ -126,13 +126,16 @@ IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController
 }
 
 /**
- * Returns a 0..1 (and beyond) fraction representing how far we have progressed through
- * the post-cranking taper. 0 = just started, 1 = taper complete. Used to blend
- * cranking IAC position into running open-loop position.
+ * Returns a 0..1 (and beyond, or negative while holding) fraction representing how far we
+ * have progressed through the post-cranking taper. Negative/0 while still within the hold
+ * duration (locked at the cranking value), 1 = taper complete. Used to blend cranking IAC
+ * position into running open-loop position.
  */
 float IdleController::getCrankingTaperFraction(float clt) const {
+  	float holdDuration = interpolate2d(clt, config->afterCrankingIACtaperHoldDurationBins, config->afterCrankingIACtaperHoldDuration);
   	float taperDuration = interpolate2d(clt, config->afterCrankingIACtaperDurationBins, config->afterCrankingIACtaperDuration);
-	return (float)engine->rpmCalculator.getRevolutionCounterSinceStart() / taperDuration;
+	float cyclesPastHold = (float)engine->rpmCalculator.getRevolutionCounterSinceStart() - holdDuration;
+	return cyclesPastHold / taperDuration;
 }
 
 float IdleController::getOffIdleAdder(Phase phase, float rpm) {

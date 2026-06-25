@@ -60,6 +60,10 @@ static void setupDefaultSensorInputs() {
 
 	engineConfiguration->clt.adcChannel = EFI_ADC_39;  // PF5, mux=0
 	engineConfiguration->iat.adcChannel = EFI_ADC_47;  // PF5, mux=1
+
+	// AC Pressure is a tune-stored linear sensor; pin it here so it survives a config
+	// reset/version bump like CLT/IAT do, instead of drifting on firmware update.
+	engineConfiguration->acPressure.hwChannel = EFI_ADC_43;  // PF9, mux=1
 }
 
 static void alphax_8chan_boardInitHardware() {

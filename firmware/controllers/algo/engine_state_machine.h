@@ -104,6 +104,14 @@ private:
 	bool         m_prevClutchUp      = false;
 	bool         m_prevClutchDown    = false;
 
+	// Shift latch: once a direction is confirmed, Upshifting/Downshifting is held true until
+	// this deadline, masking flicker from the instantaneous rate check (smShiftLatchTimeMs).
+	// Tracked separately from m_shiftIsUpshift so a new window opening in the opposite
+	// direction doesn't retroactively flip the direction of a still-active latch.
+	bool         m_shiftLatched         = false;
+	bool         m_shiftLatchedIsUpshift = false;
+	efitimems_t  m_shiftLatchUntilMs     = 0;
+
 	void updateTempOverlay();
 
 	// Suppresses repeated VSS-unavailable warnings once emitted

@@ -287,6 +287,43 @@ TEST(idle_v2, getCrankingTaperFraction) {
 	EXPECT_FLOAT_EQ(2, dut.getCrankingTaperFraction(mockedTemperature));
 }
 
+TEST(idle_v2, getCrankingTaperFractionWithHold) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	StrictMock<MockOpenLoopIdler> dut;
+	const float mockedTemperature = 50;
+
+	// Hold for 200 cycles before the 500-cycle taper begins counting down.
+	setArrayValues(config->afterCrankingIACtaperHoldDuration, 200);
+	setArrayValues(config->afterCrankingIACtaperDuration, 500);
+
+	// 0 cycles - within hold, pinned at (or below) cranking value
+	EXPECT_LE(dut.getCrankingTaperFraction(mockedTemperature), 0);
+
+	// 100 cycles - still within hold
+	for (size_t i = 0; i < 100; i++) {
+		engine->rpmCalculator.onNewEngineCycle();
+	}
+	EXPECT_LE(dut.getCrankingTaperFraction(mockedTemperature), 0);
+
+	// 200 cycles - hold just elapsed, taper now starts from 0
+	for (size_t i = 0; i < 100; i++) {
+		engine->rpmCalculator.onNewEngineCycle();
+	}
+	EXPECT_FLOAT_EQ(0, dut.getCrankingTaperFraction(mockedTemperature));
+
+	// 450 cycles - 250 cycles past the hold, halfway through the 500-cycle taper
+	for (size_t i = 0; i < 250; i++) {
+		engine->rpmCalculator.onNewEngineCycle();
+	}
+	EXPECT_FLOAT_EQ(0.5f, dut.getCrankingTaperFraction(mockedTemperature));
+
+	// 700 cycles - 500 cycles past the hold, taper complete
+	for (size_t i = 0; i < 250; i++) {
+		engine->rpmCalculator.onNewEngineCycle();
+	}
+	EXPECT_FLOAT_EQ(1, dut.getCrankingTaperFraction(mockedTemperature));
+}
+
 TEST(idle_v2, crankingRpmFlare_openLoopBypassesCrankingDuty) {
 	// RPM flare enabled without air amount: getOpenLoop() during Cranking must fall through
 	// to running open-loop so m_lastTargetRpm drives the 3D table lookup.

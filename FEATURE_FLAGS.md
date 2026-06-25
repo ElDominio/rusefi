@@ -80,6 +80,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_MISFIRE_DETECTION` | Idle misfire detection (ESM sub-feature; needs `EFI_ENGINE_STATE_MACHINE` at runtime) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_CLUTCH_DELAY_VALVE` | Clutch delay valve (CDV) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_LAUNCH_POWER_RAMP` | Launch power ramp (timing pull + ramp-in after a WOT launch release) | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_ROLLING_LAUNCH` | Rolling Launch Control (button-held captured-RPM hold via the hard spark limiter to spool the turbo while moving; flat timing/fuel while held, timing ramp-out on release; needs `EFI_LAUNCH_CONTROL`) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_BURST_KNOCK` | Burst knock (transient ignition timing pull on a TPS-rate stab, decays over time) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_WOT_ENRICHMENT` | WOT time enrichment (AFR adder applied to the target after prolonged WOT; needs `EFI_ENGINE_STATE_MACHINE` at runtime for WOT state) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_SPORT_PEDAL` | Sport Pedal (ETB pedal-to-throttle ratio shaping via a pedal-indexed multiplier curve; switch/Lua-gauge activated; needs `EFI_ELECTRONIC_THROTTLE_BODY`) | FALSE (f4) / TRUE (f7,h7) |
@@ -150,6 +151,7 @@ EFI_INTERNAL_FAST_ADC_PWM
 EFI_INTERNAL_SLOW_ADC_BACKGROUND
 EFI_LAUNCH_CONTROL
 EFI_LAUNCH_POWER_RAMP            ← AlphaX (launch power ramp)
+EFI_ROLLING_LAUNCH               ← AlphaX (rolling launch control)
 EFI_LOGIC_ANALYZER
 EFI_LTFT_CONTROL
 EFI_LUA

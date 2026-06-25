@@ -74,8 +74,9 @@ void EngineStateMachine::onSlowCallback() {
 	if (flatShiftActive) {
 		engineSmIsUpshifting   = true;
 		engineSmIsDownshifting = false;
-		// Abort any open clutch-detection window so it doesn't fight the flat-shift signal
+		// Abort any open clutch-detection window/latch so it doesn't fight the flat-shift signal
 		m_shiftWindowOpen = false;
+		m_shiftLatched    = false;
 	} else {
 		updateShiftDetection(tps, rpm, vss, nowMs);
 	}
@@ -495,6 +496,7 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 	if (upSw == sm_clutch_switch_e::None && dnSw == sm_clutch_switch_e::None) {
 		engineSmIsUpshifting   = false;
 		engineSmIsDownshifting = false;
+		m_shiftLatched         = false;
 		return;
 	}
 
@@ -562,37 +564,66 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 		m_shiftEvaluateAtMs = nowMs + delay;
 	}
 
-	if (!m_shiftWindowOpen) {
+	// Relatch-on-clutch-down: while the latch is active, a fresh Clutch-Down full-press resets
+	// it back to the full duration instead of letting it expire, independent of window state.
+	// Requires a second switch to be wired (rawDnRose is meaningless without one).
+	if (m_shiftLatched && secondSwitch && getCustomPage()->smRelatchOnClutchDown && rawDnRose) {
+		m_shiftLatchUntilMs = nowMs + getCustomPage()->smShiftLatchTimeMs;
+	}
+
+	bool windowConfirmed = false;
+
+	if (m_shiftWindowOpen) {
+		// Close the window when the clutch re-engages, or on timeout. With a second switch wired,
+		// Clutch-Down's falling edge (release starting) is an earlier, equally valid "re-engaging"
+		// signal than waiting for Clutch-Up to fully return to rest.
+		sm_clutch_switch_e dirSwitch = m_shiftIsUpshift ? upSw : dnSw;
+		bool ownClose   = closeFired(dirSwitch);
+		bool earlyClose = secondSwitch && dirSwitch == sm_clutch_switch_e::ClutchUp && rawDnFell;
+		bool triggerFell    = ownClose || earlyClose;
+		efitimems_t elapsed = nowMs - m_shiftWindowOpenMs;
+
+		if (triggerFell || elapsed > SM_SHIFT_TIMEOUT_MS) {
+			// Window closes; any active latch keeps running independently (see below).
+			m_shiftWindowOpen = false;
+		} else if (nowMs >= m_shiftEvaluateAtMs) {
+			// Window active and past the disengagement delay: evaluate direction via sensor
+			// history. evaluateShiftDirection() itself applies the VSS Rate min-speed gate.
+			windowConfirmed = evaluateShiftDirection(m_shiftIsUpshift, rpm, vss, nowMs);
+		}
+		// Still within the disengagement delay — don't commit direction yet this cycle.
+	}
+
+	// Latch: arm fresh on the first confirmation, then hold for smShiftLatchTimeMs without
+	// being extended by further confirmations (a true "minimum hold", not an extending one) --
+	// the only thing allowed to push the deadline back out is the relatch-on-clutch-down logic
+	// above. This masks rate-check flicker without making the overlay outlive a long latch
+	// configured shorter than the actual shift.
+	if (windowConfirmed) {
+		if (!m_shiftLatched) {
+			m_shiftLatchUntilMs = nowMs + getCustomPage()->smShiftLatchTimeMs;
+		}
+		m_shiftLatched          = true;
+		m_shiftLatchedIsUpshift = m_shiftIsUpshift;
+	} else if (m_shiftLatched && nowMs >= m_shiftLatchUntilMs) {
+		m_shiftLatched = false;
+	}
+
+	bool active        = windowConfirmed || m_shiftLatched;
+	bool activeIsUpshift = windowConfirmed ? m_shiftIsUpshift : m_shiftLatchedIsUpshift;
+	engineSmIsUpshifting   = active &&  activeIsUpshift;
+	engineSmIsDownshifting = active && !activeIsUpshift;
+
+	// Clutch fully up (pedal at rest) unconditionally ends any shift overlay, overriding the
+	// latch/relatch hold. The blipper and RPM-hold modules trust these flags with no clutch
+	// check of their own, so this is the only place that can guarantee neither is ever active
+	// while the pedal is at rest.
+	if (clutchUpActive) {
 		engineSmIsUpshifting   = false;
 		engineSmIsDownshifting = false;
-		return;
+		m_shiftWindowOpen       = false;
+		m_shiftLatched          = false;
 	}
-
-	// Close the window when the clutch re-engages, or on timeout. With a second switch wired,
-	// Clutch-Down's falling edge (release starting) is an earlier, equally valid "re-engaging"
-	// signal than waiting for Clutch-Up to fully return to rest.
-	sm_clutch_switch_e dirSwitch = m_shiftIsUpshift ? upSw : dnSw;
-	bool ownClose   = closeFired(dirSwitch);
-	bool earlyClose = secondSwitch && dirSwitch == sm_clutch_switch_e::ClutchUp && rawDnFell;
-	bool triggerFell    = ownClose || earlyClose;
-	efitimems_t elapsed = nowMs - m_shiftWindowOpenMs;
-
-	if (triggerFell || elapsed > SM_SHIFT_TIMEOUT_MS) {
-		m_shiftWindowOpen      = false;
-		engineSmIsUpshifting   = false;
-		engineSmIsDownshifting = false;
-		return;
-	}
-
-	// Still within the disengagement delay — don't commit direction yet
-	if (nowMs < m_shiftEvaluateAtMs) {
-		return;
-	}
-
-	// Window active and past delay: evaluate direction via sensor history
-	bool confirmed = evaluateShiftDirection(m_shiftIsUpshift, rpm, vss, nowMs);
-	engineSmIsUpshifting   =  m_shiftIsUpshift && confirmed;
-	engineSmIsDownshifting = !m_shiftIsUpshift && confirmed;
 }
 
 bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentRpm*/, float currentVss, efitimems_t /*nowMs*/) {
@@ -651,6 +682,12 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentR
 			return isUpshift ? tpsWasOpen : !tpsWasOpen;
 		}
 		m_vssRateWarningEmitted = false;
+
+		// Below the configured minimum speed, VSS rate noise is largest relative to the signal —
+		// block engagement entirely rather than risk a false confirmation near-stationary.
+		if (currentVss < (float)getCustomPage()->smShiftMinVss) {
+			return false;
+		}
 
 		float deltaPer1s = (currentVss - hist->vss) / (static_cast<float>(lookbackMs) / 1000.0f);
 		if (isUpshift) {

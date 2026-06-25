@@ -68,7 +68,7 @@ struct_no_prefix page5_s
 	uint8_t downshiftBlipperMaxTpsLimit;Downshift Blipper: maximum throttle % the closed-loop PID hold is allowed to command. Does not limit the open-loop ramp-up phase, which targets etbMaximumPosition.;"%", 1, 0, 0, 100, 0
 	uint8_t downshiftBlipperAlignmentPad;unused
 
-	uint16_t downshiftBlipperMaxTimeMs;Downshift Blipper: maximum duration of an active blip before it is force-terminated (safety timeout).;"ms", 1, 0, 0, 2000, 0
+	uint16_t downshiftBlipperMaxTimeMs;Downshift Blipper: maximum duration of an active blip before it is force-terminated (safety timeout).;"ms", 1, 0, 0, 5000, 0
 	uint16_t downshiftBlipperLockoutTimeMs;Downshift Blipper: lockout after a blip during which another blip cannot start (anti-chatter).;"ms", 1, 0, 0, 5000, 0
 	uint16_t downshiftBlipperMinRpm;Downshift Blipper: minimum engine RPM required to start a blip.;"rpm", 1, 0, 0, 15000, 0
 	uint16_t downshiftBlipperMaxRpm;Downshift Blipper: blip is blocked when the computed target RPM exceeds this, to prevent over-rev.;"rpm", 1, 0, 0, 15000, 0
@@ -442,5 +442,28 @@ struct_no_prefix page5_s
 	uint8_t celBlinkPointsThreshold;Check Engine Triggering: total tripped-check points required to escalate an already-active DTC to a flashing CEL -- more critical than solid. Should be set higher than celPointsThreshold. 0 = never escalate to blink.;"points", 1, 0, 0, 100, 0
 	uint8_t autoscale celDebounceTimeSec;Check Engine Triggering: shared continuous-confirm time for every check on this page (trip and untrip both require the condition to hold for this long). Also the flip-counting window for TPS Circuit Intermittent.;"s", 0.1, 0, 0, 25, 1
 	uint8_t tpsIntermittentFlipCount;Check Engine Triggering -- TPS Circuit Intermittent: number of ok/fault flips within celDebounceTimeSec required to trip.;"flips", 1, 0, 2, 10, 0
+
+	! --- Rolling Launch Control (EFI_ROLLING_LAUNCH) ---
+	! A driver-held button (hardware switch and/or the setRollingLaunchTrigger Lua call) that, while
+	! the car is moving (VSS >= rollingLaunchMinVss) and above rollingLaunchMinArmRpm, snapshots the
+	! current RPM at the press edge and holds the engine there via the shared hard spark limiter so
+	! the turbo can be spooled. The hold ceiling is capturedRpm + rollingLaunchRpmWindow, clamped to
+	! rollingLaunchMaxRpm. While held it also pulls a flat rollingLaunchTimingRetard and adds
+	! rollingLaunchFuelAdderPercent fuel. On release the hold ends immediately and the pulled timing
+	! decays linearly back to zero over rollingLaunchRampOutTime so boost is eased in, not slammed.
+	! Requires EFI_LAUNCH_CONTROL (shares the hard spark limiter).
+	bit rollingLaunchEnabled,"enabled","disabled";Rolling Launch: master enable. Holds engine RPM at a captured target while a button is held and the car is moving, to spool the turbo.
+
+	switch_input_pin_e rollingLaunchActivatePin;Rolling Launch: hardware switch input pin. Active state (per the pin mode below) engages the hold. Also OR-ed with the setRollingLaunchTrigger Lua call.
+	pin_input_mode_e rollingLaunchActivatePinMode;
+
+	uint8_t rollingLaunchTimingRetard;Rolling Launch: flat ignition timing pulled (retarded) while the hold is active, to build boost.;"deg", 1, 0, 0, 30, 0
+	uint8_t rollingLaunchFuelAdderPercent;Rolling Launch: extra fuel added (richer) while the hold is active.;"%", 1, 0, 0, 50, 0
+	uint8_t autoscale rollingLaunchRampOutTime;Rolling Launch: time over which the pulled timing decays linearly back to zero after the button is released.;"s", 0.1, 0, 0, 10, 1
+
+	uint16_t rollingLaunchRpmWindow;Rolling Launch: RPM added to the captured (press-edge) RPM to set the hold target. e.g. press at 3500 with 500 here holds at 4000.;"rpm", 1, 0, 0, 4000, 0
+	uint16_t rollingLaunchMinArmRpm;Rolling Launch: minimum engine RPM required at the press edge to arm. Prevents engaging while lugging.;"rpm", 1, 0, 0, 15000, 0
+	uint16_t rollingLaunchMaxRpm;Rolling Launch: absolute ceiling the captured hold target is clamped to, regardless of where the button is pressed (over-rev safety).;"rpm", 1, 0, 0, 15000, 0
+	uint16_t rollingLaunchMinVss;Rolling Launch: minimum vehicle speed required to arm. This is the "rolling" gate -- below it the button does nothing.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
 
 end_struct

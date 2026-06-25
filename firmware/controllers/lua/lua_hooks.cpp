@@ -810,6 +810,13 @@ extern int luaCommandCounters[LUA_BUTTON_COUNT];
 		return 0;
 	});
 #endif // EFI_LAUNCH_CONTROL
+#if EFI_ROLLING_LAUNCH
+	lua_register(lState, "setRollingLaunchTrigger", [](lua_State* l) {
+		auto value = luaL_checkinteger(l, 1);
+		engine->module<RollingLaunchControl>().unmock().luaRollingLaunchState = value;
+		return 0;
+	});
+#endif // EFI_ROLLING_LAUNCH
 #if EFI_ANTILAG_SYSTEM
 	lua_register(lState, "setRollingIdleTrigger", [](lua_State* l) {
 		auto value = luaL_checkinteger(l, 1);

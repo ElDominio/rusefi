@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE5_DATA_VERSION = 10;
+static constexpr uint32_t PAGE5_DATA_VERSION = 11;
 
 using page5_container_s = ExtraPageContainer<page5_s, PAGE5_DATA_VERSION>;
 
@@ -183,6 +183,18 @@ void customPageSetDefaults() {
 	d.celBlinkPointsThreshold = 2;  // two simultaneously tripped checks escalate to a flashing CEL
 	d.celDebounceTimeSec = 5.0f;    // every check's condition must hold for 5s before tripping/clearing
 	d.tpsIntermittentFlipCount = 3; // 3+ ok/fault flips within celDebounceTimeSec trips Intermittent
+
+	// Rolling Launch Control — disabled by default; sane gates so it is usable once enabled.
+	d.rollingLaunchEnabled        = false;
+	d.rollingLaunchActivatePin    = Gpio::Unassigned;
+	d.rollingLaunchActivatePinMode = PI_DEFAULT;
+	d.rollingLaunchRpmWindow      = 500;   // hold target = captured RPM + 500
+	d.rollingLaunchMinArmRpm      = 2500;  // do not arm while lugging below 2500 RPM
+	d.rollingLaunchMaxRpm         = 7000;  // absolute over-rev ceiling for the captured target
+	d.rollingLaunchMinVss         = 10;    // must be rolling (>= 10 km/h) to arm
+	d.rollingLaunchTimingRetard   = 10;    // 10 deg pulled while held to build boost
+	d.rollingLaunchFuelAdderPercent = 5;   // 5% richer while held
+	d.rollingLaunchRampOutTime    = 1.0f;  // pulled timing decays to zero over 1 s on release
 }
 
 void loadCustomPage() {

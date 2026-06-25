@@ -16,6 +16,7 @@ include $(PROJECT_DIR)/controllers/modules/example_module/example_module.mk
 include $(PROJECT_DIR)/controllers/modules/vvl_controller/vvl_controller.mk
 include $(PROJECT_DIR)/controllers/modules/cdv_controller/cdv_controller.mk
 include $(PROJECT_DIR)/controllers/modules/launch_power_ramp/launch_power_ramp.mk
+include $(PROJECT_DIR)/controllers/modules/rolling_launch/rolling_launch.mk
 include $(PROJECT_DIR)/controllers/modules/burst_knock/burst_knock.mk
 include $(PROJECT_DIR)/controllers/modules/wot_enrichment/wot_enrichment.mk
 include $(PROJECT_DIR)/controllers/modules/check_engine_light/check_engine_light.mk

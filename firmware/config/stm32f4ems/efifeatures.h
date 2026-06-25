@@ -594,6 +594,11 @@
 #define EFI_LAUNCH_POWER_RAMP FALSE
 #endif
 
+// Rolling Launch Control (button-held captured-RPM hold to spool the turbo while moving)
+#ifndef EFI_ROLLING_LAUNCH
+#define EFI_ROLLING_LAUNCH FALSE
+#endif
+
 // Burst Knock (transient ignition timing pull on a TPS-rate stab)
 #ifndef EFI_BURST_KNOCK
 #define EFI_BURST_KNOCK FALSE

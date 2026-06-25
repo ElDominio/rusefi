@@ -243,6 +243,9 @@ angle_t getAdvanceCorrections(float engineLoad) {
 #if EFI_LAUNCH_POWER_RAMP
 		- engine->module<LaunchPowerRamp>().unmock().getTimingRetard()
 #endif // EFI_LAUNCH_POWER_RAMP
+#if EFI_ROLLING_LAUNCH
+		- engine->module<RollingLaunchControl>().unmock().getTimingRetard()
+#endif // EFI_ROLLING_LAUNCH
 #if EFI_BURST_KNOCK
 		- engine->module<BurstKnock>().unmock().getTimingRetard()
 #endif // EFI_BURST_KNOCK

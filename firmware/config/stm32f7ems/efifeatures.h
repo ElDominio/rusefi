@@ -49,6 +49,10 @@
 #define EFI_LAUNCH_POWER_RAMP TRUE
 #endif
 
+#ifndef EFI_ROLLING_LAUNCH
+#define EFI_ROLLING_LAUNCH TRUE
+#endif
+
 // Burst Knock (transient ignition timing pull on a TPS-rate stab)
 #ifndef EFI_BURST_KNOCK
 #define EFI_BURST_KNOCK TRUE

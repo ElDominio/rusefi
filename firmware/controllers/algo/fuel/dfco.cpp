@@ -80,8 +80,12 @@ bool DfcoController::getState() const {
 void DfcoController::update() {
 	bool newState = getState();
 
-	// If P&B is active, don't cut fuel — we want rich, unburnt mixture for pops
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+	auto& sm = engine->module<EngineStateMachine>().unmock();
+
+	// If P&B is active, don't cut fuel — we want rich, unburnt mixture for pops.
+	// Likewise, don't cut fuel while the SM has a shift in progress (Upshifting/Downshifting) —
+	// an abrupt fuel cut mid-shift fights the rev-match / RPM-hold modules and feels harsh.
+	if (sm.engineSmIsPopsAndBangs || sm.engineSmIsUpshifting || sm.engineSmIsDownshifting) {
 		newState = false;
 	}
 

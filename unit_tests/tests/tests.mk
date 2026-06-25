@@ -105,6 +105,7 @@ TESTS_SRC_CPP = \
 	tests/engine_state_machine/test_engine_state_machine.cpp \
 	tests/test_misfire_detection.cpp \
 	tests/test_launch_power_ramp.cpp \
+	tests/test_rolling_launch.cpp \
 	tests/actuators/test_downshift_blipper.cpp \
 	tests/actuators/test_upshift_rpm_hold.cpp \
 	tests/test_fft.cpp \

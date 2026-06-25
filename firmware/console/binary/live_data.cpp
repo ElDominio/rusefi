@@ -374,6 +374,15 @@ const launch_power_ramp_state_s* getLiveData(size_t) {
 }
 
 template<>
+const rolling_launch_state_s* getLiveData(size_t) {
+#if EFI_ROLLING_LAUNCH
+	return &engine->module<RollingLaunchControl>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
 const burst_knock_state_s* getLiveData(size_t) {
 #if EFI_BURST_KNOCK
 	return &engine->module<BurstKnock>().unmock();

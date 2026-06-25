@@ -46,6 +46,7 @@
 #include "exhaust_cutout.h"
 #include "cdv_controller.h"
 #include "launch_power_ramp.h"
+#include "rolling_launch.h"
 #include "burst_knock.h"
 #include "wot_enrichment.h"
 #include "check_engine_light.h"
@@ -177,6 +178,9 @@ public:
 #if EFI_LAUNCH_POWER_RAMP
         LaunchPowerRamp,
 #endif // EFI_LAUNCH_POWER_RAMP
+#if EFI_ROLLING_LAUNCH
+        RollingLaunchControl,
+#endif // EFI_ROLLING_LAUNCH
 #if EFI_BURST_KNOCK
         BurstKnock,
 #endif // EFI_BURST_KNOCK
