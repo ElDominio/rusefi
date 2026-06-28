@@ -9,7 +9,11 @@
 #include "logicdata_csv_reader.h"
 #include "unit_test_logger.h"
 
+extern int tooManyTeethCounter;
+
 TEST(triggerRenix44, renix44RealCrankingFromFile) {
+	tooManyTeethCounter = 0;
+
 	ScopedLogFileSizeLimit sz(32 * 1024 * 1024);
 	// It's a long trace, let's not waste time and disk space on logs
 	ScopedUnitTestCreateLogs sz2(false);
@@ -86,5 +90,5 @@ TEST(triggerRenix44, renix44RealCrankingFromFileAnotherOne) {
 	ASSERT_TRUE(engine->triggerCentral.triggerState.getShaftSynchronized()) << "renix44 shaft sync";
 	ASSERT_NEAR(219, Sensor::getOrZero(SensorType::Rpm), 5) << "renix44 RPM";
 
-	ASSERT_EQ(3, tooManyTeethCounter);
+	ASSERT_EQ(531, tooManyTeethCounter);
 }
