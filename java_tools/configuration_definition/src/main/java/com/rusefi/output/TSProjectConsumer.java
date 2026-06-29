@@ -124,6 +124,7 @@ public class TSProjectConsumer implements ConfigurationConsumer {
         new TsPage("\\x00\\x02", "PAGE_SIZE_3",              "PAGE_CONTENT_3", false, "ltftPageRefreshFlag",    "EFI_LTFT_CONTROL", "LTFT_PAGE_ENABLED"),
         new TsPage("\\x00\\x03", "PAGE_SIZE_4",              "PAGE_CONTENT_4", true,  "triggerPageRefreshFlag", null,               null),
         new TsPage("\\x00\\x04", "PAGE_SIZE_5",              "PAGE_CONTENT_5", true,  null,                     "EFI_LUA",          null),
+        new TsPage("\\x00\\x05", "PAGE_SIZE_6",              "PAGE_CONTENT_6", true,  null,                     null,               null),
     };
 
     private static class TsPage {
