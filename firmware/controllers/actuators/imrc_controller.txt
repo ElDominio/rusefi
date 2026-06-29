@@ -1,0 +1,8 @@
+struct_no_prefix imrc_controller_s
+	bit imrcTriggerRpm;IMRC: RPM trigger
+	bit imrcTriggerTps;IMRC: TPS trigger
+	bit imrcTriggerMap;IMRC: MAP trigger
+	bit imrcTriggered;IMRC: triggered
+	bit imrcRunnersOpen;IMRC: runners open
+	bit imrcMoving;IMRC: motor moving
+end_struct
