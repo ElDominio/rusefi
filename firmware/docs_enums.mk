@@ -5,6 +5,7 @@ DOCS_ENUMS_INPUTS = \
   $(PROJECT_DIR)/integration/config_page_2.txt \
   $(PROJECT_DIR)/integration/config_page_3.txt \
   $(PROJECT_DIR)/integration/config_page_4.txt \
+  $(PROJECT_DIR)/integration/config_page_5.txt \
   $(PROJECT_DIR)/integration/config_page_6.txt \
   $(PROJECT_DIR)/console/binary/output_channels.txt \
   $(PROJECT_DIR)/controllers/engine_cycle/knock_controller.txt \

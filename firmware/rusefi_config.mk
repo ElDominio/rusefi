@@ -9,6 +9,8 @@ CONFIG_INPUTS = \
   $(PROJECT_DIR)/controllers/algo/rusefi_hw_stm32_enums.h \
   $(PROJECT_DIR)/controllers/algo/rusefi_hw_adc_enums.h \
   $(PROJECT_DIR)/integration/rusefi_config.txt \
+  $(PROJECT_DIR)/integration/config_page_5.txt \
+  $(PROJECT_DIR)/integration/config_page_6.txt \
   $(PROJECT_DIR)/tunerstudio/tunerstudio.template.ini \
   $(PROJECT_DIR)/${META_OUTPUT_ROOT_FOLDER}console/binary/generated/live_data_fragments.ini \
   $(PROJECT_DIR)/${META_OUTPUT_ROOT_FOLDER}console/binary/generated/data_logs.ini \
@@ -53,6 +55,7 @@ CONFIG_FILES = \
   $(PROJECT_DIR)/$(META_OUTPUT_ROOT_FOLDER)controllers/generated/page_3_generated.h \
   $(PROJECT_DIR)/$(META_OUTPUT_ROOT_FOLDER)controllers/generated/page_4_generated.h \
   $(PROJECT_DIR)/$(META_OUTPUT_ROOT_FOLDER)controllers/generated/page_5_generated.h \
+  $(PROJECT_DIR)/$(META_OUTPUT_ROOT_FOLDER)controllers/generated/page_6_generated.h \
   $(PROJECT_DIR)/$(META_OUTPUT_ROOT_FOLDER)controllers/lua/generated/value_lookup_generated.cpp \
   $(PROJECT_DIR)/$(META_OUTPUT_ROOT_FOLDER)controllers/lua/generated/value_lookup_generated.md \
   $(PROJECT_DIR)/../java_console/models/src/main/java/com/rusefi/config/generated/VariableRegistryValues.java \

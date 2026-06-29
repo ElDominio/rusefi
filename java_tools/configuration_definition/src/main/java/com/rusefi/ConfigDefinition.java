@@ -194,6 +194,7 @@ public class ConfigDefinition {
         handlePage(state, 3, softPrePrependsFileNames, usedNames);
         handlePage(state, 4, softPrePrependsFileNames, usedNames);
         handlePage(state, 5, softPrePrependsFileNames, usedNames);
+        handlePage(state, 6, softPrePrependsFileNames, usedNames);
 
         if (tsInputFileFolder != null) {
             // used to update .ini files
