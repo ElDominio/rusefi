@@ -22,13 +22,21 @@
 static_assert(sizeof(persistent_config_container_s) <= PAGE4_SECTOR_OFFSET,
 	"persistent_config_container_s exceeds PAGE4_SECTOR_OFFSET — increase the offset");
 
-// Page 6 (AlphaX custom) lives above page 4 in the same shared settings sector. 80 KB (81920) is
-// 32-byte aligned, clears page 4 (72 KB + page-4 container), and fits within a
-// 128 KB sector alongside its small container.
-// Page 5 (Lua script) is mapped by lua_config_page.cpp (LUA_PAGE_SECTOR_OFFSET in its header).
-static constexpr size_t PAGE6_SECTOR_OFFSET = 80u * 1024u;
-static_assert(PAGE4_SECTOR_OFFSET + sizeof(ExtraPageContainer<page4_s, 1>) <= PAGE6_SECTOR_OFFSET,
-	"page 4 region overlaps PAGE6_SECTOR_OFFSET — increase the offset");
+// Page 6 (AlphaX custom) is placed immediately after the Lua container so the two
+// can never overlap regardless of LUA_SCRIPT_SIZE.  Derived at compile time from
+// the Lua container's actual sizeof (board-specific); DataVersion does not affect
+// sizeof so 0u is used as a placeholder.
+static constexpr size_t PAGE6_SECTOR_OFFSET =
+	(LUA_PAGE_SECTOR_OFFSET + sizeof(ExtraPageContainer<page5_s, 0u>) + 31u) & ~31u;
+
+#if (EFI_STORAGE_INT_FLASH == TRUE) && (EFI_STORAGE_MFS != TRUE) && !EFI_SIMULATOR
+static_assert(PAGE4_SECTOR_OFFSET + sizeof(ExtraPageContainer<page4_s, 0u>) <= LUA_PAGE_SECTOR_OFFSET,
+	"page 4 region overlaps Lua page — increase LUA_PAGE_SECTOR_OFFSET");
+static_assert(LUA_PAGE_SECTOR_OFFSET + sizeof(ExtraPageContainer<page5_s, 0u>) <= PAGE6_SECTOR_OFFSET,
+	"Lua page overlaps page 6 — PAGE6_SECTOR_OFFSET derivation is broken");
+static_assert(PAGE6_SECTOR_OFFSET + sizeof(ExtraPageContainer<page6_s, 0u>) <= 128u * 1024u,
+	"page 6 does not fit in the flash sector — reduce LUA_SCRIPT_SIZE or page 6 size");
+#endif
 
 void resetExtraPages() {
 	secondTablesSetDefaults();
