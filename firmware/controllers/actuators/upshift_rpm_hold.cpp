@@ -12,7 +12,7 @@
 // Protects against the gear detector reading 0/neutral the instant the clutch disengages.
 static constexpr efitimems_t GEAR_STABLE_MS = 200;
 
-// Hold config lives in TS page 5 (page5_s) with PID gains as plain floats, so the Pid is
+// Hold config lives in TS page 6 (page6_s) with PID gains as plain floats, so the Pid is
 // bound to this file-static pid_s (single hold instance) rather than to a page field.
 static pid_s s_holdPidCfg{};
 

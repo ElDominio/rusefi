@@ -855,7 +855,7 @@ engineSyncCam_e engineSyncCam;Select which cam is used for engine sync. Other ca
 	pin_output_mode_e fuelPump2PinMode;Secondary fuel pump output mode
 
 	pid_s fuelPumpControl;PID settings for closed-loop fuel pressure control (PWM mode, requires FP sensor)
-	! Advanced fuel pump tuning (fuelPumpMode, secondaryFp*, PWM duties/freq, iTerm) moved to TS page 5 (page5_s).
+	! Advanced fuel pump tuning (fuelPumpMode, secondaryFp*, PWM duties/freq, iTerm) moved to TS page 6 (page6_s).
 
 	int8_t gapVvtTrackingLengthOverride;How many consecutive VVT gap rations have to match expected ranges for sync to happen;"count", 1, 0, 1, @@VVT_TRACKING_LENGTH@@, 0
 
@@ -1901,7 +1901,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	custom lua_gauge_e  1 bits, S08, @OFFSET@, [0:2], @@lua_gauge_e_enum@@
 	lua_gauge_e nitrousLuaGauge;
 	lua_gauge_e tractionControlLuaGauge;Lua gauge index used as traction control multiplier input
-	! luaLimiterGaugeSelect moved to TS page 5 (page5_s).
+	! luaLimiterGaugeSelect moved to TS page 6 (page6_s).
 
 	#define lua_gauge_meaning_e_enum "greater than", "less than"
 	custom lua_gauge_meaning_e  1 bits, S08, @OFFSET@, [3:3], @@lua_gauge_meaning_e_enum@@
@@ -1974,7 +1974,7 @@ end_struct
 
 	output_pin_e cdvSolenoidPin;Output pin for clutch delay valve bypass solenoid
 	pin_output_mode_e cdvSolenoidPinMode;
-	! cdvExitDelay / cdvExitVss moved to TS page 5 (page5_s).
+	! cdvExitDelay / cdvExitVss moved to TS page 6 (page6_s).
 
 struct vvl_s
     int8_t fuelAdderPercent;;"%", 1, 0, 0, 100, 0
@@ -1998,11 +1998,11 @@ end_struct
 
     rotational_idle_s rotationalIdleController;
 
-! Exhaust Cutout Control settings live in TS page 5 (integration/config_page_5.txt / page5_s).
+! Exhaust Cutout Control settings live in TS page 6 (integration/config_page_6.txt / page6_s).
 ! The exhaust_cutout_* C++ enums remain defined in controllers/algo/rusefi_enums.h.
 
 ! Engine State Machine thresholds + shift detection, and Pops & Bangs settings live in
-! TS page 5 (integration/config_page_5.txt / page5_s). The sm_*/pops_and_bangs_* C++ enums
+! TS page 6 (integration/config_page_6.txt / page6_s). The sm_*/pops_and_bangs_* C++ enums
 ! remain defined in controllers/algo/rusefi_enums.h. Only the two enable bits stay here
 ! (useEngineStateMachine above, and popsAndBangsEnabled below) since they share bit words
 ! with other features.
@@ -2015,8 +2015,8 @@ end_struct
 	pin_input_mode_e[IDLE_UP_SWITCH_COUNT iterate] idleUpSwitchMode;Idle-up input polarity/pull
 	uint8_t[IDLE_UP_SWITCH_COUNT iterate] idleUpAdder;Idle % to add when this switch is active;"%", 1, 0, 0, 100, 0
 
-! Note: the Downshift Blipper settings live in TS page 5 (integration/config_page_5.txt /
-! page5_s), not here, to keep engine_configuration_s under the 64 KB TS page limit.
+! Note: the Downshift Blipper settings live in TS page 6 (integration/config_page_6.txt /
+! page6_s), not here, to keep engine_configuration_s under the 64 KB TS page limit.
 
 ! end of engine_configuration_s
 end_struct
@@ -2451,7 +2451,7 @@ float tcu_shiftTime;;"ms", 1, 0, 0, 3000, 0
 
 #define LUA_LIMITER_CURVE_SIZE 8
 
-! luaLimiter add curves moved to TS page 5 (page5_s).
+! luaLimiter add curves moved to TS page 6 (page6_s).
 
 int16_t[ALTERNATOR_VOLTAGE_TARGET_SIZE x ALTERNATOR_VOLTAGE_RPM_SIZE] autoscale alternatorVoltageTargetTable;;"volts", 0.1, 0, 0, 30, 1
 uint16_t[ALTERNATOR_VOLTAGE_TARGET_SIZE] alternatorVoltageTargetLoadBins;;"Load", 1, 0, 0, 1000, 0

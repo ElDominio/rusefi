@@ -4,7 +4,7 @@
 #include <rusefi/timer.h>
 
 // Table dimensions for the transient timing-pull map. Must match the array sizes declared
-// for burstKnockRpmBins / burstKnockTpsRateBins / burstKnockRetardTable in config_page_5.txt.
+// for burstKnockRpmBins / burstKnockTpsRateBins / burstKnockRetardTable in config_page_6.txt.
 #define BURST_KNOCK_RPM_SIZE 8
 #define BURST_KNOCK_TPS_RATE_SIZE 8
 

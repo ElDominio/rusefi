@@ -23,12 +23,13 @@ static constexpr size_t PAGE4_SECTOR_OFFSET = 72u * 1024u;
 static_assert(sizeof(persistent_config_container_s) <= PAGE4_SECTOR_OFFSET,
 	"persistent_config_container_s exceeds PAGE4_SECTOR_OFFSET — increase the offset");
 
-// Page 5 lives above page 4 in the same shared settings sector. 80 KB (81920) is
+// Page 6 (AlphaX custom) lives above page 4 in the same shared settings sector. 80 KB (81920) is
 // 32-byte aligned, clears page 4 (72 KB + page-4 container), and fits within a
 // 128 KB sector alongside its small container.
-static constexpr size_t PAGE5_SECTOR_OFFSET = 80u * 1024u;
-static_assert(PAGE4_SECTOR_OFFSET + sizeof(ExtraPageContainer<page4_s, 1>) <= PAGE5_SECTOR_OFFSET,
-	"page 4 region overlaps PAGE5_SECTOR_OFFSET — increase the offset");
+// Page 5 (Lua script) will be mapped by lua_config_page.cpp when that page is added.
+static constexpr size_t PAGE6_SECTOR_OFFSET = 80u * 1024u;
+static_assert(PAGE4_SECTOR_OFFSET + sizeof(ExtraPageContainer<page4_s, 1>) <= PAGE6_SECTOR_OFFSET,
+	"page 4 region overlaps PAGE6_SECTOR_OFFSET — increase the offset");
 
 void resetExtraPages() {
 	secondTablesSetDefaults();
@@ -137,7 +138,7 @@ size_t getExtraPageFlashOffset(StorageItemId id) {
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		return PAGE4_SECTOR_OFFSET;
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
-		return PAGE5_SECTOR_OFFSET;
+		return PAGE6_SECTOR_OFFSET;
 	}
 
 	// When adding a new extra page, add an else-if branch here

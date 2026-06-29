@@ -1,4 +1,4 @@
-! TunerStudio page 5 — alphax custom features.
+! TunerStudio page 6 — alphax custom features.
 ! These settings live outside the main engine_configuration_s image (page 1) to keep
 ! page 1 under the 64 KB TS page limit and to isolate non-mainline custom features.
 ! See controllers/custom_page.cpp and controllers/extra_flash_pages.cpp.
@@ -20,7 +20,7 @@
 
 ! Custom types re-declared for the isolated page generator (see config_page_4.txt header).
 ! The C++ enums themselves are defined in headers (e.g. rusefi_enums.h) and shared;
-! these declarations only drive the TS .ini for page 5.
+! these declarations only drive the TS .ini for page 6.
 custom switch_input_pin_e 2 bits, U16, @OFFSET@, [0:8], $switch_input_pin_e_list
 custom output_pin_e 2 bits, U16, @OFFSET@, [0:8], $output_pin_e_list
 custom pin_input_mode_e 1 bits, U08, @OFFSET@, [0:2], $pin_input_mode_e_enum
@@ -58,7 +58,7 @@ custom fuel_pump_mode_e 1 bits, U08, @OFFSET@, [0:1], "Single", "Dual", "PWM"
 #define imrc_mode_e_enum "Disabled", "Solenoid", "H-Bridge"
 custom imrc_mode_e 1 bits, U08, @OFFSET@, [0:1], @@imrc_mode_e_enum@@
 
-struct_no_prefix page5_s
+struct_no_prefix page6_s
 
 	! --- Downshift Blipper (automated rev-match on a clutch-in single-gear downshift) ---
 	! Requires an Electronic Throttle Body, a calibrated Gear Detector (gear ratios + final

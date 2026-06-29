@@ -4,7 +4,7 @@
 #include <rusefi/timer.h>
 
 // Number of cells in the elapsed-WOT-time -> AFR adder curve. Must match the array sizes
-// declared for wotEnrichmentTimeBins / wotEnrichmentAfrAdder in config_page_5.txt.
+// declared for wotEnrichmentTimeBins / wotEnrichmentAfrAdder in config_page_6.txt.
 #define WOT_ENRICHMENT_SIZE 8
 
 // "WOT Time Enrichment": once the engine is held at Wide Open Throttle, a timer counts the

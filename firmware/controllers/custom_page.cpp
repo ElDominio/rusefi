@@ -4,14 +4,14 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE5_DATA_VERSION = 12;
+static constexpr uint32_t PAGE6_DATA_VERSION = 12;
 
-using page5_container_s = ExtraPageContainer<page5_s, PAGE5_DATA_VERSION>;
+using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
-static_assert(sizeof(page5_container_s) % 32 == 0,
-	"page5_container_s must be 32-byte aligned for STM32H7 flash writes");
+static_assert(sizeof(page6_container_s) % 32 == 0,
+	"page6_container_s must be 32-byte aligned for STM32H7 flash writes");
 
-static page5_container_s customPageContainer;
+static page6_container_s customPageContainer;
 
 void customPageSetDefaults() {
 	customPageContainer.data = {};
@@ -242,7 +242,7 @@ bool customPageIsValid() {
 	return customPageContainer.isValid();
 }
 
-page5_s* getCustomPage() {
+page6_s* getCustomPage() {
 	return &customPageContainer.data;
 }
 
@@ -251,7 +251,7 @@ void* customPageGetTsPage() {
 }
 
 size_t customPageGetTsPageSize() {
-	return sizeof(page5_s);
+	return sizeof(page6_s);
 }
 
 void customPagePrepareForStorage() {

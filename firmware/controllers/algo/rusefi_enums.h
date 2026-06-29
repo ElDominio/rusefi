@@ -648,7 +648,7 @@ typedef enum __attribute__ ((__packed__)) {
 	EXHAUST_CUTOUT_OUTPUT_HBRIDGE = 2,
 } exhaust_cutout_output_mode_e;
 
-// Intake Manifold Runner Control mode. Values must match imrc_mode_e_enum order in config_page_5.txt
+// Intake Manifold Runner Control mode. Values must match imrc_mode_e_enum order in config_page_6.txt
 typedef enum __attribute__ ((__packed__)) {
 	IMRC_DISABLED = 0,
 	IMRC_SOLENOID = 1,
@@ -670,20 +670,20 @@ typedef enum __attribute__ ((__packed__)) {
 	POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE = 3,
 } pops_and_bangs_disable_mode_e;
 
-// Pops & Bangs exhaust cutout gate. Values must match pops_and_bangs_cutout_inhibit_e_enum order in config_page_5.txt
+// Pops & Bangs exhaust cutout gate. Values must match pops_and_bangs_cutout_inhibit_e_enum order in config_page_6.txt
 enum class pops_and_bangs_cutout_inhibit_e : uint8_t {
 	Off     = 0, // exhaust cutout state ignored
 	Inhibit = 1, // pops and bangs blocked unless the exhaust cutout is open
 };
 
-// Eco Mode manual switch behaviour. Values must match eco_mode_switch_mode_e_enum order in config_page_5.txt
+// Eco Mode manual switch behaviour. Values must match eco_mode_switch_mode_e_enum order in config_page_6.txt
 enum class eco_mode_switch_mode_e : uint8_t {
 	Off     = 0, // switch ignored — eco engages purely on the cruise timer / MAP gate
 	Inhibit = 1, // asserted switch blocks eco from engaging
 };
 
 // Radiator fan A/C control mode — the single place that decides whether a fan follows the
-// A/C compressor. Values must match fan_ac_mode_e_enum order in config_page_5.txt
+// A/C compressor. Values must match fan_ac_mode_e_enum order in config_page_6.txt
 enum class fan_ac_mode_e : uint8_t {
 	Disabled = 0, // fan never runs for A/C
 	Relay    = 1, // fan turns on whenever the A/C compressor relay is active
@@ -989,7 +989,7 @@ enum class sm_clutch_switch_e : uint8_t {
 	ClutchDown = 2,
 };
 
-// Values must match sm_shift_detection_mode_e_enum order in config_page_5.txt
+// Values must match sm_shift_detection_mode_e_enum order in config_page_6.txt
 enum class sm_shift_detection_mode_e : uint8_t {
 	RpmRate = 0,
 	VssRate = 1,
