@@ -77,7 +77,8 @@ static void customBoardOnConfigurationChange(const engine_configuration_s * /*pr
 }
 
 static void alphax_8chan_boardConfigOverrides() {
-	hellenMegaModule();
+	setHellenVbatt();
+	setHellenSdCardSpi1Hardware();
 	engineConfiguration->vbattAdcChannel = EFI_ADC_11; // PC1, overrides MM176 default PA5
 	setHellenCan();
 	setHellenCan2();
@@ -120,6 +121,7 @@ static void alphax_8chan_defaultConfiguration() {
 	engineConfiguration->vrThreshold[1].pin = Gpio::Unassigned;
 
 	hellenWbo();
+	setDefaultHellenAtPullUps(2700);
 }
 
 void boardPrepareForStop() {

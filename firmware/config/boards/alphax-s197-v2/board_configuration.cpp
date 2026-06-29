@@ -160,6 +160,7 @@ static void alphax_s197_boardDefaultConfiguration() {
 	engineConfiguration->spi3sckPin = Gpio::Unassigned;
 
 	hellenWbo();
+	setDefaultHellenAtPullUps(2700);
 }
 
 static Gpio OUTPUTS[] = {
@@ -214,7 +215,7 @@ Gpio getCommsLedPin() {
 }
 
 Gpio getRunningLedPin() {
-	return Gpio::D7;
+	return Gpio::Unassigned;
 }
 
 Gpio getWarningLedPin() {

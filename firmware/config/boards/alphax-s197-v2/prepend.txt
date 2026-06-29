@@ -1,1 +1,2 @@
+#define LUA_SCRIPT_SIZE 15000
 #define MAIN_HELP_URL "https://rusefi.com/s/uaefi"
