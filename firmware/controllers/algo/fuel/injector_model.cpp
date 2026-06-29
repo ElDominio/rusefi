@@ -2,6 +2,9 @@
 
 #include "injector_model.h"
 #include "fuel_computer.h"
+#if EFI_INJ_PERCENT_CURVE
+#include "custom_page.h"
+#endif
 
 void InjectorModelBase::prepare() {
 	float flowRatio = getInjectorFlowRatio();
@@ -261,6 +264,19 @@ floatms_t InjectorModelBase::getBaseDurationImpl(float fuelMassGram) const {
 		}
 	case INJ_PolynomialAdder:
 		return correctInjectionPolynomial(baseDuration);
+#if EFI_INJ_PERCENT_CURVE
+	case INJ_PercentCurve: {
+		auto* p5 = getCustomPage();
+		// last bin is the cutoff: no correction above it
+		if (baseDuration >= p5->injectorSmallPulseCurveBins[INJ_CURVE_SIZE - 1]) {
+			return baseDuration;
+		}
+		float pct = interpolate2d(baseDuration,
+			p5->injectorSmallPulseCurveBins,
+			p5->injectorSmallPulseCurveValues);
+		return baseDuration * (1.0f + 0.01f * pct);
+	}
+#endif // EFI_INJ_PERCENT_CURVE
 	case INJ_None:
 	default:
 		return baseDuration;
