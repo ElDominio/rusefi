@@ -39,9 +39,6 @@ void EngineStateMachine::onSlowCallback() {
 
 	float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
 
-	// Record sensor snapshot into history buffer
-	recordHistory(tps, rpm, vss, nowMs);
-
 	// Primary state determination (engine lifecycle, throttle position)
 	EngineStateMachineState newState = determineState(rpm, tps);
 	m_currentState = newState;
@@ -49,15 +46,17 @@ void EngineStateMachine::onSlowCallback() {
 	uint8_t stateNum = static_cast<uint8_t>(newState);
 	engineSmCurrentState = stateNum;
 
-	engineSmIsOff        = (newState == EngineStateMachineState::Off);
-	engineSmIsCranking   = (newState == EngineStateMachineState::Cranking);
-	engineSmIsAfterStart = (newState == EngineStateMachineState::Afterstart);
-	engineSmIsIdle       = (newState == EngineStateMachineState::Idle);
-	engineSmIsCoasting   = (newState == EngineStateMachineState::Coasting);
-	engineSmIsTransient  = (newState == EngineStateMachineState::Transient);
-	engineSmIsWot        = (newState == EngineStateMachineState::WOT);
-	engineSmIsCruising   = (newState == EngineStateMachineState::Cruising);
-	engineSmIsOverrun    = (newState == EngineStateMachineState::Overrun);
+	engineSmIsOff          = (newState == EngineStateMachineState::Off);
+	engineSmIsCranking     = (newState == EngineStateMachineState::Cranking);
+	engineSmIsAfterStart   = (newState == EngineStateMachineState::Afterstart);
+	engineSmIsIdle         = (newState == EngineStateMachineState::Idle);
+	engineSmIsCoasting     = (newState == EngineStateMachineState::Coasting);
+	engineSmIsTransient    = (newState == EngineStateMachineState::Transient);
+	engineSmIsWot          = (newState == EngineStateMachineState::WOT);
+	engineSmIsCruising     = (newState == EngineStateMachineState::Cruising);
+	engineSmIsOverrun      = (newState == EngineStateMachineState::Overrun);
+	engineSmIsAccelerating = (newState == EngineStateMachineState::Accelerating);
+	engineSmIsDecelerating = (newState == EngineStateMachineState::Decelerating);
 
 	// Overlay: Launch Control — forward directly from LaunchControlBase
 	engineSmIsLaunchControl = engine->launchController.isLaunchCondition;
@@ -149,6 +148,14 @@ void EngineStateMachine::updateEcoMode(EngineStateMachineState currentState) {
 	// the state machine still reports Cruising (TPS-based) this cycle. 0 disables the gate.
 	uint16_t mapLimit = getCustomPage()->ecoModeMapLimit;
 	if (mapLimit > 0 && Sensor::get(SensorType::Map).value_or(0) > mapLimit) {
+		m_ecoCruiseTimer.reset();
+		cruiseElapsed = false;
+	}
+
+	// VSS floor: below this speed eco cannot engage regardless of state or MAP. Catches
+	// low-speed parking-lot crawls that the cruise timer alone would eventually allow. 0 disables.
+	uint16_t minVss = getCustomPage()->ecoModeMinVss;
+	if (minVss > 0 && Sensor::getOrZero(SensorType::VehicleSpeed) < static_cast<float>(minVss)) {
 		m_ecoCruiseTimer.reset();
 		cruiseElapsed = false;
 	}
@@ -424,6 +431,31 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		}
 	}
 
+	// Sustained acceleration/deceleration — based on the previous tick's RPM rate of change
+	// (m_lastRpmRate, updated by updateShiftAccumulator later this callback; one slow-callback
+	// lag is negligible at ~100 ms). Thresholds of 0 disable the respective state.
+	{
+		int16_t accelThr = getCustomPage()->smAccelRateThreshold;
+		int16_t decelThr = getCustomPage()->smDecelRateThreshold;
+
+		if (accelThr > 0 && m_lastRpmRate > static_cast<float>(accelThr)) {
+			return EngineStateMachineState::Accelerating;
+		}
+
+		// Decelerating: RPM dropping faster than threshold.
+		// With VSS: only when transmission is disengaged (DetectedGear == 0).
+		// Without VSS: rate alone is sufficient — gear detector cannot work without VSS.
+		// Decelerating requires VSS to confirm the clutch is out (gear == 0).
+		// Without VSS we cannot distinguish clutch-out decel from engine braking in gear,
+		// so we fall through to let the idle-controller path classify it as Coasting/Overrun.
+		if (decelThr > 0 && m_lastRpmRate < -static_cast<float>(decelThr)) {
+			auto gearResult = Sensor::get(SensorType::DetectedGear);
+			if (Sensor::hasSensor(SensorType::VehicleSpeed) && gearResult.Valid && gearResult.Value == 0) {
+				return EngineStateMachineState::Decelerating;
+			}
+		}
+	}
+
 	// Priorities 5–8: defer to IdleController — it is the single source of truth for the idle corner.
 	// CrankToIdleTaper → Afterstart (taper table drives duration, CLT-indexed, same as idle control).
 	// Idling → Idle; Coasting → Coasting or Overrun; Running → fall through to Cruising.
@@ -439,11 +471,17 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		}
 
 		if (idlePhase == IIdleController::Phase::Coasting) {
-			// VSS is intentionally excluded: overrun is foot-off-throttle at high RPM regardless of speed.
-			// DFCO's VSS guard lives in getState() and is a fuel-cut-only constraint.
 			bool tpsClosed = tps < engineConfiguration->coastingFuelCutTps;
 			if (tpsClosed && rpm > engineConfiguration->coastingFuelCutRpmHigh) {
-				return EngineStateMachineState::Overrun;
+				// Overrun requires the transmission to be engaged. With VSS, the gear detector
+				// reflects clutch state (DetectedGear == 0 when clutch is out). Without VSS,
+				// we cannot determine clutch state so we fall back to the RPM/TPS check alone.
+				auto gearResult = Sensor::get(SensorType::DetectedGear);
+				bool vssPresent   = Sensor::hasSensor(SensorType::VehicleSpeed);
+				bool transmissionEngaged = !vssPresent || (gearResult.Valid && gearResult.Value > 0);
+				if (transmissionEngaged) {
+					return EngineStateMachineState::Overrun;
+				}
 			}
 			return EngineStateMachineState::Coasting;
 		}
@@ -453,36 +491,111 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 	return EngineStateMachineState::Cruising;
 }
 
-void EngineStateMachine::recordHistory(float tps, float rpm, float vss, efitimems_t nowMs) {
-	m_history[m_historyHead] = { nowMs, tps, rpm, vss };
-	m_historyHead = (m_historyHead + 1) % SM_HISTORY_SIZE;
-	if (m_historyCount < SM_HISTORY_SIZE) {
-		m_historyCount++;
+void EngineStateMachine::updateShiftAccumulator(float rpm, float vss, efitimems_t nowMs) {
+	efitimems_t dtMs = nowMs - m_accumulatorLastMs;
+	float prevRpm = m_accumulatorLastRpm;
+	float prevVss = m_accumulatorLastVss;
+	m_accumulatorLastMs  = nowMs;
+	m_accumulatorLastRpm = rpm;
+	m_accumulatorLastVss = vss;
+
+	// Always compute RPM rate for state detection (used by determineState next tick).
+	if (dtMs > 0) {
+		m_lastRpmRate = (rpm - prevRpm) / (dtMs / 1000.0f);
 	}
+
+	// Accumulator is frozen while the shift window is open (clutch out).
+	// dtMs == 0 guard covers the first-ever call where we have no previous data.
+	if (m_shiftWindowOpen || dtMs == 0) {
+		engineSmShiftAccumulator = m_shiftAccumulator;
+		return;
+	}
+
+	float dt = dtMs / 1000.0f;
+	float gain      = getCustomPage()->smAccumulatorGain;
+	float decayRate = getCustomPage()->smAccumulatorDecayRate;
+
+	auto decay = [&]() {
+		float d = decayRate * dt;
+		if (m_shiftAccumulator > 0) {
+			m_shiftAccumulator -= d;
+			if (m_shiftAccumulator < 0) { m_shiftAccumulator = 0; }
+		} else if (m_shiftAccumulator < 0) {
+			m_shiftAccumulator += d;
+			if (m_shiftAccumulator > 0) { m_shiftAccumulator = 0; }
+		}
+	};
+
+	if (m_currentState == EngineStateMachineState::Idle ||
+	    m_currentState == EngineStateMachineState::LaunchControl) {
+		// Idle oscillations and launch-RPM hold are not shift evidence — decay only.
+		decay();
+		engineSmShiftAccumulator = m_shiftAccumulator;
+		return;
+	}
+
+	// Accumulator integrates only in Accelerating (positive) and Overrun (negative).
+	// The accumulator signal source for shift detection follows smShiftDetectionMode;
+	// m_lastRpmRate above is always RPM-based regardless of mode.
+	sm_shift_detection_mode_e mode = getCustomPage()->smShiftDetectionMode;
+	float signal;
+	if (mode == sm_shift_detection_mode_e::VssRate) {
+		if (getCustomPage()->smShiftMinVss > 0 && vss < (float)getCustomPage()->smShiftMinVss) {
+			decay();
+			engineSmShiftAccumulator = m_shiftAccumulator;
+			return;
+		}
+		signal = (vss - prevVss) / dt;
+	} else {
+		signal = m_lastRpmRate;
+	}
+
+	float accelThr = (float)getCustomPage()->smAccelRateThreshold;
+	float decelThr = (float)getCustomPage()->smDecelRateThreshold;
+	if (accelThr <= 0) { accelThr = 1.0f; }
+	if (decelThr <= 0) { decelThr = 1.0f; }
+
+	if (mode == sm_shift_detection_mode_e::VssRate) {
+		// VSS-rate signal: integrate directly on threshold crossing — no RPM-based state gate,
+		// since state (Accelerating/Overrun) is derived from RPM, not VSS.
+		if (signal > 0) {
+			m_shiftAccumulator += (signal / accelThr) * gain * dt;
+		} else if (signal < 0) {
+			m_shiftAccumulator += (signal / decelThr) * gain * dt;
+		} else {
+			decay();
+		}
+	} else {
+		// RpmRate: upshift integrates only in Accelerating state (rate-gated, immune to idle
+		// oscillations and launch hold). Downshift integrates whenever RPM is falling — Idle and
+		// LaunchControl are already excluded above, so any other state with negative rate means
+		// the driver is decelerating toward a downshift.
+		if (m_currentState == EngineStateMachineState::Accelerating && signal > 0) {
+			m_shiftAccumulator += (signal / accelThr) * gain * dt;
+		} else if (signal < 0) {
+			m_shiftAccumulator += (signal / decelThr) * gain * dt;
+		} else {
+			decay();
+		}
+	}
+
+	m_shiftAccumulator = clampF(-100.0f, m_shiftAccumulator, 100.0f);
+	engineSmShiftAccumulator = m_shiftAccumulator;
 }
 
-// Returns the history entry approximately `lookbackMs` ago, or nullptr if insufficient history.
-// Assumes the buffer is sampled at SLOW_CALLBACK_PERIOD_MS intervals.
-const EngineStateMachine::SmHistoryEntry* EngineStateMachine::getHistoryAt(efitimems_t lookbackMs) const {
-	if (m_historyCount == 0) {
-		return nullptr;
+void EngineStateMachine::updateShiftDetection(float /*tps*/, float rpm, float vss, efitimems_t nowMs) {
+	// VSS Rate mode requires VSS to have a meaningful signal — disable shift detection
+	// entirely in that mode when no VSS sensor is present. RPM Rate mode can work without
+	// VSS since it only needs engine RPM, so it falls through normally.
+	bool vssPresent = Sensor::hasSensor(SensorType::VehicleSpeed);
+	if (!vssPresent && getCustomPage()->smShiftDetectionMode == sm_shift_detection_mode_e::VssRate) {
+		updateShiftAccumulator(rpm, vss, nowMs);
+		engineSmIsUpshifting   = false;
+		engineSmIsDownshifting = false;
+		m_shiftLatched         = false;
+		return;
 	}
 
-	int entriesBack = static_cast<int>(lookbackMs / SLOW_CALLBACK_PERIOD_MS);
-	// Clamp: need at least 1 to get a different sample; can't go further than available history
-	if (entriesBack < 1) {
-		entriesBack = 1;
-	}
-	if (entriesBack >= m_historyCount) {
-		entriesBack = m_historyCount - 1;
-	}
-
-	// Most recent entry is at (head-1); target is (head-1-entriesBack)
-	int idx = ((m_historyHead - 1 - entriesBack) % SM_HISTORY_SIZE + SM_HISTORY_SIZE) % SM_HISTORY_SIZE;
-	return &m_history[idx];
-}
-
-void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, efitimems_t nowMs) {
 	// Read clutch state maintained by the engine (clutchUpState via SwitchedState,
 	// clutchDownState via engine.cpp getClutchDownState)
 	bool clutchUpActive   = engine->engineState.clutchUpState  != 0;
@@ -499,6 +612,10 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 		m_shiftLatched         = false;
 		return;
 	}
+
+	// Update the direction accumulator. This runs every tick; the accumulator itself
+	// only advances while the window is closed (clutch engaged).
+	updateShiftAccumulator(rpm, vss, nowMs);
 
 	// Raw physical edges, independent of which direction (if any) a switch is assigned to, so a
 	// switch can be consulted even when it isn't the one a given direction is configured with.
@@ -541,9 +658,10 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 
 		if (upSw != sm_clutch_switch_e::None && dnSw != sm_clutch_switch_e::None) {
 			if (upSw == dnSw) {
-				// Both directions share the same physical switch. Use current TPS to disambiguate:
-				// above idle threshold = driver was on throttle = upshift.
-				m_shiftIsUpshift = (tps >= (float)getCustomPage()->smShiftTpsThreshold);
+				// Both directions share the same physical switch. Read direction from the
+				// pre-shift accumulator: positive = upshift context, negative = downshift context.
+				// evaluateShiftDirection() will confirm or deny against the thresholds.
+				m_shiftIsUpshift = (m_shiftAccumulator >= 0);
 			} else {
 				// Different switch types assigned per direction: whichever type's open edge
 				// actually fired identifies the direction.
@@ -553,15 +671,6 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 			// Only one direction configured at all.
 			m_shiftIsUpshift = (upSw != sm_clutch_switch_e::None);
 		}
-
-		// Clutch-Up's falling edge fires as soon as the pedal leaves rest, which may lag the
-		// clutch plate actually being mechanically disengaged. Apply the configured delay
-		// before evaluating sensor data.
-		sm_clutch_switch_e dirSwitch = m_shiftIsUpshift ? upSw : dnSw;
-		bool usingClutchUpSwitch = (dirSwitch == sm_clutch_switch_e::ClutchUp);
-		efitimems_t delay = usingClutchUpSwitch
-			? static_cast<efitimems_t>(getCustomPage()->smClutchUpDisengagementDelayMs) : 0u;
-		m_shiftEvaluateAtMs = nowMs + delay;
 	}
 
 	// Relatch-on-clutch-down: while the latch is active, a fresh Clutch-Down full-press resets
@@ -584,14 +693,16 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 		efitimems_t elapsed = nowMs - m_shiftWindowOpenMs;
 
 		if (triggerFell || elapsed > SM_SHIFT_TIMEOUT_MS) {
-			// Window closes; any active latch keeps running independently (see below).
-			m_shiftWindowOpen = false;
-		} else if (nowMs >= m_shiftEvaluateAtMs) {
-			// Window active and past the disengagement delay: evaluate direction via sensor
-			// history. evaluateShiftDirection() itself applies the VSS Rate min-speed gate.
-			windowConfirmed = evaluateShiftDirection(m_shiftIsUpshift, rpm, vss, nowMs);
+			// Window closes; reset the accumulator for the next shift.
+			// Any active latch keeps running independently (see below).
+			m_shiftWindowOpen  = false;
+			m_shiftAccumulator = 0;
+			engineSmShiftAccumulator = 0;
+			m_accumulatorLastMs = nowMs;
+		} else {
+			// Window active: evaluate direction from the (now frozen) accumulator.
+			windowConfirmed = evaluateShiftDirection(m_shiftIsUpshift, vss);
 		}
-		// Still within the disengagement delay — don't commit direction yet this cycle.
 	}
 
 	// Latch: arm fresh on the first confirmation, then hold for smShiftLatchTimeMs without
@@ -619,85 +730,46 @@ void EngineStateMachine::updateShiftDetection(float tps, float rpm, float vss, e
 	// check of their own, so this is the only place that can guarantee neither is ever active
 	// while the pedal is at rest.
 	if (clutchUpActive) {
+		bool wasShifting = m_shiftWindowOpen || m_shiftLatched;
 		engineSmIsUpshifting   = false;
 		engineSmIsDownshifting = false;
-		m_shiftWindowOpen       = false;
-		m_shiftLatched          = false;
+		m_shiftWindowOpen      = false;
+		m_shiftLatched         = false;
+		// Only reset the accumulator when we're actually ending a shift, not on every
+		// pedal-at-rest tick (which would prevent the accumulator from building up at all).
+		if (wasShifting) {
+			m_shiftAccumulator       = 0;
+			engineSmShiftAccumulator = 0;
+			m_accumulatorLastMs      = nowMs;
+		}
 	}
 }
 
-bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float /*currentRpm*/, float currentVss, efitimems_t /*nowMs*/) {
-	uint16_t lookbackMs = getCustomPage()->smShiftLookbackMs;
-	if (lookbackMs < 100) {
-		lookbackMs = 300; // safe default when not yet configured
-	}
-	if (lookbackMs > 1000) {
-		lookbackMs = 1000;
-	}
+bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float currentVss) {
+	sm_clutch_switch_e upSw = getCustomPage()->smUpshiftClutchSwitch;
+	sm_clutch_switch_e dnSw = getCustomPage()->smDownshiftClutchSwitch;
 
-	sm_shift_detection_mode_e mode = getCustomPage()->smShiftDetectionMode;
-
-	const SmHistoryEntry* hist = getHistoryAt(lookbackMs);
-	if (!hist) {
-		// Buffer not yet full — direction from switch alone is sufficient
+	// Single direction configured — the switch is authoritative, no accumulator confirmation needed.
+	if (upSw == sm_clutch_switch_e::None || dnSw == sm_clutch_switch_e::None) {
 		return true;
 	}
 
-	if (mode == sm_shift_detection_mode_e::SimpleThrottle) {
-		// Simple Throttle: TPS position at lookback time reveals driver intent.
-		// Above idle threshold at shift start → driver was on throttle → upshift.
-		bool tpsWasOpen = hist->tps >= getCustomPage()->smShiftTpsThreshold;
-		return isUpshift ? tpsWasOpen : !tpsWasOpen;
+	// VSS mode: belt-and-suspenders speed gate (accumulator also decays below this threshold).
+	if (getCustomPage()->smShiftDetectionMode == sm_shift_detection_mode_e::VssRate &&
+	    getCustomPage()->smShiftMinVss > 0 &&
+	    currentVss < (float)getCustomPage()->smShiftMinVss) {
+		return false;
 	}
 
-	if (mode == sm_shift_detection_mode_e::RpmRate) {
-		// Use two pre-shift history points, mirroring the TPS lookback approach.
-		// hist  = RPM at ~shift time (lookbackMs ago); hist2 = RPM before the shift trend (2× ago).
-		// Rising RPM going into the shift → upshift; falling RPM → downshift.
-		const SmHistoryEntry* hist2 = getHistoryAt(static_cast<efitimems_t>(lookbackMs) * 2);
-		if (!hist2 || hist2 == hist) {
-			// Not enough history depth — trust the switch direction
-			return true;
-		}
-		float deltaPer1s = (hist->rpm - hist2->rpm) / (static_cast<float>(lookbackMs) / 1000.0f);
-		if (isUpshift) {
-			return deltaPer1s > (float)getCustomPage()->smUpshiftRateThreshold;
-		} else {
-			return deltaPer1s < -(float)getCustomPage()->smDownshiftRateThreshold;
-		}
+	// Both directions configured: confirm against the pre-shift accumulator.
+	float upThr = (float)getCustomPage()->smAccumulatorUpshiftThreshold;
+	float dnThr = (float)getCustomPage()->smAccumulatorDownshiftThreshold;
+
+	if (isUpshift) {
+		return m_shiftAccumulator >= upThr;
+	} else {
+		return m_shiftAccumulator <= -dnThr;
 	}
-
-	if (mode == sm_shift_detection_mode_e::VssRate) {
-		// VSS Rate: upshift context = accelerating (VSS rising),
-		//           downshift context = braking/trail-braking (VSS falling).
-		// Requires a VSS sensor — fall back to Simple Throttle with a warning if absent.
-		auto vssSensor = Sensor::get(SensorType::VehicleSpeed);
-		if (!vssSensor) {
-			if (!m_vssRateWarningEmitted) {
-				warning(ObdCode::OBD_PCM_Processor_Fault,
-				        "Engine SM: VSS Rate mode selected but no VSS sensor configured — falling back to Simple Throttle");
-				m_vssRateWarningEmitted = true;
-			}
-			bool tpsWasOpen = hist->tps >= getCustomPage()->smShiftTpsThreshold;
-			return isUpshift ? tpsWasOpen : !tpsWasOpen;
-		}
-		m_vssRateWarningEmitted = false;
-
-		// Below the configured minimum speed, VSS rate noise is largest relative to the signal —
-		// block engagement entirely rather than risk a false confirmation near-stationary.
-		if (currentVss < (float)getCustomPage()->smShiftMinVss) {
-			return false;
-		}
-
-		float deltaPer1s = (currentVss - hist->vss) / (static_cast<float>(lookbackMs) / 1000.0f);
-		if (isUpshift) {
-			return deltaPer1s > (float)getCustomPage()->smUpshiftRateThreshold;
-		} else {
-			return deltaPer1s < -(float)getCustomPage()->smDownshiftRateThreshold;
-		}
-	}
-
-	return true; // unknown mode — assume switch direction is correct
 }
 
 #else // !EFI_ENGINE_STATE_MACHINE

@@ -26,10 +26,10 @@ enum class EngineStateMachineState : uint8_t {
 	Downshifting = 11,
 	Limp         = 12,
 	Eco          = 13,
+	Accelerating = 14,
+	Decelerating = 15,
 };
 
-// History buffer: 20 samples at 20 Hz = 1000 ms of lookback
-static constexpr int SM_HISTORY_SIZE = 20;
 // A shift window that stays open longer than this is considered stale and is closed.
 static constexpr efitimems_t SM_SHIFT_TIMEOUT_MS = 3000;
 
@@ -41,6 +41,10 @@ public:
 
 	EngineStateMachineState getCurrentState() const;
 	bool isEnabled() const;
+
+	// RPM rate of change from the last slow callback (RPM/s). Used by DFCO for the
+	// no-VSS Decel fuel-cut fallback where engineSmIsDecelerating cannot fire.
+	float getLastRpmRate() const { return m_lastRpmRate; }
 
 	// Drives the P&B state machine off the given overrun state.
 	// Public so unit tests can call it directly without needing a full slow-callback setup.
@@ -68,18 +72,10 @@ public:
 	void reportLimpCondition();
 
 private:
-	struct SmHistoryEntry {
-		efitimems_t timestampMs;
-		float tps;
-		float rpm;
-		float vss;
-	};
-
 	EngineStateMachineState determineState(float rpm, float tps);
-	void recordHistory(float tps, float rpm, float vss, efitimems_t nowMs);
-	const SmHistoryEntry* getHistoryAt(efitimems_t lookbackMs) const;
 	void updateShiftDetection(float tps, float rpm, float vss, efitimems_t nowMs);
-	bool evaluateShiftDirection(bool isUpshift, float currentRpm, float currentVss, efitimems_t nowMs);
+	void updateShiftAccumulator(float rpm, float vss, efitimems_t nowMs);
+	bool evaluateShiftDirection(bool isUpshift, float currentVss);
 
 	// Remaining slow-callback hold-off periods after AE threshold drops
 	uint8_t m_transientHoldoffRemaining = 0;
@@ -87,16 +83,10 @@ private:
 	// Current computed state — uint8_t stores are atomic in hardware on Cortex-M
 	EngineStateMachineState m_currentState = EngineStateMachineState::Off;
 
-	// Sensor history circular buffer (oldest→newest as head advances)
-	SmHistoryEntry m_history[SM_HISTORY_SIZE]{};
-	int m_historyHead  = 0;
-	int m_historyCount = 0;
-
 	// Shift detection window state
 	bool         m_shiftWindowOpen   = false;
 	bool         m_shiftIsUpshift    = false;
 	efitimems_t  m_shiftWindowOpenMs = 0;
-	efitimems_t  m_shiftEvaluateAtMs = 0;
 	// Raw physical clutch switch states from the previous call, used for edge detection.
 	// Tracked independently of which direction(s) are configured to use which switch, so a
 	// switch can be consulted for early-open/early-close even when it isn't the one assigned
@@ -105,17 +95,27 @@ private:
 	bool         m_prevClutchDown    = false;
 
 	// Shift latch: once a direction is confirmed, Upshifting/Downshifting is held true until
-	// this deadline, masking flicker from the instantaneous rate check (smShiftLatchTimeMs).
+	// this deadline, masking flicker from the accumulator (smShiftLatchTimeMs).
 	// Tracked separately from m_shiftIsUpshift so a new window opening in the opposite
 	// direction doesn't retroactively flip the direction of a still-active latch.
 	bool         m_shiftLatched         = false;
 	bool         m_shiftLatchedIsUpshift = false;
 	efitimems_t  m_shiftLatchUntilMs     = 0;
 
-	void updateTempOverlay();
+	// Shift-direction accumulator: integrates pre-shift rate signal into -100..+100.
+	// Positive = upshift evidence, negative = downshift evidence.
+	// Runs only while the clutch is engaged (window closed); frozen during the shift window;
+	// reset to 0 when the window closes (shift complete).
+	float        m_shiftAccumulator     = 0;
+	efitimems_t  m_accumulatorLastMs    = 0;
+	float        m_accumulatorLastRpm   = 0;
+	float        m_accumulatorLastVss   = 0;
 
-	// Suppresses repeated VSS-unavailable warnings once emitted
-	bool m_vssRateWarningEmitted = false;
+	// RPM rate of change (RPM/s) computed each tick and stored for use by determineState()
+	// on the next tick (one slow-callback lag, ~100 ms — acceptable for state detection).
+	float        m_lastRpmRate          = 0;
+
+	void updateTempOverlay();
 
 	// Limp mode latch — set by reportLimpCondition(), never auto-cleared (matches the old
 	// ETB-jam behaviour which persisted until reboot). TODO: an un-latch path (e.g. a

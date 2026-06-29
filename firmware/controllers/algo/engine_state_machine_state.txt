@@ -22,7 +22,11 @@ struct_no_prefix engine_state_machine_state_s
 	bit engineSmIsOperating;Engine SM: At operating temp
 	bit engineSmIsHot;Engine SM: Hot engine
 	bit engineSmIsQuickWarmup;Engine SM: Quick Warmup active
+	bit engineSmIsAccelerating;Engine SM: Accelerating
+	bit engineSmIsDecelerating;Engine SM: Decelerating
 
 	uint8_t engineSmCurrentState;Engine SM: primary state
+
+	float engineSmShiftAccumulator;Engine SM: Shift accumulator;"", 1, 0, -100, 100, 1
 
 end_struct
