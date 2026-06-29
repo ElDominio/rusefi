@@ -254,6 +254,42 @@ TEST(Actuators, FanPwm_SoftStart) {
 	EXPECT_NEAR(0.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
 }
 
+TEST(Actuators, FanVssHysteresis) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	MockAcOff mockAc;
+	engine->module<AcController>().set(&mockAc);
+	getCustomPage()->fan1AcMode = fan_ac_mode_e::Disabled;
+
+	engineConfiguration->fanOnTemperature = 90;
+	engineConfiguration->fanOffTemperature = 80;
+	engineConfiguration->disableFan1AtSpeed = 50;
+	engineConfiguration->disableFan1AtSpeedHysteresis = 10;
+
+	// Hot CLT, VSS below threshold → fan on
+	Sensor::setMockValue(SensorType::Clt, 95);
+	Sensor::setMockValue(SensorType::VehicleSpeed, 30);
+	updateFans();
+	EXPECT_EQ(true, enginePins.fanRelay.getLogicValue());
+
+	// VSS exceeds threshold → fan disabled by speed
+	Sensor::setMockValue(SensorType::VehicleSpeed, 55);
+	updateFans();
+	EXPECT_EQ(false, enginePins.fanRelay.getLogicValue());
+	EXPECT_EQ(true, engine->module<FanControl1>()->disabledBySpeed);
+
+	// VSS drops below threshold but still inside hysteresis band (45 < 50 but > 50-10=40) → stays off
+	Sensor::setMockValue(SensorType::VehicleSpeed, 45);
+	updateFans();
+	EXPECT_EQ(false, enginePins.fanRelay.getLogicValue());
+	EXPECT_EQ(true, engine->module<FanControl1>()->disabledBySpeed);
+
+	// VSS drops below (threshold - hysteresis) → fan re-enabled
+	Sensor::setMockValue(SensorType::VehicleSpeed, 38);
+	updateFans();
+	EXPECT_EQ(true, enginePins.fanRelay.getLogicValue());
+	EXPECT_EQ(false, engine->module<FanControl1>()->disabledBySpeed);
+}
+
 TEST(Actuators, FanPwm_RelayModeUnchanged) {
 	// Ensure PWM disabled still uses the existing on/off relay path
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);

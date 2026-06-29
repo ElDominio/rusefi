@@ -44,6 +44,7 @@ protected:
 	virtual fan_ac_mode_e getAcMode() const = 0;
 	virtual bool disableWhenStopped() = 0;
 	virtual int disableAtSpeed() = 0;
+	virtual int disableAtSpeedHysteresis() = 0;
 
 	// PWM mode virtuals
 	virtual bool isPwmEnabled() const = 0;
@@ -84,6 +85,10 @@ struct FanControl1 : public FanController {
 
 	int disableAtSpeed() {
 		return engineConfiguration->disableFan1AtSpeed;
+	}
+
+	int disableAtSpeedHysteresis() {
+		return engineConfiguration->disableFan1AtSpeedHysteresis;
 	}
 
 	bool isPwmEnabled() const override {
@@ -152,6 +157,10 @@ struct FanControl2 : public FanController {
 
 	int disableAtSpeed() {
 		return engineConfiguration->disableFan2AtSpeed;
+	}
+
+	int disableAtSpeedHysteresis() {
+		return engineConfiguration->disableFan2AtSpeedHysteresis;
 	}
 
 	bool isPwmEnabled() const override {

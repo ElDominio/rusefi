@@ -10,6 +10,8 @@ int16_t fan2OffTemperature;Cooling fan turn-off temperature threshold, in Celsiu
 
 int8_t disableFan1AtSpeed
 int8_t disableFan2AtSpeed
+int8_t disableFan1AtSpeedHysteresis;Hysteresis below the disable-at-speed threshold before the fan is allowed back on. Prevents rapid on/off cycling at the threshold speed.;"mph", 1, 0, 0, 100, 0
+int8_t disableFan2AtSpeedHysteresis;Hysteresis below the disable-at-speed threshold before the fan is allowed back on. Prevents rapid on/off cycling at the threshold speed.;"mph", 1, 0, 0, 100, 0
 
 bit disableFan1WhenStopped,"yes","no";Inhibit operation of this fan while the engine is not running.
 bit disableFan2WhenStopped,"yes","no";Inhibit operation of this fan while the engine is not running.

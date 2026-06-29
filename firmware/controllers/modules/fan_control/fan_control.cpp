@@ -28,7 +28,16 @@ bool FanController::getState(bool acActive, bool lastState) {
 
 	auto acMode = getAcMode();
 
-	disabledBySpeed = disableAtSpeed() > 0 && vss.Valid && vss.Value > disableAtSpeed();
+	if (disableAtSpeed() > 0 && vss.Valid) {
+		if (vss.Value > disableAtSpeed()) {
+			disabledBySpeed = true;
+		} else if (vss.Value < (disableAtSpeed() - disableAtSpeedHysteresis())) {
+			disabledBySpeed = false;
+		}
+		// else: in hysteresis band — maintain previous disabledBySpeed
+	} else {
+		disabledBySpeed = false;
+	}
 	disabledWhileEngineStopped = notRunning && disableWhenStopped();
 	brokenClt = !clt;
 	enabledForAc = (acMode == fan_ac_mode_e::Relay) && acActive;
@@ -193,6 +202,9 @@ void FanController::onSlowCallback() {
 }
 
 void FanController::setDefaultConfiguration() {
+	engineConfiguration->disableFan1AtSpeedHysteresis = 5;
+	engineConfiguration->disableFan2AtSpeedHysteresis = 5;
+
 	engineConfiguration->fanOnTemperature = 92;
 	engineConfiguration->fanOffTemperature = 88;
 	engineConfiguration->fan2OnTemperature = 95;
