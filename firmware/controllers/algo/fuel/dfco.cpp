@@ -23,64 +23,102 @@ bool DfcoController::isOverrun() const {
 	       (vss >= engineConfiguration->coastingFuelCutVssHigh);
 }
 
-// Original fuel-cut state logic — unchanged. Checks all guards including enabled flag and CLT.
-bool DfcoController::getState() const {
+// Shared guards: must pass regardless of fuel-cut mode.
+bool DfcoController::commonGuards() const {
 	if (!engineConfiguration->coastingFuelCutEnabled) {
 		return false;
 	}
-
 	if (checkIfTuningVeNow()) {
-		return false;
-	}
-
-	const auto tps = Sensor::get(SensorType::DriverThrottleIntent);
-	const auto clt = Sensor::get(SensorType::Clt);
-	const auto map = Sensor::get(SensorType::Map);
-
-	if (!tps || !clt) {
-		return false;
-	}
-
-	bool hasMap = Sensor::hasSensor(SensorType::Map);
-	if (hasMap && !map) {
 		return false;
 	}
 	if (engine->engineState.lua.disableDecelerationFuelCutOff) {
 		return false;
 	}
 
+	const auto clt = Sensor::get(SensorType::Clt);
+	if (!clt || clt.Value <= engineConfiguration->coastingFuelCutClt) {
+		return false;
+	}
+
+	bool hasMap = Sensor::hasSensor(SensorType::Map);
+	if (hasMap) {
+		const auto map = Sensor::get(SensorType::Map);
+		if (!map) {
+			return false;
+		}
+		if (m_mapHysteresis.test(map.value_or(0), engineConfiguration->coastingFuelCutMap + 1, engineConfiguration->coastingFuelCutMap - 1)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+// Returns true when the traditional overrun conditions (TPS/RPM/VSS/gear) are met.
+bool DfcoController::overrunActive() const {
+	const auto tps = Sensor::get(SensorType::DriverThrottleIntent);
+	if (!tps) {
+		return false;
+	}
+
 	if (engineConfiguration->coastingFuelCutRequiresGear && Sensor::getOrZero(SensorType::DetectedGear) <= 0) {
-		// Neutral (or gear not detected): don't cut fuel, we'd just be revving with no load.
 		return false;
 	}
 
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
 	float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
 
-	bool mapActivate = !hasMap || !m_mapHysteresis.test(map.value_or(0), engineConfiguration->coastingFuelCutMap + 1, engineConfiguration->coastingFuelCutMap - 1);
-	bool tpsActivate = tps.Value < engineConfiguration->coastingFuelCutTps;
-	bool cltActivate = clt.Value > engineConfiguration->coastingFuelCutClt;
-	bool dfcoAllowed = mapActivate && tpsActivate && cltActivate;
-
+	bool tpsActivate   = tps.Value < engineConfiguration->coastingFuelCutTps;
 	bool rpmActivate   = (rpm > engineConfiguration->coastingFuelCutRpmHigh);
 	bool rpmDeactivate = (rpm < engineConfiguration->coastingFuelCutRpmLow);
 	bool vssActivate   = (vss >= engineConfiguration->coastingFuelCutVssHigh);
 	bool vssDeactivate = (vss < engineConfiguration->coastingFuelCutVssLow);
 
-	if (dfcoAllowed && rpmActivate && vssActivate) {
+	if (tpsActivate && rpmActivate && vssActivate) {
 		return true;
 	}
-	if (!dfcoAllowed || rpmDeactivate || vssDeactivate) {
+	if (rpmDeactivate || vssDeactivate || !tpsActivate) {
 		return false;
 	}
 
 	return m_isDfco;
 }
 
-void DfcoController::update() {
-	bool newState = getState();
+bool DfcoController::getState(const EngineStateMachine& sm) const {
+	if (!commonGuards()) {
+		return false;
+	}
 
+	auto mode = engineConfiguration->dfcoFuelCutMode;
+
+	bool wantsOverrun = (mode == dfco_fuel_cut_mode_e::Overrun || mode == dfco_fuel_cut_mode_e::Both);
+	bool wantsDecel   = (mode == dfco_fuel_cut_mode_e::Decel   || mode == dfco_fuel_cut_mode_e::Both);
+
+	if (wantsOverrun && overrunActive()) {
+		return true;
+	}
+
+	// Decel mode: cut fuel when the SM reports Decelerating (VSS + clutch-out confirmed),
+	// or — when VSS is absent — fall back to a raw RPM rate check so people without VSS
+	// can still get fuel cut on a fast RPM drop.
+	if (wantsDecel) {
+		if (sm.engineSmIsDecelerating) {
+			return true;
+		}
+		if (!Sensor::hasSensor(SensorType::VehicleSpeed)) {
+			float decelThr = (float)getCustomPage()->smDecelRateThreshold;
+			if (decelThr > 0 && sm.getLastRpmRate() < -decelThr) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+void DfcoController::update() {
 	auto& sm = engine->module<EngineStateMachine>().unmock();
+	bool newState = getState(sm);
 
 	// If P&B is active, don't cut fuel — we want rich, unburnt mixture for pops.
 	// Likewise, don't cut fuel while the SM has a shift in progress (Upshifting/Downshifting) —

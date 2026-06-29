@@ -7,6 +7,7 @@
 #include <rusefi/timer.h>
 #include "hysteresis.h"
 #include "dfco_state_generated.h"
+#include "engine_state_machine.h"
 
 // DFCO = deceleration fuel cut off, ie, save gas when your foot is off the pedal
 class DfcoController : public dfco_state_s, public EngineModule {
@@ -24,7 +25,9 @@ public:
 	float getTimeSinceCut() const;
 
 private:
-	bool getState() const;
+	bool commonGuards() const;
+	bool overrunActive() const;
+	bool getState(const EngineStateMachine& sm) const;
 
 	bool m_isDfco = false;
 
