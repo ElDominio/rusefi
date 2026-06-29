@@ -377,7 +377,8 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// pedal-indexed curve. Applied before the idle-range compression below so 0% pedal still maps
 	// to the idle position, and clamped to 100% so an aggressive multiplier cannot command
 	// throttle over-travel.
-	if (isSportPedalActive()) {
+	sportPedalActive = isSportPedalActive();
+	if (sportPedalActive) {
 		float sportMult = interpolate2d(sanitizedPedal,
 			getCustomPage()->sportPedalPedalBins,
 			getCustomPage()->sportPedalMultValues);

@@ -153,7 +153,7 @@ public:
 		bool hasSecond = m_sec.init(secondary);
 
 		if (engineConfiguration->etbSplit <= 0 || engineConfiguration->etbSplit > MAX_TPS_PPS_DISCREPANCY) {
-			engineConfiguration->etbSplit = MAX_TPS_PPS_DISCREPANCY;
+			engineConfiguration->etbSplit = 5;
 		}
 
 		if (isFordTps && fordTps) {

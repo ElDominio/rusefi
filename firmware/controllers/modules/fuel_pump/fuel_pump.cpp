@@ -93,7 +93,15 @@ void FuelPumpController::onFastCallback() {
 		return;
 	}
 
-	update();
+	if (!Sensor::get(SensorType::FuelPressureLow)) {
+		// No pressure sensor — feed-forward only, skip PID
+		isFpPidActive = false;
+		m_fuelPumpPid.reset();
+		auto sp = getSetpoint();
+		setOutput(sp ? getOpenLoop(sp.Value) : expected<percent_t>{unexpected});
+	} else {
+		update();
+	}
 #endif
 }
 

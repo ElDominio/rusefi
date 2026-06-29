@@ -85,6 +85,10 @@ bool UpshiftRpmHold::passesEntryGate(float rpm, float vss, float driverTps) cons
 	if (!cfg->upshiftRpmHoldEnabled) {
 		return false;
 	}
+	// Flat shift takes priority: if the driver is holding the flat-shift button, don't enter RPM hold.
+	if (engine->shiftTorqueReductionController.isCuttingTorque()) {
+		return false;
+	}
 	if (vss < cfg->upshiftRpmHoldMinVss) {
 		return false;
 	}

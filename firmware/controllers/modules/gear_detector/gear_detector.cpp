@@ -62,6 +62,21 @@ void GearDetector::onSlowCallback() {
         isInitialized = true;
     }
 
+	bool hasClutchDown = isBrainPinValid(engineConfiguration->clutchDownPin);
+	bool hasClutchUp   = isBrainPinValid(engineConfiguration->clutchUpPin);
+
+	if (hasClutchDown || hasClutchUp) {
+		bool clutchDown = engine->engineState.clutchDownState;
+		bool clutchUp   = engine->engineState.clutchUpState != 0;
+
+		// Clutch disengaged means drivetrain is disconnected — ratio is meaningless
+		if ((hasClutchDown && clutchDown) || (hasClutchUp && !clutchUp)) {
+			m_gearboxRatio = 0;
+			m_currentGear  = 0;
+			return;
+		}
+	}
+
 	float ratio = computeGearboxRatio();
 	m_gearboxRatio = ratio;
 
