@@ -642,6 +642,13 @@ typedef enum __attribute__ ((__packed__)) {
 	EXHAUST_CUTOUT_OUTPUT_HBRIDGE = 2,
 } exhaust_cutout_output_mode_e;
 
+// Intake Manifold Runner Control mode. Values must match imrc_mode_e_enum order in config_page_5.txt
+typedef enum __attribute__ ((__packed__)) {
+	IMRC_DISABLED = 0,
+	IMRC_SOLENOID = 1,
+	IMRC_HBRIDGE  = 2,
+} imrc_mode_e;
+
 // Sport Pedal activation source (mirrors exhaust_cutout_activation_e — opening cutouts and a
 // sportier pedal feel tend to be wanted together).
 typedef enum __attribute__ ((__packed__)) {
@@ -858,6 +865,7 @@ typedef enum __attribute__ ((__packed__)) {
 	INJ_None = 0,
 	INJ_PolynomialAdder = 1,
 	INJ_FordModel = 2,
+	INJ_PercentCurve = 3,
 } InjectorNonlinearMode;
 
 typedef enum __attribute__ ((__packed__)) {
@@ -975,11 +983,17 @@ enum class sm_clutch_switch_e : uint8_t {
 	ClutchDown = 2,
 };
 
-// Values must match sm_shift_detection_mode_e_enum order in rusefi_config.txt
+// Values must match sm_shift_detection_mode_e_enum order in config_page_5.txt
 enum class sm_shift_detection_mode_e : uint8_t {
-	SimpleThrottle = 0,
-	RpmRate        = 1,
-	VssRate        = 2,
+	RpmRate = 0,
+	VssRate = 1,
+};
+
+// Values must match dfco_fuel_cut_mode_e_enum order in rusefi_config.txt
+enum class dfco_fuel_cut_mode_e : uint8_t {
+	Overrun = 0,
+	Decel   = 1,
+	Both    = 2,
 };
 
 #endif // __cplusplus

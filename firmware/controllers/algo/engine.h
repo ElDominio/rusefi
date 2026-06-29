@@ -44,6 +44,7 @@
 #include "fuel_pump.h"
 #include "main_relay.h"
 #include "exhaust_cutout.h"
+#include "imrc_controller.h"
 #include "cdv_controller.h"
 #include "launch_power_ramp.h"
 #include "rolling_launch.h"
@@ -174,6 +175,7 @@ public:
 #endif /* EFI_ALTERNATOR_CONTROL */
         MainRelayController,
         ExhaustCutoutController,
+        ImrcController,
         CdvController,
 #if EFI_LAUNCH_POWER_RAMP
         LaunchPowerRamp,

@@ -423,7 +423,9 @@ public class ReaderStateImpl implements ReaderState {
                 }
                 templateArgs = new LinkedHashMap<>();
                 for (int i = 0; i < templateParams.size(); i++) {
-                    templateArgs.put(templateParams.get(i), argValues[i]);
+                    String rawArg = argValues[i];
+                    String resolved = state.getVariableRegistry().get(rawArg);
+                    templateArgs.put(templateParams.get(i), resolved != null ? resolved : rawArg);
                 }
 
                 String instanceName = baseTypeName + "_" + typeName.substring(bracketStart + 1, typeName.length() - 1)

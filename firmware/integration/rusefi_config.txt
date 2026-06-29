@@ -791,10 +791,10 @@ end_struct
 
 afr_sensor_s afr
 
-#define MAX_TPS_PPS_DISCREPANCY 5
+#define MAX_TPS_PPS_DISCREPANCY 30
 
 adc_channel_e throttlePedalPositionAdcChannel;Electronic throttle pedal position first channel\nSee throttlePedalPositionSecondAdcChannel for second channel\nSee also tps1_1AdcChannel\nSee throttlePedalUpVoltage and throttlePedalWOTVoltage
-    uint8_t autoscale etbSplit;TPS/PPS error threshold;"%", 0.1, 0, 0, @@MAX_TPS_PPS_DISCREPANCY@@, 1
+    uint8_t autoscale etbSplit;TPS/PPS error threshold;"%", 0.5, 0, 0, @@MAX_TPS_PPS_DISCREPANCY@@, 1
 	Gpio tle6240_cs;
 	pin_output_mode_e tle6240_csPinMode;
 	pin_output_mode_e mc33810_csPinMode;
@@ -978,7 +978,7 @@ spi_device_e digitalPotentiometerSpiDevice;Digital Potentiometer is used by stoc
 
 	brain_input_pin_e vehicleSpeedSensorInputPin;
 	switch_input_pin_e clutchUpPin;Some vehicles have a switch to indicate that clutch pedal is all the way up
-	custom InjectorNonlinearMode 1 bits, U08, @OFFSET@, [0:1], "None", "Polynomial", "Ford (dual slope)"
+	custom InjectorNonlinearMode 1 bits, U08, @OFFSET@, [0:1], "None", "Polynomial", "Ford (dual slope)", "Curve (%)"
 	InjectorNonlinearMode injectorNonlinearMode
 	pin_input_mode_e clutchUpPinMode;
 
@@ -1909,6 +1909,10 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 
 	uint8_t dfcoRetardDeg;Retard timing by this amount during DFCO. Smooths the transition back from fuel cut. After fuel is restored, ramp timing back in over the period specified.;"deg", 1, 0, 0, 30, 0
 	uint8_t autoscale dfcoRetardRampInTime;Smooths the transition back from fuel cut. After fuel is restored, ramp timing back in over the period specified.;"s", 0.1, 0, 0, 1, 1
+
+	#define dfco_fuel_cut_mode_e_enum "Overrun", "Decel", "Both"
+	custom dfco_fuel_cut_mode_e 1 bits, U08, @OFFSET@, [0:1], @@dfco_fuel_cut_mode_e_enum@@
+	dfco_fuel_cut_mode_e dfcoFuelCutMode;Selects when fuel cut is active. Overrun: TPS-closed + RPM above threshold (traditional DFCO). Decel: engine RPM is dropping faster than smDecelRateThreshold (works without VSS). Both: either condition triggers fuel cut.
 
 	output_pin_e nitrousRelayPin;
 	pin_output_mode_e nitrousRelayPinMode;

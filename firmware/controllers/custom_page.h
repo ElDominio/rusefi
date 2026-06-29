@@ -12,6 +12,9 @@
 // visible before the generated struct below uses it.
 #define SPORT_PEDAL_SIZE 8
 
+// Injector Small Pulse % Correction Curve length. Must match INJ_CURVE_SIZE in config_page_5.txt.
+#define INJ_CURVE_SIZE 12
+
 #include "page_5_generated.h"
 
 page5_s* getCustomPage();

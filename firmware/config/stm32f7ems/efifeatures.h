@@ -68,6 +68,11 @@
 #define EFI_SPORT_PEDAL TRUE
 #endif
 
+// Injector Small Pulse % Correction Curve (nonlinear flow correction via user-supplied PW vs % curve)
+#ifndef EFI_INJ_PERCENT_CURVE
+#define EFI_INJ_PERCENT_CURVE TRUE
+#endif
+
 // AC Pressure Fan Control (pressure-based fan on/off hysteresis when AC high-side pressure sensor is installed)
 #ifndef EFI_AC_PRESSURE_FAN
 #define EFI_AC_PRESSURE_FAN TRUE
@@ -76,6 +81,11 @@
 // Check Engine Triggering (TS-configurable threshold checks with a points-gated CEL)
 #ifndef EFI_CHECK_ENGINE_TRIGGERING
 #define EFI_CHECK_ENGINE_TRIGGERING TRUE
+#endif
+
+// Intake Manifold Runner Control (solenoid or H-Bridge driven runner actuator)
+#ifndef EFI_IMRC
+#define EFI_IMRC TRUE
 #endif
 
 #ifndef EFI_OFF_IDLE_RPM_ADDER

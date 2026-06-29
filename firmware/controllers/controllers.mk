@@ -22,6 +22,7 @@ CONTROLLERS_SRC_CPP = \
 	$(CONTROLLERS_DIR)/actuators/ignition_controller.cpp \
 	$(CONTROLLERS_DIR)/actuators/main_relay.cpp \
 	$(CONTROLLERS_DIR)/actuators/exhaust_cutout.cpp \
+	$(CONTROLLERS_DIR)/actuators/imrc_controller.cpp \
 	$(CONTROLLERS_DIR)/actuators/vvt.cpp \
 	$(CONTROLLERS_DIR)/actuators/gppwm_channel_reader.cpp \
 	$(CONTROLLERS_DIR)/actuators/gppwm/gppwm_channel.cpp \

@@ -411,7 +411,7 @@ void setDefaultBaseEngine() {
 	engineConfiguration->idleStepperTotalSteps = 200;
 	engineConfiguration->stepperForceParkingEveryRestart = true;
 
-    engineConfiguration->etbSplit = MAX_TPS_PPS_DISCREPANCY;
+    engineConfiguration->etbSplit = 5;
 
 	// Advanced Trigger
 

@@ -16,6 +16,7 @@
 #define BURST_KNOCK_TPS_RATE_SIZE 8
 #define WOT_ENRICHMENT_SIZE 8
 #define SPORT_PEDAL_SIZE 8
+#define INJ_CURVE_SIZE 12
 
 ! Custom types re-declared for the isolated page generator (see config_page_4.txt header).
 ! The C++ enums themselves are defined in headers (e.g. rusefi_enums.h) and shared;
@@ -39,7 +40,7 @@ custom exhaust_cutout_output_mode_e 1 bits, U08, @OFFSET@, [0:1], @@exhaust_cuto
 
 #define sm_clutch_switch_e_enum "None", "Clutch Up", "Clutch Down", "INVALID"
 custom sm_clutch_switch_e 1 bits, U08, @OFFSET@, [0:1], @@sm_clutch_switch_e_enum@@
-#define sm_shift_detection_mode_e_enum "Simple Throttle", "RPM Rate", "VSS Rate (needs VSS sensor)", "INVALID"
+#define sm_shift_detection_mode_e_enum "RPM Rate", "VSS Rate (needs VSS sensor)", "INVALID", "INVALID"
 custom sm_shift_detection_mode_e 1 bits, U08, @OFFSET@, [0:1], @@sm_shift_detection_mode_e_enum@@
 #define pops_and_bangs_disable_mode_e_enum "None", "Switch Input", "Lua Gauge", "Switch or Lua Gauge"
 custom pops_and_bangs_disable_mode_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_disable_mode_e_enum@@
@@ -53,6 +54,9 @@ custom sport_pedal_activation_e 1 bits, U08, @OFFSET@, [0:1], @@sport_pedal_acti
 custom fan_ac_mode_e 1 bits, U08, @OFFSET@, [0:1], @@fan_ac_mode_e_enum@@
 
 custom fuel_pump_mode_e 1 bits, U08, @OFFSET@, [0:1], "Single", "Dual", "PWM"
+
+#define imrc_mode_e_enum "Disabled", "Solenoid", "H-Bridge"
+custom imrc_mode_e 1 bits, U08, @OFFSET@, [0:1], @@imrc_mode_e_enum@@
 
 struct_no_prefix page5_s
 
@@ -151,7 +155,6 @@ struct_no_prefix page5_s
 	uint8_t autoscale exhaustCutoutHBridgeDutyCycle;H-Bridge motor drive duty cycle (H-Bridge mode only);"%", 1, 0, 0, 100, 0
 
 	! --- Engine State Machine thresholds + shift detection (enable bit stays in page 1) ---
-	uint8_t smShiftTpsThreshold;Engine SM: TPS threshold used for shift-direction disambiguation (above = driver was on throttle = upshift).;"%", 1, 0, 0, 50, 0
 	uint8_t smWotTpsThreshold;Engine SM: TPS threshold above which the engine is at Wide Open Throttle.;"%", 1, 0, 50, 100, 0
 	uint8_t smTransientHoldoffCallbacks;Engine SM: slow-callback periods (50 ms each) to hold the Transient state after the accel-enrichment threshold drops. 0 = no hold-off.;"callbacks", 1, 0, 0, 20, 0
 
@@ -161,13 +164,17 @@ struct_no_prefix page5_s
 
 	sm_clutch_switch_e smUpshiftClutchSwitch;Engine SM: Clutch switch that signals an upshift. 'Clutch Up' opens the shift window when the pedal leaves rest (falling edge, drivetrain still locked) and closes it when the pedal returns to rest; 'Clutch Down' opens the window on full press and closes it on release. Flat-shift torque reduction always overrides this.
 	sm_clutch_switch_e smDownshiftClutchSwitch;Engine SM: Clutch switch that signals a downshift.
-	sm_shift_detection_mode_e smShiftDetectionMode;Engine SM: Method used to confirm shift direction. RPM Rate: upshift=RPM drops, downshift=RPM rises. VSS Rate: upshift=VSS rises (accel), downshift=VSS falls (decel). Both require configured rate thresholds.
-	uint16_t smShiftLookbackMs;Engine SM: Sensor history window used for shift direction evaluation (100-1000ms).;"ms", 1, 0, 100, 1000, 0
-	uint16_t smClutchUpDisengagementDelayMs;Engine SM: Delay after the Clutch-Up switch leaves rest (shift window opens) before evaluating shift direction. Compensates for the time between the electrical switch opening and the clutch plate actually being mechanically disengaged.;"ms", 1, 0, 0, 1000, 0
-	int16_t smUpshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm upshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s drop. VSS mode: km/h/s rise.;"/s", 1, 0, 0, 10000, 0
-	int16_t smDownshiftRateThreshold;Engine SM: Rate-of-change magnitude to confirm downshift in RPM Rate or VSS Rate mode. RPM mode: RPM/s rise. VSS mode: km/h/s fall.;"/s", 1, 0, 0, 10000, 0
-	uint16_t smShiftLatchTimeMs;Engine SM: once shift direction is confirmed, hold Upshifting/Downshifting true for at least this long, masking rapid on/off flicker from the instantaneous rate check. 0 = no latch (raw instantaneous signal, legacy behavior).;"ms", 1, 0, 0, 2000, 0
-	uint16_t smShiftMinVss;Engine SM: VSS Rate mode only -- minimum vehicle speed required to confirm/engage a shift, below which Upshifting/Downshifting cannot engage. 0 = no minimum.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
+	sm_shift_detection_mode_e smShiftDetectionMode;Engine SM: Signal source for the shift-direction accumulator. RPM Rate: accumulates positive/negative based on engine RPM rate of change. VSS Rate: accumulates based on vehicle speed rate of change (needs VSS sensor).
+	int16_t smAccelRateThreshold;Engine SM: RPM/s rate threshold to enter the Accelerating state. Also the accumulator gain normalizer while accelerating -- at exactly this rate the accumulator climbs at smAccumulatorGain pct/s, faster rates climb proportionally faster. 0 disables the Accelerating state.;"RPM/s", 1, 0, 0, 10000, 0
+	int16_t smDecelRateThreshold;Engine SM: RPM/s rate threshold to enter the Decelerating state (RPM falling faster than this). Also the accumulator normalizer in Overrun. 0 disables the Decelerating state.;"RPM/s", 1, 0, 0, 10000, 0
+	uint16_t smShiftLatchTimeMs;Engine SM: once shift direction is confirmed, hold Upshifting/Downshifting true for at least this long. 0 = no latch.;"ms", 1, 0, 0, 2000, 0
+	uint16_t smShiftMinVss;Engine SM: VSS Rate mode only -- minimum vehicle speed. Below this the accumulator decays instead of accumulating. 0 = no minimum.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
+	int8_t smAccumulatorUpshiftThreshold;Engine SM: Accumulator must reach or exceed this value (0..100) to confirm an upshift. The accumulator runs from -100 to +100.;"", 1, 0, 0, 100, 0
+	int8_t smAccumulatorDownshiftThreshold;Engine SM: Accumulator must reach or fall below the negative of this value (0..100) to confirm a downshift.;"", 1, 0, 0, 100, 0
+	int8_t smAccelDecelPad1;
+	int8_t smAccelDecelPad2;
+	float smAccumulatorGain;Engine SM: Accumulator climb rate in %/s per 1x threshold ratio. At exactly the threshold rate, the accumulator changes by this many %/s. Larger = faster response.;"%/s", 1, 0, 0, 200, 1
+	float smAccumulatorDecayRate;Engine SM: Rate at which the accumulator decays toward 0 (%/s) when the signal is within the ±threshold dead-band. Larger = faster decay.;"%/s", 1, 0, 0, 200, 1
 
 	! --- Limp Mode (Engine State Machine sub-feature) ---
 	! These limits are enforced only while the state machine has latched the Limp state.
@@ -231,6 +238,7 @@ struct_no_prefix page5_s
 
 	uint16_t ecoModeCruisingTime;Eco Mode: continuous time in the Cruising state before eco engages.;"sec", 1, 0, 0, 600, 0
 	uint16_t ecoModeMapLimit;Eco Mode: MAP must be at or below this for eco to engage. Exceeding it drops eco instantly, just like leaving Cruising. 0 disables the MAP gate.;"kPa", 1, 0, 0, @@MAP_UPPER_LIMIT@@, 0
+	uint16_t ecoModeMinVss;Eco Mode: minimum vehicle speed for eco to engage. Below this the cruise timer is reset and eco cannot activate — catches low-speed crawls that the Accelerating state alone misses. 0 disables.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
 
 	float ecoModeLuaGaugeValue;Eco Mode: Lua gauge threshold for the switch source.;"", 1, 0, -30000, 30000, 3
 	float ecoTargetAfr;Eco Mode: absolute target AFR while active (leaner = more economy).;"afr", 1, 0, 10, 20, 1
@@ -443,6 +451,17 @@ struct_no_prefix page5_s
 	uint8_t autoscale celDebounceTimeSec;Check Engine Triggering: shared continuous-confirm time for every check on this page (trip and untrip both require the condition to hold for this long). Also the flip-counting window for TPS Circuit Intermittent.;"s", 0.1, 0, 0, 25, 1
 	uint8_t tpsIntermittentFlipCount;Check Engine Triggering -- TPS Circuit Intermittent: number of ok/fault flips within celDebounceTimeSec required to trip.;"flips", 1, 0, 2, 10, 0
 
+	! --- Injector Small Pulse % Correction Curve (EFI_INJ_PERCENT_CURVE) ---
+	! Nonlinear injector flow correction using a user-supplied pulsewidth vs. percent-adder
+	! curve (as provided by Injector Dynamics and similar suppliers). The X axis is the
+	! effective pulsewidth (after dead time subtraction) in ms; the Y axis is the percentage
+	! to add to that effective PW. Example: at 0.25 ms effective PW with 41.6% correction,
+	! the injector is commanded for 0.25 * 1.416 = 0.354 ms effective open time, then dead
+	! time is added on top as normal. The last X bin acts as the cutoff: above that effective
+	! PW, no correction is applied regardless of the Y value in that cell.
+	float[INJ_CURVE_SIZE] injectorSmallPulseCurveBins;Injector % Correction Curve: effective pulsewidth axis (ms). The last bin is the cutoff — no correction above it.;"ms", 1, 0, 0, 10, 3
+	float[INJ_CURVE_SIZE] injectorSmallPulseCurveValues;Injector % Correction Curve: percent adder at each effective PW. Example: 41.6 adds 41.6%% of the effective PW. Set all to 0 to disable while keeping the mode selected.;"%", 1, 0, -100, 500, 1
+
 	! --- Rolling Launch Control (EFI_ROLLING_LAUNCH) ---
 	! A driver-held button (hardware switch and/or the setRollingLaunchTrigger Lua call) that, while
 	! the car is moving (VSS >= rollingLaunchMinVss) and above rollingLaunchMinArmRpm, snapshots the
@@ -465,5 +484,40 @@ struct_no_prefix page5_s
 	uint16_t rollingLaunchMinArmRpm;Rolling Launch: minimum engine RPM required at the press edge to arm. Prevents engaging while lugging.;"rpm", 1, 0, 0, 15000, 0
 	uint16_t rollingLaunchMaxRpm;Rolling Launch: absolute ceiling the captured hold target is clamped to, regardless of where the button is pressed (over-rev safety).;"rpm", 1, 0, 0, 15000, 0
 	uint16_t rollingLaunchMinVss;Rolling Launch: minimum vehicle speed required to arm. This is the "rolling" gate -- below it the button does nothing.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
+
+	! --- Intake Manifold Runner Control (EFI_IMRC) ---
+	! Controls solenoid-driven or H-Bridge-driven intake manifold runners based on RPM, TPS, and MAP
+	! trigger conditions. In Solenoid mode, up to two solenoids are driven identically at configurable
+	! PWM duty cycles for open and closed positions. In H-Bridge mode, a single H-Bridge positions
+	! the runner actuator motor (same logic as Exhaust Cutout H-Bridge mode).
+	! Trigger conditions are OR-ed: any one tripping causes the runner change.
+	! The imrcInvert bit selects whether the runners OPEN (default) or CLOSE when triggered.
+	imrc_mode_e imrcMode;Intake Manifold Runner Control mode: Disabled, Solenoid (up to 2 solenoids), or H-Bridge motor.
+	bit imrcInvert,"CLOSE runners on trigger","OPEN runners on trigger";When set, runners CLOSE when trigger conditions are met (and OPEN otherwise). Default: OPEN on trigger.
+
+	uint16_t imrcRpmThreshold;IMRC: RPM above which to trigger runner change (0 to disable);"rpm", 1, 0, 0, 20000, 0
+	uint8_t imrcTpsThreshold;IMRC: TPS % above which to trigger (0 to disable);"%", 1, 0, 0, 100, 0
+	uint8_t autoscale imrcSolenoidOpenDuty;IMRC Solenoid: PWM duty cycle when runners are OPEN;"%", 1, 0, 0, 100, 0
+	uint8_t autoscale imrcSolenoidClosedDuty;IMRC Solenoid: PWM duty cycle when runners are CLOSED;"%", 1, 0, 0, 100, 0
+	uint8_t autoscale imrcHBridgeDutyCycle;IMRC H-Bridge: motor drive duty cycle;"%", 1, 0, 0, 100, 0
+	uint8_t autoscale imrcHBridgeMoveDurationS;IMRC H-Bridge: motor drive time (de-energizes after);"s", 0.1, 0, 0, 5, 1
+	uint8_t imrcAlignPad;unused
+
+	float imrcMapKpaThreshold;IMRC: MAP/Boost kPa above which to trigger (0 to disable);"kPa", 1, 0, 0, 500, 1
+
+	output_pin_e imrcSolenoid1Pin;IMRC Solenoid: output pin for solenoid 1
+	pin_output_mode_e imrcSolenoid1PinMode;
+
+	output_pin_e imrcSolenoid2Pin;IMRC Solenoid: output pin for solenoid 2 (optional; leave unassigned to use only one solenoid)
+	pin_output_mode_e imrcSolenoid2PinMode;
+
+	output_pin_e imrcHBridgePin1;IMRC H-Bridge: IN1 pin (drives runners open)
+	pin_output_mode_e imrcHBridgePin1Mode;
+
+	output_pin_e imrcHBridgePin2;IMRC H-Bridge: IN2 pin (drives runners closed)
+	pin_output_mode_e imrcHBridgePin2Mode;
+
+	uint16_t imrcSolenoidFrequency;IMRC Solenoid: PWM frequency;"Hz", 1, 0, 1, 10000, 0
+	uint16_t imrcHBridgeFrequency;IMRC H-Bridge: PWM frequency;"Hz", 1, 0, 1, 10000, 0
 
 end_struct

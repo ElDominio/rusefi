@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE5_DATA_VERSION = 11;
+static constexpr uint32_t PAGE5_DATA_VERSION = 12;
 
 using page5_container_s = ExtraPageContainer<page5_s, PAGE5_DATA_VERSION>;
 
@@ -41,19 +41,20 @@ void customPageSetDefaults() {
 	d.downshiftBlipperKd = 0;
 
 	// Engine State Machine thresholds + shift detection (enable bit lives in page 1).
-	d.smShiftTpsThreshold = 5;          // 5% TPS — matches idlePidDeactivationTpsThreshold default
 	d.smWotTpsThreshold = 90;           // 90% TPS
 	d.smTransientHoldoffCallbacks = 4;  // 200 ms at 20 Hz
 	d.smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
 	d.smDownshiftClutchSwitch = sm_clutch_switch_e::None;
-	d.smShiftDetectionMode    = sm_shift_detection_mode_e::SimpleThrottle;
-	d.smShiftLookbackMs       = 300;
-	d.smClutchUpDisengagementDelayMs = 0;
-	d.smUpshiftRateThreshold   = 0;
-	d.smDownshiftRateThreshold = 0;
+	d.smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
+	d.smAccelRateThreshold = 0;
+	d.smDecelRateThreshold = 0;
 	d.smRelatchOnClutchDown    = false;
-	d.smShiftLatchTimeMs       = 0;  // 0 = no latch, raw instantaneous signal (legacy behavior)
-	d.smShiftMinVss            = 0;  // 0 = no minimum-speed gate
+	d.smShiftLatchTimeMs       = 0;
+	d.smShiftMinVss            = 0;
+	d.smAccumulatorUpshiftThreshold  = 40;
+	d.smAccumulatorDownshiftThreshold = 40;
+	d.smAccumulatorGain      = 20.0f;
+	d.smAccumulatorDecayRate = 10.0f;
 
 	// Limp Mode (Engine State Machine sub-feature) — conservative "get-home" defaults.
 	d.limpSeverityThreshold  = 5;    // one latched misfire (5 severity pts) latches limp
@@ -183,6 +184,34 @@ void customPageSetDefaults() {
 	d.celBlinkPointsThreshold = 2;  // two simultaneously tripped checks escalate to a flashing CEL
 	d.celDebounceTimeSec = 5.0f;    // every check's condition must hold for 5s before tripping/clearing
 	d.tpsIntermittentFlipCount = 3; // 3+ ok/fault flips within celDebounceTimeSec trips Intermittent
+
+	// Injector Small Pulse % Correction Curve — evenly-spaced bins 0..2 ms, all corrections zero.
+	// User fills in vendor data (e.g. Injector Dynamics NFC) before enabling Curve (%) mode.
+	for (size_t i = 0; i < efi::size(d.injectorSmallPulseCurveBins); i++) {
+		d.injectorSmallPulseCurveBins[i] = i * (2.0f / (efi::size(d.injectorSmallPulseCurveBins) - 1));
+		d.injectorSmallPulseCurveValues[i] = 0.0f;
+	}
+
+	// Intake Manifold Runner Control — disabled by default; solenoid defaults at 100% open, 0% closed.
+	d.imrcMode                = IMRC_DISABLED;
+	d.imrcInvert              = false;
+	d.imrcRpmThreshold        = 0;
+	d.imrcTpsThreshold        = 0;
+	d.imrcMapKpaThreshold     = 0.0f;
+	d.imrcSolenoid1Pin        = Gpio::Unassigned;
+	d.imrcSolenoid1PinMode    = OM_DEFAULT;
+	d.imrcSolenoid2Pin        = Gpio::Unassigned;
+	d.imrcSolenoid2PinMode    = OM_DEFAULT;
+	d.imrcSolenoidFrequency   = 100;
+	d.imrcSolenoidOpenDuty    = 100;
+	d.imrcSolenoidClosedDuty  = 0;
+	d.imrcHBridgePin1         = Gpio::Unassigned;
+	d.imrcHBridgePin1Mode     = OM_DEFAULT;
+	d.imrcHBridgePin2         = Gpio::Unassigned;
+	d.imrcHBridgePin2Mode     = OM_DEFAULT;
+	d.imrcHBridgeFrequency    = 1000;
+	d.imrcHBridgeDutyCycle    = 100;
+	d.imrcHBridgeMoveDurationS = 1.0f;
 
 	// Rolling Launch Control — disabled by default; sane gates so it is usable once enabled.
 	d.rollingLaunchEnabled        = false;

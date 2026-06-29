@@ -13,6 +13,7 @@
 #include "vvt_generated.h"
 #include "mc33810_state_generated.h"
 #include "exhaust_cutout.h"
+#include "imrc_controller.h"
 #include "dfco_state_generated.h"
 #include "dfco.h"
 #include <livedata_board_extra.h>
@@ -426,4 +427,9 @@ const live_data_rotational_idle_s* getLiveData(size_t) {
 template<>
 const exhaust_cutout_s* getLiveData(size_t) {
 	return &engine->module<ExhaustCutoutController>().unmock();
+}
+
+template<>
+const imrc_controller_s* getLiveData(size_t) {
+	return &engine->module<ImrcController>().unmock();
 }

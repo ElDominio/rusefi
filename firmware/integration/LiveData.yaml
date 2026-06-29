@@ -148,6 +148,12 @@ Usages:
     output_name: exhaustCutout
     engineModule: ExhaustCutoutController
 
+  - name: imrc_controller
+    java: ImrcController.java
+    folder: controllers/actuators
+    output_name: imrcController
+    engineModule: ImrcController
+
   #todo: handle ETB pid and Idle pid which point at same pid_state.txt
   # - name: pid_state
   #   java: PidState.java

@@ -80,7 +80,7 @@ $(SIG_FILE): .FORCE
 $(RAMDISK): .ramdisk-sentinel ;
 
 .ramdisk-sentinel: $(INI_FILE) $(TGT_SENTINEL)
-	bash $(PROJECT_DIR)/bin/gen_image_board.sh $(BOARD_DIR) $(SHORT_BOARD_NAME)
+	bash $(PROJECT_DIR)/bin/gen_image_board.sh $(BOARD_DIR) $(SHORT_BOARD_NAME) || true
 	@touch $@
 
 $(CONFIG_FILES): .config-sentinel;
