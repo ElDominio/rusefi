@@ -11,6 +11,8 @@
 
 #include "pch.h"
 
+#include "cht_clt_estimator.h"
+#include "eot_estimator.h"
 #include "trigger_central.h"
 #include "fuel_math.h"
 #include "advance_map.h"
@@ -209,6 +211,8 @@ void Engine::periodicSlowCallback() {
  * See also periodicFastCallback
  */
 void Engine::updateSlowSensors() {
+	updateChtCltEstimator();
+	updateEotEstimator();
 	updateSwitchInputs();
 
 #if EFI_PROD_CODE

@@ -404,9 +404,16 @@ float mapFast
 	uint16_t testBenchIter;;"count",1, 0, 0, 0, 0
 
 	int16_t autoscale oilTemp;;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
+	int16_t autoscale eotEstDeltaTActual;EOT estimator dT actual;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
+	int16_t autoscale eotEstDeltaTTarget;EOT estimator dT target;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
 	int16_t autoscale fuelTemp;;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
 	int16_t autoscale ambientTemp;;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
 	int16_t autoscale compressorDischargeTemp;;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
+
+	int16_t autoscale cylHeadTemperature;Cylinder head temperature (CHT);"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
+	int16_t autoscale rawCht;CHT sensor raw voltage;"V",{1/@@PACK_MULT_VOLTAGE@@}, 0, 0, 5, 3
+	int16_t autoscale chtEstDeltaTActual;CHT estimator dT actual;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
+	int16_t autoscale chtEstDeltaTTarget;CHT estimator dT target;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
 
 	uint16_t autoscale compressorDischargePressure;;"kPa",{1/@@PACK_MULT_PRESSURE@@}, 0, 0, 0, 1
 	uint16_t autoscale throttleInletPressure;;"kPa",{1/@@PACK_MULT_PRESSURE@@}, 0, 0, 0, 1

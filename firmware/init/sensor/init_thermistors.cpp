@@ -4,6 +4,8 @@
 #include "functional_sensor.h"
 #include "linear_func.h"
 #include "thermistor_func.h"
+#include "cht_clt_estimator.h"
+#include "eot_estimator.h"
 
 // Each one could be either linear or thermistor
 struct FuncPair {
@@ -20,8 +22,9 @@ static CCM_OPTIONAL FunctionalSensor oilTempSensor(SensorType::OilTemperature, M
 static CCM_OPTIONAL FunctionalSensor fuelTempSensor(SensorType::FuelTemperature, MS2NT(10));
 static CCM_OPTIONAL FunctionalSensor ambientTempSensor(SensorType::AmbientTemperature, MS2NT(10));
 static CCM_OPTIONAL FunctionalSensor compressorDischargeTemp(SensorType::CompressorDischargeTemperature, MS2NT(10));
+static CCM_OPTIONAL FunctionalSensor chtSensor(SensorType::CylinderHeadTemperature, MS2NT(10));
 
-static FuncPair fclt, fiat, faux1, faux2, foil, ffuel, fambient, fcdt;
+static FuncPair fclt, fiat, faux1, faux2, foil, ffuel, fambient, fcdt, fcht;
 
 static void validateThermistorConfig(const char* msg, thermistor_conf_s& cfg) {
 	if (cfg.tempC_1 >= cfg.tempC_2 || cfg.tempC_2 >= cfg.tempC_3) {
@@ -91,13 +94,16 @@ static void configureTempSensor(
 
 void initThermistors() {
 	if (!engineConfiguration->consumeObdSensors) {
-		configureTempSensor(
-				"clt",
-				clt,
-				fclt,
-				engineConfiguration->clt,
-				engineConfiguration->useLinearCltSensor,
-				engineConfiguration->cltSensorPulldown);
+		// When cltFromCht is enabled, the estimator registers a StoredValueSensor as Clt instead
+		if (!engineConfiguration->cltFromCht) {
+			configureTempSensor(
+					"clt",
+					clt,
+					fclt,
+					engineConfiguration->clt,
+					engineConfiguration->useLinearCltSensor,
+					engineConfiguration->cltSensorPulldown);
+		}
 
 		configureTempSensor(
 				"iat",
@@ -108,7 +114,10 @@ void initThermistors() {
 				engineConfiguration->iatSensorPulldown);
 	}
 
-	configureTempSensor("oil temp", oilTempSensor, faux2, engineConfiguration->oilTempSensor, false);
+	// When eotFromIatCht is enabled, the estimator registers a StoredValueSensor as OilTemperature instead
+	if (!engineConfiguration->eotFromIatCht) {
+		configureTempSensor("oil temp", oilTempSensor, faux2, engineConfiguration->oilTempSensor, false);
+	}
 
 	configureTempSensor("fuel temp", fuelTempSensor, ffuel, engineConfiguration->fuelTempSensor, false);
 
@@ -124,16 +133,37 @@ void initThermistors() {
 	configureTempSensor("aux1", aux1, faux1, engineConfiguration->auxTempSensor1, false);
 
 	configureTempSensor("aux2", aux2, faux2, engineConfiguration->auxTempSensor2, false);
+
+	configureTempSensor(
+			"cht",
+			chtSensor,
+			fcht,
+			engineConfiguration->chtSensor,
+			engineConfiguration->useLinearChtSensor,
+			engineConfiguration->chtSensorPulldown);
+
+	if (engineConfiguration->cltFromCht) {
+		initChtCltEstimator();
+	}
+
+	if (engineConfiguration->eotFromIatCht) {
+		initEotEstimator();
+	}
 }
 
 void deinitThermistors() {
-	AdcSubscription::UnsubscribeSensor(clt, engineConfiguration->clt.adcChannel);
+	if (!engineConfiguration->cltFromCht) {
+		AdcSubscription::UnsubscribeSensor(clt, engineConfiguration->clt.adcChannel);
+	}
 	AdcSubscription::UnsubscribeSensor(iat, engineConfiguration->iat.adcChannel);
-	AdcSubscription::UnsubscribeSensor(oilTempSensor, engineConfiguration->oilTempSensor.adcChannel);
+	if (!engineConfiguration->eotFromIatCht) {
+		AdcSubscription::UnsubscribeSensor(oilTempSensor, engineConfiguration->oilTempSensor.adcChannel);
+	}
 	AdcSubscription::UnsubscribeSensor(fuelTempSensor, engineConfiguration->fuelTempSensor.adcChannel);
 	AdcSubscription::UnsubscribeSensor(ambientTempSensor, engineConfiguration->ambientTempSensor.adcChannel);
 	AdcSubscription::UnsubscribeSensor(
 			compressorDischargeTemp, engineConfiguration->compressorDischargeTemperature.adcChannel);
 	AdcSubscription::UnsubscribeSensor(aux1, engineConfiguration->auxTempSensor1.adcChannel);
 	AdcSubscription::UnsubscribeSensor(aux2, engineConfiguration->auxTempSensor2.adcChannel);
+	AdcSubscription::UnsubscribeSensor(chtSensor, engineConfiguration->chtSensor.adcChannel);
 }

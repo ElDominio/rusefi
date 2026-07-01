@@ -27,6 +27,8 @@
 #include "pch.h"
 #include "status_loop.h"
 #include "electronic_throttle.h"
+#include "cht_clt_estimator.h"
+#include "eot_estimator.h"
 
 #if EFI_LOGIC_ANALYZER
 #include "logic_analyzer.h"
@@ -358,6 +360,10 @@ static void updateTempSensors() {
 	SensorResult oilTemp = Sensor::get(SensorType::OilTemperature);
 	engine->outputChannels.oilTemp = oilTemp.value_or(0);
 
+	const auto& eotEst = getEotEstimator();
+	engine->outputChannels.eotEstDeltaTActual = eotEst.deltaTActual;
+	engine->outputChannels.eotEstDeltaTTarget = eotEst.deltaTTarget;
+
     // see also updateFuelSensors()
 	SensorResult fuelTemp = Sensor::get(SensorType::FuelTemperature);
 	engine->outputChannels.fuelTemp = fuelTemp.value_or(0);
@@ -367,6 +373,14 @@ static void updateTempSensors() {
 
 	SensorResult compressorDischargeTemp = Sensor::get(SensorType::CompressorDischargeTemperature);
 	engine->outputChannels.compressorDischargeTemp = compressorDischargeTemp.value_or(0);
+
+	SensorResult cht = Sensor::get(SensorType::CylinderHeadTemperature);
+	engine->outputChannels.cylHeadTemperature = cht.value_or(0);
+	engine->outputChannels.rawCht = Sensor::getRaw(SensorType::CylinderHeadTemperature);
+
+	const auto& chtEst = getChtCltEstimator();
+	engine->outputChannels.chtEstDeltaTActual = chtEst.deltaTActual;
+	engine->outputChannels.chtEstDeltaTTarget = chtEst.deltaTTarget;
 }
 
 void updateUnfilteredRawPedal();
