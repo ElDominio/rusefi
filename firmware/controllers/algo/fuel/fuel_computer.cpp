@@ -46,6 +46,14 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 		afr = lambda * stoich;
 	}
 
+#if EFI_GHOST_CAM
+	// Ghost Cam: override AFR target while active. STFT stays active and chases this target.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam) {
+		afr = getCustomPage()->ghostCamTargetAfr;
+		lambda = afr / stoich;
+	}
+#endif // EFI_GHOST_CAM
+
 	afrTableYAxis = load;
 	targetLambda = lambda;
 	targetAFR = afr;

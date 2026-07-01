@@ -308,7 +308,7 @@ PUBLIC_API_WEAK float boardAdjustEtbTarget(float currentEtbTarget) {
 #if EFI_SPORT_PEDAL
 // Sport Pedal: returns true while the configured activation source (hardware switch or Lua gauge)
 // is asserting. Mirrors the Exhaust Cutout activation reading (see exhaust_cutout.cpp getInputHigh).
-static bool isSportPedalActive() {
+bool isSportPedalActive() {
 	auto& cfg = *getCustomPage();
 
 	if (cfg.sportPedalActivationMode == SPORT_PEDAL_SWITCH) {

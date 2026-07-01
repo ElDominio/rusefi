@@ -148,6 +148,10 @@ private:
 	Pid m_timingPid;
 	float m_modeledFlowIdleTiming = 0;
 	Biquad m_timingHpf;
+#if EFI_GHOST_CAM
+	bool m_lastGhostCamActive = false;
+	pid_s m_ghostCamTimingPidConfig = {};
+#endif // EFI_GHOST_CAM
 };
 
 percent_t getIdlePosition();

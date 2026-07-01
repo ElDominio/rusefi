@@ -614,6 +614,11 @@
 #define EFI_SPORT_PEDAL FALSE
 #endif
 
+// Ghost Cam Mode (idle lope via VVT overlap + AFR/ignition overrides; needs Engine State Machine)
+#ifndef EFI_GHOST_CAM
+#define EFI_GHOST_CAM FALSE
+#endif
+
 // Injector Small Pulse % Correction Curve (nonlinear flow correction via user-supplied PW vs % curve)
 #ifndef EFI_INJ_PERCENT_CURVE
 #define EFI_INJ_PERCENT_CURVE FALSE

@@ -520,4 +520,34 @@ struct_no_prefix page6_s
 	uint16_t imrcSolenoidFrequency;IMRC Solenoid: PWM frequency;"Hz", 1, 0, 1, 10000, 0
 	uint16_t imrcHBridgeFrequency;IMRC H-Bridge: PWM frequency;"Hz", 1, 0, 1, 10000, 0
 
+	! --- Ghost Cam Mode (EFI_GHOST_CAM) ---
+	! Switch or Lua gauge activated idle lope effect. Only active in the Idle SM state; any other
+	! state kills ghost cam immediately. VVT cam angle overrides create the overlap lope; ignition
+	! and AFR are secondary. On deactivation, CLID and CLII integrators reset to zero for a clean
+	! re-entry to normal idle.
+	bit ghostCamEnabled,"enabled","disabled";Ghost Cam: master enable.
+	bit ghostCamActivationSource,"Lua Gauge","Pin";Ghost Cam: activation source. Pin = hardware switch pin; Lua Gauge = Lua gauge input. Only the selected source is checked.
+
+	switch_input_pin_e ghostCamActivatePin;Ghost Cam: hardware switch pin. Asserting this pin while idle conditions are met engages ghost cam.
+	pin_input_mode_e ghostCamActivatePinMode;
+
+	lua_gauge_e ghostCamLuaGauge;Ghost Cam: Lua gauge used as the activation source.
+	lua_gauge_meaning_e ghostCamLuaGaugeMeaning;
+
+	int8_t ghostCamCltMin;Ghost Cam: minimum coolant temperature required to activate. Below this the mode cannot engage.;"°C", 1, 0, -40, 120, 0
+	uint8_t autoscale ghostCamIdleBaseDuty;Ghost Cam: open-loop IAC base duty override. Replaces the CLT-table idle position while active (CLID correction still adds on top).;"%", 1, 0, 0, 100, 1
+
+	uint16_t ghostCamIdleRpm;Ghost Cam: idle RPM target override. Fed directly to CLID and CLII as the RPM setpoint.;"rpm", 1, 0, 0, 3000, 0
+
+	float ghostCamLuaGaugeThreshold;Ghost Cam: Lua gauge activation threshold. Asserts when the gauge crosses this value in the configured direction.;"", 1, 0, -30000, 30000, 3
+	float ghostCamTargetAfr;Ghost Cam: AFR target override. STFT stays active and chases this target — rich overshoot creates the lope effect.;"AFR", 1, 0, 8, 20, 1
+	float ghostCamIntakeCamAngle;Ghost Cam: VVT intake cam target angle override. The primary lope mechanism on VVT engines — cam overlap creates the choppy idle.;"deg", 1, 0, -60, 60, 1
+	float ghostCamExhaustCamAngle;Ghost Cam: VVT exhaust cam target angle override.;"deg", 1, 0, -60, 60, 1
+
+	float ghostCamTimingPid_pFactor;Ghost Cam: idle ignition timing PID proportional gain (degrees advance per rpm error).;"", 1, 0, -10000, 10000, 4
+	float ghostCamTimingPid_iFactor;Ghost Cam: idle ignition timing PID integral gain.;"", 1, 0, -10000, 10000, 4
+	float ghostCamTimingPid_dFactor;Ghost Cam: idle ignition timing PID derivative gain.;"", 1, 0, -10000, 10000, 4
+	int16_t ghostCamTimingPid_minValue;Ghost Cam: idle ignition timing PID minimum output (max retard, degrees).;"deg", 1, 0, -30, 0, 0
+	int16_t ghostCamTimingPid_maxValue;Ghost Cam: idle ignition timing PID maximum output (max advance, degrees).;"deg", 1, 0, 0, 30, 0
+
 end_struct

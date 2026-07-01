@@ -43,6 +43,10 @@ EtbStatus etbGetState(size_t throttleIndex);
 
 float getSanitizedPedal();
 
+#if EFI_SPORT_PEDAL
+bool isSportPedalActive();
+#endif
+
 enum class EtbState : uint8_t {
   Uninitialized, // 0
   Autotune, // 1

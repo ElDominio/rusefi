@@ -28,6 +28,7 @@ enum class EngineStateMachineState : uint8_t {
 	Eco          = 13,
 	Accelerating = 14,
 	Decelerating = 15,
+	GhostCam     = 16,
 };
 
 // A shift window that stays open longer than this is considered stale and is closed.
@@ -56,6 +57,8 @@ public:
 	// current state directly so unit tests can drive it without standing up the full state
 	// determination.
 	void updateEcoMode(EngineStateMachineState currentState);
+	void updateGhostCam();
+	void updateSportPedal();
 
 	// P&B spark-cut overlay: returns the spark skip ratio (0..1) to feed the hard spark
 	// limiter. Non-zero only while a cut window is open (every popsAndBangsCutEveryRevs

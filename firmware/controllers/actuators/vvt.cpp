@@ -85,6 +85,13 @@ expected<angle_t> VvtController::getSetpoint() {
 		target = (m_cam == 0) ? getCustomPage()->ecoVvtIntakeTarget : getCustomPage()->ecoVvtExhaustTarget;
 	}
 
+#if EFI_GHOST_CAM
+	// Ghost Cam: override VVT targets while active. Cam overlap is the primary lope mechanism.
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam) {
+		target = (m_cam == 0) ? getCustomPage()->ghostCamIntakeCamAngle : getCustomPage()->ghostCamExhaustCamAngle;
+	}
+#endif // EFI_GHOST_CAM
+
 #if EFI_TUNER_STUDIO
 	engine->outputChannels.vvtTargets[index] = target;
 #endif

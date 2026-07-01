@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 12;
+static constexpr uint32_t PAGE6_DATA_VERSION = 13;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -212,6 +212,26 @@ void customPageSetDefaults() {
 	d.imrcHBridgeFrequency    = 1000;
 	d.imrcHBridgeDutyCycle    = 100;
 	d.imrcHBridgeMoveDurationS = 1.0f;
+
+	// Ghost Cam Mode — disabled by default; inert calibration (stoich AFR, zero cam angle).
+	d.ghostCamEnabled = false;
+	d.ghostCamActivationSource = false; // 0 = Pin
+	d.ghostCamActivatePin = Gpio::Unassigned;
+	d.ghostCamActivatePinMode = PI_DEFAULT;
+	d.ghostCamLuaGauge = LUA_GAUGE_1;
+	d.ghostCamLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
+	d.ghostCamLuaGaugeThreshold = 0.0f;
+	d.ghostCamCltMin = 60;           // require operating temp
+	d.ghostCamIdleRpm = 800;         // match a typical warm idle target
+	d.ghostCamTargetAfr = 14.7f;     // stoich — user tunes toward 16+ for lope effect
+	d.ghostCamIdleBaseDuty = 30;     // reasonable open-loop starting point
+	d.ghostCamIntakeCamAngle = 0.0f; // no overlap until user tunes
+	d.ghostCamExhaustCamAngle = 0.0f;
+	d.ghostCamTimingPid_pFactor  = 0.1f;
+	d.ghostCamTimingPid_iFactor  = 0;
+	d.ghostCamTimingPid_dFactor  = 0;
+	d.ghostCamTimingPid_minValue = -10; // max retard
+	d.ghostCamTimingPid_maxValue = 10;  // max advance
 
 	// Rolling Launch Control — disabled by default; sane gates so it is usable once enabled.
 	d.rollingLaunchEnabled        = false;

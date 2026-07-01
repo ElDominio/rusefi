@@ -57,6 +57,17 @@ IIdleController::TargetInfo IdleController::getTargetRpm(float clt) {
  	idleTarget = target;
 	idleEntryRpm = entryRpm;
 	idleExitRpm = exitRpm;
+
+#if EFI_GHOST_CAM
+	if (engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam) {
+		float ghostRpm = static_cast<float>(getCustomPage()->ghostCamIdleRpm);
+		idleTarget = ghostRpm;
+		idleEntryRpm = ghostRpm + rpmUpperLimit;
+		idleExitRpm = ghostRpm + 1.5f * rpmUpperLimit;
+		return { ghostRpm, ghostRpm + rpmUpperLimit, ghostRpm + 1.5f * rpmUpperLimit };
+	}
+#endif // EFI_GHOST_CAM
+
  	return { target, entryRpm, exitRpm };
 }
 
@@ -321,7 +332,14 @@ percent_t IdleController::getOpenLoop(Phase phase, float rpm, float clt, SensorR
 		return running;
 	}
 
-	// Air amount table enabled: interpolate between cranking duty and running over the crank taper.
+	// When RPM flare is also enabled, cranking air becomes a fading additive offset on top of the running
+	// open loop, so the extra air decays in sync with the RPM target adder from the flare.
+	if (engineConfiguration->crankingIdleRpmFlareEnabled) {
+		float crankingAdder = interpolateClamped(0, getCrankingOpenLoop(clt), 1, 0.0f, crankingTaperFraction);
+		return clampPercentValue(running + crankingAdder);
+	}
+
+	// Standard mode: blend from cranking duty to running over the crank taper.
 	// This clamps once you fall off the end, so no explicit check for >1 required.
 	return interpolateClamped(0, getCrankingOpenLoop(clt), 1, running, crankingTaperFraction);
 }
@@ -513,6 +531,29 @@ float IdleController::getIdlePosition(float rpm) {
 
 		m_lastPhase = phase;
 
+#if EFI_GHOST_CAM
+		{
+			bool ghostCamActive = engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam;
+			if (m_lastGhostCamActive && !ghostCamActive) {
+				// Ghost cam deactivated: reset CLID integrator and restore normal timing PID config.
+				getIdlePid()->reset();
+				m_timingPid.initPidClass(&engineConfiguration->idleTimingPid);
+			} else if (!m_lastGhostCamActive && ghostCamActive) {
+				// Ghost cam activated: build pid_s from individual page-6 fields and switch.
+				auto* p = getCustomPage();
+				m_ghostCamTimingPidConfig.pFactor  = p->ghostCamTimingPid_pFactor;
+				m_ghostCamTimingPidConfig.iFactor  = p->ghostCamTimingPid_iFactor;
+				m_ghostCamTimingPidConfig.dFactor  = p->ghostCamTimingPid_dFactor;
+				m_ghostCamTimingPidConfig.minValue = p->ghostCamTimingPid_minValue;
+				m_ghostCamTimingPidConfig.maxValue = p->ghostCamTimingPid_maxValue;
+				m_ghostCamTimingPidConfig.offset   = 0;
+				m_ghostCamTimingPidConfig.periodMs = 0;
+				m_timingPid.initPidClass(&m_ghostCamTimingPidConfig);
+			}
+			m_lastGhostCamActive = ghostCamActive;
+		}
+#endif // EFI_GHOST_CAM
+
 		// CLT-based RPM adder during cranking, tapered to zero as crankingTaper → 1.
 		// Use targetRpm.ClosedLoopTarget (fresh from getTargetRpm() this call) as the base so
 		// the adder is not accumulated across iterations via m_lastTargetRpm.
@@ -544,6 +585,14 @@ float IdleController::getIdlePosition(float rpm) {
 			// Always apply open loop correction
 		percent_t iacPosition = getOpenLoop(phase, rpm, clt, tps, crankingTaper);
 			baseIdlePosition = iacPosition;
+
+#if EFI_GHOST_CAM
+		if (m_lastGhostCamActive && phase == Phase::Idling) {
+			iacPosition = getCustomPage()->ghostCamIdleBaseDuty;
+			baseIdlePosition = iacPosition;
+		}
+#endif // EFI_GHOST_CAM
+
 			// Force closed loop operation for modeled flow
 			auto idleMode = useModeledFlow ? IM_AUTO : engineConfiguration->idleMode;
 

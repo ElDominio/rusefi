@@ -24,6 +24,8 @@ struct_no_prefix engine_state_machine_state_s
 	bit engineSmIsQuickWarmup;Engine SM: Quick Warmup active
 	bit engineSmIsAccelerating;Engine SM: Accelerating
 	bit engineSmIsDecelerating;Engine SM: Decelerating
+	bit engineSmIsGhostCam;Engine SM: Ghost Cam active
+	bit engineSmIsSportPedal;Engine SM: Sport Pedal active
 
 	uint8_t engineSmCurrentState;Engine SM: primary state
 

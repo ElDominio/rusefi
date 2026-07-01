@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "custom_page.h"
 #include "engine_state_machine.h"
+#include "electronic_throttle.h"
 #include "malfunction_central.h"
 #include "dfco.h"
 #include "exhaust_cutout.h"
@@ -102,6 +103,13 @@ void EngineStateMachine::onSlowCallback() {
 	// this cycle. Depends on m_currentState (set above) and engineSmIsLimp (limp wins).
 	updateEcoMode(m_currentState);
 
+	// Ghost Cam overlay — idle-only manual lope effect via switch or Lua gauge.
+	// Must run after engineSmIsIdle and engineSmIsLimp are set.
+	updateGhostCam();
+
+	// Sport Pedal overlay — ETB pedal-to-throttle ratio shaping via switch or Lua gauge.
+	updateSportPedal();
+
 	// Temperature overlay — three mutually-exclusive CLT bands published as bits.
 	// Independent of all other state; falls back to Operating when no CLT sensor is valid.
 	updateTempOverlay();
@@ -122,6 +130,8 @@ void EngineStateMachine::onSlowCallback() {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::LaunchControl);
 	} else if (engineSmIsEcoMode) {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Eco);
+	} else if (engineSmIsGhostCam) {
+		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::GhostCam);
 	}
 
 	updatePopsAndBangs(engineSmIsOverrun);
@@ -220,6 +230,68 @@ bool EngineStateMachine::isEcoModeSwitchAsserted() const {
 bool EngineStateMachine::isEcoModeInhibited() const {
 	return getCustomPage()->ecoModeSwitchMode == eco_mode_switch_mode_e::Inhibit
 		&& isEcoModeSwitchAsserted();
+}
+
+void EngineStateMachine::updateGhostCam() {
+#if EFI_GHOST_CAM
+	// Requires idle state and non-limp; feature must be enabled.
+	if (!getCustomPage()->ghostCamEnabled || !engineSmIsIdle || engineSmIsLimp) {
+		engineSmIsGhostCam = false;
+		return;
+	}
+
+	// CLT gate: don't engage below minimum coolant temperature.
+	auto clt = Sensor::get(SensorType::Clt);
+	if (clt && clt.Value < static_cast<float>(getCustomPage()->ghostCamCltMin)) {
+		engineSmIsGhostCam = false;
+		return;
+	}
+
+	// Activation: either pin or Lua gauge, selected by ghostCamActivationSource (0=Pin, 1=Gauge).
+	if (getCustomPage()->ghostCamActivationSource == 0) {
+		bool switchAsserted = false;
+#if !EFI_UNIT_TEST
+		const switch_input_pin_e pin = getCustomPage()->ghostCamActivatePin;
+		if (isBrainPinValid(pin)) {
+			switchAsserted = efiReadPin(pin, getCustomPage()->ghostCamActivatePinMode);
+		}
+#endif
+		engineSmIsGhostCam = switchAsserted;
+	} else {
+		bool gaugeAsserted = false;
+		SensorType gaugeType = SensorType::LuaGauge1;
+		switch (getCustomPage()->ghostCamLuaGauge) {
+			case LUA_GAUGE_2: gaugeType = SensorType::LuaGauge2; break;
+			case LUA_GAUGE_3: gaugeType = SensorType::LuaGauge3; break;
+			case LUA_GAUGE_4: gaugeType = SensorType::LuaGauge4; break;
+			case LUA_GAUGE_5: gaugeType = SensorType::LuaGauge5; break;
+			case LUA_GAUGE_6: gaugeType = SensorType::LuaGauge6; break;
+			case LUA_GAUGE_7: gaugeType = SensorType::LuaGauge7; break;
+			case LUA_GAUGE_8: gaugeType = SensorType::LuaGauge8; break;
+			default: break;
+		}
+		const auto gaugeResult = Sensor::get(gaugeType);
+		if (gaugeResult.Valid) {
+			const float value = gaugeResult.Value;
+			const float threshold = getCustomPage()->ghostCamLuaGaugeThreshold;
+			switch (getCustomPage()->ghostCamLuaGaugeMeaning) {
+				case LUA_GAUGE_LOWER_BOUND: gaugeAsserted = (value >= threshold); break;
+				case LUA_GAUGE_UPPER_BOUND: gaugeAsserted = (value <= threshold); break;
+			}
+		}
+		engineSmIsGhostCam = gaugeAsserted;
+	}
+#else // !EFI_GHOST_CAM
+	engineSmIsGhostCam = false;
+#endif // EFI_GHOST_CAM
+}
+
+void EngineStateMachine::updateSportPedal() {
+#if EFI_SPORT_PEDAL
+	engineSmIsSportPedal = isSportPedalActive();
+#else
+	engineSmIsSportPedal = false;
+#endif
 }
 
 void EngineStateMachine::updatePopsAndBangs(bool isOverrun) {
@@ -783,6 +855,8 @@ void EngineStateMachine::reportLimpCondition() { /* state machine compiled out �
 void EngineStateMachine::onSlowCallback() { }
 void EngineStateMachine::updatePopsAndBangs(bool /*isOverrun*/) { engineSmIsPopsAndBangs = false; }
 void EngineStateMachine::updateEcoMode(EngineStateMachineState /*currentState*/) { engineSmIsEcoMode = false; }
+void EngineStateMachine::updateGhostCam() { engineSmIsGhostCam = false; }
+void EngineStateMachine::updateSportPedal() { engineSmIsSportPedal = false; }
 void EngineStateMachine::updateTempOverlay() { engineSmIsCold = false; engineSmIsOperating = false; engineSmIsHot = false; }float EngineStateMachine::getPopsAndBangsSparkSkipRatio() { engineSmPnbSparkCut = false; return 0.0f; }
 
 #endif // EFI_ENGINE_STATE_MACHINE
