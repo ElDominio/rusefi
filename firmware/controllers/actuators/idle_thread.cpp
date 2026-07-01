@@ -306,7 +306,8 @@ percent_t IdleController::getOpenLoop(Phase phase, float rpm, float clt, SensorR
 	isCranking = phase == Phase::Cranking;
 	isIdleCoasting = phase == Phase::Coasting || (phase == Phase::Running && engineConfiguration->modeledFlowIdle);
 
-	if (isCranking && engineConfiguration->crankingAirAmountEnabled) {
+	// During cranking with air amount table enabled — but not when RPM flare mode uses cranking air as an adder.
+	if (isCranking && engineConfiguration->crankingAirAmountEnabled && !engineConfiguration->crankingIdleRpmFlareEnabled) {
 		return getCrankingOpenLoop(clt);
 	}
 

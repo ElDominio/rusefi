@@ -398,6 +398,34 @@ TEST(idle_v2, crankingRpmFlare_closedLoopStillOffDuringCranking) {
 	EXPECT_FLOAT_EQ(0, dut.getClosedLoop(ICP::CrankToIdleTaper, 0, 1000, 900));
 }
 
+TEST(idle_v2, crankingRpmFlare_airAmountIsAdder) {
+	// When both RPM flare and cranking air amount are enabled, cranking air becomes an additive
+	// offset on top of the running open-loop duty that fades out with crankingTaperFraction.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	StrictMock<MockOpenLoopIdler> dut;
+
+	engineConfiguration->crankingIdleRpmFlareEnabled = true;
+	engineConfiguration->crankingAirAmountEnabled = true;
+
+	// running open-loop = 25%, cranking air adder = 50%
+	EXPECT_CALL(dut, getRunningOpenLoop(ICP::Cranking, 0, 30, SensorResult(0))).WillRepeatedly(Return(25));
+	EXPECT_CALL(dut, getRunningOpenLoop(ICP::CrankToIdleTaper, 0, 30, SensorResult(0))).WillRepeatedly(Return(25));
+	EXPECT_CALL(dut, getCrankingOpenLoop(30)).WillRepeatedly(Return(50));
+
+	// taper=0 (pure cranking): running + full cranking adder = 25 + 50 = 75
+	EXPECT_FLOAT_EQ(75, dut.getOpenLoop(ICP::Cranking, 0, 30, 0, 0));
+	EXPECT_FLOAT_EQ(75, dut.getOpenLoop(ICP::CrankToIdleTaper, 0, 30, 0, 0));
+
+	// taper=0.5: running + half cranking adder = 25 + 25 = 50
+	EXPECT_FLOAT_EQ(50, dut.getOpenLoop(ICP::CrankToIdleTaper, 0, 30, 0, 0.5f));
+
+	// taper=1.0: adder fully decayed, just running = 25
+	EXPECT_FLOAT_EQ(25, dut.getOpenLoop(ICP::CrankToIdleTaper, 0, 30, 0, 1.0f));
+
+	// taper=2.0: clamped, still just running = 25
+	EXPECT_FLOAT_EQ(25, dut.getOpenLoop(ICP::CrankToIdleTaper, 0, 30, 0, 2.0f));
+}
+
 TEST(idle_v2, openLoopCoastingTable) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
