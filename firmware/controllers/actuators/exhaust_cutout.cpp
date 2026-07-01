@@ -117,21 +117,29 @@ bool ExhaustCutoutController::getInputHigh() const {
 bool ExhaustCutoutController::evaluateAutoTrigger() {
 	auto& cfg = *getCustomPage();
 
+	bool rpmEnabled = cfg.exhaustCutoutOpenRpm > 0;
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
-	isTriggerRpm = (cfg.exhaustCutoutOpenRpm > 0) && (rpm > cfg.exhaustCutoutOpenRpm);
+	isTriggerRpm = rpmEnabled && (rpm > cfg.exhaustCutoutOpenRpm);
 
+	bool tpsEnabled = cfg.exhaustCutoutOpenTps > 0;
 	float tps = Sensor::getOrZero(SensorType::Tps1);
-	if (cfg.exhaustCutoutOpenTps > 0 && tps > cfg.exhaustCutoutOpenTps) {
+	if (tpsEnabled && tps > cfg.exhaustCutoutOpenTps) {
 		isTriggerTps = m_tpsHoldTimer.hasElapsedSec(cfg.exhaustCutoutTpsDelayS);
 	} else {
 		m_tpsHoldTimer.reset();
 		isTriggerTps = false;
 	}
 
+	bool mapEnabled = cfg.exhaustCutoutOpenMapKpa > 0;
 	float map = Sensor::getOrZero(SensorType::MapSlow);
-	isTriggerMap = (cfg.exhaustCutoutOpenMapKpa > 0) && (map > cfg.exhaustCutoutOpenMapKpa);
+	isTriggerMap = mapEnabled && (map > cfg.exhaustCutoutOpenMapKpa);
 
-	bool shouldBeOpen = isTriggerRpm || isTriggerTps || isTriggerMap;
+	// AND across whichever thresholds are actually configured (>0); a disabled (0)
+	// threshold is excluded rather than forcing shouldBeOpen to false.
+	bool shouldBeOpen = (rpmEnabled || tpsEnabled || mapEnabled)
+		&& (!rpmEnabled || isTriggerRpm)
+		&& (!tpsEnabled || isTriggerTps)
+		&& (!mapEnabled || isTriggerMap);
 
 	if (shouldBeOpen) {
 		m_closeDelayTimer.reset();

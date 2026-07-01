@@ -57,16 +57,24 @@ void ImrcController::onConfigurationChange(engine_configuration_s const* /*previ
 bool ImrcController::evaluateTrigger() {
 	auto& cfg = *getCustomPage();
 
+	bool rpmEnabled = cfg.imrcRpmThreshold > 0;
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
-	imrcTriggerRpm = (cfg.imrcRpmThreshold > 0) && (rpm > cfg.imrcRpmThreshold);
+	imrcTriggerRpm = rpmEnabled && (rpm > cfg.imrcRpmThreshold);
 
+	bool tpsEnabled = cfg.imrcTpsThreshold > 0;
 	float tps = Sensor::getOrZero(SensorType::Tps1);
-	imrcTriggerTps = (cfg.imrcTpsThreshold > 0) && (tps > cfg.imrcTpsThreshold);
+	imrcTriggerTps = tpsEnabled && (tps > cfg.imrcTpsThreshold);
 
+	bool mapEnabled = cfg.imrcMapKpaThreshold > 0;
 	float map = Sensor::getOrZero(SensorType::MapSlow);
-	imrcTriggerMap = (cfg.imrcMapKpaThreshold > 0) && (map > cfg.imrcMapKpaThreshold);
+	imrcTriggerMap = mapEnabled && (map > cfg.imrcMapKpaThreshold);
 
-	return imrcTriggerRpm || imrcTriggerTps || imrcTriggerMap;
+	// AND across whichever thresholds are actually configured (>0); a disabled (0)
+	// threshold is excluded rather than forcing the result to false.
+	return (rpmEnabled || tpsEnabled || mapEnabled)
+		&& (!rpmEnabled || imrcTriggerRpm)
+		&& (!tpsEnabled || imrcTriggerTps)
+		&& (!mapEnabled || imrcTriggerMap);
 }
 
 void ImrcController::setState(ImrcRunnerState newState) {
