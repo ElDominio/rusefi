@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 13;
+static constexpr uint32_t PAGE6_DATA_VERSION = 15;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -233,6 +233,61 @@ void customPageSetDefaults() {
 	d.ghostCamTimingPid_dFactor  = 0;
 	d.ghostCamTimingPid_minValue = -10; // max retard
 	d.ghostCamTimingPid_maxValue = 10;  // max advance
+
+	// CLT Estimator (competing-rate radiator model estimating CLT from CHT) — disabled by
+	// default. All curve/valve values below are PLACEHOLDER physically-motivated calibration,
+	// NOT bench-validated. Re-validate on a bench/real vehicle before treating these as real
+	// defaults. See cht_clt_estimator.h.
+	d.cltFromCht = false;
+	d.cltEstThermostatTemp = 88;    // typical ~190F thermostat
+	d.cltEstFallbackClt = 20;       // reported CLT if CHT itself is invalid
+	d.cltEstRadiatorFailTemp = 126; // above this CHT, assume zero radiator airflow and lock CLT=CHT
+	d.cltEstThermostatLag = 15;     // wax-pellet valve response lag
+	d.cltEstCoolantLag = 5;         // coolant thermal-mass/circulation lag on airflow's effect
+	d.cltEstFan1Cfm = 400;
+	d.cltEstFan2Cfm = 400;
+	d.cltEstThermostatSpread = 8;   // deg C from closed to fully open
+
+	// CHT heatload factor: how fast coolant trends toward CHT, rising as the head gets hotter.
+	{
+		static const int16_t chtBins[CLT_EST_CURVE_SIZE] = { 40, 60, 80, 95, 105, 115, 125, 140 };
+		static const float chtHeatFactor[CLT_EST_CURVE_SIZE] = { 0.020f, 0.023f, 0.027f, 0.030f, 0.033f, 0.036f, 0.040f, 0.045f };
+		for (size_t i = 0; i < efi::size(d.cltEstChtBins); i++) {
+			d.cltEstChtBins[i] = chtBins[i];
+			d.cltEstChtHeatFactor[i] = chtHeatFactor[i];
+		}
+	}
+
+	// Radiator rejection vs airflow: near-stalled rejection at zero airflow, ramping up sharply
+	// with real airflow (applied once the thermostat valve has opened).
+	{
+		static const int16_t airflowBins[CLT_EST_CURVE_SIZE] = { 0, 100, 200, 300, 400, 550, 700, 900 };
+		static const float rejectionFactor[CLT_EST_CURVE_SIZE] = { 0.0025f, 0.006f, 0.010f, 0.014f, 0.018f, 0.022f, 0.026f, 0.030f };
+		for (size_t i = 0; i < efi::size(d.cltEstAirflowBins); i++) {
+			d.cltEstAirflowBins[i] = airflowBins[i];
+			d.cltEstRejectionFactor[i] = rejectionFactor[i];
+		}
+	}
+
+	// VSS -> ram-air CFM: non-degenerate out of the box so the model is usable without retuning.
+	{
+		static const int16_t vssBins[CLT_EST_CURVE_SIZE] = { 0, 10, 20, 40, 60, 90, 130, 180 };
+		static const float vssAirflow[CLT_EST_CURVE_SIZE] = { 0, 80, 160, 260, 350, 460, 580, 700 };
+		for (size_t i = 0; i < efi::size(d.cltEstVssBins); i++) {
+			d.cltEstVssBins[i] = vssBins[i];
+			d.cltEstVssAirflow[i] = vssAirflow[i];
+		}
+	}
+
+	// IAT/AAT rejection multiplier: default flat (1.0, no-op) — leave the shape/direction of
+	// hot-underhood-air degradation to user tuning rather than guessing it.
+	{
+		static const int16_t iatBins[CLT_EST_CURVE_SIZE] = { -20, 0, 20, 40, 60, 80, 100, 120 };
+		for (size_t i = 0; i < efi::size(d.cltEstIatBins); i++) {
+			d.cltEstIatBins[i] = iatBins[i];
+			d.cltEstIatFactor[i] = 1.0f;
+		}
+	}
 
 	// Rolling Launch Control — disabled by default; sane gates so it is usable once enabled.
 	d.rollingLaunchEnabled        = false;

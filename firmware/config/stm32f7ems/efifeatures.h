@@ -73,6 +73,11 @@
 #define EFI_GHOST_CAM TRUE
 #endif
 
+// CLT Estimator (estimates coolant temp from CHT via a competing-rate radiator model)
+#ifndef EFI_CHT_CLT_ESTIMATOR
+#define EFI_CHT_CLT_ESTIMATOR TRUE
+#endif
+
 // Injector Small Pulse % Correction Curve (nonlinear flow correction via user-supplied PW vs % curve)
 #ifndef EFI_INJ_PERCENT_CURVE
 #define EFI_INJ_PERCENT_CURVE TRUE

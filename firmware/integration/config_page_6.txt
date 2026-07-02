@@ -17,6 +17,7 @@
 #define WOT_ENRICHMENT_SIZE 8
 #define SPORT_PEDAL_SIZE 8
 #define INJ_CURVE_SIZE 12
+#define CLT_EST_CURVE_SIZE 8
 
 ! Custom types re-declared for the isolated page generator (see config_page_4.txt header).
 ! The C++ enums themselves are defined in headers (e.g. rusefi_enums.h) and shared;
@@ -550,5 +551,38 @@ struct_no_prefix page6_s
 	float ghostCamTimingPid_dFactor;Ghost Cam: idle ignition timing PID derivative gain.;"", 1, 0, -10000, 10000, 4
 	int16_t ghostCamTimingPid_minValue;Ghost Cam: idle ignition timing PID minimum output (max retard, degrees).;"deg", 1, 0, -30, 0, 0
 	int16_t ghostCamTimingPid_maxValue;Ghost Cam: idle ignition timing PID maximum output (max advance, degrees).;"deg", 1, 0, 0, 30, 0
+
+	! --- CLT Estimator (EFI_CHT_CLT_ESTIMATOR) ---
+	! Competing-rate radiator model estimating coolant temp from CHT: CHT pulls the estimate up,
+	! radiator airflow pulls it down toward the thermostat temperature. A lagged thermostat valve
+	! (cubic function of CLT vs. thermostat temp, shaped by "spread" and delayed by "lag") reproduces
+	! the real-world crossing/dip/recover hunting behavior around the setpoint instead of a smooth
+	! monotonic approach. Coolant lag additionally delays how fast a change in airflow affects the
+	! heat-rejection rate, modeling the coolant's own thermal mass/circulation delay. See
+	! controllers/sensors/cht_clt_estimator.h.
+	bit cltFromCht,"yes","no";Use CHT sensor to estimate CLT via a competing-rate thermal model. Disable if a real CLT sensor is wired.
+
+	int16_t cltEstThermostatTemp;CLT estimation: thermostat opening/regulation temperature. Coolant trends toward this value when radiator airflow dominates.;"deg C", 1, 0, 40, 120, 0
+	int16_t cltEstFallbackClt;Fallback CLT value used when the CHT sensor reads invalid.;"deg C", 1, 0, -40, 200, 0
+	int16_t cltEstRadiatorFailTemp;CLT estimation: CHT threshold above which the radiator is assumed to provide no cooling (boil-over / coolant loss). At or above this CHT, estimated CLT locks directly to CHT.;"deg C", 1, 0, 40, 200, 0
+
+	uint16_t cltEstThermostatLag;Thermostat lag (s). How long the physical thermostat valve takes to catch up to its target position. Larger values produce a more pronounced overshoot/dip/recover "hunt" around the thermostat temperature as CLT crosses it -- zero means the valve reacts instantly.;"s", 1, 0, 0, 120, 0
+	uint16_t cltEstCoolantLag;Coolant lag (s). How long a change in radiator airflow (fan on/off, ram-air) takes to actually affect the coolant's heat-rejection rate, due to the coolant's own thermal mass and circulation time. Distinct from the thermostat valve's own mechanical lag above -- zero means airflow acts on the rejection rate instantly.;"s", 1, 0, 0, 120, 0
+
+	float cltEstFan1Cfm;CLT estimation: airflow contributed by Fan 1 while running. PWM duty is not modeled, only relay on/off state.;"CFM", 1, 0, 0, 3000, 0
+	float cltEstFan2Cfm;CLT estimation: airflow contributed by Fan 2 while running. PWM duty is not modeled, only relay on/off state.;"CFM", 1, 0, 0, 3000, 0
+	float cltEstThermostatSpread;CLT estimation: thermostat valve opening spread. Degrees above the thermostat temperature over which the valve's target position goes from closed to fully open (cubic response -- barely moving near the setpoint, opening/closing rapidly away from it).;"deg C", 1, 0, 1, 60, 1
+
+	int16_t[CLT_EST_CURVE_SIZE] cltEstChtBins;CLT estimation: CHT temperature bins for the heatload-factor curve.;"deg C", 1, 0, -40, 200, 0
+	float[CLT_EST_CURVE_SIZE] cltEstChtHeatFactor;CLT estimation: CHT-to-CLT heat-transfer rate factor. Higher means coolant trends toward CHT faster.;"1/s", 1, 0, 0, 1, 4
+
+	int16_t[CLT_EST_CURVE_SIZE] cltEstAirflowBins;CLT estimation: radiator airflow bins for the heat-rejection curve.;"CFM", 1, 0, 0, 3000, 0
+	float[CLT_EST_CURVE_SIZE] cltEstRejectionFactor;CLT estimation: radiator heat-rejection rate factor vs airflow (applied once the thermostat valve is open). Higher means coolant trends toward the thermostat temperature faster.;"1/s", 1, 0, 0, 1, 4
+
+	int16_t[CLT_EST_CURVE_SIZE] cltEstVssBins;CLT estimation: vehicle speed bins for the ram-air curve.;"kph", 1, 0, 0, 400, 0
+	float[CLT_EST_CURVE_SIZE] cltEstVssAirflow;CLT estimation: radiator ram-air airflow contributed by vehicle speed.;"CFM", 1, 0, 0, 3000, 0
+
+	int16_t[CLT_EST_CURVE_SIZE] cltEstIatBins;CLT estimation: IAT/AAT bins for the rejection-rate multiplier curve.;"deg C", 1, 0, -40, 200, 0
+	float[CLT_EST_CURVE_SIZE] cltEstIatFactor;CLT estimation: multiplier applied to the radiator rejection rate based on IAT/AAT. Colder incoming air rejects heat faster.;"ratio", 1, 0, 0, 4, 3
 
 end_struct

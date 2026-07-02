@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260630
+#define FLASH_DATA_VERSION 260701
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -1083,8 +1083,7 @@ bit canBroadcastUseChannelTwo,"second","first"
 bit verboseCan2,"Print all","Do not print";Print incoming and outgoing second bus CAN messages in rusEFI console
 ! bit 30
 bit disableLaunchWithClutchUp,"yes","no";When Launch Control is NOT activated by Clutch Up, use the Clutch Up switch to positively confirm the clutch has been released and disable launch.
-! bit 31
-bit cltFromCht,"yes","no";Use CHT sensor to estimate CLT via first-order thermal model. Disable if a real CLT sensor is wired.
+! bit 31 was cltFromCht, moved to TS page 6 (page6_s).
 
 
 	dc_io[ETB_COUNT iterate] etbIo
@@ -1747,13 +1746,10 @@ pin_input_mode_e[LUA_DIGITAL_INPUT_COUNT iterate] luaDigitalInputPinModes;
 	ThermistorConf compressorDischargeTemperature
 	ThermistorConf chtSensor;Cylinder head temperature (CHT) sensor
 
-	float chtEstK0;CHT-to-CLT estimation: base delta. The head runs this many deg C hotter than coolant at zero load regardless of temperature.;"deg C", 1, 0, 0, 200, 1
-	float chtEstK1;CHT-to-CLT estimation: CHT coefficient. This fraction of the current CHT reading is added to the delta (hotter head = harder to reject heat).;"ratio", 1, 0, 0, 1, 3
-	float chtEstK2;CHT-to-CLT estimation: engine load coefficient. How many additional deg C of delta per percent of engine load.;"deg C/%", 1, 0, 0, 5, 3
-	float chtEstTauHeat;CHT-to-CLT estimation: heating time factor in seconds. Short blips barely register while sustained load integrates fully.;"s", 1, 0, 0, 300, 0
-	float chtEstTauCool;CHT-to-CLT estimation: cooling time factor in seconds. How long it takes for the delta to decay after load drops. Usually longer than heating because the head soaks heat after load disappears.;"s", 1, 0, 0, 600, 0
-	int16_t chtEstFallbackClt;Fallback CLT value used when the CHT sensor reads invalid.;"deg C", 1, 0, -40, 200, 0
-	int16_t pad_cht_reserved;;
+	! CLT Estimator config (cltEstThermostatTemp, cltEstFan1/2Cfm, cltEstFallbackClt,
+	! cltEstRadiatorFailTemp, cltEstChtBins/HeatFactor, cltEstAirflowBins/RejectionFactor,
+	! cltEstVssBins/Airflow, cltEstIatBins/Factor, cltEstThermostatSpread, cltEstThermostatLag)
+	! moved to TS page 6 (page6_s).
 
 	float eotEstK0;EOT-from-CHT/IAT estimation: base delta. The head/block runs this many deg C hotter than the oil at zero IAT influence.;"deg C", 1, 0, 0, 200, 1
 	float eotEstK1;EOT-from-CHT/IAT estimation: CHT coefficient. This fraction of the current CHT reading is added to the delta (hotter head = harder to reject heat into the oil).;"ratio", 1, 0, 0, 1, 3

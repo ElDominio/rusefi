@@ -497,16 +497,6 @@ static void setDefaultEngineConfiguration() {
 
     setCommonNTCSensorParameters(&engineConfiguration->iat);
 
-	// CHT-to-CLT estimation (cltFromCht) — disabled by default; bench-validated calibration
-	// (2026-06-30) keeps the CHT/CLT gap in a realistic ~10-15C range. See cht_clt_estimator.h.
-	engineConfiguration->cltFromCht = false;
-	engineConfiguration->chtEstK0 = 10;        // head runs ~10C hotter than coolant at idle/no load
-	engineConfiguration->chtEstK1 = 0.025f;    // only 2.5% of CHT feeds back into the delta
-	engineConfiguration->chtEstK2 = 0.01f;     // load barely widens the gap
-	engineConfiguration->chtEstTauHeat = 35;   // gap opens up over ~35s under load
-	engineConfiguration->chtEstTauCool = 350;  // gap closes much more slowly once load drops (soak-back)
-	engineConfiguration->chtEstFallbackClt = 20; // reported CLT if CHT itself is invalid
-
 	// CHT-to-EOT estimation (eotFromIatCht) — disabled by default; placeholder physically-motivated
 	// calibration, NOT bench-validated like the CHT-to-CLT estimator above. See eot_estimator.h.
 	engineConfiguration->eotFromIatCht = false;

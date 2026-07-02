@@ -379,8 +379,9 @@ static void updateTempSensors() {
 	engine->outputChannels.rawCht = Sensor::getRaw(SensorType::CylinderHeadTemperature);
 
 	const auto& chtEst = getChtCltEstimator();
-	engine->outputChannels.chtEstDeltaTActual = chtEst.deltaTActual;
-	engine->outputChannels.chtEstDeltaTTarget = chtEst.deltaTTarget;
+	engine->outputChannels.cltEstAirflow = chtEst.airflow;
+	engine->outputChannels.cltEstRejectionRate = chtEst.rejectionRate;
+	engine->outputChannels.cltEstValvePos = chtEst.valvePos;
 }
 
 void updateUnfilteredRawPedal();

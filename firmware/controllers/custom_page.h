@@ -15,6 +15,10 @@
 // Injector Small Pulse % Correction Curve length. Must match INJ_CURVE_SIZE in config_page_6.txt.
 #define INJ_CURVE_SIZE 12
 
+// CLT Estimator curve length (CHT/airflow/VSS/IAT curves). Must match CLT_EST_CURVE_SIZE in
+// config_page_6.txt and be visible before the generated struct below uses it.
+#define CLT_EST_CURVE_SIZE 8
+
 #include "page_6_generated.h"
 
 page6_s* getCustomPage();

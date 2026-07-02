@@ -6,6 +6,7 @@
 #include "thermistor_func.h"
 #include "cht_clt_estimator.h"
 #include "eot_estimator.h"
+#include "custom_page.h"
 
 // Each one could be either linear or thermistor
 struct FuncPair {
@@ -95,7 +96,7 @@ static void configureTempSensor(
 void initThermistors() {
 	if (!engineConfiguration->consumeObdSensors) {
 		// When cltFromCht is enabled, the estimator registers a StoredValueSensor as Clt instead
-		if (!engineConfiguration->cltFromCht) {
+		if (!getCustomPage()->cltFromCht) {
 			configureTempSensor(
 					"clt",
 					clt,
@@ -142,7 +143,7 @@ void initThermistors() {
 			engineConfiguration->useLinearChtSensor,
 			engineConfiguration->chtSensorPulldown);
 
-	if (engineConfiguration->cltFromCht) {
+	if (getCustomPage()->cltFromCht) {
 		initChtCltEstimator();
 	}
 
@@ -152,7 +153,7 @@ void initThermistors() {
 }
 
 void deinitThermistors() {
-	if (!engineConfiguration->cltFromCht) {
+	if (!getCustomPage()->cltFromCht) {
 		AdcSubscription::UnsubscribeSensor(clt, engineConfiguration->clt.adcChannel);
 	}
 	AdcSubscription::UnsubscribeSensor(iat, engineConfiguration->iat.adcChannel);
