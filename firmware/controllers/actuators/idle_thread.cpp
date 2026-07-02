@@ -159,6 +159,14 @@ float IdleController::getOffIdleAdder(Phase phase, float rpm) {
 		return m_offIdleAdderRpm = 0;
 	}
 
+	// Cranking always aborts the adder, even if a prior Running/Coasting cycle left it
+	// Armed/Stabilizing/Waiting/Decaying (e.g. the engine stalled and is being re-cranked).
+	// The adder must only ever engage via Coasting (or Running), never carry over into cranking.
+	if (phase == Phase::Cranking) {
+		m_offIdlePhase = OffIdleAdderPhase::Inactive;
+		return m_offIdleAdderRpm = 0;
+	}
+
 	const float maxAdder  = getCustomPage()->offIdleRpmAdder;
 	const float stability = getCustomPage()->offIdleRpmStabilityThreshold;
 	const float waitTime  = getCustomPage()->offIdleWaitTime;

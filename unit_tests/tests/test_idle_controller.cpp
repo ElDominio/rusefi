@@ -814,3 +814,28 @@ TEST(idle_v2, offIdleAdder_inactiveWhenCranking) {
 	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Cranking, 400));
 	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Cranking, 400));
 }
+
+TEST(idle_v2, offIdleAdder_abortsOnRecrankFromAnyState) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	setupOffIdleAdder(200, 100, 0.0f, 2.0f); // no wait time
+
+	// Armed by Running, then engine stalls and is re-cranked mid-cycle: must not
+	// carry the adder into Cranking.
+	EXPECT_FLOAT_EQ(200, dut.getOffIdleAdder(ICP::Running, 2000));
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Cranking, 300));
+
+	// Get all the way into Decaying, then stall/re-crank: must still abort to zero.
+	dut.getOffIdleAdder(ICP::Running, 2000);
+	dut.getOffIdleAdder(ICP::Idling, 1000);
+	dut.getOffIdleAdder(ICP::Idling, 1000); // transitions to Waiting
+	dut.getOffIdleAdder(ICP::Idling, 1000); // wait=0 -> transitions to Decaying
+	advanceTimeUs(1'000'000); // decay is half-way
+	EXPECT_NEAR(100, dut.getOffIdleAdder(ICP::Idling, 1000), 10);
+
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Cranking, 300));
+
+	// Once cranking has reset the adder, resuming Idling must not resurrect the
+	// stale decay - it should stay off until re-armed via Running/Coasting.
+	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Idling, 1000));
+}
