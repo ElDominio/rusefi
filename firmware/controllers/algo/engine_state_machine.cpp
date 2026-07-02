@@ -503,10 +503,15 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		}
 	}
 
+	auto idlePhase = engine->module<IdleController>()->getCurrentPhase();
+
 	// Sustained acceleration/deceleration — based on the previous tick's RPM rate of change
 	// (m_lastRpmRate, updated by updateShiftAccumulator later this callback; one slow-callback
 	// lag is negligible at ~100 ms). Thresholds of 0 disable the respective state.
-	{
+	// Skipped while the IdleController considers us in closed-loop idle territory: RPM rate
+	// noise from idle hunting or AC/load compensation must not be misread as a driver-initiated
+	// tip-in/tip-out.
+	if (idlePhase != IIdleController::Phase::Idling) {
 		int16_t accelThr = getCustomPage()->smAccelRateThreshold;
 		int16_t decelThr = getCustomPage()->smDecelRateThreshold;
 
@@ -532,8 +537,6 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 	// CrankToIdleTaper → Afterstart (taper table drives duration, CLT-indexed, same as idle control).
 	// Idling → Idle; Coasting → Coasting or Overrun; Running → fall through to Cruising.
 	{
-		auto idlePhase = engine->module<IdleController>()->getCurrentPhase();
-
 		if (idlePhase == IIdleController::Phase::CrankToIdleTaper) {
 			return EngineStateMachineState::Afterstart;
 		}
@@ -563,18 +566,48 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 	return EngineStateMachineState::Cruising;
 }
 
+float EngineStateMachine::recordRpmSampleAndComputeRate(float rpm, efitimems_t nowMs) {
+	if (!m_rpmRateHasAnchor) {
+		m_rpmRateAnchorMs  = nowMs;
+		m_rpmRateAnchorRpm = rpm;
+		m_rpmRateHasAnchor = true;
+		return 0; // just started, no reference sample yet
+	}
+
+	// Floor the window to one slow-callback tick: a window shorter than the sampling cadence
+	// carries no additional information, and this also makes a fresh/reset smRpmRateWindowMs
+	// == 0 (e.g. from an older tune with no saved value) behave identically to the
+	// pre-existing raw-tick calculation.
+	uint16_t windowMs = getCustomPage()->smRpmRateWindowMs;
+	if (windowMs < SLOW_CALLBACK_PERIOD_MS) {
+		windowMs = SLOW_CALLBACK_PERIOD_MS;
+	}
+
+	efitimems_t elapsedMs = nowMs - m_rpmRateAnchorMs;
+	if (elapsedMs < static_cast<efitimems_t>(windowMs)) {
+		// Window hasn't elapsed yet -- hold the last computed rate rather than recomputing
+		// against a partial window, so the value only actually changes at the cadence the user
+		// configured.
+		return m_lastRpmRate;
+	}
+
+	float rate = (rpm - m_rpmRateAnchorRpm) / (elapsedMs / 1000.0f);
+	m_rpmRateAnchorMs  = nowMs;
+	m_rpmRateAnchorRpm = rpm;
+	return rate;
+}
+
 void EngineStateMachine::updateShiftAccumulator(float rpm, float vss, efitimems_t nowMs) {
 	efitimems_t dtMs = nowMs - m_accumulatorLastMs;
-	float prevRpm = m_accumulatorLastRpm;
 	float prevVss = m_accumulatorLastVss;
 	m_accumulatorLastMs  = nowMs;
 	m_accumulatorLastRpm = rpm;
 	m_accumulatorLastVss = vss;
 
-	// Always compute RPM rate for state detection (used by determineState next tick).
-	if (dtMs > 0) {
-		m_lastRpmRate = (rpm - prevRpm) / (dtMs / 1000.0f);
-	}
+	// Always compute RPM rate for state detection (used by determineState next tick), over the
+	// user-configurable window (smRpmRateWindowMs, "RPM/t") rather than a raw single tick.
+	m_lastRpmRate = recordRpmSampleAndComputeRate(rpm, nowMs);
+	engineSmRpmRate = m_lastRpmRate; // live-data visibility
 
 	// Accumulator is frozen while the shift window is open (clutch out).
 	// dtMs == 0 guard covers the first-ever call where we have no previous data.

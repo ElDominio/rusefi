@@ -114,9 +114,24 @@ private:
 	float        m_accumulatorLastRpm   = 0;
 	float        m_accumulatorLastVss   = 0;
 
-	// RPM rate of change (RPM/s) computed each tick and stored for use by determineState()
-	// on the next tick (one slow-callback lag, ~100 ms — acceptable for state detection).
+	// RPM rate of change (RPM/s), recomputed only once every smRpmRateWindowMs (floored to one
+	// slow-callback tick, 50 ms) rather than on every tick -- so the value visibly updates at
+	// the cadence the user configures instead of continuously. Between recomputes this holds
+	// the last computed rate. Stored for use by determineState() on the next tick (one
+	// slow-callback lag on top of the window itself — acceptable for state detection).
 	float        m_lastRpmRate          = 0;
+
+	// Anchor sample (timestamp, RPM) that the next recompute will be measured against.
+	efitimems_t m_rpmRateAnchorMs  = 0;
+	float       m_rpmRateAnchorRpm = 0;
+	bool        m_rpmRateHasAnchor = false;
+
+	// Returns m_lastRpmRate unchanged (held) until at least smRpmRateWindowMs has elapsed since
+	// the last recompute, at which point it computes RPM/s over the *actual* elapsed time since
+	// the anchor sample (not the nominal window, so the result stays exact RPM/s regardless of
+	// tick jitter) and re-anchors on (nowMs, rpm). Returns 0 on the very first-ever call, when
+	// there's no anchor yet.
+	float recordRpmSampleAndComputeRate(float rpm, efitimems_t nowMs);
 
 	void updateTempOverlay();
 

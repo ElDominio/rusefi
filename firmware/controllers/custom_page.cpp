@@ -48,6 +48,7 @@ void customPageSetDefaults() {
 	d.smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
 	d.smAccelRateThreshold = 0;
 	d.smDecelRateThreshold = 0;
+	d.smRpmRateWindowMs    = 100; // 100 ms (2 slow-callback ticks) -- recompute cadence for RPM/t vs. the old raw single-tick behavior
 	d.smRelatchOnClutchDown    = false;
 	d.smShiftLatchTimeMs       = 0;
 	d.smShiftMinVss            = 0;

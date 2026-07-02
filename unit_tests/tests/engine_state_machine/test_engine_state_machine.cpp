@@ -451,7 +451,10 @@ TEST(EngineStateMachine, upshiftDetectedAccumulator) {
 TEST(EngineStateMachine, downshiftDetectedAccumulator) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupShiftDetectionConfig();
-	enterRunning();
+	// Anchor the RPM-rate calc at the ramp's actual starting RPM (4000) -- otherwise the first
+	// quantized recompute would measure against enterRunning()'s default 2000 RPM anchor, a
+	// same-tick discontinuity that doesn't occur with real (continuous) RPM.
+	enterRunning(4000.0f, 0.0f);
 
 	// Falling RPM builds a negative accumulator → downshift confirmed.
 	// TPS=0% ensures tps < coastingFuelCutTps (default 2%) so SM reaches Overrun state.
@@ -533,7 +536,9 @@ TEST(EngineStateMachine, upshiftDetectedRpmMode) {
 TEST(EngineStateMachine, downshiftDetectedRpmMode) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupRpmRateModeConfig();
-	enterRunning();
+	// Anchor the RPM-rate calc at the ramp's actual starting RPM (4000) -- see
+	// downshiftDetectedAccumulator for why.
+	enterRunning(4000.0f, 0.0f);
 
 	// TPS=0% ensures tps < coastingFuelCutTps (default 2%) so SM reaches Overrun state.
 	seedRampedRpm(4000.0f, -100.0f, 20, 0.0f);
@@ -575,6 +580,162 @@ TEST(EngineStateMachine, noShiftBitsWithoutClutchSwitch) {
 
 	EXPECT_FALSE(getSm().engineSmIsUpshifting);
 	EXPECT_FALSE(getSm().engineSmIsDownshifting);
+}
+
+// ---- RPM/t configurable rate window ----
+
+// For a linear RPM ramp, the rate is identical regardless of window length, because the rate
+// calc always divides by the *actual* elapsed time between the two sampled points -- this is
+// what lets smAccelRateThreshold/smDecelRateThreshold stay in RPM/s without re-tuning when the
+// user changes the window.
+TEST(EngineStateMachine, rpmRateWindowInvariantOnLinearRamp) {
+	float shortWindowRate;
+	float longWindowRate;
+	{
+		EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+		setupSmConfig();
+		// The rate calc only runs once a shift-detection direction is configured -- see
+		// updateShiftDetection()'s "no direction configured" early-out.
+		getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+		getCustomPage()->smRpmRateWindowMs = 50; // one tick
+		enterRunning();
+
+		// 100 RPM/tick @ 50 ms/tick == 2000 RPM/s.
+		seedRampedRpm(2000.0f, 100.0f, 10, 50.0f);
+		shortWindowRate = getSm().getLastRpmRate();
+	}
+	{
+		EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+		setupSmConfig();
+		getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+		getCustomPage()->smRpmRateWindowMs = 500; // ten ticks
+		enterRunning();
+
+		seedRampedRpm(2000.0f, 100.0f, 12, 50.0f); // extra ticks so a full window elapses
+		longWindowRate = getSm().getLastRpmRate();
+	}
+
+	EXPECT_NEAR(2000.0f, shortWindowRate, 5.0f);
+	EXPECT_NEAR(2000.0f, longWindowRate, 5.0f);
+}
+
+// The rate value now only recomputes once smRpmRateWindowMs has actually elapsed since the last
+// recompute -- holding the previous value on every tick in between -- rather than recomputing on
+// every 50 ms tick regardless of the configured window. This is what makes the number visibly
+// update at the rate the user configures (in multiples of the 50 ms tick), instead of jittering
+// every tick no matter what window is set.
+TEST(EngineStateMachine, rpmRateHoldsUntilWindowElapsesThenUpdates) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smRpmRateWindowMs = 200; // four 50 ms ticks
+
+	// First-ever sample: no reference yet, rate reads 0 and anchors here.
+	engine->rpmCalculator.setRpmValue(2000.0f);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
+	engine->periodicSlowCallback();
+	EXPECT_EQ(0.0f, getSm().getLastRpmRate());
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	// RPM jumps immediately, but the window (200 ms) hasn't elapsed since the anchor yet on any
+	// of the next three ticks (50/100/150 ms in) -- the rate must hold at the old value.
+	engine->rpmCalculator.setRpmValue(2500.0f);
+	for (int i = 0; i < 3; i++) {
+		engine->periodicSlowCallback();
+		EXPECT_EQ(0.0f, getSm().getLastRpmRate());
+		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	}
+
+	// The fourth tick lands exactly on the 200 ms window boundary -- the rate now recomputes
+	// over the full window, picking up the jump.
+	engine->periodicSlowCallback();
+	EXPECT_NEAR(2500.0f, getSm().getLastRpmRate(), 1.0f); // (2500-2000)/0.2s
+}
+
+// A shorter window recomputes (and thus can respond to an RPM change) more often than a longer
+// one -- directly exercising that smRpmRateWindowMs controls the recompute cadence.
+TEST(EngineStateMachine, shorterWindowRecomputesMoreOften) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smRpmRateWindowMs = 100; // two 50 ms ticks
+
+	engine->rpmCalculator.setRpmValue(2000.0f);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
+	engine->periodicSlowCallback(); // anchor
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	engine->rpmCalculator.setRpmValue(2100.0f);
+	engine->periodicSlowCallback(); // 50 ms since anchor -- window not elapsed yet, holds
+	EXPECT_EQ(0.0f, getSm().getLastRpmRate());
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	engine->periodicSlowCallback(); // 100 ms since anchor -- window elapsed, recomputes
+	EXPECT_NEAR(1000.0f, getSm().getLastRpmRate(), 1.0f); // (2100-2000)/0.1s
+}
+
+// smRpmRateWindowMs == 0 (e.g. an old tune saved before this field existed) must floor to one
+// slow-callback tick and behave identically to an explicit 50 ms window -- calibration
+// compatibility for existing tunes.
+TEST(EngineStateMachine, rpmRateWindowZeroMatchesOneTickWindow) {
+	float zeroWindowRate;
+	float explicitOneTickRate;
+	{
+		EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+		setupSmConfig();
+		getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+		getCustomPage()->smRpmRateWindowMs = 0;
+		enterRunning(2000.0f, 50.0f);
+		seedHistory(6, 2000.0f, 50.0f);
+		engine->rpmCalculator.setRpmValue(2500.0f);
+		engine->periodicSlowCallback();
+		zeroWindowRate = getSm().getLastRpmRate();
+	}
+	{
+		EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+		setupSmConfig();
+		getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+		getCustomPage()->smRpmRateWindowMs = 50;
+		enterRunning(2000.0f, 50.0f);
+		seedHistory(6, 2000.0f, 50.0f);
+		engine->rpmCalculator.setRpmValue(2500.0f);
+		engine->periodicSlowCallback();
+		explicitOneTickRate = getSm().getLastRpmRate();
+	}
+	EXPECT_NEAR(explicitOneTickRate, zeroWindowRate, 0.01f);
+}
+
+// No reference sample yet on the very first slow callback -- rate must read 0, not garbage.
+TEST(EngineStateMachine, rpmRateZeroBeforeEnoughHistory) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smRpmRateWindowMs = 500;
+
+	engine->rpmCalculator.setRpmValue(2000.0f);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
+	engine->periodicSlowCallback(); // first-ever sample, no reference yet
+
+	EXPECT_EQ(0.0f, getSm().getLastRpmRate());
+}
+
+// The RPM-rate value now has a consumer beyond the accumulator: the Accelerating state itself,
+// gated directly on smAccelRateThreshold against the windowed rate.
+TEST(EngineStateMachine, acceleratingStateEnteredOnConfiguredRate) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smAccelRateThreshold = 500; // RPM/s
+	getCustomPage()->smRpmRateWindowMs = 100;
+	enterRunning(2000.0f, 50.0f);
+
+	// 100 RPM/tick @ 50 ms/tick == 2000 RPM/s, comfortably above the 500 RPM/s threshold.
+	seedRampedRpm(2000.0f, 100.0f, 5, 50.0f);
+	engine->periodicSlowCallback();
+
+	auto& sm = getSm();
+	EXPECT_TRUE(sm.engineSmIsAccelerating);
+	EXPECT_EQ(14u, sm.engineSmCurrentState);
 }
 
 // ---- Clutch-Up-only shift detection (single switch, no Clutch-Down wired) ----
@@ -983,7 +1144,9 @@ TEST(EngineStateMachine, relatchOnClutchDownExtendsLatch) {
 TEST(EngineStateMachine, shiftingBlocksOverrunFuelCut) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupShiftDetectionConfig(); // up & down both ClutchDown, RPM accumulator
-	enterRunning();
+	// Anchor the RPM-rate calc at the ramp's actual starting RPM (4000) -- see
+	// downshiftDetectedAccumulator for why.
+	enterRunning(4000.0f, 2.0f);
 
 	engineConfiguration->coastingFuelCutEnabled = true;
 	engineConfiguration->coastingFuelCutTps     = 5;
