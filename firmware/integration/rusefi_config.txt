@@ -1747,7 +1747,7 @@ pin_input_mode_e[LUA_DIGITAL_INPUT_COUNT iterate] luaDigitalInputPinModes;
 	ThermistorConf chtSensor;Cylinder head temperature (CHT) sensor
 
 	! CLT Estimator config (cltEstThermostatTemp, cltEstFan1/2Cfm, cltEstFallbackClt,
-	! cltEstRadiatorFailTemp, cltEstChtBins/HeatFactor, cltEstAirflowBins/RejectionFactor,
+	! cltEstRadiatorFailTemp, cltEstHeadTransferRate/Gain, cltEstRadiatorBaseRejection/AirflowGain,
 	! cltEstVssBins/Airflow, cltEstIatBins/Factor, cltEstThermostatSpread, cltEstThermostatLag)
 	! moved to TS page 6 (page6_s).
 

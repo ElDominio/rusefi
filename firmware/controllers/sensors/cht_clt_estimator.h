@@ -10,6 +10,14 @@
  *
  * dCLT/dt = R_heat(CHT) * (CHT - CLT) - R_reject(laggedAirflow) * iatFactor(IAT) * valvePos * (CLT - thermostatTemp)
  *
+ *   R_heat(CHT)       = clamp01(cltEstHeadTransferRate + cltEstHeadTransferGain * (CHT - 90))
+ *                     -- base rate at a 90 deg C reference CHT, plus a gain for how much faster
+ *                        that transfer happens as CHT climbs above (or below) the reference.
+ *   R_reject(airflow) = clamp01(cltEstRadiatorBaseRejection + cltEstRadiatorAirflowGain * airflow)
+ *                     -- base rate at zero airflow, plus a gain per CFM through the radiator.
+ *                        Both are a straight line rather than a curve -- simpler for tuners to
+ *                        reason about, at the cost of not capturing any real nonlinearity.
+ *
  *   airflow       = (fan1 on ? cltEstFan1Cfm : 0) + (fan2 on ? cltEstFan2Cfm : 0)
  *                 + interpolate2d(VSS, cltEstVssBins, cltEstVssAirflow)
  *   laggedAirflow tracks airflow with time constant cltEstCoolantLag (seconds) -- a step

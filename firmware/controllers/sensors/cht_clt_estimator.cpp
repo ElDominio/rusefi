@@ -10,6 +10,9 @@
 static ChtCltEstimator s_estimator;
 static StoredValueSensor s_estimatedClt(SensorType::Clt, MS2NT(500));
 
+// Reference CHT that cltEstHeadTransferRate is anchored to -- see cht_clt_estimator.h.
+static constexpr float CLT_EST_CHT_REFERENCE = 90.0f;
+
 void ChtCltEstimator::init() {
 	m_lastUpdateNt = getTimeNowNt();
 	m_initialized = false;
@@ -86,8 +89,16 @@ void ChtCltEstimator::update() {
 		m_laggedAirflow = airflow;
 	}
 
-	float rHeat = interpolate2d(chtVal, getCustomPage()->cltEstChtBins, getCustomPage()->cltEstChtHeatFactor);
-	float rRejectBase = interpolate2d(m_laggedAirflow, getCustomPage()->cltEstAirflowBins, getCustomPage()->cltEstRejectionFactor);
+	// Head-to-coolant transfer rate and radiator rejection rate are both modeled as a base value
+	// plus a gain, rather than a curve -- see cht_clt_estimator.h for the reference points these
+	// are anchored to. Clamped to the same [0, 1] 1/s range the old curves were configured with,
+	// since a user-entered gain could otherwise push the rate negative at the domain extremes.
+	float rHeat = clampF(0.0f,
+		getCustomPage()->cltEstHeadTransferRate + getCustomPage()->cltEstHeadTransferGain * (chtVal - CLT_EST_CHT_REFERENCE),
+		1.0f);
+	float rRejectBase = clampF(0.0f,
+		getCustomPage()->cltEstRadiatorBaseRejection + getCustomPage()->cltEstRadiatorAirflowGain * m_laggedAirflow,
+		1.0f);
 
 	float iatVal = Sensor::get(SensorType::Iat).value_or(Sensor::get(SensorType::AmbientTemperature).value_or(chtVal));
 	float iatFactor = interpolate2d(iatVal, getCustomPage()->cltEstIatBins, getCustomPage()->cltEstIatFactor);

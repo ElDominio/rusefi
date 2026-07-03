@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 15;
+static constexpr uint32_t PAGE6_DATA_VERSION = 16;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -248,26 +248,17 @@ void customPageSetDefaults() {
 	d.cltEstFan2Cfm = 400;
 	d.cltEstThermostatSpread = 8;   // deg C from closed to fully open
 
-	// CHT heatload factor: how fast coolant trends toward CHT, rising as the head gets hotter.
-	{
-		static const int16_t chtBins[CLT_EST_CURVE_SIZE] = { 40, 60, 80, 95, 105, 115, 125, 140 };
-		static const float chtHeatFactor[CLT_EST_CURVE_SIZE] = { 0.020f, 0.023f, 0.027f, 0.030f, 0.033f, 0.036f, 0.040f, 0.045f };
-		for (size_t i = 0; i < efi::size(d.cltEstChtBins); i++) {
-			d.cltEstChtBins[i] = chtBins[i];
-			d.cltEstChtHeatFactor[i] = chtHeatFactor[i];
-		}
-	}
+	// Head-to-coolant heat transfer: rate at a 90 deg C reference CHT, plus a gain for how much
+	// faster that transfer happens as CHT climbs above (or below) the reference. Approximates
+	// the old 40-140 deg C curve (0.020..0.045 1/s) to within a few percent across its range.
+	d.cltEstHeadTransferRate = 0.030f;  // 1/s at 90 deg C
+	d.cltEstHeadTransferGain = 0.00025f; // 1/s per deg C above the reference
 
-	// Radiator rejection vs airflow: near-stalled rejection at zero airflow, ramping up sharply
-	// with real airflow (applied once the thermostat valve has opened).
-	{
-		static const int16_t airflowBins[CLT_EST_CURVE_SIZE] = { 0, 100, 200, 300, 400, 550, 700, 900 };
-		static const float rejectionFactor[CLT_EST_CURVE_SIZE] = { 0.0025f, 0.006f, 0.010f, 0.014f, 0.018f, 0.022f, 0.026f, 0.030f };
-		for (size_t i = 0; i < efi::size(d.cltEstAirflowBins); i++) {
-			d.cltEstAirflowBins[i] = airflowBins[i];
-			d.cltEstRejectionFactor[i] = rejectionFactor[i];
-		}
-	}
+	// Radiator rejection vs airflow: near-zero rejection at zero airflow (fans off, stopped),
+	// increasing with real airflow (applied once the thermostat valve has opened). Approximates
+	// the old 0-900 CFM curve (0.0025..0.030 1/s) to within a few percent across its range.
+	d.cltEstRadiatorBaseRejection = 0.0035f; // 1/s at zero airflow
+	d.cltEstRadiatorAirflowGain = 0.00003f;  // 1/s per CFM
 
 	// VSS -> ram-air CFM: non-degenerate out of the box so the model is usable without retuning.
 	{
