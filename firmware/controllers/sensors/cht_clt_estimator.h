@@ -22,8 +22,14 @@
  *                        Both are a straight line rather than a curve -- simpler for tuners to
  *                        reason about, at the cost of not capturing any real nonlinearity.
  *
- *   airflow       = (fan1 on ? cltEstFan1Cfm : 0) + (fan2 on ? cltEstFan2Cfm : 0)
- *                 + interpolate2d(VSS, cltEstVssBins, cltEstVssAirflow)
+ *   airflow       = (fan1 on ? cltEstFan1Cfm : 0) + (fan2 on ? cltEstFan2Cfm : 0) + ramAir(VSS)
+ *   ramAir(VSS)   = cltEstVssMaxAirflow * (1 - exp(-VSS * ln(2) / cltEstVssHalfFlowSpeed))
+ *                 -- saturating curve: ram-air airflow approaches cltEstVssMaxAirflow at high
+ *                    speed rather than climbing linearly, reflecting real diminishing returns
+ *                    from backpressure/turbulence. cltEstVssHalfFlowSpeed is the speed at which
+ *                    ram-air reaches half of cltEstVssMaxAirflow -- lower means it builds up
+ *                    faster with speed. Zero (or negative) cltEstVssHalfFlowSpeed disables
+ *                    ram-air modeling entirely rather than risking a divide-by-zero.
  *   laggedAirflow tracks airflow with time constant cltEstCoolantLag (seconds) -- a step
  *                 change in fan/ram-air airflow doesn't instantly change how fast the bulk
  *                 coolant mass gives up heat, since that heat has to physically circulate

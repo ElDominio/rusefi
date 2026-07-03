@@ -4,7 +4,6 @@
 #if EFI_CHT_CLT_ESTIMATOR
 
 #include "stored_value_sensor.h"
-#include "rusefi/interpolation.h"
 #include "custom_page.h"
 
 static ChtCltEstimator s_estimator;
@@ -12,6 +11,10 @@ static StoredValueSensor s_estimatedClt(SensorType::Clt, MS2NT(500));
 
 // Reference CHT that cltEstHeadTransferRate is anchored to -- see cht_clt_estimator.h.
 static constexpr float CLT_EST_CHT_REFERENCE = 90.0f;
+
+// ln(2): converts cltEstVssHalfFlowSpeed (speed at half of max ram-air flow) into the exponential
+// decay constant used by the saturating ram-air formula -- see cht_clt_estimator.h.
+static constexpr float CLT_EST_LN2 = 0.6931472f;
 
 void ChtCltEstimator::init() {
 	m_lastUpdateNt = getTimeNowNt();
@@ -74,9 +77,17 @@ void ChtCltEstimator::update() {
 
 	float vssVal = Sensor::getOrZero(SensorType::VehicleSpeed); // soft-degrades to 0, not a fault
 
+	// Ram-air airflow saturates with speed (diminishing returns from backpressure/turbulence)
+	// rather than climbing linearly -- see cht_clt_estimator.h. Degenerate halfFlowSpeed (<= 0)
+	// means ram-air isn't modeled at all rather than risking a divide-by-zero.
+	float halfFlowSpeed = getCustomPage()->cltEstVssHalfFlowSpeed;
+	float ramAirCfm = (halfFlowSpeed > 0)
+		? getCustomPage()->cltEstVssMaxAirflow * (1.0f - expf(-vssVal * CLT_EST_LN2 / halfFlowSpeed))
+		: 0.0f;
+
 	airflow = (fan1On ? getCustomPage()->cltEstFan1Cfm : 0)
 	        + (fan2On ? getCustomPage()->cltEstFan2Cfm : 0)
-	        + interpolate2d(vssVal, getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow);
+	        + ramAirCfm;
 
 	// Coolant thermal-mass lag: airflow itself (fan relay, ram-air) changes in a step, but the
 	// bulk coolant's heat-rejection rate doesn't -- it takes time for that airflow change to

@@ -17,7 +17,6 @@
 #define WOT_ENRICHMENT_SIZE 8
 #define SPORT_PEDAL_SIZE 8
 #define INJ_CURVE_SIZE 12
-#define CLT_EST_CURVE_SIZE 8
 
 ! Custom types re-declared for the isolated page generator (see config_page_4.txt header).
 ! The C++ enums themselves are defined in headers (e.g. rusefi_enums.h) and shared;
@@ -579,8 +578,8 @@ struct_no_prefix page6_s
 	float cltEstRadiatorBaseRejection;CLT estimation: radiator heat-rejection rate at zero airflow (fans off, vehicle stopped) -- residual natural convection. Applied once the thermostat valve is open.;"1/s", 1, 0, 0, 1, 4
 	float cltEstRadiatorAirflowGain;CLT estimation: how much the radiator heat-rejection rate increases per CFM of airflow through it -- effectively how big/effective the radiator is.;"1/s per CFM", 1, 0, 0, 0.001, 5
 
-	int16_t[CLT_EST_CURVE_SIZE] cltEstVssBins;CLT estimation: vehicle speed bins for the ram-air curve.;"kph", 1, 0, 0, 400, 0
-	float[CLT_EST_CURVE_SIZE] cltEstVssAirflow;CLT estimation: radiator ram-air airflow contributed by vehicle speed.;"CFM", 1, 0, 0, 3000, 0
+	float cltEstVssMaxAirflow;CLT estimation: radiator ram-air airflow approached at high vehicle speed (the saturation point of the ram-air effect).;"CFM", 1, 0, 0, 3000, 0
+	float cltEstVssHalfFlowSpeed;CLT estimation: vehicle speed at which ram-air airflow reaches half of cltEstVssMaxAirflow. Lower means ram-air builds up faster with speed.;"kph", 1, 0, 0, 400, 0
 
 	int16_t cltEstRadiatorReferenceTemp;CLT estimation: intake/ambient air temp at which radiator effectiveness is defined as 100% (multiplier = 1.0). Set this to whatever air temp you consider "typical" -- the gain below then scales effectiveness up/down from there.;"deg C", 1, 0, -40, 60, 0
 	float cltEstRadiatorEffectivenessIatGain;CLT estimation: how much radiator effectiveness changes per degree C the intake/ambient air runs above (or below) the reference temp. Negative means hotter incoming air makes the radiator less effective.;"ratio per C", 1, 0, -0.1, 0.1, 4

@@ -2,14 +2,6 @@
 #include "cht_clt_estimator.h"
 #include "custom_page.h"
 
-static void setFlatCurve(int16_t (&bins)[CLT_EST_CURVE_SIZE], float (&values)[CLT_EST_CURVE_SIZE],
-		int16_t binLo, int16_t binHi, float value) {
-	for (int i = 0; i < CLT_EST_CURVE_SIZE; i++) {
-		bins[i] = binLo + (binHi - binLo) * i / (CLT_EST_CURVE_SIZE - 1);
-		values[i] = value;
-	}
-}
-
 TEST(ChtCltEstimatorTest, TrendsTowardChtAtZeroAirflow) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	getCustomPage()->cltFromCht = true;
@@ -23,7 +15,8 @@ TEST(ChtCltEstimatorTest, TrendsTowardChtAtZeroAirflow) {
 	getCustomPage()->cltEstHeadTransferGain = 0.0f;
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.0f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
-	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
+	getCustomPage()->cltEstVssMaxAirflow = 0.0f;
+	getCustomPage()->cltEstVssHalfFlowSpeed = 100.0f;
 	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
 	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
@@ -67,7 +60,8 @@ TEST(ChtCltEstimatorTest, TrendsTowardThermostatAtHighAirflow) {
 	getCustomPage()->cltEstHeadTransferGain = 0.0f;
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.2f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
-	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
+	getCustomPage()->cltEstVssMaxAirflow = 0.0f;
+	getCustomPage()->cltEstVssHalfFlowSpeed = 100.0f;
 	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
 	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
@@ -105,14 +99,10 @@ TEST(ChtCltEstimatorTest, InvalidVssSoftDegradesToFanOnlyAirflow) {
 	getCustomPage()->cltEstHeadTransferGain = 0.0f;
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.02f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
-	// VSS->airflow curve reads exactly 0 CFM at 0 kph (interpolate2d(0, ...) clamps to the
-	// first bin's value when VSS is invalid and getOrZero() degrades to 0).
-	getCustomPage()->cltEstVssBins[0] = 0;
-	getCustomPage()->cltEstVssAirflow[0] = 0;
-	for (int i = 1; i < CLT_EST_CURVE_SIZE; i++) {
-		getCustomPage()->cltEstVssBins[i] = 50 * i;
-		getCustomPage()->cltEstVssAirflow[i] = 200 * i;
-	}
+	// Ram-air formula reads exactly 0 CFM at 0 kph regardless of these values (VSS is invalid
+	// and getOrZero() degrades to 0).
+	getCustomPage()->cltEstVssMaxAirflow = 1400.0f;
+	getCustomPage()->cltEstVssHalfFlowSpeed = 150.0f;
 	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
 	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
@@ -162,7 +152,8 @@ TEST(ChtCltEstimatorTest, EstimateNeverExceedsCht) {
 	getCustomPage()->cltEstHeadTransferGain = 0.0f;
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.05f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
-	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
+	getCustomPage()->cltEstVssMaxAirflow = 0.0f;
+	getCustomPage()->cltEstVssHalfFlowSpeed = 100.0f;
 	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
 	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
@@ -195,7 +186,8 @@ TEST(ChtCltEstimatorTest, RadiatorFailLocksCltToCht) {
 	getCustomPage()->cltEstHeadTransferGain = 0.0f;
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.05f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
-	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
+	getCustomPage()->cltEstVssMaxAirflow = 0.0f;
+	getCustomPage()->cltEstVssHalfFlowSpeed = 100.0f;
 	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
 	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
@@ -228,7 +220,8 @@ TEST(ChtCltEstimatorTest, ThermostatLagProducesOvershootAndRecover) {
 	getCustomPage()->cltEstHeadTransferGain = 0.0f;
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.05f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
-	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
+	getCustomPage()->cltEstVssMaxAirflow = 0.0f;
+	getCustomPage()->cltEstVssHalfFlowSpeed = 100.0f;
 	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
 	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
@@ -281,7 +274,8 @@ TEST(ChtCltEstimatorTest, CoolantLagDelaysAirflowEffect) {
 	// the fully-lagged-in 500 CFM fan airflow below lands exactly on a 0.05 1/s steady state.
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.0f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0001f;
-	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
+	getCustomPage()->cltEstVssMaxAirflow = 0.0f;
+	getCustomPage()->cltEstVssHalfFlowSpeed = 100.0f;
 	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
 	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 	getCustomPage()->cltEstFan1Cfm = 500; // 500 CFM * 0.0001 gain = 0.05 1/s once fully lagged in

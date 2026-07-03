@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 17;
+static constexpr uint32_t PAGE6_DATA_VERSION = 18;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -260,15 +260,11 @@ void customPageSetDefaults() {
 	d.cltEstRadiatorBaseRejection = 0.0035f; // 1/s at zero airflow
 	d.cltEstRadiatorAirflowGain = 0.00003f;  // 1/s per CFM
 
-	// VSS -> ram-air CFM: non-degenerate out of the box so the model is usable without retuning.
-	{
-		static const int16_t vssBins[CLT_EST_CURVE_SIZE] = { 0, 10, 20, 40, 60, 90, 130, 180 };
-		static const float vssAirflow[CLT_EST_CURVE_SIZE] = { 0, 80, 160, 260, 350, 460, 580, 700 };
-		for (size_t i = 0; i < efi::size(d.cltEstVssBins); i++) {
-			d.cltEstVssBins[i] = vssBins[i];
-			d.cltEstVssAirflow[i] = vssAirflow[i];
-		}
-	}
+	// VSS -> ram-air CFM: saturating curve, non-degenerate out of the box so the model is usable
+	// without retuning. Approximates the old 0-180 kph curve (0..700 CFM) to within ~10% across
+	// its range -- worst case is the low-speed knee, where the old curve rose slightly faster.
+	d.cltEstVssMaxAirflow = 800.0f;    // CFM approached at high speed
+	d.cltEstVssHalfFlowSpeed = 70.0f;  // kph to reach half of max ram-air flow
 
 	// Radiator effectiveness vs IAT/AAT: default zero gain (no-op, effectiveness always 1.0
 	// regardless of reference temp) — leave the shape/direction of hot-underhood-air degradation
