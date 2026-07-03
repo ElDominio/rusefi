@@ -100,8 +100,13 @@ void ChtCltEstimator::update() {
 		getCustomPage()->cltEstRadiatorBaseRejection + getCustomPage()->cltEstRadiatorAirflowGain * m_laggedAirflow,
 		1.0f);
 
+	// Radiator effectiveness is 1.0 (no change) at cltEstRadiatorReferenceTemp, the "typical" air
+	// temp the user's calibration is centered on; the gain scales it up/down from there. Clamped
+	// to the same [0, 4] range the old curve was configured with.
 	float iatVal = Sensor::get(SensorType::Iat).value_or(Sensor::get(SensorType::AmbientTemperature).value_or(chtVal));
-	float iatFactor = interpolate2d(iatVal, getCustomPage()->cltEstIatBins, getCustomPage()->cltEstIatFactor);
+	float iatFactor = clampF(0.0f,
+		1.0f + getCustomPage()->cltEstRadiatorEffectivenessIatGain * (iatVal - getCustomPage()->cltEstRadiatorReferenceTemp),
+		4.0f);
 
 	// Thermostat valve: target position is a cubic function of how far CLT is from the
 	// setpoint, so it barely moves right at thermostatTemp and opens/closes rapidly away from

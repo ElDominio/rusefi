@@ -10,6 +10,10 @@
  *
  * dCLT/dt = R_heat(CHT) * (CHT - CLT) - R_reject(laggedAirflow) * iatFactor(IAT) * valvePos * (CLT - thermostatTemp)
  *
+ *   iatFactor(IAT) = clamp(0, 1.0 + cltEstRadiatorEffectivenessIatGain * (IAT - cltEstRadiatorReferenceTemp), 4)
+ *                  -- radiator effectiveness multiplier; always 1.0 (no change) exactly at the
+ *                     user-chosen reference air temp, scaled up/down from there by the gain.
+ *
  *   R_heat(CHT)       = clamp01(cltEstHeadTransferRate + cltEstHeadTransferGain * (CHT - 90))
  *                     -- base rate at a 90 deg C reference CHT, plus a gain for how much faster
  *                        that transfer happens as CHT climbs above (or below) the reference.

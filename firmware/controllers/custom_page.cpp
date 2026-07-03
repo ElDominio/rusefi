@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 16;
+static constexpr uint32_t PAGE6_DATA_VERSION = 17;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -270,15 +270,11 @@ void customPageSetDefaults() {
 		}
 	}
 
-	// IAT/AAT rejection multiplier: default flat (1.0, no-op) — leave the shape/direction of
-	// hot-underhood-air degradation to user tuning rather than guessing it.
-	{
-		static const int16_t iatBins[CLT_EST_CURVE_SIZE] = { -20, 0, 20, 40, 60, 80, 100, 120 };
-		for (size_t i = 0; i < efi::size(d.cltEstIatBins); i++) {
-			d.cltEstIatBins[i] = iatBins[i];
-			d.cltEstIatFactor[i] = 1.0f;
-		}
-	}
+	// Radiator effectiveness vs IAT/AAT: default zero gain (no-op, effectiveness always 1.0
+	// regardless of reference temp) — leave the shape/direction of hot-underhood-air degradation
+	// to user tuning rather than guessing it.
+	d.cltEstRadiatorReferenceTemp = 25;         // deg C -- "typical" calibration air temp
+	d.cltEstRadiatorEffectivenessIatGain = 0.0f;
 
 	// Rolling Launch Control — disabled by default; sane gates so it is usable once enabled.
 	d.rollingLaunchEnabled        = false;

@@ -1748,7 +1748,7 @@ pin_input_mode_e[LUA_DIGITAL_INPUT_COUNT iterate] luaDigitalInputPinModes;
 
 	! CLT Estimator config (cltEstThermostatTemp, cltEstFan1/2Cfm, cltEstFallbackClt,
 	! cltEstRadiatorFailTemp, cltEstHeadTransferRate/Gain, cltEstRadiatorBaseRejection/AirflowGain,
-	! cltEstVssBins/Airflow, cltEstIatBins/Factor, cltEstThermostatSpread, cltEstThermostatLag)
+	! cltEstVssBins/Airflow, cltEstRadiatorReferenceTemp/EffectivenessIatGain, cltEstThermostatSpread, cltEstThermostatLag)
 	! moved to TS page 6 (page6_s).
 
 	float eotEstK0;EOT-from-CHT/IAT estimation: base delta. The head/block runs this many deg C hotter than the oil at zero IAT influence.;"deg C", 1, 0, 0, 200, 1

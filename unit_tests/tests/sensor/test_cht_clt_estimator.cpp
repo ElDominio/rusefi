@@ -24,7 +24,8 @@ TEST(ChtCltEstimatorTest, TrendsTowardChtAtZeroAirflow) {
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.0f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
 	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
-	setFlatCurve(getCustomPage()->cltEstIatBins, getCustomPage()->cltEstIatFactor, -40, 200, 1.0f);
+	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
+	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
 	initChtCltEstimator();
 	Sensor::resetMockValue(SensorType::Clt); // EngineTestHelper pre-mocks Clt=70; clear it so our estimator's registered value actually surfaces.
@@ -67,7 +68,8 @@ TEST(ChtCltEstimatorTest, TrendsTowardThermostatAtHighAirflow) {
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.2f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
 	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
-	setFlatCurve(getCustomPage()->cltEstIatBins, getCustomPage()->cltEstIatFactor, -40, 200, 1.0f);
+	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
+	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
 	initChtCltEstimator();
 	Sensor::resetMockValue(SensorType::Clt); // EngineTestHelper pre-mocks Clt=70; clear it so our estimator's registered value actually surfaces.
@@ -111,7 +113,8 @@ TEST(ChtCltEstimatorTest, InvalidVssSoftDegradesToFanOnlyAirflow) {
 		getCustomPage()->cltEstVssBins[i] = 50 * i;
 		getCustomPage()->cltEstVssAirflow[i] = 200 * i;
 	}
-	setFlatCurve(getCustomPage()->cltEstIatBins, getCustomPage()->cltEstIatFactor, -40, 200, 1.0f);
+	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
+	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
 	initChtCltEstimator();
 	Sensor::resetMockValue(SensorType::Clt); // EngineTestHelper pre-mocks Clt=70; clear it so our estimator's registered value actually surfaces.
@@ -160,7 +163,8 @@ TEST(ChtCltEstimatorTest, EstimateNeverExceedsCht) {
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.05f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
 	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
-	setFlatCurve(getCustomPage()->cltEstIatBins, getCustomPage()->cltEstIatFactor, -40, 200, 1.0f);
+	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
+	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
 	initChtCltEstimator();
 	Sensor::resetMockValue(SensorType::Clt); // EngineTestHelper pre-mocks Clt=70; clear it so our estimator's registered value actually surfaces.
@@ -192,7 +196,8 @@ TEST(ChtCltEstimatorTest, RadiatorFailLocksCltToCht) {
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.05f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
 	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
-	setFlatCurve(getCustomPage()->cltEstIatBins, getCustomPage()->cltEstIatFactor, -40, 200, 1.0f);
+	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
+	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
 	initChtCltEstimator();
 	Sensor::resetMockValue(SensorType::Clt); // EngineTestHelper pre-mocks Clt=70; clear it so our estimator's registered value actually surfaces.
@@ -224,7 +229,8 @@ TEST(ChtCltEstimatorTest, ThermostatLagProducesOvershootAndRecover) {
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.05f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0f;
 	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
-	setFlatCurve(getCustomPage()->cltEstIatBins, getCustomPage()->cltEstIatFactor, -40, 200, 1.0f);
+	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
+	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 
 	initChtCltEstimator();
 	Sensor::resetMockValue(SensorType::Clt); // EngineTestHelper pre-mocks Clt=70; clear it so our estimator's registered value actually surfaces.
@@ -276,7 +282,8 @@ TEST(ChtCltEstimatorTest, CoolantLagDelaysAirflowEffect) {
 	getCustomPage()->cltEstRadiatorBaseRejection = 0.0f;
 	getCustomPage()->cltEstRadiatorAirflowGain = 0.0001f;
 	setFlatCurve(getCustomPage()->cltEstVssBins, getCustomPage()->cltEstVssAirflow, 0, 400, 0);
-	setFlatCurve(getCustomPage()->cltEstIatBins, getCustomPage()->cltEstIatFactor, -40, 200, 1.0f);
+	getCustomPage()->cltEstRadiatorReferenceTemp = 25;
+	getCustomPage()->cltEstRadiatorEffectivenessIatGain = 0.0f;
 	getCustomPage()->cltEstFan1Cfm = 500; // 500 CFM * 0.0001 gain = 0.05 1/s once fully lagged in
 	getCustomPage()->cltEstFan2Cfm = 0;
 
