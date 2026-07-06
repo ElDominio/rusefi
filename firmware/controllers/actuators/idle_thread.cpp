@@ -381,6 +381,15 @@ float IdleController::getIdleTimingAdjustment(float rpm, float targetRpm, Phase 
 		m_timingPid.setErrorAmplification(interpolateClamped(m_crankTaperEndTime, 0.0f, m_idleTimingSoftEntryEndTime, 1.0f, engine->fuelComputer.running.timeSinceCrankingInSecs));
 	}
 
+#if EFI_GHOST_CAM
+	if (m_lastGhostCamActive) {
+		// Ghost Cam replaces whatever closed-loop idle timing scheme is normally active (PID or
+		// modeled-flow) with its own PID -- m_timingPid was already swapped to the page-6
+		// ghostCamTimingPid_* gains in getIdlePosition() when ghost cam activated.
+		return m_timingPid.getOutput(targetRpm, rpm, FAST_CALLBACK_PERIOD_MS / 1000.0f);
+	}
+#endif // EFI_GHOST_CAM
+
 	if (engineConfiguration->modeledFlowIdle) {
 		return m_modeledFlowIdleTiming;
 	} else {
