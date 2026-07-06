@@ -328,11 +328,13 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 				float cycleRpm = 60 * mult / periodSeconds;
 
 				float rawRpmRate = (cycleRpm - rpmState->prevCycleRpm) / (mult * periodSeconds);
-				// EMA alpha=0.5: only applied in FIRST_ORDER mode to smooth the extrapolation slope.
-				// Skipped on the first real measurement (prevCycleRpm==0) to avoid initializing at
-				// half the true rate. Other modes leave rpmRate unfiltered (it is a display gauge there).
+				// Tunable EMA (rpmRateSmoothingPct, 0-95%): only applied in FIRST_ORDER mode to smooth
+				// the extrapolation slope. Skipped on the first real measurement (prevCycleRpm==0) to
+				// avoid initializing at a fraction of the true rate. Other modes leave rpmRate
+				// unfiltered (it is a display gauge there).
 				if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER && rpmState->prevCycleRpm != 0) {
-					rpmState->rpmRate = 0.5f * rpmState->rpmRate + 0.5f * rawRpmRate;
+					float smoothing = engineConfiguration->rpmRateSmoothingPct / 100.0f;
+					rpmState->rpmRate = smoothing * rpmState->rpmRate + (1.0f - smoothing) * rawRpmRate;
 				} else {
 					rpmState->rpmRate = rawRpmRate;
 				}

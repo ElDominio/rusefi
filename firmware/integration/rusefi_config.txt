@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260701
+#define FLASH_DATA_VERSION 260705
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -1243,6 +1243,8 @@ uint16_t sdLogMinMap;Also require MAP at/above this to start logging (0 = ignore
 uint8_t sdLogMinVss;Also require vehicle speed at/above this to start logging (0 = ignore);"kph", 1, 0, 0, 255, 0
 switch_input_pin_e sdLogTriggerPin;Optional toggle button to start/stop logging (press on, press off)
 pin_input_mode_e sdLogTriggerPinMode;
+
+uint8_t rpmRateSmoothingPct;Only used by First Order RPM mode. Smoothing applied to the RPM rate of change (the slope used to extrapolate RPM between cycles) each engine cycle. 0% = fully raw: the slope is replaced by the latest cycle-to-cycle measurement every cycle (most responsive, but cycle-to-cycle combustion/measurement noise passes straight through). Higher % blends in more of the previous slope, smoothing that noise out at the cost of slower response to genuine acceleration/deceleration. Capped at 95%: at 100% the slope would never incorporate a new measurement and would freeze permanently.;"%", 1, 0, 0, 95, 0
 
 	uint32_t engineChartSize;;"count", 1, 0, 0, 300, 0
 

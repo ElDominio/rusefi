@@ -393,6 +393,7 @@ static void setDefaultEngineConfiguration() {
   setDefaultCanSettings();
 
 	engineConfiguration->sdCardLogFrequency = 50;
+	engineConfiguration->rpmRateSmoothingPct = 50;
 
 	setDefaultGppwmParameters();
 	setDefaultBoostOpenLoopParameters();
