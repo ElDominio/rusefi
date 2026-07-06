@@ -1,12 +1,3 @@
-/**
- * @file speed_density_airmass.cpp
- * @brief Speed-density air-mass model.
- *
- * Estimates the air mass trapped per cylinder per cycle from manifold pressure
- * (MAP), intake air temperature and the volumetric-efficiency table using the
- * ideal-gas law. This is the default airflow model when no MAF sensor is used.
- */
-
 #include "pch.h"
 #include "speed_density_airmass.h"
 #include "accel_enrichment.h"
@@ -30,11 +21,7 @@ AirmassResult SpeedDensityAirmass::getAirmass(float rpm, float map, bool postSta
 		return {};
 	}
 
-	// Compensated MAP: tables are looked up by baro-normalized MAP, while the
-	// physical air mass calculation below still uses actual MAP.
-	float mapRef = getCompensatedMap(map);
-
-	float ve = getVe(rpm, mapRef, postState);
+	float ve = getVe(rpm, map, postState);
 
 	float airMass = getAirmassImpl(ve, map, tChargeK);
 	if (std::isnan(airMass)) {
@@ -47,24 +34,8 @@ AirmassResult SpeedDensityAirmass::getAirmass(float rpm, float map, bool postSta
 
 	return {
 		airMass,
-		mapRef,	// AFR/VE table Y axis, also becomes the fuel/spark load axis
+		map,	// AFR/VE table Y axis
 	};
-}
-
-float SpeedDensityAirmass::getCompensatedMap(float map) const {
-	if (!engineConfiguration->useCompensatedMap) {
-		return map;
-	}
-
-	auto baro = Sensor::get(SensorType::BarometricPressure);
-	if (!baro) {
-		return map;
-	}
-
-	// Clamp to a plausible baro range so a misbehaving sensor can't skew the load axis too far
-	float baroFactor = clampF(0.5f, baro.Value / STD_ATMOSPHERE, 1.5f);
-
-	return map / baroFactor;
 }
 
 float SpeedDensityAirmass::getAirflow(float rpm, float map, bool postState) {

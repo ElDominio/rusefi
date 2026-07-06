@@ -18,7 +18,7 @@ static void runMaximaTest(const char* fileName, double startTimeStamp, int expec
 	reader.open(fileName);
 	EngineTestHelper eth(engine_type_e::PROTEUS_NISSAN_VQ35);
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	while (reader.haveMore()) {
 		reader.processLine(&eth);
@@ -56,7 +56,7 @@ static void runMaximaVvtTest(const char* fileName, double startTimeStamp) {
 	reader.open(fileName);
 	EngineTestHelper eth(engine_type_e::PROTEUS_NISSAN_VQ35);
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	// this signal is not inverted
 	engineConfiguration->invertCamVVTSignal = false;

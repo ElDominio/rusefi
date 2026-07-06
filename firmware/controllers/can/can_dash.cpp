@@ -595,7 +595,7 @@ void canDashboardAim(CanCycle cycle) {
 		return;
 	}
 
-	auto canChannel = (int)engineConfiguration->canBroadcastUseChannel;
+	auto canChannel = engineConfiguration->canBroadcastUseChannelTwo;
 
 	transmitStruct<Aim5f0>(CanCategory::NBC, 0x5f0, false, canChannel);
 	transmitStruct<Aim5f1>(CanCategory::NBC, 0x5f1, false, canChannel);

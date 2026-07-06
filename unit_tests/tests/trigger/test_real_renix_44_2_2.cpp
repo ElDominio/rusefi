@@ -29,7 +29,7 @@ TEST(triggerRenix44, renix44RealCrankingFromFile) {
 
 	reader.open("tests/trigger/resources/renix_44_2_2.csv");
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 	eth.setTriggerType(trigger_type_e::TT_RENIX_44_2_2);
 
 	// capture the RPM reported at the very first synchronization point, like
@@ -73,7 +73,7 @@ TEST(triggerRenix44, renix44RealCrankingFromFileAnotherOne) {
 
 	reader.open("tests/trigger/resources/renix_44_2_2.csv-another-one.csv");
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 	eth.setTriggerType(trigger_type_e::TT_RENIX_44_2_2);
 
 	float firstSyncRpm = 0;
@@ -90,5 +90,5 @@ TEST(triggerRenix44, renix44RealCrankingFromFileAnotherOne) {
 	ASSERT_TRUE(engine->triggerCentral.triggerState.getShaftSynchronized()) << "renix44 shaft sync";
 	ASSERT_NEAR(219, Sensor::getOrZero(SensorType::Rpm), 5) << "renix44 RPM";
 
-	ASSERT_EQ(531, tooManyTeethCounter);
+	ASSERT_EQ(3, tooManyTeethCounter);
 }
