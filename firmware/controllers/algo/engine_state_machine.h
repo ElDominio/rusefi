@@ -114,6 +114,10 @@ private:
 	float        m_accumulatorLastRpm   = 0;
 	float        m_accumulatorLastVss   = 0;
 
+	// Accelerating hold: reset every tick the rate threshold is met, so a fresh crossing
+	// extends the hold back to the full smAccelHoldMs duration (see determineState()).
+	Timer m_accelHoldTimer;
+
 	// RPM rate of change (RPM/s), recomputed only once every smRpmRateWindowMs (floored to one
 	// slow-callback tick, 50 ms) rather than on every tick -- so the value visibly updates at
 	// the cadence the user configures instead of continuously. Between recomputes this holds

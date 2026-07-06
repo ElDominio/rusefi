@@ -738,6 +738,138 @@ TEST(EngineStateMachine, acceleratingStateEnteredOnConfiguredRate) {
 	EXPECT_EQ(14u, sm.engineSmCurrentState);
 }
 
+// ---- Accelerating hold (smAccelHoldMs) ----
+//
+// determineState() consumes m_lastRpmRate one slow-callback tick after it's computed (see the
+// comment on m_lastRpmRate / recordRpmSampleAndComputeRate), so with smRpmRateWindowMs floored to
+// one tick, a single RPM step becomes visible to determineState() only on the *following* tick.
+// The helpers below spell out each tick's real time and rate explicitly to keep that lag honest.
+
+// Once the rate threshold is met, Accelerating must keep reporting for smAccelHoldMs after the
+// rate drops back below threshold, then fall through once the hold expires.
+TEST(EngineStateMachine, acceleratingHoldsAfterRateDrops) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	// m_lastRpmRate is only ever computed inside updateShiftAccumulator(), which
+	// updateShiftDetection() skips entirely unless a clutch switch is configured -- so a switch
+	// must be wired even though these tests don't exercise shift detection itself.
+	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smAccelRateThreshold = 500; // RPM/s
+	getCustomPage()->smRpmRateWindowMs = 50;     // recompute every tick (one slow-callback tick)
+	getCustomPage()->smAccelHoldMs = 120;
+
+	engine->rpmCalculator.setRpmValue(2000.0f);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
+	engine->periodicSlowCallback(); // t=0: establishes the rate anchor, no rate yet
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	// 500 RPM over one 50 ms tick == 10,000 RPM/s, comfortably above threshold. Not yet visible
+	// to determineState() this same tick (one-tick lag).
+	engine->rpmCalculator.setRpmValue(2500.0f);
+	EXPECT_NE(EngineStateMachineState::Accelerating, runAndGetState()); // t=50 ms
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	// RPM goes flat from here. The 10,000 RPM/s computed last tick is now visible -- Accelerating
+	// triggers and the hold timer resets, even though the rate itself is about to read 0.
+	EXPECT_EQ(EngineStateMachineState::Accelerating, runAndGetState()); // t=100 ms: trigger
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	// Rate has now recomputed to 0 (flat RPM) -- below threshold -- but the hold keeps it latched.
+	EXPECT_EQ(EngineStateMachineState::Accelerating, runAndGetState()); // t=150 ms: 50 ms into hold
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	EXPECT_EQ(EngineStateMachineState::Accelerating, runAndGetState()); // t=200 ms: 100 ms into hold
+
+	// Past smAccelHoldMs (120 ms since the t=100 ms trigger) -- hold expires, falls through.
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	EXPECT_EQ(EngineStateMachineState::Cruising, runAndGetState()); // t=250 ms: 150 ms, expired
+}
+
+// A fresh threshold crossing during the hold window must reset it back to the full duration,
+// not just let the original window run out underneath it.
+TEST(EngineStateMachine, acceleratingHoldResetsOnReTrigger) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	// m_lastRpmRate is only ever computed inside updateShiftAccumulator(), which
+	// updateShiftDetection() skips entirely unless a clutch switch is configured -- so a switch
+	// must be wired even though these tests don't exercise shift detection itself.
+	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smAccelRateThreshold = 500; // RPM/s
+	getCustomPage()->smRpmRateWindowMs = 50;
+	getCustomPage()->smAccelHoldMs = 120;
+
+	engine->rpmCalculator.setRpmValue(2000.0f);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
+	engine->periodicSlowCallback(); // t=0
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	engine->rpmCalculator.setRpmValue(2500.0f);
+	engine->periodicSlowCallback(); // t=50 ms: rate computed, not yet visible
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	EXPECT_EQ(EngineStateMachineState::Accelerating, runAndGetState()); // t=100 ms: trigger #1
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	// Still within trigger #1's hold. Jump RPM again -- this re-trigger's rate isn't visible yet
+	// (one-tick lag), so this tick is still riding out the *original* hold.
+	engine->rpmCalculator.setRpmValue(3000.0f);
+	EXPECT_EQ(EngineStateMachineState::Accelerating, runAndGetState()); // t=150 ms
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	// The re-trigger's rate (10,000 RPM/s) is now visible -- Accelerating re-triggers and the
+	// hold timer resets to t=200 ms.
+	EXPECT_EQ(EngineStateMachineState::Accelerating, runAndGetState()); // t=200 ms: re-trigger
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	// t=250/300 ms: 50/100 ms since the re-trigger -- still held. Without the reset, the
+	// *original* trigger's 120 ms hold (from t=100 ms) would already have expired by t=220 ms.
+	EXPECT_EQ(EngineStateMachineState::Accelerating, runAndGetState()); // t=250 ms
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	EXPECT_EQ(EngineStateMachineState::Accelerating, runAndGetState()); // t=300 ms
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	// Past the reset hold (150 ms since the t=200 ms re-trigger) -- now falls through.
+	EXPECT_EQ(EngineStateMachineState::Cruising, runAndGetState()); // t=350 ms
+}
+
+// A lift into Coasting/Overrun must break the Accelerating hold immediately -- a closed throttle
+// physically contradicts a stale "still accelerating" claim, and Overrun/DFCO must never be
+// masked by a latch that was still holding from an earlier tip-in.
+TEST(EngineStateMachine, overrunBreaksAcceleratingHoldImmediately) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	// m_lastRpmRate is only ever computed inside updateShiftAccumulator(), which
+	// updateShiftDetection() skips entirely unless a clutch switch is configured -- so a switch
+	// must be wired even though these tests don't exercise shift detection itself.
+	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smAccelRateThreshold = 500; // RPM/s
+	getCustomPage()->smRpmRateWindowMs = 50;
+	getCustomPage()->smAccelHoldMs = 200; // long hold relative to the steps below
+
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
+
+	engine->rpmCalculator.setRpmValue(2000.0f);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
+	engine->periodicSlowCallback(); // t=0
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	engine->rpmCalculator.setRpmValue(2500.0f);
+	engine->periodicSlowCallback(); // t=50 ms: rate computed, not yet visible
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	EXPECT_EQ(EngineStateMachineState::Accelerating, runAndGetState()); // t=100 ms: trigger
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+
+	// Lift off: throttle closes and the idle controller reports Coasting. Only 50 ms have
+	// elapsed since the trigger, deep inside the 200 ms hold -- but Coasting must override it
+	// immediately rather than waiting out the hold.
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Coasting));
+	engineConfiguration->coastingFuelCutRpmHigh = 9000; // keep this plain Coasting, not Overrun
+	EXPECT_EQ(EngineStateMachineState::Coasting, runAndGetState()); // t=150 ms
+}
+
 // ---- Clutch-Up-only shift detection (single switch, no Clutch-Down wired) ----
 
 static void setupClutchUpOnlyConfig() {

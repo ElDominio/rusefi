@@ -516,6 +516,17 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 		int16_t decelThr = getCustomPage()->smDecelRateThreshold;
 
 		if (accelThr > 0 && m_lastRpmRate > static_cast<float>(accelThr)) {
+			m_accelHoldTimer.reset();
+			return EngineStateMachineState::Accelerating;
+		}
+
+		// Hold Accelerating for smAccelHoldMs after the rate last crossed threshold, so a brief
+		// dip below threshold doesn't cause chatter back to Cruising/Transient. A lift into
+		// Coasting breaks the hold immediately -- a closed throttle physically contradicts a
+		// stale "still accelerating" claim, and Overrun/DFCO must never be masked by it.
+		uint16_t accelHoldMs = getCustomPage()->smAccelHoldMs;
+		if (accelHoldMs > 0 && idlePhase != IIdleController::Phase::Coasting &&
+				!m_accelHoldTimer.hasElapsedMs(static_cast<float>(accelHoldMs))) {
 			return EngineStateMachineState::Accelerating;
 		}
 

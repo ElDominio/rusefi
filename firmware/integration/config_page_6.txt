@@ -172,8 +172,7 @@ struct_no_prefix page6_s
 	uint16_t smShiftMinVss;Engine SM: VSS Rate mode only -- minimum vehicle speed. Below this the accumulator decays instead of accumulating. 0 = no minimum.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
 	int8_t smAccumulatorUpshiftThreshold;Engine SM: Accumulator must reach or exceed this value (0..100) to confirm an upshift. The accumulator runs from -100 to +100.;"", 1, 0, 0, 100, 0
 	int8_t smAccumulatorDownshiftThreshold;Engine SM: Accumulator must reach or fall below the negative of this value (0..100) to confirm a downshift.;"", 1, 0, 0, 100, 0
-	int8_t smAccelDecelPad1;
-	int8_t smAccelDecelPad2;
+	uint16_t smAccelHoldMs;Engine SM: once the Accelerating rate threshold is met, hold the Accelerating state for at least this long after the rate drops back below threshold. A fresh threshold crossing during the hold resets it back to the full duration. Broken immediately by a lift into the Coasting/Overrun phase, so a stale hold can never mask Overrun/DFCO. 0 = no hold (raw signal, legacy behavior).;"ms", 1, 0, 0, 5000, 0
 	float smAccumulatorGain;Engine SM: Accumulator climb rate in %/s per 1x threshold ratio. At exactly the threshold rate, the accumulator changes by this many %/s. Larger = faster response.;"%/s", 1, 0, 0, 200, 1
 	float smAccumulatorDecayRate;Engine SM: Rate at which the accumulator decays toward 0 (%/s) when the signal is within the ±threshold dead-band. Larger = faster decay.;"%/s", 1, 0, 0, 200, 1
 
