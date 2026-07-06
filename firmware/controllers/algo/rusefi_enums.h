@@ -140,6 +140,10 @@ typedef enum  __attribute__ ((__packed__)) {
 
   VVT_MITSUBISHI_6G75 = 31,
 
+  VVT_CUSTOM_3 = 32,
+
+  VVT_CUSTOM_4 = 34,
+
 } vvt_mode_e;
 
 typedef enum __attribute__ ((__packed__)) {
@@ -289,13 +293,17 @@ typedef enum {
 	TWO_STROKE = 3,
 
 	/**
-	 * 720 degree engine cycle but trigger is defined using a 180 cycle which is when repeated three more times
+	 * 720 degree engine cycle but trigger is defined using a 180 cycle which is then repeated three more times.
 	 * In other words, same pattern is repeated on the crank wheel twice.
+	 * Total 4 trigger cycles per engine cycle.
+	 * Used by Renix 44-2-2.
 	 */
 	FOUR_STROKE_SYMMETRICAL_CRANK_SENSOR = 4,
 
 	/**
-	 * Same pattern repeated three times on crank wheel. Crazy, I know!
+	 * Same pattern repeated three times on crank wheel (every 120 crank degrees).
+	 * Total 6 trigger cycles per engine cycle.
+	 * Used by Renix 66-2-2-2.
 	 */
 	FOUR_STROKE_THREE_TIMES_CRANK_SENSOR = 5,
 
@@ -561,8 +569,13 @@ typedef enum __attribute__ ((__packed__)) {
 	CAN_BUS_HONDA_K = 11,
 	CAN_AIM_DASH = 12,
 	CAN_BUS_MS_SIMPLE_BROADCAST = 13,
-
 } can_nbc_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	CAN_BUS_FIRST = 0,
+	CAN_BUS_SECOND = 1,
+	CAN_BUS_THIRD = 2,
+} can_broadcast_channel_e;
 
 typedef enum __attribute__ ((__packed__)) {
 	TCHARGE_MODE_RPM_TPS = 0,

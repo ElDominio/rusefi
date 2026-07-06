@@ -16,6 +16,23 @@
 
  *
  * At least some of the code here is related to xxx.teeth files
+ *
+ * .teeth file lifecycle (see firmware/hw_layer/mmc_card.cpp sdLoggerTooth()):
+ *   - A .teeth file is written instead of the regular .mlg log only while
+ *     engineConfiguration->sdTriggerLog is enabled (see prepareLogFileName()).
+ *   - No file exists until tooth data is actually available: sdLoggerTooth()
+ *     waits until ToothLoggerHasData() is true, then opens a brand new file.
+ *   - Each new file therefore starts fresh with the current/default logger
+ *     settings - the composite logger state (see 'cur' below) begins empty and
+ *     the header is written at offset zero, no state carries over from the
+ *     previous file.
+ *   - A file is closed (and the next tooth event begins yet another new file)
+ *     when either a write error occurs or the logger goes idle: ToothLoggerWriter()
+ *     blocks up to 3 seconds waiting for a tooth event (filledBuffers.fetch with
+ *     TIME_MS2I(3000)); on timeout it flushes the partially-filled buffer and
+ *     signals a new file. Note there is NO 32MB size cap on .teeth files - the
+ *     LOGGER_MAX_FILE_SIZE check in mmc_card.cpp applies only to regular .mlg logs.
+ *
  * TODO: remove legacy 'binary' format since we have CSV now?
  * See also misc\tooth_log_converter\log_convert.cpp
  *
@@ -487,7 +504,7 @@ int ToothLoggerWriter(FileBufferedWriter &writer) {
 int ToothLoggerWriteCsvHeader(Writer &writer) {
 	// keep in sync with composite_logger_s
 	// drop trigger - purpose not clear
-	const char header[] = "Time[s], Primary, Cam 1, Cam 2, Cam 3, Cam 4, Sync, TDC, Coils, Injectors, ACR, VBatt, ET\r\n";
+	const char header[] = "Time[s], Primary, Cam 1, Cam 2, Cam 3, Cam 4, Sync, TDC, Coils, Injectors, ACR, VBatt, ET, InstantMAP\r\n";
 
 	// no tailing '\0'
 	writer.write(header, sizeof(header) - 1);
@@ -507,16 +524,17 @@ int ToothLoggerWriteCsv(Writer &writer, CompositeBuffer* buffer) {
 		// todo: take these data points from structure, not current values. Kind of works for slow sensors, but still!
 		float vbatt = Sensor::get(SensorType::BatteryVoltage).value_or(0);
 		float et = Sensor::get(SensorType::Clt).value_or(0);
+		float instantMap = engine->outputChannels.instantMAPValue;
 
 		// it is cheaper to write all data, even we have 1 cylinder engine with single crank sensor
 		int ret = chsnprintf(tmp, sizeof(tmp), "%d.%06d, "
 					"%d, %d, %d, %d, %d, "
 					"%d, %d, "
-					"%d, %d, %d, %.2f, %.2f\r\n",	// TODO: convert to bitwise?
+					"%d, %d, %d, %.2f, %.2f, %.2f\r\n",	// TODO: convert to bitwise?
 				c.timestamp / 1000000, c.timestamp % 1000000,
 				c.priLevel, c.cam1, c.cam2, c.cam3, c.cam4,
 				c.sync, c.tdc,
-				c.coil, c.injector, c.acr, vbatt, et);
+				c.coil, c.injector, c.acr, vbatt, et, instantMap);
 
 		if ((ret < 0) || (ret >= (int)sizeof(tmp))) {
 			return -1;

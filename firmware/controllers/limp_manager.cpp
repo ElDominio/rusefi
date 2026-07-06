@@ -1,3 +1,12 @@
+/**
+ * @file limp_manager.cpp
+ * @brief Limp-home / protection manager.
+ *
+ * Central place that decides when fuel, spark or engine power must be cut or limited.
+ * Aggregates the various protection inputs (RPM/CLT/oil-pressure/boost limits, lambda
+ * protection, etc.) into the allowed-injection/allowed-ignition state machine.
+ */
+
 #include "pch.h"
 #include "custom_page.h"
 
@@ -33,13 +42,18 @@ static bool noFiringUntilVvtSync() {
 	// Symmetrical crank modes require cam sync before firing
 	// non-symmetrical cranks can use faster spin-up mode (firing in wasted/batch before VVT sync)
 	// Examples include Nissan MR/VQ, Miata NB, etc
+	// see limp.noFiringUntilCamSyncOnSymmetricalCrank unit test
 	bool result =
 		operationMode == FOUR_STROKE_SYMMETRICAL_CRANK_SENSOR ||
 		operationMode == FOUR_STROKE_THREE_TIMES_CRANK_SENSOR ||
 		operationMode == FOUR_STROKE_FIVE_TIMES_CRANK_SENSOR ||
+		operationMode == FOUR_STROKE_SIX_TIMES_CRANK_SENSOR ||
 		operationMode == FOUR_STROKE_TWELVE_TIMES_CRANK_SENSOR;
   if (result) {
-	  warningTsReport(ObdCode::CUSTOM_SYMMETRICAL_CRANK, "Your crank wheel requires cam sync before firing");
+    float rpm = Sensor::getOrZero(SensorType::Rpm);
+    if (rpm > 200) { // only showing warning above specific RPM to reduce confusion
+	    warningTsReport(ObdCode::CUSTOM_SYMMETRICAL_CRANK, "Not firing until we get cam sync");
+    }
 	}
 	return result;
 }

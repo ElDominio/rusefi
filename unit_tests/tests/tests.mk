@@ -22,6 +22,7 @@ TESTS_SRC_CPP = \
 	tests/trigger/test_real_cranking_miata_NA.cpp \
 	tests/trigger/test_real_cranking_miata_na6.cpp \
 	tests/trigger/test_real_cranking_nissan_vq40.cpp \
+	tests/trigger/test_real_nissan_maxima.cpp \
 	tests/trigger/test_real_cas_24_plus_1.cpp \
 	tests/trigger/test_real_4b11.cpp \
 	tests/trigger/test_real_4g93.cpp \
@@ -29,6 +30,7 @@ TESTS_SRC_CPP = \
 	tests/trigger/test_real_6g75.cpp \
 	tests/trigger/test_real_ford_coyote.cpp \
 	tests/trigger/test_real_volkswagen.cpp \
+	tests/trigger/test_real_renix_44_2_2.cpp \
 	tests/trigger/test_real_nb2_cranking.cpp \
 	tests/trigger/test_real_neon.cpp \
 	tests/trigger/test_real_gm_24x.cpp \

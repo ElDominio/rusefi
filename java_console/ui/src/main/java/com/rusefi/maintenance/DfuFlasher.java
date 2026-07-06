@@ -34,8 +34,8 @@ public class DfuFlasher {
     public static final String BOOTLOADER_BIN_FILE = INPUT_FILES_PATH + "/" + "openblt.bin";
     private static final String DFU_CMD_TOOL_LOCATION = Launcher.TOOLS_PATH + File.separator + "STM32_Programmer_CLI/bin";
     private static final String DFU_CMD_TOOL = "STM32_Programmer_CLI.exe";
-    private static final String WMIC_DFU_QUERY_COMMAND = "wmic path win32_pnpentity where \"Caption like '%STM32%' and Caption like '%Bootloader%'\" get Caption,ConfigManagerErrorCode /format:list";
-    private static final String WMIC_DFU_QUERY_H7_COMMAND = "wmic path win32_pnpentity where \"Caption like '%DFU%' and Caption like '%FS Mode%'\" get Caption,ConfigManagerErrorCode /format:list";
+    private static final String WMIC_DFU_QUERY_COMMAND = "powershell -NoProfile -Command \"Get-CimInstance Win32_PnPEntity -Filter \\\"Caption like '%STM32%' and Caption like '%Bootloader%'\\\" | Select-Object Caption, ConfigManagerErrorCode | Format-List\"";
+    private static final String WMIC_DFU_QUERY_H7_COMMAND = "powershell -NoProfile -Command \"Get-CimInstance Win32_PnPEntity -Filter \\\"Caption like '%DFU%' and Caption like '%FS Mode%'\\\" | Select-Object Caption, ConfigManagerErrorCode | Format-List\"";
     /**
      * Set to true when the DFU device-detection command itself fails to execute (e.g. insufficient privileges).
      * Used by the UI to show a "Run as Administrator" hint after a grace period.
@@ -235,7 +235,11 @@ public class DfuFlasher {
     }
 
     public static boolean detectSTM32BootloaderDriverState(UpdateOperationCallbacks callbacks) {
-        String command = ConnectionAndMeta.getBoolean("is_h7") ? WMIC_DFU_QUERY_H7_COMMAND : WMIC_DFU_QUERY_COMMAND;
+        // #9714: a universal bundle's is_h7 property can't cover every board, so trust the connected
+        // ECU's target first (e.g. "uaefi_pro_h7"), falling back to the bundled is_h7 property.
+        String effectiveTarget = com.rusefi.core.io.ConnectedEcuTarget.effectiveTarget();
+        boolean isH7 = (effectiveTarget != null && effectiveTarget.contains("h7")) || ConnectionAndMeta.getBoolean("is_h7");
+        String command = isH7 ? WMIC_DFU_QUERY_H7_COMMAND : WMIC_DFU_QUERY_COMMAND;
         try {
             return MaintenanceUtil.detectDevice(callbacks, command, "ConfigManagerErrorCode=0");
         } catch (ErrorExecutingCommand e) {

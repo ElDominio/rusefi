@@ -219,6 +219,16 @@ void RpmCalculator::onNewEngineCycle() {
 	revolutionCounterSinceStart++;
 }
 
+void RpmCalculator::onEnginePhaseResync() {
+	m_cyclePeriodDisturbed = true;
+}
+
+bool RpmCalculator::consumeCyclePeriodDisturbed() {
+	bool result = m_cyclePeriodDisturbed;
+	m_cyclePeriodDisturbed = false;
+	return result;
+}
+
 uint32_t RpmCalculator::getRevolutionCounterM(void) const {
 	return revolutionCounterSinceBoot;
 }
@@ -249,6 +259,7 @@ void RpmCalculator::setStopSpinning() {
 	revolutionCounterSinceStart = 0;
 	rpmRate = 0;
 	prevCycleRpm = 0;
+	m_cyclePeriodDisturbed = false;
 
 	if (cachedRpmValue != 0) {
 		assignRpmValue(0);
@@ -304,6 +315,11 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 
 		float periodSeconds = engine->rpmCalculator.lastTdcTimer.getElapsedSecondsAndReset(nowNt);
 
+		// An engine phase re-sync since the previous cycle start shifted which trigger cycle
+		// begins the engine cycle, so 'periodSeconds' does not span exactly one engine cycle.
+		// Drop this one sample, otherwise RPM momentarily reads double on a crank-speed trigger.
+		bool cyclePeriodDisturbed = rpmState->consumeCyclePeriodDisturbed();
+
 		if (hadRpmRecently) {
 		/**
 		 * Four stroke cycle is two crankshaft revolutions
@@ -312,36 +328,40 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 		 * and each revolution of crankshaft consists of two engine cycles revolutions
 		 *
 		 */
-			// rpmRate is always derived from the cycle-averaged RPM and the full-cycle period,
-			// independent of which mode is active. Per-tooth differentiation would be pure noise.
-			// An EMA filter is applied to attenuate cycle-to-cycle jitter (needed so First Order
-			// extrapolation does not amplify single-cycle outliers over the inter-TDC window).
-			if (periodSeconds == 0) {
-				rpmState->rpmRate = 0;
-				rpmState->prevCycleRpm = 0;
-				if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE) {
-					rpmState->setRpmValue(0);
-				}
-			} else {
-			  // todo: extract utility method? see duplication with high_pressure_pump.cpp
-				int mult = (int)getEngineCycle(getEngineRotationState()->getOperationMode()) / 360;
-				float cycleRpm = 60 * mult / periodSeconds;
-
-				float rawRpmRate = (cycleRpm - rpmState->prevCycleRpm) / (mult * periodSeconds);
-				// Tunable EMA (rpmRateSmoothingPct, 0-95%): only applied in FIRST_ORDER mode to smooth
-				// the extrapolation slope. Skipped on the first real measurement (prevCycleRpm==0) to
-				// avoid initializing at a fraction of the true rate. Other modes leave rpmRate
-				// unfiltered (it is a display gauge there).
-				if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER && rpmState->prevCycleRpm != 0) {
-					float smoothing = engineConfiguration->rpmRateSmoothingPct / 100.0f;
-					rpmState->rpmRate = smoothing * rpmState->rpmRate + (1.0f - smoothing) * rawRpmRate;
+			// Skip this sample entirely when the phase re-sync disturbed periodSeconds - the
+			// stale prevCycleRpm/rpmRate must not be overwritten by a bogus cycle-RPM value.
+			if (!cyclePeriodDisturbed) {
+				// rpmRate is always derived from the cycle-averaged RPM and the full-cycle period,
+				// independent of which mode is active. Per-tooth differentiation would be pure noise.
+				// An EMA filter is applied to attenuate cycle-to-cycle jitter (needed so First Order
+				// extrapolation does not amplify single-cycle outliers over the inter-TDC window).
+				if (periodSeconds == 0) {
+					rpmState->rpmRate = 0;
+					rpmState->prevCycleRpm = 0;
+					if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE) {
+						rpmState->setRpmValue(0);
+					}
 				} else {
-					rpmState->rpmRate = rawRpmRate;
-				}
-				rpmState->prevCycleRpm = cycleRpm;
+				  // todo: extract utility method? see duplication with high_pressure_pump.cpp
+					int mult = (int)getEngineCycle(getEngineRotationState()->getOperationMode()) / 360;
+					float cycleRpm = 60 * mult / periodSeconds;
 
-				if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE) {
-					rpmState->setRpmValue(cycleRpm);
+					float rawRpmRate = (cycleRpm - rpmState->prevCycleRpm) / (mult * periodSeconds);
+					// Tunable EMA (rpmRateSmoothingPct, 0-95%): only applied in FIRST_ORDER mode to smooth
+					// the extrapolation slope. Skipped on the first real measurement (prevCycleRpm==0) to
+					// avoid initializing at a fraction of the true rate. Other modes leave rpmRate
+					// unfiltered (it is a display gauge there).
+					if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER && rpmState->prevCycleRpm != 0) {
+						float smoothing = engineConfiguration->rpmRateSmoothingPct / 100.0f;
+						rpmState->rpmRate = smoothing * rpmState->rpmRate + (1.0f - smoothing) * rawRpmRate;
+					} else {
+						rpmState->rpmRate = rawRpmRate;
+					}
+					rpmState->prevCycleRpm = cycleRpm;
+
+					if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE) {
+						rpmState->setRpmValue(cycleRpm);
+					}
 				}
 			}
 		} else {

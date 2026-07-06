@@ -23,6 +23,7 @@
 #include "status_loop.h"
 #include "engine_sniffer.h"
 #include "auto_generated_sync_edge.h"
+#include "board_overrides.h"
 
 #if EFI_TUNER_STUDIO
 #include "tunerstudio.h"
@@ -155,6 +156,15 @@ angle_t TriggerCentral::syncEnginePhaseAndReport(int divider, int remainder) {
 
 		// Reset schedulers to avoid "out-of-order" warnings/errors when transitioning phase
 		engine->injectionEvents.resetOverlapping();
+
+		// On a crank-speed trigger the sync counter parity picks which trigger cycle starts the
+		// engine cycle, so a parity-changing shift means the next trigger index 0 is no longer one
+		// full engine cycle after the previous one - that cycle-RPM sample must be discarded.
+		// On a cam-speed trigger (crank divider 1) index 0 cadence is not affected.
+		int crankDivider = getCrankDivider(triggerShape.getWheelOperationMode());
+		if ((newSyncCounter - oldSyncCounter) % crankDivider != 0) {
+			engine->rpmCalculator.onEnginePhaseResync();
+		}
 	}
 	return totalShift;
 }
@@ -225,6 +235,8 @@ static angle_t adjustCrankPhase(int camIndex) {
         [[fallthrough]];
 	case VVT_CUSTOM_1:
 	case VVT_CUSTOM_2:
+	case VVT_CUSTOM_3:
+	case VVT_CUSTOM_4:
 	case VVT_INACTIVE:
 		// do nothing
 		return 0;
@@ -781,7 +793,10 @@ bool TriggerCentral::isToothExpectedNow(efitick_t timestamp) {
 	return true;
 }
 
-PUBLIC_API_WEAK bool boardAllowTriggerActions() { return true; }
+// todo: make this static in Dec 2026
+bool boardAllowTriggerActions() {
+	return get_board_override_result(custom_board_boardAllowTriggerActions, true);
+}
 
 angle_t TriggerCentral::findNextTriggerToothAngle(int p_currentToothIndex) {
   int currentToothIndex = p_currentToothIndex;
@@ -1094,7 +1109,7 @@ void onConfigurationChangeTriggerCallback() {
 	#endif
 	}
 #if EFI_DETAILED_LOGGING
-	efiPrintf("isTriggerConfigChanged=%d", triggerConfigChanged);
+	efiPrintf("isTriggerConfigChanged=%d", changed);
 #endif /* EFI_DETAILED_LOGGING */
 
 	// we do not want to miss two updates in a row

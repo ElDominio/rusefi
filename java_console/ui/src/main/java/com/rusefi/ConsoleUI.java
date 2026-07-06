@@ -2,6 +2,8 @@ package com.rusefi;
 
 import com.devexperts.logging.FileLogger;
 import com.devexperts.logging.Logging;
+import com.opensr5.ConfigurationImage;
+import com.opensr5.ini.IniFileModel;
 import com.rusefi.autodetect.PortDetector;
 import com.rusefi.binaryprotocol.BinaryProtocolLogger;
 import com.rusefi.binaryprotocol.ShortcutsHelper;
@@ -33,8 +35,12 @@ import org.jetbrains.annotations.NotNull;
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import com.rusefi.ui.InitOnFirstPaintPanel;
+import com.rusefi.ui.basic.LoadTuneHelper;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.function.Supplier;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
@@ -75,12 +81,60 @@ public class ConsoleUI {
     private final Map<Component, ActionListener> tabSelectedListeners = new HashMap<>();
 
     public ConsoleUI(String port, SerialPortType serialPortType) {
-        this(new UIContext(), port, serialPortType, false);
+        this(new UIContext(), port, serialPortType, false, null, null, null);
     }
 
     public ConsoleUI(UIContext uiContext, String port, SerialPortType serialPortType, boolean alreadyConnected) {
+        this(uiContext, port, serialPortType, alreadyConnected, null, null, null);
+    }
+
+    /**
+     * Reuses the already-visible, maximized {@code reuseFrame} handed off from {@link StartupFrame}
+     * instead of opening a second window (#9715).
+     */
+    public ConsoleUI(UIContext uiContext, String port, SerialPortType serialPortType, boolean alreadyConnected, JFrame reuseFrame) {
+        this(uiContext, port, serialPortType, alreadyConnected, null, null, reuseFrame);
+    }
+
+    /**
+     * [tag:offline_tune]
+     * Constructor for offline mode: opens the console with a pre-loaded tune and INI,
+     * without requiring a live ECU connection.
+     *
+     * @param uiContext      shared UI context
+     * @param ini            INI file model resolved from the MSQ signature
+     * @param initialImage   ConfigurationImage loaded from the MSQ file
+     */
+    public ConsoleUI(UIContext uiContext, IniFileModel ini, ConfigurationImage initialImage) {
+        this(uiContext, null, SerialPortType.Unknown, false, ini, initialImage, null);
+    }
+
+    /**
+     * A menu action that builds the (lazily-constructed) Tuning pane on first use, then delegates to
+     * its real action (#9715). After the build, {@code buildTuning} re-points the menu at the real
+     * actions, so this wrapper only ever runs once.
+     */
+    private static Action lazyTuneAction(String text, Runnable buildTuning, Supplier<Action> realAction) {
+        return new AbstractAction(text) {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                buildTuning.run();
+                realAction.get().actionPerformed(e);
+            }
+        };
+    }
+
+    private ConsoleUI(UIContext uiContext, String port, SerialPortType serialPortType,
+                      boolean alreadyConnected, IniFileModel offlineIni, ConfigurationImage offlineImage,
+                      JFrame reuseFrame) {
         this.uiContext = uiContext;
         LinkManager linkManager = uiContext.getLinkManager();
+
+        boolean isOffline = (offlineIni != null && offlineImage != null);
+        if (isOffline) {
+            uiContext.setOfflineMode(true);
+            uiContext.setIniFileModelForOffline(offlineIni);
+        }
 
         CommandQueue.ERROR_HANDLER = e -> {
             log.error("Connectivity error", e);
@@ -136,7 +190,7 @@ public class ConsoleUI {
 
         // ---------------
 
-        MainFrame mainFrame = new MainFrame(this, tabbedPane);
+        MainFrame mainFrame = new MainFrame(this, tabbedPane, reuseFrame);
         JFrame frame = mainFrame.getFrame().getFrame();
         setFrameIcon(frame);
         log.info("Console " + UiVersion.CONSOLE_VERSION);
@@ -146,13 +200,13 @@ public class ConsoleUI {
         getConfig().getRoot().setProperty(PORT_KEY, port);
         getConfig().getRoot().setProperty(SPEED_KEY, BaudRateHolder.INSTANCE.baudRate);
 
-        if (!alreadyConnected) {
+        if (!alreadyConnected && !isOffline) {
             // todo: this blocking IO operation should NOT be happening on the UI thread
             linkManager.start(port, mainFrame.listener);
         }
 
         engineSnifferPanel = new EngineSnifferPanel(uiContext, getConfig().getRoot().getChild("digital_sniffer"));
-        if (!LinkManager.isLogViewerMode(port))
+        if (isOffline || !LinkManager.isLogViewerMode(port))
             engineSnifferPanel.setOutpinListener(uiContext.getLinkManager().getEngineState());
 
         // what is LogViewer? is this all dead?
@@ -161,14 +215,28 @@ public class ConsoleUI {
 
         uiContext.DetachedRepositoryINSTANCE.init(getConfig().getRoot().getChild("detached"));
         uiContext.DetachedRepositoryINSTANCE.load();
-        if (!linkManager.isLogViewer()) {
+        // Heavy tabs (Lua, Tuning) are lazy-built unless they are the user's last-opened tab, which
+        // will be shown immediately on startup — in that case build eagerly (#9715).
+        int savedTabIndex = getConfig().getRoot().getIntProperty(TAB_INDEX, DEFAULT_TAB_INDEX);
+        if (isOffline || !linkManager.isLogViewer()) {
             tabbedPane.addTab("Gauges", new GaugesPanel(uiContext, getConfig().getRoot().getChild("gauges")).getContent());
 
             MessagesPane messagesPane = new MessagesPane(uiContext, getConfig().getRoot().getChild("messages"));
             tabbedPaneAdd("Messages", messagesPane.getContent(), messagesPane.getTabSelectedListener());
 
-            LuaScriptPanel luaScriptPanel = new LuaScriptPanel(uiContext, getConfig().getRoot().getChild("lua"));
-            tabbedPaneAdd("Lua Scripting", luaScriptPanel.getPanel(), luaScriptPanel.getTabSelectedListener());
+            int luaIndex = tabbedPane.tabbedPane.getTabCount();
+            if (luaIndex == savedTabIndex) {
+                LuaScriptPanel luaScriptPanel = new LuaScriptPanel(uiContext, getConfig().getRoot().getChild("lua"));
+                tabbedPaneAdd("Lua Scripting", luaScriptPanel.getPanel(), luaScriptPanel.getTabSelectedListener());
+            } else {
+                // Build the (heavy) Lua editor only when its tab is first shown (#9715).
+                tabbedPane.addTab("Lua Scripting", new InitOnFirstPaintPanel() {
+                    @Override
+                    protected JPanel createContent() {
+                        return new LuaScriptPanel(uiContext, getConfig().getRoot().getChild("lua")).getPanel();
+                    }
+                }.getContent());
+            }
         }
 
         if (UiProperties.isEngineSnifferEnabled()) {
@@ -190,16 +258,52 @@ public class ConsoleUI {
 
 //        if (!linkManager.isLogViewer())
 //            tabbedPane.addTab("Settings", tabbedPane.settingsTab.createPane());
-        if (!linkManager.isLogViewer()) {
+        if (isOffline || !linkManager.isLogViewer()) {
 /*
 console live data tab is broken #8402
 
             tabbedPane.addTab("Live Data", LiveDataPane.createLazy(uiContext).getContent());
  */
-            TuningPane tuningPane = new TuningPane(uiContext);
-            mainFrame.setTuneActions(tuningPane.getLoadTuneAction(), tuningPane.getSaveTuneAction());
             PinoutPane pinoutPane = new PinoutPane(uiContext);
-            tabbedPane.addTab("Tuning", tuningPane.getContent());
+
+            // Tuning is heavy (~60ms) and not always the startup tab. Build it on first use — tab
+            // shown, File>Load/Save Tune, or Pinout→Tune nav — unless it's the restored tab (#9715).
+            // The holder wires the tune menu + navigation the first time the instance is needed.
+            final TuningPane[] tuningHolder = {null};
+            final Runnable buildTuning = () -> {
+                if (tuningHolder[0] != null) {
+                    return;
+                }
+                TuningPane tp = new TuningPane(uiContext, offlineImage, getConfig().getRoot().getChild("tuning"));
+                tuningHolder[0] = tp;
+                if (isOffline && offlineImage != null) {
+                    tp.seedOfflineImage(offlineImage, null);
+                }
+                mainFrame.setTuneActions(tp.getLoadTuneAction(), tp.getSaveTuneAction());
+                if (UiProperties.isPinoutEnabled()) {
+                    tp.setNavigateToPinout(enumValue -> {
+                        tabbedPane.selectTab("Pinout");
+                        pinoutPane.highlightByEnumValue(enumValue);
+                    });
+                }
+            };
+
+            int tuningIndex = tabbedPane.tabbedPane.getTabCount();
+            tabbedPane.addTab("Tuning", new InitOnFirstPaintPanel() {
+                @Override
+                protected JPanel createContent() {
+                    buildTuning.run();
+                    JPanel wrapper = new JPanel(new BorderLayout());
+                    wrapper.add(tuningHolder[0].getContent(), BorderLayout.CENTER);
+                    return wrapper;
+                }
+            }.getContent());
+            // Until Tuning is built, the menu actions build it on first click then delegate; once
+            // built, buildTuning re-points the menu at the real actions.
+            mainFrame.setTuneActions(
+                lazyTuneAction(LoadTuneHelper.LOAD_TUNE_TEXT, buildTuning, () -> tuningHolder[0].getLoadTuneAction()),
+                lazyTuneAction(LoadTuneHelper.SAVE_TUNE_TEXT, buildTuning, () -> tuningHolder[0].getSaveTuneAction()));
+
             tabbedPane.addTab("Knock Analyzer", new KnockPane(uiContext).getContent());
             if (UiProperties.isPinoutEnabled()) {
                 tabbedPane.addTab("Pinout", pinoutPane.getContent());
@@ -213,19 +317,21 @@ console live data tab is broken #8402
 
             // Pinout ↔ Tune bidirectional navigation
             pinoutPane.setNavigateToTune((dialogKey, fieldKey) -> {
+                buildTuning.run();
                 tabbedPane.selectTab("Tuning");
-                tuningPane.navigateToField(dialogKey, fieldKey);
+                tuningHolder[0].navigateToField(dialogKey, fieldKey);
             });
-            if (UiProperties.isPinoutEnabled()) {
-                tuningPane.setNavigateToPinout(enumValue -> {
-                    tabbedPane.selectTab("Pinout");
-                    pinoutPane.highlightByEnumValue(enumValue);
-                });
+
+            // Build eagerly if Tuning was the user's last-opened tab (shown immediately on startup).
+            if (tuningIndex == savedTabIndex) {
+                buildTuning.run();
             }
         }
 
-        if (!linkManager.isLogViewer() && false) // todo: fix it & better name?
+        if ((isOffline || !linkManager.isLogViewer()) && false) {
+            // todo: fix it & better name?
             tabbedPane.addTab("Logs Manager", tabbedPane.logsManager.getContent());
+        }
 
 
         MessagesCentral.getInstance().postMessage(ConsoleUI.class, "COMPOSITE_OFF_RPM=" + BinaryProtocolLogger.COMPOSITE_OFF_RPM);
@@ -241,10 +347,9 @@ console live data tab is broken #8402
             uiContext.sensorLogger.init();
         }
 
-        if (!LinkManager.isLogViewerMode(port)) {
-            int selectedIndex = getConfig().getRoot().getIntProperty(TAB_INDEX, DEFAULT_TAB_INDEX);
-            if (selectedIndex < tabbedPane.tabbedPane.getTabCount())
-                tabbedPane.tabbedPane.setSelectedIndex(selectedIndex);
+        if (isOffline || !LinkManager.isLogViewerMode(port)) {
+            if (savedTabIndex < tabbedPane.tabbedPane.getTabCount())
+                tabbedPane.tabbedPane.setSelectedIndex(savedTabIndex);
         }
 
         tabbedPane.tabbedPane.addChangeListener(new ChangeListener() {
@@ -263,7 +368,6 @@ console live data tab is broken #8402
 
         ShortcutsHelper.installConnectAndDisconnect(uiContext, tabbedPane.tabbedPane);
         AutoupdateUtil.setAppIcon(mainFrame.getFrame().getFrame());
-        log.info("showFrame");
 
         mainFrame.getFrame().showFrame(rootPanel);
     }

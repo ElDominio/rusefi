@@ -74,6 +74,8 @@ trigger_type_e getVvtTriggerType(vvt_mode_e vvtMode) {
 	switch (vvtMode) {
 	case VVT_CUSTOM_1:
 	case VVT_CUSTOM_2:
+	case VVT_CUSTOM_3:
+	case VVT_CUSTOM_4:
 	case VVT_INACTIVE:
 	  // hold on, what? 'VVT_INACTIVE' means TT_HALF_MOON?!
 		return trigger_type_e::TT_HALF_MOON;
@@ -329,7 +331,7 @@ void Engine::reset() {
 /**
  * The "resetLua track": clears every piece of engine state that a Lua script
  * may have written, so that after a script reload (luareset / new script
- * upload via mcp_lua / set_lua) we start from a clean slate instead of
+ * upload via mcp_ecu / set_lua) we start from a clean slate instead of
  * leaving the previous script's overrides stuck in place forever.
  *
  * Anything a Lua script can poke (fuel/ign add+mult, idle add, boost
@@ -341,7 +343,7 @@ void Engine::reset() {
  * Call sites:
  *  - LuaThread::ThreadTask() after each runOneLua() iteration (lua.cpp),
  *    which means it fires on every `luareset` and on every new script
- *    upload performed by mcp_lua / SetLuaTool.
+ *    upload performed by mcp_ecu / SetLuaTool.
  *  - Engine reset paths in unit tests.
  *
  * todo: https://github.com/rusefi/rusefi/issues/4308 Uniform reset pattern for all Lua adjustments

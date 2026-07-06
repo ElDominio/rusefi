@@ -29,6 +29,7 @@ project(':trigger-ui').projectDir = new File(rootRelativePath + 'java_console/tr
 include ':logging-api'
 project(':logging-api').projectDir = new File(rootRelativePath + 'java_console/logging-api')
 include ':gcc_map_reader'
+project(':gcc_map_reader').projectDir = new File(rootRelativePath + 'java_tools/gcc_map_reader')
 
 include ':enum_to_string'
 project(':enum_to_string').projectDir = new File(rootRelativePath + 'java_tools/enum_to_string')
@@ -69,8 +70,8 @@ include ':ui'
 project(':ui').projectDir = new File(rootRelativePath + 'java_console/ui')
 include ':luaformatter'
 project(':luaformatter').projectDir = new File(rootRelativePath + 'java_console/luaformatter_module')
-include ':mcp_lua'
-project(':mcp_lua').projectDir = new File(rootRelativePath + 'java_console/mcp_lua')
+include ':mcp_ecu'
+project(':mcp_ecu').projectDir = new File(rootRelativePath + 'java_console/mcp_ecu')
 
 include ':mcp_can'
 project(':mcp_can').projectDir = new File(rootRelativePath + 'java_console/mcp_can')

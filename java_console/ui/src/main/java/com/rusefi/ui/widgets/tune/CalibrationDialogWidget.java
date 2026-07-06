@@ -26,10 +26,15 @@ import com.rusefi.ui.laf.GradientTitleBorder;
 import com.rusefi.ui.util.ScrollablePanel;
 import com.rusefi.ui.util.SwingUtil;
 import com.rusefi.ui.util.WrapLayout;
+import com.rusefi.trigger.TriggerImage;
+import com.rusefi.trigger.TriggerWheelInfo;
+import com.opensr5.ConfigurationImageGetterSetter;
+import java.io.File;
 
 import com.devexperts.logging.Logging;
 
 import javax.swing.*;
+import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.util.*;
 import java.util.Arrays;
@@ -46,8 +51,10 @@ import static com.devexperts.logging.Logging.getLogging;
  */
 public class CalibrationDialogWidget {
     private static final Logging log = getLogging(CalibrationDialogWidget.class);
+
     private final JPanel contentPane = new ScrollablePanel();
     private final UIContext uiContext;
+    private final TriggerImageHelper triggerImageHelper = new TriggerImageHelper();
     private ConfigurationImage workingImage;
     private IniFileModel currentIniFileModel;
     private final List<ExpressionRow> expressionRows = new ArrayList<>();
@@ -178,9 +185,20 @@ public class CalibrationDialogWidget {
         gaugeReadoutEntries.clear();
         contentPane.removeAll();
         if (dialogModel != null) {
+            String uiName = dialogModel.getUiName();
+            if (uiName == null || uiName.isEmpty()) {
+                uiName = dialogModel.getKey();
+            }
+            contentPane.setName(uiName);
+
             applyLayout(contentPane, dialogModel.getLayoutHint());
             contentPane.setAlignmentX(Component.LEFT_ALIGNMENT);
             fillPanel(contentPane, dialogModel, iniFileModel, ci);
+
+            if (triggerImageHelper.isTriggerPanel(dialogModel.getKey(), uiName)) {
+                triggerImageHelper.addTriggerPanelExtras(contentPane);
+                triggerImageHelper.updateTriggerImage(currentIniFileModel, workingImage);
+            }
         }
         contentPane.revalidate();
         contentPane.repaint();
@@ -300,7 +318,12 @@ public class CalibrationDialogWidget {
     }
 
     private void renderField(JPanel container, DialogModel.Field field, IniFileModel iniFileModel, ConfigurationImage ci) {
-        Runnable onChange = this::refreshExpressions;
+        Runnable onChange = () -> {
+            refreshExpressions();
+            if ("trigger_type".equalsIgnoreCase(field.getKey())) {
+                triggerImageHelper.updateTriggerImage(currentIniFileModel, workingImage);
+            }
+        };
         Optional<IniField> iniField = iniFileModel.findIniField(field.getKey());
         JPanel row = iniField.map(value -> {
             try {
@@ -414,6 +437,11 @@ public class CalibrationDialogWidget {
             panelWidget.setName(uiName);
             GradientTitleBorder.installBorder(uiName, panelWidget);
             fillPanel(panelWidget, subDialog, iniFileModel, ci);
+
+            if (triggerImageHelper.isTriggerPanel(subDialog.getKey(), uiName) || "Sub Panel".equals(uiName)) {
+                triggerImageHelper.addTriggerPanelExtras(panelWidget);
+                triggerImageHelper.updateTriggerImage(currentIniFileModel, workingImage);
+            }
         } else {
             panelWidget.setName(panel.getPanelName());
             GradientTitleBorder.installBorder(panel.getPanelName(), panelWidget);
@@ -421,7 +449,6 @@ public class CalibrationDialogWidget {
         if (constraint != null) targetContainer.add(panelWidget, constraint); else targetContainer.add(panelWidget);
     }
 
-    /** older render logic, used only for test, TODO: refactor the test and remove */
     private static List<DialogModel.DialogEntry> synthesizeOrderedEntries(DialogModel dialog) {
         List<DialogModel.DialogEntry> list = new ArrayList<>();
         for (DialogModel.Field f : dialog.getFields())

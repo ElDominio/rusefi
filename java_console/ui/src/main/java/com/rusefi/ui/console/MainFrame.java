@@ -1,6 +1,7 @@
 package com.rusefi.ui.console;
 
 import com.devexperts.logging.Logging;
+import com.opensr5.ini.IniFileModel;
 import com.rusefi.*;
 import com.rusefi.autoupdate.Autoupdate;
 import com.rusefi.binaryprotocol.BinaryProtocol;
@@ -48,38 +49,46 @@ public class MainFrame {
     /**
      * @see StartupFrame
      */
-    private final FrameHelper frame = new FrameHelper() {
-        @Override
-        protected void onWindowOpened() {
-            log.info("onWindowOpened");
-            windowOpenedHandler();
-        }
-
-        @Override
-        protected void onWindowClosed() {
-            /**
-             * here we would close the port and log a message about it
-             */
-            windowClosedHandler();
-            /**
-             * here we would close the log file
-             */
-            log.info("onWindowClosed");
-        }
-    };
+    private final FrameHelper frame;
 
     public final ConnectionStatusLogic.Listener listener;
 
     private JMenuItem loadTuneItem;
     private JMenuItem saveTuneItem;
+    /**
+     * user experience overview at Autoupdate.java
+     */
     private JMenuItem updateSoftwareItem;
     private JMenuItem updateEcuItem;
     private Runnable updateEcuAction;
 
     public MainFrame(ConsoleUI consoleUI, TabbedPanel tabbedPane) {
+        this(consoleUI, tabbedPane, null);
+    }
+
+    /**
+     * @param reuseFrame when non-null, the console reuses this already-visible, maximized frame
+     *                   (handed off from {@link StartupFrame}) instead of creating a new window (#9715).
+     */
+    public MainFrame(ConsoleUI consoleUI, TabbedPanel tabbedPane, JFrame reuseFrame) {
         this.consoleUI = Objects.requireNonNull(consoleUI);
         this.tabbedPane = tabbedPane;
         listener = ConnectionStatusLogic.Listener.VOID;
+        // reuseFrame == null creates a new window; non-null reuses the splash frame in place (#9715).
+        this.frame = new FrameHelper(reuseFrame, JFrame.DISPOSE_ON_CLOSE) {
+            @Override
+            protected void onWindowOpened() {
+                log.info("onWindowOpened");
+                windowOpenedHandler();
+            }
+
+            @Override
+            protected void onWindowClosed() {
+                // close the port, then the log file
+                windowClosedHandler();
+                log.info("onWindowClosed");
+            }
+        };
 
         createMenuBar();
     }
@@ -307,6 +316,11 @@ public class MainFrame {
             BinaryProtocol bp = consoleUI.uiContext.getBinaryProtocol();
             String signature = bp == null ? "not loaded" : bp.signature;
             frameTitle = consoleVersion + "; firmware=" + Launcher.firmwareVersion.get() + "@" + consoleUI.getPort() + " " + signature;
+        } else if (consoleUI.uiContext.isOfflineMode()) {
+            // [tag:offline_tune] no ECU — title reflects the loaded tune's signature
+            IniFileModel ini = consoleUI.uiContext.iniFileState.getIniFileModel();
+            String signature = ini != null ? ini.getSignature() : "no INI";
+            frameTitle = "OFFLINE " + consoleVersion + " " + signature;
         } else {
             frameTitle = "DISCONNECTED " + consoleVersion;
         }

@@ -73,6 +73,9 @@ void TriggerDecoderBase::setShaftSynchronized(bool value) {
 /**
  * Resets the base decoder state.
  *
+ * This handles fields common to all trigger inputs (primary, VVT, etc),
+ * such as tooth durations and basic synchronization flags.
+ *
  * This is called during initialization, when engine rotation stops,
  * or during trigger re-sync search.
  */
@@ -94,6 +97,12 @@ void TriggerDecoderBase::resetState() {
 
 	totalEventCountBase = 0;
 	isFirstEvent = true;
+
+	vvtToothDurations0 = 0;
+	vvtCurrentPosition = 0;
+	setArrayValues(vvtToothPosition, 0);
+	triggerSyncGapRatio = 0;
+	triggerStateIndex = 0;
 
 	call_board_override(custom_board_TriggerResetState);
 }
@@ -210,13 +219,23 @@ int TriggerDecoderBase::getSynchronizationCounter() const {
 /**
  * Resets the primary decoder state, including its phase sync state.
  *
+ * This overrides TriggerDecoderBase::resetState() to handle primary-specific
+ * state like crank/phase sync flags, while calling the base implementation
+ * to clear common fields.
+ *
  * This is called during initialization, when engine rotation stops,
  * or during trigger re-sync search.
  */
 void PrimaryTriggerDecoder::resetState() {
 	TriggerDecoderBase::resetState();
 
+	/**
+	 * resetHasFullSync() resets m_hasSynchronizedPhase to true OR false
+	 * depending on m_needsDisambiguation
+	 */
 	resetHasFullSync();
+	m_hasSynchronizedCrank = false;
+	m_phaseAdjustment = 0;
 }
 
 

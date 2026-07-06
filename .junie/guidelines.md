@@ -4,6 +4,10 @@
 
 See also: `CLAUDE.md`, `docs/adding-new-trigger.md`, `.junie/ts-help-topic.md`, `.junie/ts-readme.md`, `README-mcp.md`, `java_console/mcp_lua/README.md`, `firmware/controllers/lua/examples/`, [Lua-Scripting.md](https://github.com/rusefi/rusefi_documentation/blob/master/Lua-Scripting.md).
 
+## Firmware: engine modules
+
+When creating a new engine module (or disabling an existing one), first search the codebase for the `[tag:disable_engine_module]` comment tag and read every hit for context — the main how-to lives in `firmware/controllers/core/engine_module.h`, with the module registry in `firmware/controllers/algo/engine.h` and `long_term_fuel_trim.h`/`.cpp` as the worked example of an optional module that owns a TunerStudio page. See also the "Engine modules" bullet under Key Concepts in `CLAUDE.md`.
+
 ## Frontend (Java console)
 
 `CLAUDE.md` focuses on the C++ firmware / unit tests / simulator. This section covers the Java side, which `CLAUDE.md` does not describe.
@@ -39,7 +43,7 @@ The Java side is a Gradle project with build tools and the frontend application;
 #### MCP servers and Lua iteration
 - The `:mcp_lua` module is the recommended way for an LLM (Junie / Claude Desktop / JetBrains AI / Cursor) to iterate on Lua scripts against a real ECU: write a candidate script, `set_lua` to upload + burn + `luareset`, then `wait_for_message` / `read_messages` to observe `print(...)` / `efiPrintf` output. See `java_console/mcp_lua/README.md` for the full architecture (`LuaService` in `:ecu_io`, `MessagesCentral` listener) and gotchas (stdio transport, single ECU connection, ASCII-only `LUASCRIPT`).
 - **By default target a real ECU** connected via serial port. The Win32 simulator is not reliable for MCP workflows (socket binding issues, process instability). Use serial port autodetect (omit `--port`) or pass the explicit serial port name.
-- Reference Lua scripts live in `firmware/controllers/lua/examples/` (e.g. `launch_control.lua`, `CruiseCheck.lua`, `gdi4-communication.lua`, `man-in-the-middle.txt`, `DBW-controller.txt`, `dash-sweep.lua`, …). When asked to write or improve a Lua script, **start by scanning that folder** for an analogous example before drafting from scratch, then iterate via `:mcp_lua`.
+- Reference Lua scripts live in `firmware/controllers/lua/examples/` (e.g. `launch_control.lua`, `CruiseCheck.lua`, `gdi4-communication.lua`, `man-in-the-middle.txt`, `DBW-controller.txt`, `dash-sweep.lua`, …). When asked to write or improve a Lua script, **start by scanning that folder** for an analogous example before drafting from scratch, then iterate via `:mcp_lua`. Read `firmware/controllers/lua/examples/readme.md` first — its "Gotchas" section covers common pitfalls (Lua-fed sensors time out unless `:set()` is refreshed every `onTick`; failing `txCan` on an unACKed bus stalls the Lua thread).
 - For CAN-bus context that a Lua script might react to, the read-only `:mcp_can` PCAN sniffer can be used to capture frames first.
 
 #### Build and Development:
@@ -48,8 +52,7 @@ The Java side is a Gradle project with build tools and the frontend application;
 - Source code for `:ui` is in `../java_console/ui/src/main/java`.
 
 #### UI entry points
-- `rusefi_updater.exe` (see `console_launcher` folder for launch4j) invokes `Launcher#main` with empty args; the merged launcher handles both the autoupdate flow and the console UI.
-- `rusefi_autoupdate.exe` entry point is `Autoupdate#main`.
+- see docs/frontend.md
 
 #### TS templating:
 - Pattern: `#define CAM_INPUT_1_1_NAME "Cam sensor bank 1 intake"` in `rusefi_config.txt`

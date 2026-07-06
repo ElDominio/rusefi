@@ -3,6 +3,7 @@ apply from: dependenciesPath
 
 dependencies {
     api project(':ecu_io')
+    api project(':ui')
     api project(':models')
     api project(':inifile')
     implementation global_libs.json
@@ -17,15 +18,16 @@ test {
 
 jar {
     manifest {
-        attributes 'Main-Class': 'com.rusefi.mcp.LuaMcpServer'
+        attributes 'Main-Class': 'com.rusefi.mcp.EcuMcpServer'
     }
 }
 
 task fatJar(type: Jar) {
     dependsOn configurations.runtimeClasspath
+    archiveBaseName = 'mcp_ecu'
     archiveClassifier = 'all'
     manifest {
-        attributes 'Main-Class': 'com.rusefi.mcp.LuaMcpServer'
+        attributes 'Main-Class': 'com.rusefi.mcp.EcuMcpServer'
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from sourceSets.main.output
@@ -37,9 +39,9 @@ task fatJar(type: Jar) {
 task runMcp(type: JavaExec) {
     dependsOn build
     group = "Execution"
-    description = "Run the rusEFI Lua MCP server on stdio"
+    description = "Run the rusEFI ECU MCP server on stdio"
     workingDir = rootProject.projectDir
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'com.rusefi.mcp.LuaMcpServer'
+    mainClass = 'com.rusefi.mcp.EcuMcpServer'
     standardInput = System.in
 }

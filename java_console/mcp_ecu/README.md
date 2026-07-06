@@ -1,4 +1,4 @@
-# rusEFI Lua MCP server
+# rusEFI ECU MCP server
 
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that lets an
 LLM client (Claude Desktop, JetBrains AI, Cursor, etc.) iterate on rusEFI Lua scripts:
@@ -8,7 +8,7 @@ write a candidate script, upload it to the ECU, reset Lua, and observe the resul
 ## Architecture
 
 ```
-LLM client  <-- stdio JSON-RPC (MCP) -->  LuaMcpServer
+LLM client  <-- stdio JSON-RPC (MCP) -->  EcuMcpServer
                                               |
                                               +-- LuaService (in :ecu_io)
                                               |       |
@@ -22,7 +22,7 @@ LLM client  <-- stdio JSON-RPC (MCP) -->  LuaMcpServer
 ```
 
 `LuaService` (in `:ecu_io`) is the headless reusable core that `SetLuaTool` and
-`LuaMcpServer` both depend on. It owns connecting to the ECU, locating the `LUASCRIPT`
+`EcuMcpServer` both depend on. It owns connecting to the ECU, locating the `LUASCRIPT`
 ini field, writing/burning, and `luareset`.
 
 ## Tools exposed over MCP
@@ -35,6 +35,8 @@ ini field, writing/burning, and `luareset`.
 | `get_lua` | Read currently-flashed Lua from the cached image. |
 | `lua_reset` | Send `luareset` to restart the Lua VM. |
 | `send_command` | Send any text command via the standard queue (e.g. `lua 1+2`). |
+| `command` | Alias for `send_command` (useful for clients that prefer shorter tool names). |
+| `read_output_channel` | Read latest output-channel value by name (case-insensitive). |
 | `read_messages` | Pull recent ECU messages from the in-memory ring buffer (Lua `print` included). |
 | `wait_for_message` | Block until a regex matches an ECU message, or timeout. |
 
@@ -47,9 +49,9 @@ A typical LLM session:
 ## Run
 
 ```
-./gradlew :mcp_lua:runMcp          # run on stdio
-./gradlew :mcp_lua:fatJar          # produce build/libs/mcp_lua-*-all.jar
-java -jar build/libs/mcp_lua-all.jar [--port /dev/ttyACM0]
+./gradlew :mcp_ecu:runMcp          # run on stdio
+./gradlew :mcp_ecu:fatJar          # produce build/libs/mcp_ecu-*-all.jar
+java -jar build/libs/mcp_ecu-all.jar [--port /dev/ttyACM0]
 ```
 
 ### Example client config (Claude Desktop)
@@ -59,7 +61,7 @@ java -jar build/libs/mcp_lua-all.jar [--port /dev/ttyACM0]
   "mcpServers": {
     "rusefi-lua": {
       "command": "java",
-      "args": ["-jar", "/abs/path/to/mcp_lua-all.jar"]
+      "args": ["-jar", "/abs/path/to/mcp_ecu-all.jar"]
     }
   }
 }

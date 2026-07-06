@@ -6,6 +6,7 @@ import com.rusefi.AutoupdateProperty;
 import com.rusefi.core.FindFileHelper;
 import com.rusefi.core.io.BundleInfo;
 import com.rusefi.core.io.BundleInfoStrategy;
+import com.rusefi.core.io.ConnectedEcuTarget;
 import com.rusefi.core.io.BundleUtil;
 import com.rusefi.core.net.ConnectionAndMeta;
 import com.rusefi.core.FileUtil;
@@ -35,10 +36,94 @@ import static com.rusefi.core.FindFileHelper.findSrecFile;
 import static com.rusefi.core.FindFileHelper.findFirmwareFile;
 
 /**
- * entry point of rusefi_autoupdate.exe
+ * Entry point of {@code rusefi_autoupdate.exe} and the coordinator of the console/firmware
+ * auto-update user experience.
+ * <p>
+ * We've given up on complex classloader logic for auto-update and ended up with the
+ * {@link #startConsoleAsANewProcess} approach: the updater JVM downloads and unpacks a fresh
+ * bundle, then launches the real console as a brand-new process so classloading is never asked
+ * to swap classes underneath a running JVM.
  *
- * We've given up on complex classloader logic for auto-update and ended up with startConsoleAsANewProcess approach
+ * <h2>User experience overview</h2>
+ *
+ * <h3>1. Settings that gate auto-update</h3>
+ * Auto-update is controlled by <b>two</b> flags — {@link #isAutoUpdateEnabled} requires
+ * BOTH to be true:
+ * <ul>
+ *   <li><b>{@link com.rusefi.AutoupdateProperty} (user preference)</b> — per-installation
+ *       toggle persisted in the console's preferences. Users flip this to opt out of
+ *       silent updates.</li>
+ *   <li><b>{@code autoupdate_bundle} (bundle-level property in {@code shared_io.properties})</b>
+ *       — set by whoever ships the bundle. A white-label bundle can hard-disable auto-update
+ *       for its users regardless of the per-user preference.</li>
+ * </ul>
+ *
+ * <h3>2. Caps Lock override at launch</h3>
+ * When {@code rusefi_autoupdate.exe} starts, {@link #isSkipUpdater} checks the CAPS LOCK
+ * key state. If Caps Lock is ON, the updater short-circuits and launches the existing
+ * console without any network check — an emergency escape hatch when the user needs to
+ * boot the console even if the update servers are unreachable or misbehaving. This is
+ * independent of {@link AutoupdateProperty} / {@code autoupdate_bundle} (those only gate
+ * the download; Caps Lock skips even the availability check).
+ *
+ * <h3>3. Launch-time silent update path ({@link #main} / {@link #autoupdate})</h3>
+ * When the user double-clicks the bundle's autoupdate exe:
+ * <ol>
+ *   <li>Read {@link BundleInfo} from the local bundle name.</li>
+ *   <li>If auto-update is enabled, {@link #downloadFreshZipFile} downloads the latest
+ *       bundle zip (only when server timestamp/size indicate it's newer than the local
+ *       copy — see {@link #isNewerAvailable}); otherwise nothing is downloaded.</li>
+ *   <li>{@link #unzipAutoUpdate} extracts the bundle over the installation.</li>
+ *   <li>{@link #prefetchLastConnectedBoardFirmware} (issue #9714) refreshes firmware for
+ *       the board the user last connected to, so a later in-console "Update ECU" is
+ *       instant.</li>
+ *   <li>{@link #startConsoleAsANewProcess} launches the freshly unpacked console.</li>
+ * </ol>
+ *
+ * <h3>4. In-console UX: the two "Actions" menu items</h3>
+ * Wiring lives in {@code MainFrame}:
+ * <ul>
+ *   <li><b>"Update Software" ({@code updateSoftwareItem})</b> — updates the bundle
+ *       (console + firmware files) from within a running console, without needing to
+ *       restart via the autoupdate exe.
+ *       <ul>
+ *         <li>Disabled by default. Only when {@link AutoupdateProperty} is OFF (i.e. the
+ *             user has opted out of launch-time silent updates) does {@code MainFrame}
+ *             spawn a background thread that polls {@link #isUpdateAvailable} and enables
+ *             the menu item if a newer bundle exists on the server. When the property is
+ *             ON the launch-time flow already handled it, so the menu stays disabled.</li>
+ *         <li>Clicking runs {@link #runManualUpdate} which — bypassing the
+ *             {@link #isAutoUpdateEnabled} gate — calls {@link #performUpdate} to
+ *             download+unpack the bundle, stage {@code rusefi_console.jar} as
+ *             {@link #PENDING_CONSOLE_JAR} (the running JAR cannot overwrite itself),
+ *             then invokes {@link #relaunchConsole} which spawns a new JVM off the
+ *             pending JAR; {@link #finalizePendingUpdate} promotes it to the real name
+ *             during the next startup.</li>
+ *       </ul></li>
+ *   <li><b>"Update ECU" ({@code updateEcuItem})</b> — flashes the connected ECU when
+ *       its firmware signature does not match the locally cached srec. Enabled by
+ *       {@code MainFrame#checkFirmwareUpdate} after connection, based on
+ *       {@code MainFrame#needsFirmwareUpdate} comparing the ECU's reported signature
+ *       against the srec on disk. This action is about firmware-on-the-ECU, not about
+ *       the console software itself; it delegates to the firmware update flow rather
+ *       than to this class.</li>
+ * </ul>
+ *
+ * <h3>5. "Check" vs. "Apply" are separate</h3>
+ * The class deliberately splits availability check from the actual download+install:
+ * <ul>
+ *   <li>{@link #isUpdateAvailable} / {@link #isNewerAvailable} — read-only, network-only,
+ *       safe to call from a background thread; used by {@code MainFrame} to decide
+ *       whether to enable "Update Software".</li>
+ *   <li>{@link #runSilentUpdate} — respects the {@link #isAutoUpdateEnabled} gate; used
+ *       by callers that want the settings honored.</li>
+ *   <li>{@link #runManualUpdate} — ignores the gate; used by the "Update Software"
+ *       menu item because reaching that item already implies explicit user intent.</li>
+ *   <li>{@link #performUpdate} — the shared apply path used by both silent and manual.</li>
+ * </ul>
+ *
  * @see com.rusefi.core.ui.ProgressView
+ * @see com.rusefi.AutoupdateProperty
  */
 public class Autoupdate {
     private static final Logging log = getLogging(Autoupdate.class);
@@ -97,7 +182,14 @@ public class Autoupdate {
     }
 
     private static boolean isAutoUpdateEnabled() {
-        return AutoupdateProperty.get() && ConnectionAndMeta.getBoolean("autoupdate_bundle");
+        boolean property = AutoupdateProperty.get();
+        boolean autoupdate_bundle = ConnectionAndMeta.getBoolean("autoupdate_bundle");
+        boolean result = property && autoupdate_bundle;
+        if (!result) {
+            log.info("AutoupdateProperty=" + property);
+            log.info("autoupdate_bundle=" + autoupdate_bundle);
+        }
+        return result;
     }
 
     // everything here assumes Windows. Sorry!
@@ -126,7 +218,33 @@ public class Autoupdate {
         // ATTENTION! To avoid `ClassNotFoundException` we need to load all necessary classes before unzipping
         // autoupdate archive
         unzipAutoUpdate(downloadedAutoupdateFile);
+        prefetchLastConnectedBoardFirmware();
         startConsoleAsANewProcess(consoleExeFileName, args);
+    }
+
+    /**
+     * #9714 At startup, fetch (or refresh to the latest) the
+     * firmware of the most recently connected board so a later "Update Firmware" is instant.
+     * <p>
+     * No-op when: autoupdate is disabled, no board has ever connected, or this is a single-board
+     * bundle whose own firmware is the last-connected board (already refreshed by the bundle update
+     * above). Only downloads when the server has a newer build than the local cache.
+     */
+    private static void prefetchLastConnectedBoardFirmware() {
+        try {
+            if (!isAutoUpdateEnabled()) {
+                return;
+            }
+            String lastBoard = ConnectedEcuTarget.readPersisted();
+            if (lastBoard == null) {
+                log.info("[universal_bundle] prefetch: no previously connected board recorded");
+                return;
+            }
+            log.info("[universal_bundle] prefetch: ensuring latest firmware for last connected board " + lastBoard);
+            ensureFirmwareForTarget(lastBoard, percent -> {}, log::info);
+        } catch (Throwable e) {
+            log.error("[universal_bundle] prefetch error: " + e);
+        }
     }
 
     /**
@@ -173,11 +291,31 @@ public class Autoupdate {
 
         File targetJar = new File(runningJar.getParentFile(), "rusefi_console.jar");
         log.info("finalizePendingUpdate: " + runningJar + " -> " + targetJar);
-        try {
-            Files.copy(runningJar.toPath(), targetJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            log.info("finalizePendingUpdate: console JAR replaced successfully");
-        } catch (IOException e) {
-            log.error("finalizePendingUpdate: failed to replace console JAR: " + e);
+        // relaunchConsole() starts this process and then System.exit(0)s the previous JVM, but that
+        // old JVM was running from rusefi_console.jar and may not have released its file lock yet
+        // (on Windows the copy fails with "being used by another process"). Retry to wait it out -
+        // giving up on the first failure leaves the pending JAR orphaned and old code running (#9727).
+        IOException lastError = null;
+        for (int attempt = 1; attempt <= 20; attempt++) {
+            try {
+                Files.copy(runningJar.toPath(), targetJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                log.info("finalizePendingUpdate: console JAR replaced successfully on attempt " + attempt);
+                lastError = null;
+                break;
+            } catch (IOException e) {
+                lastError = e;
+                try {
+                    Thread.sleep(250);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        if (lastError != null) {
+            // Keep the pending JAR so a later startup can still finalize the swap.
+            log.error("finalizePendingUpdate: failed to replace console JAR: " + lastError);
+            return;
         }
         // On Linux the pending file can be deleted even while open; on Windows this may fail silently.
         if (!runningJar.delete()) {
@@ -432,6 +570,115 @@ public class Autoupdate {
         String branchUrl = BundleInfoStrategy.getDownloadUrl(bundleInfo, PropertiesHolder.getBaseUrl(), BundleInfoStrategy::selectBranchName);
         return downloadAutoupdateZipFile(bundleInfo, branchUrl, FindFileHelper.isObfuscated());
     }
+
+    /**
+     * when a universal bundle is connected to an ECU whose board
+     * differs from the one this bundle shipped with, fetch that board's firmware on demand by downloading
+     * its autoupdate zip from the build server and unpacking the firmware artifacts
+     * (rusefi.bin / *_update.srec / openblt.bin) next to the console, where the existing DFU/OpenBLT
+     * flashers look for them. Because the target is derived from the connected ECU's signature, the
+     * staged firmware always matches the ECU.
+     *
+     * @param ecuTarget bundle target reported by the connected ECU (its signature's bundle target)
+     * @return true if firmware for {@code ecuTarget} is present locally afterwards
+     */
+    public static boolean ensureFirmwareForTarget(String ecuTarget,
+                                                  ConnectionAndMeta.DownloadProgressListener progressListener,
+                                                  Consumer<String> logger) {
+        if (ecuTarget == null || ecuTarget.trim().isEmpty()) {
+            log.error("[universal_bundle] ensureFirmwareForTarget: no ECU target");
+            return false;
+        }
+        BundleInfo local = BundleUtil.readBundleFullNameNotNull();
+        String localTarget = local.getTarget();
+        if (localTarget != null && localTarget.equalsIgnoreCase(ecuTarget)) {
+            // the connected ECU is this bundle's own board - firmware already shipped locally
+            return true;
+        }
+        String branchName = BundleInfo.isUndefined(local) ? "master" : local.getBranchName();
+        BundleInfo wanted = new BundleInfo(branchName, null, ecuTarget);
+        String baseUrl = BundleInfoStrategy.getDownloadUrl(wanted, PropertiesHolder.getBaseUrl(), BundleInfo::getBranchName);
+        String zip = downloadZipForTarget(wanted, baseUrl, progressListener, logger);
+        if (zip == null) {
+            return false;
+        }
+        try {
+            findSrecFile(false); // move firmware of the previously-selected board into older-fw
+            log.info("[universal_bundle] ensureFirmwareForTarget: unpacking firmware for " + ecuTarget + " from " + zip);
+            FileUtil.unzip(zip, new File(".."), isFirmwareArtifact);
+            return true;
+        } catch (IOException e) {
+            log.error("[universal_bundle] ensureFirmwareForTarget: unzip failed: " + e);
+            return false;
+        }
+    }
+
+    /**
+     * Like the firmware half of {@link #downloadAutoupdateZipFile} but returns the local zip path even
+     * when the cached copy is already up to date (we still need to unpack it for the selected board).
+     *
+     * @return local zip path, or null on error
+     */
+    private static String downloadZipForTarget(BundleInfo info, String baseUrl,
+                                               ConnectionAndMeta.DownloadProgressListener progressListener,
+                                               Consumer<String> logger) {
+        // The universal console cannot know prior whether a given board ships open or obfuscated
+        // firmware. Try the public zip first and fall back to the obfuscated one - whichever the server has. #9714
+        String zip = downloadZipForTarget(info, baseUrl, progressListener, logger, false);
+        if (zip == null) {
+            zip = downloadZipForTarget(info, baseUrl, progressListener, logger, true);
+        }
+        return zip;
+    }
+
+    private static String downloadZipForTarget(BundleInfo info, String baseUrl,
+                                               ConnectionAndMeta.DownloadProgressListener progressListener,
+                                               Consumer<String> logger, boolean obfuscated) {
+        try {
+            String suffix = obfuscated ? "_obfuscated_public" : "";
+            String folderName = info.getTarget() + "_" + info.getBranchName();
+            String localFolder = userHomeSubDirectory + folderName + File.separator;
+            new File(localFolder).mkdirs();
+            String fileName = ConnectionAndMeta.getWhiteLabel(ConnectionAndMeta.getProperties())
+                + "_bundle_" + info.getTarget() + suffix + "_autoupdate.zip";
+            String localZipFileName = localFolder + fileName;
+            ConnectionAndMeta connectionAndMeta = new ConnectionAndMeta(fileName).invoke(baseUrl);
+            long lastModified = connectionAndMeta.getLastModified();
+            if (AutoupdateUtil.hasExistingFile(localZipFileName, connectionAndMeta.getCompleteFileSize(), lastModified)) {
+                log.info("[universal_bundle] downloadZipForTarget: reusing cached " + localZipFileName);
+                logger.accept("Using cached firmware download for " + info.getTarget());
+            } else {
+                logger.accept("[universal_bundle] Downloading firmware for " + info.getTarget()
+                    + (obfuscated ? " (obfuscated)" : "")
+                    + " (" + (connectionAndMeta.getCompleteFileSize() / 1024) + " KB)...");
+                // Route progress through the caller's callbacks (the reflash progress bar) instead of
+                // popping up a separate download dialog - #9714 makes it an inline step.
+                ConnectionAndMeta.downloadFile(localZipFileName, connectionAndMeta, progressListener);
+                new File(localZipFileName).setLastModified(lastModified);
+                logger.accept("[universal_bundle] Firmware download complete");
+            }
+            return localZipFileName;
+        } catch (IOException e) {
+            // Expected when this variant does not exist on the server (e.g. public miss -> try obfuscated).
+            log.info("[universal_bundle] downloadZipForTarget (" + (obfuscated ? "obfuscated" : "public")
+                + ") not available for " + info.getTarget() + ": " + e);
+            return null;
+        }
+    }
+
+    /**
+     * Firmware binaries that live at the root of an autoupdate zip. Deliberately excludes the console
+     * jar, release.txt, shared_io.properties and the .ini
+     */
+    private static final Predicate<ZipEntry> isFirmwareArtifact = entry -> {
+        if (entry.isDirectory())
+            return false;
+        String lower = entry.getName().toLowerCase();
+        return lower.endsWith(".srec") || lower.endsWith(".hex")
+            || lower.endsWith("rusefi.bin") || lower.endsWith("openblt.bin")
+            // "rusefi_" (underscore) excludes rusefi-obfuscated.bin
+            || (lower.contains("rusefi_") && lower.endsWith(".bin"));
+    };
 
     /**
      * rusefi_updater.exe/invokes rusefi_console.jar - entry point is Launcher#main

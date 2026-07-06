@@ -14,14 +14,14 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Smoke test for the JSON-RPC / MCP protocol layer of {@link LuaMcpServer}.
+ * Smoke test for the JSON-RPC / MCP protocol layer of {@link EcuMcpServer}.
  *
  * <p>Drives the server with no ECU attached, so only protocol-level methods that
  * don't require {@code ensureConnected(...)} are exercised: {@code initialize},
  * {@code tools/list}, {@code ping}, plus an unknown-method error path. ECU-touching
  * tools are covered separately by {@code LuaService} tests / integration tests.
  */
-class LuaMcpServerTest {
+class EcuMcpServerTest {
 
     @Test
     void initializeAndListTools() throws Exception {
@@ -45,7 +45,7 @@ class LuaMcpServerTest {
 
         JSONObject toolsList = parse(responses[1]);
         JSONArray tools = (JSONArray) ((JSONObject) toolsList.get("result")).get("tools");
-        assertTrue(tools.size() >= 8, "expected our 8 tools, got " + tools.size());
+        assertTrue(tools.size() >= 10, "expected our 10 tools, got " + tools.size());
         // Make sure the headline tools are present.
         java.util.Set<String> names = new java.util.HashSet<>();
         for (Object t : tools) names.add((String) ((JSONObject) t).get("name"));
@@ -53,6 +53,8 @@ class LuaMcpServerTest {
         assertTrue(names.contains("get_lua"));
         assertTrue(names.contains("lua_reset"));
         assertTrue(names.contains("send_command"));
+        assertTrue(names.contains("command"));
+        assertTrue(names.contains("read_output_channel"));
         assertTrue(names.contains("read_messages"));
         assertTrue(names.contains("wait_for_message"));
         assertTrue(names.contains("ecu_info"));
@@ -106,7 +108,7 @@ class LuaMcpServerTest {
         BufferedReader in = new BufferedReader(new StringReader(input));
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream out = new PrintStream(baos, true, "UTF-8");
-        LuaMcpServer server = new LuaMcpServer(null, in, out);
+        EcuMcpServer server = new EcuMcpServer(null, in, out);
         server.runForTests();
         String all = baos.toString(StandardCharsets.UTF_8.name()).trim();
         if (all.isEmpty()) return new String[0];

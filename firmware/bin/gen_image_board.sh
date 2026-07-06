@@ -24,6 +24,9 @@ if [ "" = "$BOARD_SPECIFIC_URL" ]; then
 fi
 echo "BOARD_SPECIFIC_URL=[$BOARD_SPECIFIC_URL]"
 
+INI_IMAGE_SIZE=${INI_IMAGE_SIZE:-128}
+INI_IMAGE_COMPRESSED_SIZE=${INI_IMAGE_COMPRESSED_SIZE:-1088}
+
 # we generate both versions of the header but only one would be actually included due to conditional compilation see EFI_USE_COMPRESSED_INI_MSD
 # todo: make things consistent by
 # 0) having generated content not in the same folder with the tool generating content?
@@ -31,7 +34,7 @@ echo "BOARD_SPECIFIC_URL=[$BOARD_SPECIFIC_URL]"
 # 2) leverage consistent caching mechanism so that image is generated only in case of fresh .ini. Laziest approach would be to return exit code from java process above
 #
 
-# Skip the 128KB uncompressed ramdisk for boards that explicitly disable EFI_EMBED_INI_MSD.
+# Skip the uncompressed ramdisk for boards that explicitly disable EFI_EMBED_INI_MSD.
 # Such boards never compile ramdisk_image.h into firmware, so we just write a placeholder
 # to satisfy the Makefile target rather than risk a "Disk full" failure when the INI is large.
 BOARD_MK_FILE="${BOARD_DIR}/board.mk"
@@ -39,6 +42,6 @@ if grep -q "EFI_EMBED_INI_MSD=FALSE" "${BOARD_MK_FILE}" 2>/dev/null; then
   echo "gen_image_board: EFI_EMBED_INI_MSD=FALSE in ${BOARD_MK_FILE} — skipping uncompressed ramdisk"
   echo "// placeholder: EFI_EMBED_INI_MSD=FALSE for ${SHORT_BOARD_NAME}" > ./hw_layer/mass_storage/ramdisk_image.h
 else
-  hw_layer/mass_storage/create_ini_image.sh            ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image.h             128 ${SHORT_BOARD_NAME} ${BOARD_SPECIFIC_URL}
+  hw_layer/mass_storage/create_ini_image.sh            ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image.h            ${INI_IMAGE_SIZE}            ${SHORT_BOARD_NAME} ${BOARD_SPECIFIC_URL} || { echo "ERROR: create_ini_image.sh failed with ${INI_IMAGE_SIZE}"; exit 1; }
 fi
-hw_layer/mass_storage/create_ini_image_compressed.sh ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image_compressed.h 1088 ${SHORT_BOARD_NAME} ${BOARD_SPECIFIC_URL}
+hw_layer/mass_storage/create_ini_image_compressed.sh ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image_compressed.h ${INI_IMAGE_COMPRESSED_SIZE} ${SHORT_BOARD_NAME} ${BOARD_SPECIFIC_URL} || { echo "ERROR: create_ini_image_compressed.sh failed with ${INI_IMAGE_COMPRESSED_SIZE}"; exit 1; }
