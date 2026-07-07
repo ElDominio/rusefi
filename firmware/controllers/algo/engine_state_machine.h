@@ -28,7 +28,6 @@ enum class EngineStateMachineState : uint8_t {
 	Eco          = 13,
 	Accelerating = 14,
 	Decelerating = 15,
-	GhostCam     = 16,
 };
 
 // A shift window that stays open longer than this is considered stale and is closed.
@@ -53,10 +52,12 @@ public:
 
 	// Drives the Eco mode overlay: engages after the engine has been Cruising continuously for
 	// ecoModeCruisingTime with MAP at or below ecoModeMapLimit, drops instantly on leaving Cruising
-	// or exceeding the MAP limit, and can be inhibited by a manual switch / Lua gauge. Takes the
+	// or exceeding the MAP limit, and can be inhibited by a manual switch / Lua gauge. Mutually
+	// exclusive with Sport Mode (engineSmIsSportMode out-votes eco, same as Limp). Takes the
 	// current state directly so unit tests can drive it without standing up the full state
 	// determination.
 	void updateEcoMode(EngineStateMachineState currentState);
+	void updateSportMode();
 	void updateGhostCam();
 	void updateSportPedal();
 

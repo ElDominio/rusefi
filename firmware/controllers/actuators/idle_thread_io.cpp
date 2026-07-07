@@ -70,7 +70,7 @@ void startSwitchPins() {
 	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
 		startInputPinIfValid("Idle Up Switch", engineConfiguration->idleUpSwitchPins[i], engineConfiguration->idleUpSwitchMode[i]);
 	}
-	startInputPinIfValid("Pops and Bangs Disable", getCustomPage()->popsAndBangsDisablePin, getCustomPage()->popsAndBangsDisablePinMode);
+	startInputPinIfValid("Sport Mode Switch", getCustomPage()->smSportModeSwitchPin, getCustomPage()->smSportModeSwitchPinMode);
 #endif /* EFI_PROD_CODE */
 }
 
@@ -86,7 +86,7 @@ void stopSwitchPins() {
 	for (int i = 0; i < IDLE_UP_SWITCH_COUNT; i++) {
 		brain_pin_markUnused(activeConfiguration.idleUpSwitchPins[i]);
 	}
-	// popsAndBangsDisablePin now lives in TS page 5, which the page-1 activeConfiguration
+	// smSportModeSwitchPin lives in TS page 5, which the page-1 activeConfiguration
 	// snapshot does not track. It is (re)marked each config change via startInputPinIfValid above.
 }
 

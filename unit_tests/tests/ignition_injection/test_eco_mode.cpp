@@ -91,6 +91,21 @@ TEST(EcoMode, LimpModeOutVotesEco) {
 	EXPECT_FALSE(ecoActive(eth));
 }
 
+// Sport Mode and Eco Mode are mutually exclusive: the driver's explicit request for aggressive
+// behavior out-votes the automatic economy overlay.
+TEST(EcoMode, SportModeOutVotesEco) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupEco();
+	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	esm.engineSmIsSportMode = true;
+
+	setTimeNowUs(1e6);
+	tickEco(eth, EngineStateMachineState::Idle);
+	advanceTimeUs(5e6);
+	tickEco(eth, EngineStateMachineState::Cruising);
+	EXPECT_FALSE(ecoActive(eth));
+}
+
 TEST(EcoMode, MapAboveLimitBlocksEngagement) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupEco();

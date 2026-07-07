@@ -1387,6 +1387,83 @@ TEST(EngineStateMachine, limpPriorityOverUpshifting) {
 	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), getSm().engineSmCurrentState);
 }
 
+// ---- Sport Mode ----
+
+TEST(EngineStateMachine, sportModeOffByDefault) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning();
+
+	getCustomPage()->smSportModeActivationMode = SPORT_MODE_OFF;
+	engine->periodicSlowCallback();
+
+	EXPECT_FALSE(getSm().engineSmIsSportMode);
+}
+
+TEST(EngineStateMachine, sportModeLuaGaugeActivation) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning();
+
+	getCustomPage()->smSportModeActivationMode = SPORT_MODE_LUA_GAUGE;
+	getCustomPage()->smSportModeLuaGauge = LUA_GAUGE_1;
+	getCustomPage()->smSportModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND; // assert when value >= threshold
+	getCustomPage()->smSportModeLuaGaugeThreshold = 0.5f;
+
+	Sensor::setMockValue(SensorType::LuaGauge1, 0.0f);
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsSportMode);
+
+	Sensor::setMockValue(SensorType::LuaGauge1, 1.0f);
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsSportMode);
+}
+
+TEST(EngineStateMachine, limpOutVotesSportMode) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	enterRunning();
+
+	getCustomPage()->smSportModeActivationMode = SPORT_MODE_LUA_GAUGE;
+	getCustomPage()->smSportModeLuaGauge = LUA_GAUGE_1;
+	getCustomPage()->smSportModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
+	getCustomPage()->smSportModeLuaGaugeThreshold = 0.5f;
+	Sensor::setMockValue(SensorType::LuaGauge1, 1.0f); // would otherwise assert Sport Mode
+
+	getSm().reportLimpCondition();
+	engine->periodicSlowCallback();
+
+	EXPECT_TRUE(getSm().engineSmIsLimp);
+	EXPECT_FALSE(getSm().engineSmIsSportMode);
+}
+
+TEST(EngineStateMachine, ghostCamActivatesViaSportMode) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Idling));
+	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
+
+	getCustomPage()->ghostCamEnabled = true;
+	getCustomPage()->ghostCamActivationSource = true; // 1 = Sport Mode
+	getCustomPage()->ghostCamCltMin = -40;
+	getCustomPage()->smSportModeActivationMode = SPORT_MODE_LUA_GAUGE;
+	getCustomPage()->smSportModeLuaGauge = LUA_GAUGE_1;
+	getCustomPage()->smSportModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
+	getCustomPage()->smSportModeLuaGaugeThreshold = 0.5f;
+
+	Sensor::setMockValue(SensorType::LuaGauge1, 0.0f);
+	engine->periodicSlowCallback();
+	EXPECT_FALSE(getSm().engineSmIsGhostCam);
+
+	Sensor::setMockValue(SensorType::LuaGauge1, 1.0f);
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getSm().engineSmIsGhostCam);
+}
+
 // ---- Temperature overlay ----
 
 TEST(EngineStateMachine, tempOverlay_cold) {

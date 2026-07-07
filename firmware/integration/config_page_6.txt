@@ -31,7 +31,7 @@ custom lua_gauge_e 1 bits, S08, @OFFSET@, [0:2], @@lua_gauge_e_enum@@
 #define lua_gauge_meaning_e_enum "greater than", "less than"
 custom lua_gauge_meaning_e 1 bits, S08, @OFFSET@, [3:3], @@lua_gauge_meaning_e_enum@@
 
-#define exhaust_cutout_activation_e_enum "OFF", "Switch", "LuaGauge"
+#define exhaust_cutout_activation_e_enum "OFF", "Switch", "Sport Mode", "Auto + Sport Mode"
 custom exhaust_cutout_activation_e 1 bits, U08, @OFFSET@, [0:1], @@exhaust_cutout_activation_e_enum@@
 #define exhaust_cutout_behavior_e_enum "Always Closed", "Always Open", "Auto"
 custom exhaust_cutout_behavior_e 1 bits, U08, @OFFSET@, [0:1], @@exhaust_cutout_behavior_e_enum@@
@@ -42,14 +42,16 @@ custom exhaust_cutout_output_mode_e 1 bits, U08, @OFFSET@, [0:1], @@exhaust_cuto
 custom sm_clutch_switch_e 1 bits, U08, @OFFSET@, [0:1], @@sm_clutch_switch_e_enum@@
 #define sm_shift_detection_mode_e_enum "RPM Rate", "VSS Rate (needs VSS sensor)", "INVALID", "INVALID"
 custom sm_shift_detection_mode_e 1 bits, U08, @OFFSET@, [0:1], @@sm_shift_detection_mode_e_enum@@
-#define pops_and_bangs_disable_mode_e_enum "None", "Switch Input", "Lua Gauge", "Switch or Lua Gauge"
-custom pops_and_bangs_disable_mode_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_disable_mode_e_enum@@
 #define pops_and_bangs_cutout_inhibit_e_enum "Off", "Inhibit Unless Cutout Open"
 custom pops_and_bangs_cutout_inhibit_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_cutout_inhibit_e_enum@@
 #define eco_mode_switch_mode_e_enum "Off", "Inhibit"
 custom eco_mode_switch_mode_e 1 bits, U08, @OFFSET@, [0:1], @@eco_mode_switch_mode_e_enum@@
-#define sport_pedal_activation_e_enum "OFF", "Switch", "LuaGauge"
+#define sport_pedal_activation_e_enum "OFF", "Switch", "Sport Mode"
 custom sport_pedal_activation_e 1 bits, U08, @OFFSET@, [0:1], @@sport_pedal_activation_e_enum@@
+#define sport_mode_activation_e_enum "OFF", "Switch", "LuaGauge"
+custom sport_mode_activation_e 1 bits, U08, @OFFSET@, [0:1], @@sport_mode_activation_e_enum@@
+#define limiter_adder_source_e_enum "LuaGauge", "Sport Mode"
+custom limiter_adder_source_e 1 bits, U08, @OFFSET@, [0:0], @@limiter_adder_source_e_enum@@
 #define fan_ac_mode_e_enum "Disabled", "Relay", "Pressure"
 custom fan_ac_mode_e 1 bits, U08, @OFFSET@, [0:1], @@fan_ac_mode_e_enum@@
 
@@ -65,9 +67,8 @@ struct_no_prefix page6_s
 	! drive), a VSS sensor, and the Engine State Machine downshift detection.
 	bit downshiftBlipperEnabled,"enabled","disabled";Downshift Blipper: master enable. Blips the ETB to rev-match a single-gear (N to N-1) downshift.
 	bit downshiftBlipperRequireBrake,"yes","no";Downshift Blipper: require the brake pedal to be pressed before a blip is allowed (heel-and-toe behavior).
-	bit downshiftBlipperUseLuaGauge,"enabled","disabled";Downshift Blipper: gate the blip with a Lua gauge. While the gauge trips the comparison below, a blip cannot start, and an in-progress blip is immediately ramped closed -- same idea as the Exhaust Cutout / Pops and Bangs Lua gauge inhibits.
+	bit downshiftBlipperRequireSportMode,"enabled","disabled";Downshift Blipper: require Sport Mode to be active for a blip to start. While Sport Mode is off, blips cannot start, and an in-progress blip is immediately ramped closed.
 
-	uint8_t downshiftBlipperLuaGauge;Downshift Blipper: Lua gauge index (0-7 for LuaGauge1-8) used as the gate input.;"", 1, 0, 0, 7, 0
 	uint8_t downshiftBlipperDriverTpsThreshold;Downshift Blipper: driver pedal % above which the blipper disables (driver is manually blipping).;"%", 1, 0, 0, 100, 0
 	uint8_t downshiftBlipperMaxTpsLimit;Downshift Blipper: maximum throttle % the closed-loop PID hold is allowed to command. Does not limit the open-loop ramp-up phase, which targets etbMaximumPosition.;"%", 1, 0, 0, 100, 0
 	uint8_t downshiftBlipperAlignmentPad;unused
@@ -84,9 +85,6 @@ struct_no_prefix page6_s
 	float downshiftBlipperKp;Downshift Blipper: PID proportional gain. Error is normalized to per-100-RPM units, output is throttle %.;"", 1, 0, 0, 1000, 3
 	float downshiftBlipperKi;Downshift Blipper: PID integral gain.;"", 1, 0, 0, 1000, 3
 	float downshiftBlipperKd;Downshift Blipper: PID derivative gain.;"", 1, 0, 0, 1000, 3
-
-	lua_gauge_meaning_e downshiftBlipperLuaGaugeMeaning;Downshift Blipper: Lua gate comparison direction.
-	float downshiftBlipperLuaGaugeThreshold;Downshift Blipper: Lua gate threshold the gauge is compared against.;"", 1, 0, -30000, 30000, 3
 
 	! --- TPS-to-RPM Feed Forward Curve (shared by Downshift Blipper + Upshift RPM Hold) ---
 	! Throttle % required at neutral (clutch in) to sustain each RPM. Used as an additive
@@ -120,11 +118,9 @@ struct_no_prefix page6_s
 
 	! --- Exhaust Cutout Control ---
 	exhaust_cutout_output_mode_e exhaustCutoutOutputMode;Exhaust cutout output type: Digital on/off, PWM, or H-Bridge motor
-	exhaust_cutout_activation_e exhaustCutoutActivationMode;Exhaust cutout activation mode
-	exhaust_cutout_behavior_e exhaustCutoutBehaviorLow;Cutout behavior when switch is OFF or gauge is below threshold
-	exhaust_cutout_behavior_e exhaustCutoutBehaviorHigh;Cutout behavior when switch is ON or gauge is above threshold
-	lua_gauge_e exhaustCutoutLuaGauge;Lua gauge index for activation
-	lua_gauge_meaning_e exhaustCutoutLuaGaugeMeaning;Lua gauge comparison direction
+	exhaust_cutout_activation_e exhaustCutoutActivationMode;Exhaust cutout activation mode. Switch/Sport Mode pick the input for the behavior below; Auto + Sport Mode bypasses the behavior and auto-opens (RPM/TPS/MAP triggers) only while Sport Mode is active.
+	exhaust_cutout_behavior_e exhaustCutoutBehaviorLow;Cutout behavior when switch is OFF or Sport Mode is inactive (Switch/Sport Mode activation modes only)
+	exhaust_cutout_behavior_e exhaustCutoutBehaviorHigh;Cutout behavior when switch is ON or Sport Mode is active (Switch/Sport Mode activation modes only)
 
 	switch_input_pin_e exhaustCutoutSwitchPin;Hardware switch input pin
 	pin_input_mode_e exhaustCutoutSwitchPinMode;
@@ -137,8 +133,6 @@ struct_no_prefix page6_s
 
 	output_pin_e exhaustCutoutLedPin;Status LED output pin
 	pin_output_mode_e exhaustCutoutLedPinMode;
-
-	float exhaustCutoutLuaGaugeThreshold;Lua gauge activation threshold;"", 1, 0, -30000, 30000, 3
 
 	uint16_t exhaustCutoutOpenRpm;RPM threshold to open cutout (0 to disable);"rpm", 1, 0, 0, 20000, 0
 	uint8_t exhaustCutoutOpenTps;TPS threshold to open cutout (0 to disable);"%", 1, 0, 0, 100, 0
@@ -153,6 +147,17 @@ struct_no_prefix page6_s
 
 	uint16_t exhaustCutoutHBridgePwmFrequency;H-Bridge IN1/IN2 PWM frequency (H-Bridge mode only);"Hz", 1, 0, 1, 10000, 0
 	uint8_t autoscale exhaustCutoutHBridgeDutyCycle;H-Bridge motor drive duty cycle (H-Bridge mode only);"%", 1, 0, 0, 100, 0
+
+	! --- Sport Mode (Engine State Machine) ---
+	! Global "driver wants aggressive behavior" flag, fed to Ghost Cam / Sport Pedal / Exhaust
+	! Cutout / Pops & Bangs / Downshift Blip / Limiter Adders as an activation source. Limp mode
+	! out-votes Sport Mode (protective); Sport Mode out-votes Eco Mode (mutually exclusive).
+	sport_mode_activation_e smSportModeActivationMode;Sport Mode: activation source. OFF disables; Switch reads a hardware switch pin; LuaGauge compares a Lua gauge against a threshold.
+	switch_input_pin_e smSportModeSwitchPin;Sport Mode: hardware switch input pin (Switch mode).
+	pin_input_mode_e smSportModeSwitchPinMode;
+	lua_gauge_e smSportModeLuaGauge;Sport Mode: Lua gauge used as the activation source (LuaGauge mode).
+	lua_gauge_meaning_e smSportModeLuaGaugeMeaning;Sport Mode: Lua gauge comparison direction.
+	float smSportModeLuaGaugeThreshold;Sport Mode: Lua gauge activation threshold (LuaGauge mode).;"", 1, 0, -30000, 30000, 3
 
 	! --- Engine State Machine thresholds + shift detection (enable bit stays in page 1) ---
 	uint8_t smWotTpsThreshold;Engine SM: TPS threshold above which the engine is at Wide Open Throttle.;"%", 1, 0, 50, 100, 0
@@ -226,7 +231,8 @@ struct_no_prefix page6_s
 	! still nominally "cruising"). While active it overrides target AFR, adds/pulls ignition timing,
 	! optionally retargets the intake/exhaust VVT cams, scales the throttle target, and can hold a
 	! lower absolute alternator charging target (when smart alternator control is enabled). A manual
-	! switch / Lua gauge can Inhibit (block) eco; Limp mode out-votes eco entirely.
+	! switch / Lua gauge can Inhibit (block) eco; Limp mode and Sport Mode both out-vote eco
+	! entirely (Sport Mode and Eco Mode are mutually exclusive).
 	bit ecoModeEnabled,"enabled","disabled";Eco Mode: master enable. Engages after sustained cruising to bias fuel/timing/throttle for economy.
 	bit ecoModeVvtOverride,"enabled","disabled";Eco Mode: also override the intake/exhaust VVT cam targets while active (engines with VVT only).
 
@@ -263,14 +269,7 @@ struct_no_prefix page6_s
 	float popsAndBangsTimingOverride;Flat ignition timing override when pops and bangs is active.;"deg", 1, 0, -60, 60, 1
 	float popsAndBangsVeOverride;VE override percentage when pops and bangs is active.;"%", 1, 0, 0, 150, 0
 
-	pops_and_bangs_disable_mode_e popsAndBangsDisableMode;Condition that disables pops and bangs while active.
-
-	switch_input_pin_e popsAndBangsDisablePin;Switch pin that disables pops and bangs when active.
-	pin_input_mode_e popsAndBangsDisablePinMode;
-
-	lua_gauge_e popsAndBangsLuaGauge;Lua gauge used to disable pops and bangs.
-	lua_gauge_meaning_e popsAndBangsLuaGaugeMeaning;
-	float popsAndBangsLuaGaugeValue;Lua gauge threshold for disabling pops and bangs.;"", 1, 0, -30000, 30000, 3
+	bit popsAndBangsRequireSportMode,"enabled","disabled";Pops and Bangs: require Sport Mode to be active for pops and bangs to activate.
 
 	pops_and_bangs_cutout_inhibit_e popsAndBangsCutoutInhibitMode;Off ignores exhaust cutout state. Inhibit blocks pops and bangs unless the exhaust cutout is open. Requires Exhaust Cutout to be enabled.
 
@@ -300,8 +299,9 @@ struct_no_prefix page6_s
 	uint8_t autoscale offIdleRpmAdderDecayTime;Time over which the off-idle RPM adder linearly decays from max to zero after the wait expires.;"sec", 0.1, 0, 0, 10, 1
 	uint8_t autoscale offIdleRpmStabilityThreshold;RPM rate-of-change (RPM/s) below which RPM is considered stable when returning to idle. Transition from Stabilizing to Waiting occurs when dRPM/s falls below this value.;"RPM/s", 10, 0, 0, 2550, 0
 
-	! --- Lua Limiter (enable bit stays in page 1) ---
-	lua_gauge_e luaLimiterGaugeSelect;Lua gauge used as the limiter input axis.
+	! --- Limiter Adders (enable bit stays in page 1) ---
+	lua_gauge_e luaLimiterGaugeSelect;Lua gauge used as the limiter input axis (LuaGauge source only).
+	limiter_adder_source_e limiterAdderSource;Limiter Adders: input source. LuaGauge interpolates the curves below off a Lua gauge value. Sport Mode applies a single flat adder while Sport Mode is active.
 
 	! --- Advanced / PWM Fuel Pump (relay pins stay in page 1) ---
 	fuel_pump_mode_e fuelPumpMode;Fuel pump output mode: Single relay, Dual relay with secondary activation, or PWM pressure control
@@ -350,24 +350,23 @@ struct_no_prefix page6_s
 	! curve indexed by accelerator pedal position, letting the driver reshape the pedal-to-throttle
 	! ratio (e.g. a more aggressive "sport" tip-in). The multiplied target is always clamped to 100%
 	! so an aggressive multiplier can never command throttle over-travel. Activation mirrors the
-	! Exhaust Cutout control (switch input or Lua gauge) since opening cutouts and a sportier pedal
+	! Exhaust Cutout control (switch input or Sport Mode) since opening cutouts and a sportier pedal
 	! feel are usually wanted together.
-	sport_pedal_activation_e sportPedalActivationMode;Sport Pedal: activation source. OFF disables the feature; Switch uses a hardware switch input; LuaGauge compares a Lua gauge against a threshold. ETB only.
-	lua_gauge_e sportPedalLuaGauge;Sport Pedal: Lua gauge used as the activation source (LuaGauge mode).
-	lua_gauge_meaning_e sportPedalLuaGaugeMeaning;Sport Pedal: Lua gauge comparison direction (greater/less than the threshold).
+	sport_pedal_activation_e sportPedalActivationMode;Sport Pedal: activation source. OFF disables the feature; Switch uses a hardware switch input; Sport Mode follows the global Sport Mode flag. ETB only.
 
 	switch_input_pin_e sportPedalSwitchPin;Sport Pedal: hardware switch input pin (Switch mode). One switch state activates sport pedal, the other deactivates it (polarity set by the pin mode below).
 	pin_input_mode_e sportPedalSwitchPinMode;
 
-	float sportPedalLuaGaugeThreshold;Sport Pedal: Lua gauge activation threshold (LuaGauge mode).;"", 1, 0, -30000, 30000, 3
 	float[SPORT_PEDAL_SIZE] sportPedalPedalBins;Sport Pedal: accelerator pedal position axis (curve X).;"%", 1, 0, 0, 100, 0
 	float[SPORT_PEDAL_SIZE] sportPedalMultValues;Sport Pedal: throttle target multiplier applied at each pedal position (curve Y). Result is clamped to 100%.;"mult", 1, 0, 0, 5, 2
 
-	! --- Lua Limiter add curves ---
+	! --- Limiter Adders (add curves + Sport Mode single-value adders) ---
 	float[LUA_LIMITER_CURVE_SIZE] luaLimiterRpmAddBins;;"value", 1, 0, -10000, 10000, 2
 	float[LUA_LIMITER_CURVE_SIZE] luaLimiterRpmAdd;;"RPM", 1, 0, -10000, 10000, 0
 	float[LUA_LIMITER_CURVE_SIZE] luaLimiterBoostAddBins;;"value", 1, 0, -10000, 10000, 2
 	float[LUA_LIMITER_CURVE_SIZE] luaLimiterBoostAdd;;"kPa", 1, 0, -1000, 1000, 1
+	float limiterAdderSportModeRpmAdd;Limiter Adders: flat RPM adder applied while Sport Mode is active (Sport Mode source only).;"RPM", 1, 0, -10000, 10000, 0
+	float limiterAdderSportModeBoostAdd;Limiter Adders: flat boost (kPa) adder applied while Sport Mode is active (Sport Mode source only).;"kPa", 1, 0, -1000, 1000, 1
 
 	! --- Engine Temperature Overlay (Engine State Machine sub-feature) ---
 	! Classifies CLT into three mutually-exclusive bands published as overlay bits each slow
@@ -521,25 +520,20 @@ struct_no_prefix page6_s
 	uint16_t imrcHBridgeFrequency;IMRC H-Bridge: PWM frequency;"Hz", 1, 0, 1, 10000, 0
 
 	! --- Ghost Cam Mode (EFI_GHOST_CAM) ---
-	! Switch or Lua gauge activated idle lope effect. Only active in the Idle SM state; any other
+	! Switch or Sport Mode activated idle lope effect. Only active in the Idle SM state; any other
 	! state kills ghost cam immediately. VVT cam angle overrides create the overlap lope; ignition
 	! and AFR are secondary. On deactivation, CLID and CLII integrators reset to zero for a clean
 	! re-entry to normal idle.
 	bit ghostCamEnabled,"enabled","disabled";Ghost Cam: master enable.
-	bit ghostCamActivationSource,"Lua Gauge","Pin";Ghost Cam: activation source. Pin = hardware switch pin; Lua Gauge = Lua gauge input. Only the selected source is checked.
+	bit ghostCamActivationSource,"Switch","Sport Mode";Ghost Cam: activation source. Switch = hardware switch pin; Sport Mode = follows the global Sport Mode flag. Only the selected source is checked.
 
 	switch_input_pin_e ghostCamActivatePin;Ghost Cam: hardware switch pin. Asserting this pin while idle conditions are met engages ghost cam.
 	pin_input_mode_e ghostCamActivatePinMode;
-
-	lua_gauge_e ghostCamLuaGauge;Ghost Cam: Lua gauge used as the activation source.
-	lua_gauge_meaning_e ghostCamLuaGaugeMeaning;
 
 	int8_t ghostCamCltMin;Ghost Cam: minimum coolant temperature required to activate. Below this the mode cannot engage.;"°C", 1, 0, -40, 120, 0
 	uint8_t autoscale ghostCamIdleBaseDuty;Ghost Cam: open-loop IAC base duty override. Replaces the CLT-table idle position while active (CLID correction still adds on top).;"%", 1, 0, 0, 100, 1
 
 	uint16_t ghostCamIdleRpm;Ghost Cam: idle RPM target override. Fed directly to CLID and CLII as the RPM setpoint.;"rpm", 1, 0, 0, 3000, 0
-
-	float ghostCamLuaGaugeThreshold;Ghost Cam: Lua gauge activation threshold. Asserts when the gauge crosses this value in the configured direction.;"", 1, 0, -30000, 30000, 3
 	float ghostCamTargetAfr;Ghost Cam: AFR target override. STFT stays active and chases this target — rich overshoot creates the lope effect.;"AFR", 1, 0, 8, 20, 1
 	float ghostCamIntakeCamAngle;Ghost Cam: VVT intake cam target angle override. The primary lope mechanism on VVT engines — cam overlap creates the choppy idle.;"deg", 1, 0, -60, 60, 1
 	float ghostCamExhaustCamAngle;Ghost Cam: VVT exhaust cam target angle override.;"deg", 1, 0, -60, 60, 1

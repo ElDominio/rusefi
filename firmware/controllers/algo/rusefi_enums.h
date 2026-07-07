@@ -646,7 +646,8 @@ typedef enum __attribute__ ((__packed__)) {
 typedef enum __attribute__ ((__packed__)) {
 	EXHAUST_CUTOUT_OFF = 0,
 	EXHAUST_CUTOUT_SWITCH = 1,
-	EXHAUST_CUTOUT_LUA_GAUGE = 2,
+	EXHAUST_CUTOUT_SPORT_MODE = 2,
+	EXHAUST_CUTOUT_AUTO_SPORT_MODE = 3,
 } exhaust_cutout_activation_e;
 
 typedef enum __attribute__ ((__packed__)) {
@@ -673,15 +674,23 @@ typedef enum __attribute__ ((__packed__)) {
 typedef enum __attribute__ ((__packed__)) {
 	SPORT_PEDAL_OFF = 0,
 	SPORT_PEDAL_SWITCH = 1,
-	SPORT_PEDAL_LUA_GAUGE = 2,
+	SPORT_PEDAL_SPORT_MODE = 2,
 } sport_pedal_activation_e;
 
+// Sport Mode activation source — the shared "driver wants aggressive behavior" flag consumed by
+// Ghost Cam / Sport Pedal / Exhaust Cutout / Pops & Bangs / Downshift Blip / Limiter Adders.
 typedef enum __attribute__ ((__packed__)) {
-	POPS_AND_BANGS_DISABLE_MODE_NONE              = 0,
-	POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT      = 1,
-	POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE         = 2,
-	POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE = 3,
-} pops_and_bangs_disable_mode_e;
+	SPORT_MODE_OFF = 0,
+	SPORT_MODE_SWITCH = 1,
+	SPORT_MODE_LUA_GAUGE = 2,
+} sport_mode_activation_e;
+
+// Limiter Adders input source: LuaGauge interpolates the RPM/boost curves off a Lua gauge value;
+// SportMode applies a single flat adder while Sport Mode is active.
+typedef enum __attribute__ ((__packed__)) {
+	LIMITER_ADDER_LUA_GAUGE = 0,
+	LIMITER_ADDER_SPORT_MODE = 1,
+} limiter_adder_source_e;
 
 // Pops & Bangs exhaust cutout gate. Values must match pops_and_bangs_cutout_inhibit_e_enum order in config_page_6.txt
 enum class pops_and_bangs_cutout_inhibit_e : uint8_t {

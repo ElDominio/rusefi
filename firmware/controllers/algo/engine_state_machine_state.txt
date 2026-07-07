@@ -26,6 +26,7 @@ struct_no_prefix engine_state_machine_state_s
 	bit engineSmIsDecelerating;Engine SM: Decelerating
 	bit engineSmIsGhostCam;Engine SM: Ghost Cam active
 	bit engineSmIsSportPedal;Engine SM: Sport Pedal active
+	bit engineSmIsSportMode;Engine SM: Sport Mode active
 
 	uint8_t engineSmCurrentState;Engine SM: primary state
 

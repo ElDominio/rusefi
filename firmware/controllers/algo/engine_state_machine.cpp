@@ -99,12 +99,21 @@ void EngineStateMachine::onSlowCallback() {
 
 	engineSmIsLimp = m_limpModeLatched;
 
+	// Sport Mode overlay — shared "driver wants aggressive behavior" flag consumed by Ghost Cam,
+	// Sport Pedal, Exhaust Cutout, Pops & Bangs, Downshift Blip, and the Limiter Adders. Priority
+	// chain: Limp out-votes Sport Mode (protective), Sport Mode out-votes Eco Mode (mutually
+	// exclusive). Must run after engineSmIsLimp is set (above), and before updateEcoMode() (eco
+	// reads engineSmIsSportMode), updateGhostCam() (Ghost Cam's Sport Mode activation source reads
+	// it), and updatePopsAndBangs() at the end of this function.
+	updateSportMode();
+
 	// Eco mode overlay — must run before the display override below so the dash reflects it
-	// this cycle. Depends on m_currentState (set above) and engineSmIsLimp (limp wins).
+	// this cycle. Depends on m_currentState (set above), engineSmIsLimp (limp wins), and
+	// engineSmIsSportMode (sport wins — the two are mutually exclusive).
 	updateEcoMode(m_currentState);
 
-	// Ghost Cam overlay — idle-only manual lope effect via switch or Lua gauge.
-	// Must run after engineSmIsIdle and engineSmIsLimp are set.
+	// Ghost Cam overlay — idle-only manual lope effect via switch or Sport Mode.
+	// Must run after engineSmIsIdle, engineSmIsLimp and engineSmIsSportMode are set.
 	updateGhostCam();
 
 	// Sport Pedal overlay — ETB pedal-to-throttle ratio shaping via switch or Lua gauge.
@@ -120,6 +129,9 @@ void EngineStateMachine::onSlowCallback() {
 	                     && engineSmIsIdle;
 
 	// Override the display integer for overlay priority: Limp > Upshifting > Downshifting > LaunchControl > Eco
+	// Ghost Cam is intentionally NOT in this chain: it only ever runs while engineSmIsIdle is true
+	// (see updateGhostCam()), so it stays an overlay on top of Idle rather than a state you "enter" -
+	// the dash keeps showing Idle and engineSmIsGhostCam conveys the overlay separately.
 	if (engineSmIsLimp) {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Limp);
 	} else if (engineSmIsUpshifting) {
@@ -130,16 +142,16 @@ void EngineStateMachine::onSlowCallback() {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::LaunchControl);
 	} else if (engineSmIsEcoMode) {
 		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::Eco);
-	} else if (engineSmIsGhostCam) {
-		engineSmCurrentState = static_cast<uint8_t>(EngineStateMachineState::GhostCam);
 	}
 
 	updatePopsAndBangs(engineSmIsOverrun);
 }
 
 void EngineStateMachine::updateEcoMode(EngineStateMachineState currentState) {
-	// Limp mode is protective and out-votes eco; a disabled feature is always inactive.
-	if (!getCustomPage()->ecoModeEnabled || engineSmIsLimp) {
+	// Limp mode is protective and out-votes eco; Sport Mode is the driver's explicit request for
+	// aggressive behavior and is mutually exclusive with eco, so it out-votes eco too. A disabled
+	// feature is always inactive.
+	if (!getCustomPage()->ecoModeEnabled || engineSmIsLimp || engineSmIsSportMode) {
 		m_ecoCruiseTimer.reset();
 		engineSmIsEcoMode = false;
 		return;
@@ -232,6 +244,60 @@ bool EngineStateMachine::isEcoModeInhibited() const {
 		&& isEcoModeSwitchAsserted();
 }
 
+// Sport Mode: shared "driver wants aggressive behavior" activation source, either a hardware
+// switch or a Lua gauge compared against a threshold. Mirrors the pin + Lua-gauge reading
+// pattern used by Sport Pedal / Exhaust Cutout (see isSportPedalActive() /
+// ExhaustCutoutController::getInputHigh()). Limp mode is protective and out-votes Sport Mode,
+// same as it out-votes Eco Mode.
+void EngineStateMachine::updateSportMode() {
+	if (engineSmIsLimp) {
+		engineSmIsSportMode = false;
+		return;
+	}
+
+	auto mode = getCustomPage()->smSportModeActivationMode;
+
+	if (mode == SPORT_MODE_SWITCH) {
+		bool switchAsserted = false;
+#if !EFI_UNIT_TEST
+		const switch_input_pin_e pin = getCustomPage()->smSportModeSwitchPin;
+		if (isBrainPinValid(pin)) {
+			switchAsserted = efiReadPin(pin, getCustomPage()->smSportModeSwitchPinMode);
+		}
+#endif
+		engineSmIsSportMode = switchAsserted;
+		return;
+	}
+
+	if (mode == SPORT_MODE_LUA_GAUGE) {
+		SensorType gaugeType = SensorType::LuaGauge1;
+		switch (getCustomPage()->smSportModeLuaGauge) {
+			case LUA_GAUGE_2: gaugeType = SensorType::LuaGauge2; break;
+			case LUA_GAUGE_3: gaugeType = SensorType::LuaGauge3; break;
+			case LUA_GAUGE_4: gaugeType = SensorType::LuaGauge4; break;
+			case LUA_GAUGE_5: gaugeType = SensorType::LuaGauge5; break;
+			case LUA_GAUGE_6: gaugeType = SensorType::LuaGauge6; break;
+			case LUA_GAUGE_7: gaugeType = SensorType::LuaGauge7; break;
+			case LUA_GAUGE_8: gaugeType = SensorType::LuaGauge8; break;
+			default: break;
+		}
+		const auto gaugeResult = Sensor::get(gaugeType);
+		bool gaugeAsserted = false;
+		if (gaugeResult.Valid) {
+			const float value = gaugeResult.Value;
+			const float threshold = getCustomPage()->smSportModeLuaGaugeThreshold;
+			switch (getCustomPage()->smSportModeLuaGaugeMeaning) {
+				case LUA_GAUGE_LOWER_BOUND: gaugeAsserted = (value >= threshold); break;
+				case LUA_GAUGE_UPPER_BOUND: gaugeAsserted = (value <= threshold); break;
+			}
+		}
+		engineSmIsSportMode = gaugeAsserted;
+		return;
+	}
+
+	engineSmIsSportMode = false; // SPORT_MODE_OFF
+}
+
 void EngineStateMachine::updateGhostCam() {
 #if EFI_GHOST_CAM
 	// Requires idle state and non-limp; feature must be enabled.
@@ -247,7 +313,8 @@ void EngineStateMachine::updateGhostCam() {
 		return;
 	}
 
-	// Activation: either pin or Lua gauge, selected by ghostCamActivationSource (0=Pin, 1=Gauge).
+	// Activation: either the dedicated switch pin or Sport Mode, selected by
+	// ghostCamActivationSource (0=Switch, 1=Sport Mode).
 	if (getCustomPage()->ghostCamActivationSource == 0) {
 		bool switchAsserted = false;
 #if !EFI_UNIT_TEST
@@ -258,28 +325,7 @@ void EngineStateMachine::updateGhostCam() {
 #endif
 		engineSmIsGhostCam = switchAsserted;
 	} else {
-		bool gaugeAsserted = false;
-		SensorType gaugeType = SensorType::LuaGauge1;
-		switch (getCustomPage()->ghostCamLuaGauge) {
-			case LUA_GAUGE_2: gaugeType = SensorType::LuaGauge2; break;
-			case LUA_GAUGE_3: gaugeType = SensorType::LuaGauge3; break;
-			case LUA_GAUGE_4: gaugeType = SensorType::LuaGauge4; break;
-			case LUA_GAUGE_5: gaugeType = SensorType::LuaGauge5; break;
-			case LUA_GAUGE_6: gaugeType = SensorType::LuaGauge6; break;
-			case LUA_GAUGE_7: gaugeType = SensorType::LuaGauge7; break;
-			case LUA_GAUGE_8: gaugeType = SensorType::LuaGauge8; break;
-			default: break;
-		}
-		const auto gaugeResult = Sensor::get(gaugeType);
-		if (gaugeResult.Valid) {
-			const float value = gaugeResult.Value;
-			const float threshold = getCustomPage()->ghostCamLuaGaugeThreshold;
-			switch (getCustomPage()->ghostCamLuaGaugeMeaning) {
-				case LUA_GAUGE_LOWER_BOUND: gaugeAsserted = (value >= threshold); break;
-				case LUA_GAUGE_UPPER_BOUND: gaugeAsserted = (value <= threshold); break;
-			}
-		}
-		engineSmIsGhostCam = gaugeAsserted;
+		engineSmIsGhostCam = engineSmIsSportMode;
 	}
 #else // !EFI_GHOST_CAM
 	engineSmIsGhostCam = false;
@@ -419,49 +465,8 @@ float EngineStateMachine::getPopsAndBangsSparkSkipRatio() {
 }
 
 bool EngineStateMachine::isPopsAndBangsBlocked() const {
-	auto mode = getCustomPage()->popsAndBangsDisableMode;
-
-	bool pinBlocked = false;
-	bool gaugeBlocked = false;
-
-#if !EFI_UNIT_TEST
-	if (mode == POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT ||
-	    mode == POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE) {
-		const switch_input_pin_e pin = getCustomPage()->popsAndBangsDisablePin;
-		const pin_input_mode_e pinMode = getCustomPage()->popsAndBangsDisablePinMode;
-		if (isBrainPinValid(pin)) {
-			pinBlocked = efiReadPin(pin, pinMode);
-		}
-	}
-#endif
-
-	if (mode == POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE ||
-	    mode == POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE) {
-		SensorType gaugeType = SensorType::LuaGauge1;
-		switch (getCustomPage()->popsAndBangsLuaGauge) {
-			case LUA_GAUGE_2: gaugeType = SensorType::LuaGauge2; break;
-			case LUA_GAUGE_3: gaugeType = SensorType::LuaGauge3; break;
-			case LUA_GAUGE_4: gaugeType = SensorType::LuaGauge4; break;
-			case LUA_GAUGE_5: gaugeType = SensorType::LuaGauge5; break;
-			case LUA_GAUGE_6: gaugeType = SensorType::LuaGauge6; break;
-			case LUA_GAUGE_7: gaugeType = SensorType::LuaGauge7; break;
-			case LUA_GAUGE_8: gaugeType = SensorType::LuaGauge8; break;
-			default: break;
-		}
-		const auto gaugeResult = Sensor::get(gaugeType);
-		if (gaugeResult.Valid) {
-			const float value = gaugeResult.Value;
-			const float threshold = getCustomPage()->popsAndBangsLuaGaugeValue;
-			switch (getCustomPage()->popsAndBangsLuaGaugeMeaning) {
-				case LUA_GAUGE_LOWER_BOUND:
-					gaugeBlocked = (value >= threshold);
-					break;
-				case LUA_GAUGE_UPPER_BOUND:
-					gaugeBlocked = (value <= threshold);
-					break;
-			}
-		}
-	}
+	// Sport Mode gate: when required, pops and bangs cannot activate unless Sport Mode is on.
+	bool sportModeBlocked = getCustomPage()->popsAndBangsRequireSportMode && !engineSmIsSportMode;
 
 	bool cutoutBlocked = false;
 	if (getCustomPage()->popsAndBangsCutoutInhibitMode == pops_and_bangs_cutout_inhibit_e::Inhibit) {
@@ -469,7 +474,7 @@ bool EngineStateMachine::isPopsAndBangsBlocked() const {
 		cutoutBlocked = !engine->module<ExhaustCutoutController>()->isCutoutOpen;
 	}
 
-	return pinBlocked || gaugeBlocked || cutoutBlocked;
+	return sportModeBlocked || cutoutBlocked;
 }
 
 EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps) {
@@ -899,6 +904,7 @@ void EngineStateMachine::reportLimpCondition() { /* state machine compiled out �
 void EngineStateMachine::onSlowCallback() { }
 void EngineStateMachine::updatePopsAndBangs(bool /*isOverrun*/) { engineSmIsPopsAndBangs = false; }
 void EngineStateMachine::updateEcoMode(EngineStateMachineState /*currentState*/) { engineSmIsEcoMode = false; }
+void EngineStateMachine::updateSportMode() { engineSmIsSportMode = false; }
 void EngineStateMachine::updateGhostCam() { engineSmIsGhostCam = false; }
 void EngineStateMachine::updateSportPedal() { engineSmIsSportPedal = false; }
 void EngineStateMachine::updateTempOverlay() { engineSmIsCold = false; engineSmIsOperating = false; engineSmIsHot = false; }float EngineStateMachine::getPopsAndBangsSparkSkipRatio() { engineSmPnbSparkCut = false; return 0.0f; }

@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 18;
+static constexpr uint32_t PAGE6_DATA_VERSION = 19;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -21,8 +21,7 @@ void customPageSetDefaults() {
 	// Downshift Blipper — disabled by default; sane starting calibration.
 	d.downshiftBlipperEnabled = false;
 	d.downshiftBlipperRequireBrake = false;
-	d.downshiftBlipperUseLuaGauge = false;
-	d.downshiftBlipperLuaGauge = 0;
+	d.downshiftBlipperRequireSportMode = false;
 
 	d.downshiftBlipperDriverTpsThreshold = 15;
 	d.downshiftBlipperMaxTpsLimit = 40;
@@ -56,6 +55,14 @@ void customPageSetDefaults() {
 	d.smAccumulatorDownshiftThreshold = 40;
 	d.smAccumulatorGain      = 20.0f;
 	d.smAccumulatorDecayRate = 10.0f;
+
+	// Sport Mode (Engine State Machine) — disabled by default.
+	d.smSportModeActivationMode  = SPORT_MODE_OFF;
+	d.smSportModeSwitchPin       = Gpio::Unassigned;
+	d.smSportModeSwitchPinMode   = PI_DEFAULT;
+	d.smSportModeLuaGauge        = LUA_GAUGE_1;
+	d.smSportModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
+	d.smSportModeLuaGaugeThreshold = 0.0f;
 
 	// Limp Mode (Engine State Machine sub-feature) — conservative "get-home" defaults.
 	d.limpSeverityThreshold  = 5;    // one latched misfire (5 severity pts) latches limp
@@ -99,11 +106,8 @@ void customPageSetDefaults() {
 
 	// Sport Pedal (ETB pedal-to-throttle ratio shaping) — disabled by default; pass-through curve.
 	d.sportPedalActivationMode   = SPORT_PEDAL_OFF;
-	d.sportPedalLuaGauge         = LUA_GAUGE_1;
-	d.sportPedalLuaGaugeMeaning  = LUA_GAUGE_LOWER_BOUND;
 	d.sportPedalSwitchPin        = Gpio::Unassigned;
 	d.sportPedalSwitchPinMode    = PI_DEFAULT;
-	d.sportPedalLuaGaugeThreshold = 0.0f;
 	for (size_t i = 0; i < efi::size(d.sportPedalPedalBins); i++) {
 		d.sportPedalPedalBins[i] = i * (100.0f / 7); // 0 .. 100 % pedal
 		d.sportPedalMultValues[i] = 1.0f;            // 1.0 = pass-through until the user tunes it
@@ -147,12 +151,7 @@ void customPageSetDefaults() {
 	d.popsAndBangsCltMax = 105;
 	d.popsAndBangsTimingOverride = -10.0f;
 	d.popsAndBangsVeOverride = 30.0f;
-	d.popsAndBangsDisableMode = POPS_AND_BANGS_DISABLE_MODE_NONE;
-	d.popsAndBangsDisablePin = Gpio::Unassigned;
-	d.popsAndBangsDisablePinMode = PI_DEFAULT;
-	d.popsAndBangsLuaGauge = LUA_GAUGE_1;
-	d.popsAndBangsLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
-	d.popsAndBangsLuaGaugeValue = 0.0f;
+	d.popsAndBangsRequireSportMode = false;
 
 	// Pops and Bangs spark cut (overlay on top of P&B).
 	d.popsAndBangsSparkCutEnabled = false;
@@ -216,12 +215,9 @@ void customPageSetDefaults() {
 
 	// Ghost Cam Mode — disabled by default; inert calibration (stoich AFR, zero cam angle).
 	d.ghostCamEnabled = false;
-	d.ghostCamActivationSource = false; // 0 = Pin
+	d.ghostCamActivationSource = false; // 0 = Switch
 	d.ghostCamActivatePin = Gpio::Unassigned;
 	d.ghostCamActivatePinMode = PI_DEFAULT;
-	d.ghostCamLuaGauge = LUA_GAUGE_1;
-	d.ghostCamLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
-	d.ghostCamLuaGaugeThreshold = 0.0f;
 	d.ghostCamCltMin = 60;           // require operating temp
 	d.ghostCamIdleRpm = 800;         // match a typical warm idle target
 	d.ghostCamTargetAfr = 14.7f;     // stoich — user tunes toward 16+ for lope effect
