@@ -45,7 +45,7 @@ private:
 	bool passesEntryGate(float rpm, float vss, float driverTps) const;
 	bool shouldTerminate(float driverTps, bool downshifting) const;
 	float runPid(float rpm, float dt);
-	bool isLuaGateBlocking() const;
+	bool isSportModeGateBlocking() const;
 
 	Pid m_pid;
 	bool m_pidInited = false;

@@ -1,7 +1,7 @@
 struct_no_prefix downshift_blipper_state_s
 
 	bit downshiftBlipActive;Blipper: active
-	bit downshiftBlipLuaGateBlocked;Blipper: Lua gate blocking
+	bit downshiftBlipSportModeGateBlocked;Blipper: Sport Mode gate blocking
 
 	uint8_t downshiftBlipState;Blipper: state
 	uint8_t downshiftBlipPreShiftGear;Blipper: pre-shift gear

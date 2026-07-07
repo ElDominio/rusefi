@@ -7,4 +7,5 @@ struct_no_prefix exhaust_cutout_s
 	bit isCutoutOpen;Cutout is fully open
 	bit isCutoutMoving;H-Bridge motor is running
 	bit isTestActive;Actuator test sequence is running
+	bit isLuaOverrideActive;Forced open by Lua override
 end_struct

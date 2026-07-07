@@ -110,6 +110,7 @@ TESTS_SRC_CPP = \
 	tests/test_rolling_launch.cpp \
 	tests/actuators/test_downshift_blipper.cpp \
 	tests/actuators/test_upshift_rpm_hold.cpp \
+	tests/actuators/test_exhaust_cutout.cpp \
 	tests/test_fft.cpp \
 	tests/lua/test_lua_basic.cpp \
 	tests/lua/test_bit_range_msb.cpp \

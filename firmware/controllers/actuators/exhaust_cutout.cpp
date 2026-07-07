@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "exhaust_cutout.h"
 #include "custom_page.h"
+#include "engine_state_machine.h"
 
 #if EFI_EXHAUST_CUTOUT
 
@@ -88,30 +89,11 @@ bool ExhaustCutoutController::getInputHigh() const {
 		return false;
 	}
 
-	if (cfg.exhaustCutoutActivationMode == EXHAUST_CUTOUT_LUA_GAUGE) {
-		SensorType gauge;
-		switch (cfg.exhaustCutoutLuaGauge) {
-			case LUA_GAUGE_2: gauge = SensorType::LuaGauge2; break;
-			case LUA_GAUGE_3: gauge = SensorType::LuaGauge3; break;
-			case LUA_GAUGE_4: gauge = SensorType::LuaGauge4; break;
-			case LUA_GAUGE_5: gauge = SensorType::LuaGauge5; break;
-			case LUA_GAUGE_6: gauge = SensorType::LuaGauge6; break;
-			case LUA_GAUGE_7: gauge = SensorType::LuaGauge7; break;
-			case LUA_GAUGE_8: gauge = SensorType::LuaGauge8; break;
-			default:          gauge = SensorType::LuaGauge1; break;
-		}
-		auto result = Sensor::get(gauge);
-		if (!result.Valid) {
-			return false;
-		}
-		if (cfg.exhaustCutoutLuaGaugeMeaning == LUA_GAUGE_LOWER_BOUND) {
-			return result.Value >= cfg.exhaustCutoutLuaGaugeThreshold;
-		} else {
-			return result.Value <= cfg.exhaustCutoutLuaGaugeThreshold;
-		}
+	if (cfg.exhaustCutoutActivationMode == EXHAUST_CUTOUT_SPORT_MODE) {
+		return engine->module<EngineStateMachine>().unmock().engineSmIsSportMode;
 	}
 
-	return false;
+	return false; // OFF or AUTO_SPORT_MODE (handled directly in onSlowCallback)
 }
 
 bool ExhaustCutoutController::evaluateAutoTrigger() {
@@ -325,6 +307,20 @@ void ExhaustCutoutController::onSlowCallback() {
 		isTriggerTps = false;
 		isTriggerMap = false;
 		isInputHigh = false;
+	} else if (cfg.exhaustCutoutActivationMode == EXHAUST_CUTOUT_AUTO_SPORT_MODE) {
+		// Dedicated mode: auto-trigger (RPM/TPS/MAP) is only evaluated while Sport Mode is active;
+		// bypasses the Low/High behavior lookup entirely.
+		bool sportModeActive = engine->module<EngineStateMachine>().unmock().engineSmIsSportMode;
+		isInputHigh = sportModeActive;
+		if (sportModeActive) {
+			desiredOpen = evaluateAutoTrigger() || isLuaOverrideActive;
+		} else {
+			desiredOpen = isLuaOverrideActive;
+			isTriggerRpm = false;
+			isTriggerTps = false;
+			isTriggerMap = false;
+			m_tpsHoldTimer.reset();
+		}
 	} else {
 		// Normal activation logic
 		isInputHigh = getInputHigh();
@@ -344,7 +340,8 @@ void ExhaustCutoutController::onSlowCallback() {
 			isTriggerTps = false;
 			isTriggerMap = false;
 		} else {
-			desiredOpen = evaluateAutoTrigger();
+			// Auto behavior: Lua can force the cutout open regardless of RPM/TPS/MAP triggers
+			desiredOpen = evaluateAutoTrigger() || isLuaOverrideActive;
 		}
 	}
 

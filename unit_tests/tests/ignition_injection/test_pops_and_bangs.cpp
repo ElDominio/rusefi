@@ -24,7 +24,7 @@ static void setupPopsAndBangs() {
 	getCustomPage()->popsAndBangsCltMax       = 105;
 	getCustomPage()->popsAndBangsTimingOverride = -10.0f;
 	getCustomPage()->popsAndBangsVeOverride   = 30.0f;
-	getCustomPage()->popsAndBangsDisableMode  = POPS_AND_BANGS_DISABLE_MODE_NONE;
+	getCustomPage()->popsAndBangsRequireSportMode = false;
 }
 
 // Helper: run the ESM P&B state machine with overrun=true at the given time
@@ -349,6 +349,28 @@ TEST(PopsAndBangs, CutoutInhibitExpiresActiveWindowWhenCutoutCloses) {
 	cutout.isCutoutOpen = false;
 	tickPnb(eth);
 	EXPECT_FALSE(esm.engineSmIsPopsAndBangs);
+}
+
+TEST(PopsAndBangs, RequireSportModeBlocksActivationWhenSportModeOff) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSensors();
+	setupPopsAndBangs();
+	getCustomPage()->popsAndBangsRequireSportMode = true;
+	eth.engine.module<EngineStateMachine>().unmock().engineSmIsSportMode = false;
+	setTimeNowUs(1e6);
+	tickPnb(eth);
+	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+}
+
+TEST(PopsAndBangs, RequireSportModeAllowsActivationWhenSportModeOn) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSensors();
+	setupPopsAndBangs();
+	getCustomPage()->popsAndBangsRequireSportMode = true;
+	eth.engine.module<EngineStateMachine>().unmock().engineSmIsSportMode = true;
+	setTimeNowUs(1e6);
+	tickPnb(eth);
+	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, SparkCutAutoDurationInRange) {

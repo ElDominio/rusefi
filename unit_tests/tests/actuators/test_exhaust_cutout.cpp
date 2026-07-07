@@ -61,3 +61,47 @@ TEST(ExhaustCutout, autoSportModeRequiresSportModeAndTrigger) {
 	dut().onSlowCallback();
 	EXPECT_FALSE(dut().isCutoutOpen);
 }
+
+// Lua override forces the cutout open in Auto + Sport Mode even while Sport Mode is inactive
+// and no RPM/TPS/MAP trigger is met.
+TEST(ExhaustCutout, luaOverrideForcesOpenInAutoSportMode) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->exhaustCutoutEnabled = true;
+	auto cfg = getCustomPage();
+	cfg->exhaustCutoutActivationMode = EXHAUST_CUTOUT_AUTO_SPORT_MODE;
+	cfg->exhaustCutoutOpenRpm = 3000;
+
+	Sensor::setMockValue(SensorType::Rpm, 0);
+	setSportMode(false);
+	dut().onSlowCallback();
+	EXPECT_FALSE(dut().isCutoutOpen);
+
+	dut().isLuaOverrideActive = true;
+	dut().onSlowCallback();
+	EXPECT_TRUE(dut().isCutoutOpen);
+
+	dut().isLuaOverrideActive = false;
+	dut().onSlowCallback();
+	EXPECT_FALSE(dut().isCutoutOpen);
+}
+
+// Lua override forces the cutout open under plain "Auto" behavior (Switch/Sport Mode activation),
+// but must not override an explicit Always Closed behavior.
+TEST(ExhaustCutout, luaOverrideAppliesOnlyToAutoBehavior) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->exhaustCutoutEnabled = true;
+	auto cfg = getCustomPage();
+	cfg->exhaustCutoutActivationMode = EXHAUST_CUTOUT_SWITCH;
+	cfg->exhaustCutoutBehaviorLow = EXHAUST_CUTOUT_ALWAYS_CLOSED;
+	cfg->exhaustCutoutBehaviorHigh = EXHAUST_CUTOUT_AUTO;
+	cfg->exhaustCutoutOpenRpm = 3000;
+
+	Sensor::setMockValue(SensorType::Rpm, 0);
+	dut().isLuaOverrideActive = true;
+
+	// Switch input LOW -> Always Closed behavior; override does not apply.
+	dut().onSlowCallback();
+	EXPECT_FALSE(dut().isCutoutOpen);
+}

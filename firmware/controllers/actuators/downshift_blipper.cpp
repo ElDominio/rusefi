@@ -16,19 +16,6 @@ static constexpr efitimems_t GEAR_STABLE_MS = 200;
 // is bound to this file-static pid_s (single blipper instance) rather than to a page field.
 static pid_s s_blipPidCfg{};
 
-static SensorType mapLuaGauge(uint8_t index) {
-	switch (index) {
-		case 1:  return SensorType::LuaGauge2;
-		case 2:  return SensorType::LuaGauge3;
-		case 3:  return SensorType::LuaGauge4;
-		case 4:  return SensorType::LuaGauge5;
-		case 5:  return SensorType::LuaGauge6;
-		case 6:  return SensorType::LuaGauge7;
-		case 7:  return SensorType::LuaGauge8;
-		default: return SensorType::LuaGauge1;
-	}
-}
-
 void DownshiftBlipper::onConfigurationChange(engine_configuration_s const* /*previousConfig*/) {
 	// Bind the PID to the file-static params; constant fields set once here.
 	s_blipPidCfg.offset = 0;
@@ -120,7 +107,7 @@ bool DownshiftBlipper::passesEntryGate(float rpm, float vss, float driverTps) co
 	if (cfg->downshiftBlipperRequireBrake && engine->engineState.brakePedalState == 0) {
 		return false;
 	}
-	if (isLuaGateBlocking()) {
+	if (isSportModeGateBlocking()) {
 		return false;
 	}
 	return true;
@@ -140,8 +127,8 @@ bool DownshiftBlipper::shouldTerminate(float driverTps, bool downshifting) const
 	if (driverTps > cfg->downshiftBlipperDriverTpsThreshold) {
 		return true;
 	}
-	// Lua gate flipped to blocking mid-blip
-	if (isLuaGateBlocking()) {
+	// Sport Mode gate flipped to blocking mid-blip
+	if (isSportModeGateBlocking()) {
 		return true;
 	}
 	return false;
@@ -161,25 +148,15 @@ float DownshiftBlipper::runPid(float rpm, float dt) {
 	return out;
 }
 
-// Inhibit gate (not a throttle multiplier): while the gauge trips the comparison, the blip
-// cannot start, and an active blip is treated as a termination condition. Same pattern as
+// Inhibit gate (not a throttle multiplier): while Sport Mode is required and not active, the
+// blip cannot start, and an active blip is treated as a termination condition. Same pattern as
 // ExhaustCutoutController::getInputHigh() / EngineStateMachine::isPopsAndBangsBlocked().
-bool DownshiftBlipper::isLuaGateBlocking() const {
+bool DownshiftBlipper::isSportModeGateBlocking() const {
 	auto cfg = getCustomPage();
-	if (!cfg->downshiftBlipperUseLuaGauge) {
+	if (!cfg->downshiftBlipperRequireSportMode) {
 		return false;
 	}
-	SensorType gauge = mapLuaGauge(cfg->downshiftBlipperLuaGauge);
-	auto result = Sensor::get(gauge);
-	if (!result.Valid) {
-		return false;
-	}
-	float threshold = cfg->downshiftBlipperLuaGaugeThreshold;
-	if (cfg->downshiftBlipperLuaGaugeMeaning == LUA_GAUGE_LOWER_BOUND) {
-		return result.Value >= threshold;
-	} else {
-		return result.Value <= threshold;
-	}
+	return !engine->module<EngineStateMachine>().unmock().engineSmIsSportMode;
 }
 
 void DownshiftBlipper::onFastCallback() {
@@ -283,7 +260,7 @@ void DownshiftBlipper::onFastCallback() {
 		}
 	}
 
-	downshiftBlipLuaGateBlocked = isLuaGateBlocking();
+	downshiftBlipSportModeGateBlocked = isSportModeGateBlocking();
 
 	// Ceiling is per-phase: runPid() already clamps to downshiftBlipperMaxTpsLimit for the
 	// closed-loop hold, and the open-loop ramp is bounded by etbMaximumPosition above. Only

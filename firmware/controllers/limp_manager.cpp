@@ -79,7 +79,13 @@ void LimpManager::updateRevLimit(float rpm) {
 
 #if EFI_LUA_LIMITER
 	if (engineConfiguration->luaLimiterEnabled) {
-		m_revLimit += interpolate2d(getLuaLimiterGaugeValue(), getCustomPage()->luaLimiterRpmAddBins, getCustomPage()->luaLimiterRpmAdd);
+		if (getCustomPage()->limiterAdderSource == LIMITER_ADDER_SPORT_MODE) {
+			if (engine->module<EngineStateMachine>().unmock().engineSmIsSportMode) {
+				m_revLimit += getCustomPage()->limiterAdderSportModeRpmAdd;
+			}
+		} else {
+			m_revLimit += interpolate2d(getLuaLimiterGaugeValue(), getCustomPage()->luaLimiterRpmAddBins, getCustomPage()->luaLimiterRpmAdd);
+		}
 	}
 #endif // EFI_LUA_LIMITER
 
@@ -168,7 +174,13 @@ void LimpManager::updateState(float rpm, efitick_t nowNt) {
 	if (mapCut != 0) {
 #if EFI_LUA_LIMITER
 		if (engineConfiguration->luaLimiterEnabled) {
-			mapCut += interpolate2d(getLuaLimiterGaugeValue(), getCustomPage()->luaLimiterBoostAddBins, getCustomPage()->luaLimiterBoostAdd);
+			if (getCustomPage()->limiterAdderSource == LIMITER_ADDER_SPORT_MODE) {
+				if (engine->module<EngineStateMachine>().unmock().engineSmIsSportMode) {
+					mapCut += getCustomPage()->limiterAdderSportModeBoostAdd;
+				}
+			} else {
+				mapCut += interpolate2d(getLuaLimiterGaugeValue(), getCustomPage()->luaLimiterBoostAddBins, getCustomPage()->luaLimiterBoostAdd);
+			}
 		}
 #endif // EFI_LUA_LIMITER
 		// require drop of 'boostCutPressureHyst' kPa to resume fuel

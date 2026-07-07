@@ -306,8 +306,9 @@ PUBLIC_API_WEAK float boardAdjustEtbTarget(float currentEtbTarget) {
 }
 
 #if EFI_SPORT_PEDAL
-// Sport Pedal: returns true while the configured activation source (hardware switch or Lua gauge)
-// is asserting. Mirrors the Exhaust Cutout activation reading (see exhaust_cutout.cpp getInputHigh).
+// Sport Pedal: returns true while the configured activation source (hardware switch or Sport
+// Mode) is asserting. Mirrors the Exhaust Cutout activation reading (see exhaust_cutout.cpp
+// getInputHigh).
 bool isSportPedalActive() {
 	auto& cfg = *getCustomPage();
 
@@ -320,27 +321,8 @@ bool isSportPedalActive() {
 		return false;
 	}
 
-	if (cfg.sportPedalActivationMode == SPORT_PEDAL_LUA_GAUGE) {
-		SensorType gauge;
-		switch (cfg.sportPedalLuaGauge) {
-			case LUA_GAUGE_2: gauge = SensorType::LuaGauge2; break;
-			case LUA_GAUGE_3: gauge = SensorType::LuaGauge3; break;
-			case LUA_GAUGE_4: gauge = SensorType::LuaGauge4; break;
-			case LUA_GAUGE_5: gauge = SensorType::LuaGauge5; break;
-			case LUA_GAUGE_6: gauge = SensorType::LuaGauge6; break;
-			case LUA_GAUGE_7: gauge = SensorType::LuaGauge7; break;
-			case LUA_GAUGE_8: gauge = SensorType::LuaGauge8; break;
-			default:          gauge = SensorType::LuaGauge1; break;
-		}
-		auto result = Sensor::get(gauge);
-		if (!result.Valid) {
-			return false;
-		}
-		if (cfg.sportPedalLuaGaugeMeaning == LUA_GAUGE_LOWER_BOUND) {
-			return result.Value >= cfg.sportPedalLuaGaugeThreshold;
-		} else {
-			return result.Value <= cfg.sportPedalLuaGaugeThreshold;
-		}
+	if (cfg.sportPedalActivationMode == SPORT_PEDAL_SPORT_MODE) {
+		return engine->module<EngineStateMachine>().unmock().engineSmIsSportMode;
 	}
 
 	// SPORT_PEDAL_OFF

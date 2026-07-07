@@ -11,6 +11,7 @@
 #include "dc_motor.h"
 #include "idle_thread.h"
 #include "custom_page.h"
+#include "engine_state_machine.h"
 
 #include "mocks.h"
 
@@ -326,7 +327,7 @@ TEST(etb, testSetpointOnlyPedal) {
 	EXPECT_EQ(90, etb.getSetpoint().value_or(-1));
 }
 
-// Sport Pedal: a Lua-gauge / switch activated curve multiplies the ETB throttle target,
+// Sport Pedal: a Sport-Mode / switch activated curve multiplies the ETB throttle target,
 // clamped to 100%. See electronic_throttle.cpp getSetpointEtb / isSportPedalActive.
 TEST(etb, sportPedalMultiplier) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
@@ -349,24 +350,21 @@ TEST(etb, sportPedalMultiplier) {
 
 	etb.init(DC_Throttle1, nullptr, nullptr, &pedalMap);
 
-	// Configure a flat 1.5x sport pedal curve, activated when Lua gauge 1 >= 0.5.
+	// Configure a flat 1.5x sport pedal curve, activated by Sport Mode.
 	auto& cfg = *getCustomPage();
-	cfg.sportPedalActivationMode = SPORT_PEDAL_LUA_GAUGE;
-	cfg.sportPedalLuaGauge = LUA_GAUGE_1;
-	cfg.sportPedalLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND; // assert when value >= threshold
-	cfg.sportPedalLuaGaugeThreshold = 0.5f;
+	cfg.sportPedalActivationMode = SPORT_PEDAL_SPORT_MODE;
 	for (size_t i = 0; i < efi::size(cfg.sportPedalPedalBins); i++) {
 		cfg.sportPedalPedalBins[i] = i * (100.0f / 7);
 		cfg.sportPedalMultValues[i] = 1.5f;
 	}
 
-	// Gauge low -> sport pedal inactive -> passthru target.
-	Sensor::setMockValue(SensorType::LuaGauge1, 0.0f, true);
+	// Sport Mode off -> sport pedal inactive -> passthru target.
+	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = false;
 	Sensor::setMockValue(SensorType::AcceleratorPedal, 40.0f, true);
 	EXPECT_NEAR(40, etb.getSetpoint().value_or(-1), EPS4D);
 
-	// Gauge high -> sport pedal active -> target multiplied by 1.5.
-	Sensor::setMockValue(SensorType::LuaGauge1, 1.0f, true);
+	// Sport Mode on -> sport pedal active -> target multiplied by 1.5.
+	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = true;
 	Sensor::setMockValue(SensorType::AcceleratorPedal, 40.0f, true);
 	EXPECT_NEAR(60, etb.getSetpoint().value_or(-1), EPS4D);
 
@@ -374,7 +372,7 @@ TEST(etb, sportPedalMultiplier) {
 	Sensor::setMockValue(SensorType::AcceleratorPedal, 80.0f, true);
 	EXPECT_NEAR(100, etb.getSetpoint().value_or(-1), EPS4D);
 
-	// Activation OFF -> feature disabled even with the gauge asserted.
+	// Activation OFF -> feature disabled even with Sport Mode active.
 	cfg.sportPedalActivationMode = SPORT_PEDAL_OFF;
 	Sensor::setMockValue(SensorType::AcceleratorPedal, 40.0f, true);
 	EXPECT_NEAR(40, etb.getSetpoint().value_or(-1), EPS4D);

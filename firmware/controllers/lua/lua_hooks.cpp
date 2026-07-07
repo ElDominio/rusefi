@@ -1123,6 +1123,13 @@ extern int luaCommandCounters[LUA_BUTTON_COUNT];
 		engine->module<AcController>().unmock().isDisabledByLua = value;
 		return 0;
 	});
+	lua_register(lState, "setExhCutoutActive", [](lua_State* l) {
+		// setExhCutoutActive(1) forces the cutout open while in Auto or Auto + Sport Mode;
+		// setExhCutoutActive(nil) clears the override.
+		auto value = lua_toboolean(l, 1);
+		engine->module<ExhaustCutoutController>().unmock().isLuaOverrideActive = value;
+		return 0;
+	});
 	lua_register(lState, "startDisabled", [](lua_State* l) {
 		engine->startStopState.startDisabledByLua = lua_toboolean(l, 1);
 		return 0;

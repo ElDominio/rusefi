@@ -32,7 +32,7 @@ void setupBlipper() {
 	auto cfg = getCustomPage();
 	cfg->downshiftBlipperEnabled = true;
 	cfg->downshiftBlipperRequireBrake = false;
-	cfg->downshiftBlipperUseLuaGauge = false;
+	cfg->downshiftBlipperRequireSportMode = false;
 	cfg->downshiftBlipperMinVss = 10;
 	cfg->downshiftBlipperMinRpm = 1500;
 	cfg->downshiftBlipperMaxRpm = 7000;
@@ -232,17 +232,15 @@ TEST(DownshiftBlipper, abortsWhenDriverOnThrottle) {
 	EXPECT_FALSE(dut().isActive());
 }
 
-// Lua gauge gate is an inhibit, not a throttle multiplier: while it trips, a blip cannot start.
-TEST(DownshiftBlipper, luaGateBlocksEntry) {
+// Sport Mode gate is an inhibit, not a throttle multiplier: while required and inactive, a blip
+// cannot start.
+TEST(DownshiftBlipper, sportModeGateBlocksEntry) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupBlipper();
 
 	auto cfg = getCustomPage();
-	cfg->downshiftBlipperUseLuaGauge = true;
-	cfg->downshiftBlipperLuaGauge = 0; // LuaGauge1
-	cfg->downshiftBlipperLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND; // trips when gauge >= threshold
-	cfg->downshiftBlipperLuaGaugeThreshold = 50;
-	Sensor::setMockValue(SensorType::LuaGauge1, 60); // >= 50 -> gate is blocking
+	cfg->downshiftBlipperRequireSportMode = true;
+	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = false; // gate is blocking
 
 	setSensors(2700, 80, 0);
 	latchGear(eth, 4);
@@ -252,18 +250,15 @@ TEST(DownshiftBlipper, luaGateBlocksEntry) {
 	EXPECT_FALSE(dut().isActive());
 }
 
-// If the gauge crosses the threshold mid-blip, the gate must cut the blip short, same as the
-// driver retaking the pedal or the clutch re-engaging.
-TEST(DownshiftBlipper, luaGateCutsActiveBlip) {
+// If Sport Mode turns off mid-blip, the gate must cut the blip short, same as the driver
+// retaking the pedal or the clutch re-engaging.
+TEST(DownshiftBlipper, sportModeGateCutsActiveBlip) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupBlipper();
 
 	auto cfg = getCustomPage();
-	cfg->downshiftBlipperUseLuaGauge = true;
-	cfg->downshiftBlipperLuaGauge = 0; // LuaGauge1
-	cfg->downshiftBlipperLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
-	cfg->downshiftBlipperLuaGaugeThreshold = 50;
-	Sensor::setMockValue(SensorType::LuaGauge1, 0); // below threshold -> not blocking yet
+	cfg->downshiftBlipperRequireSportMode = true;
+	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = true; // not blocking yet
 
 	setSensors(2700, 80, 0);
 	latchGear(eth, 4);
@@ -274,8 +269,8 @@ TEST(DownshiftBlipper, luaGateCutsActiveBlip) {
 	dut().onFastCallback();
 	ASSERT_TRUE(dut().isActive());
 
-	// Gauge crosses the threshold mid-blip -> gate trips -> ramp closed, then lockout.
-	Sensor::setMockValue(SensorType::LuaGauge1, 60);
+	// Sport Mode turns off mid-blip -> gate trips -> ramp closed, then lockout.
+	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = false;
 	dut().onFastCallback();
 	eth.moveTimeForwardMs(40);
 	dut().onFastCallback();
