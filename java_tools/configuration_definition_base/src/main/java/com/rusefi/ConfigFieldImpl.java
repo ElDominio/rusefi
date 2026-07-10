@@ -571,7 +571,13 @@ public class ConfigFieldImpl implements ConfigField {
                 return 2;
             }
         }
-        return Integer.parseInt(digitsToken);
+        try {
+            return Integer.parseInt(digitsToken);
+        } catch (NumberFormatException e) {
+            // Unresolved template variable (e.g. __TMPL_TABLE_DIGITS__) on a not-yet-instantiated
+            // template struct - fall back to a sane default, real value is filled in on instantiation.
+            return 1;
+        }
     }
 
     @Override
