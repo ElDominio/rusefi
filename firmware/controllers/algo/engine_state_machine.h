@@ -50,12 +50,12 @@ public:
 	// Public so unit tests can call it directly without needing a full slow-callback setup.
 	void updatePopsAndBangs(bool isOverrun);
 
-	// Drives the Eco mode overlay: engages after the engine has been Cruising continuously for
-	// ecoModeCruisingTime with MAP at or below ecoModeMapLimit, drops instantly on leaving Cruising
-	// or exceeding the MAP limit, and can be inhibited by a manual switch / Lua gauge. Mutually
-	// exclusive with Sport Mode (engineSmIsSportMode out-votes eco, same as Limp). Takes the
-	// current state directly so unit tests can drive it without standing up the full state
-	// determination.
+	// Drives the Eco mode overlay: engages after the engine has been Cruising (brief AE-driven
+	// Transient blips tolerated) continuously for ecoModeCruisingTime with MAP at or below
+	// ecoModeMapLimit, drops instantly on leaving Cruising/Transient or exceeding the MAP limit,
+	// and can be inhibited by a manual switch / Lua gauge. Mutually exclusive with Sport Mode
+	// (engineSmIsSportMode out-votes eco, same as Limp). Takes the current state directly so
+	// unit tests can drive it without standing up the full state determination.
 	void updateEcoMode(EngineStateMachineState currentState);
 	void updateSportMode();
 	void updateGhostCam();
@@ -159,6 +159,13 @@ private:
 	bool isEcoModeSwitchAsserted() const; // manual switch / Lua gauge currently asserting
 	bool isEcoModeInhibited() const;      // asserted in Inhibit mode
 	Timer m_ecoCruiseTimer;               // measures continuous time in the Cruising state
+
+	// Eco mode's own actuation (ecoThrottleMult, VVT override) is a real RPM-rate transient but
+	// not driver-initiated; misreading it as Accelerating/Decelerating would bounce eco straight
+	// back off. Armed for smTransientHoldoffCallbacks ticks on any engineSmIsEcoMode edge (see
+	// onSlowCallback()) and consumed by determineState() to suppress the RPM-rate check.
+	bool    m_prevEcoModeActive        = false;
+	uint8_t m_ecoSettleHoldoffRemaining = 0;
 
 	// Pops and Bangs state machine
 	bool isPopsAndBangsBlocked() const;

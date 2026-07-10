@@ -112,6 +112,19 @@ void EngineStateMachine::onSlowCallback() {
 	// engineSmIsSportMode (sport wins — the two are mutually exclusive).
 	updateEcoMode(m_currentState);
 
+	// Arm a settle holdoff on an eco engage/disengage edge: the ecoThrottleMult/VVT step that
+	// follows is a real RPM transient but not driver-initiated, and determineState() must not
+	// misread it as Accelerating/Decelerating next tick or eco would immediately bounce itself
+	// back off (see m_ecoSettleHoldoffRemaining). Skipped when the edge itself was caused by a
+	// genuine, already-detected Accelerating/Decelerating this tick -- that's real driver input,
+	// not eco noise, and masking further detection would just blind us to its continuation.
+	if (engineSmIsEcoMode != m_prevEcoModeActive
+			&& m_currentState != EngineStateMachineState::Accelerating
+			&& m_currentState != EngineStateMachineState::Decelerating) {
+		m_ecoSettleHoldoffRemaining = getCustomPage()->smTransientHoldoffCallbacks;
+	}
+	m_prevEcoModeActive = engineSmIsEcoMode;
+
 	// Ghost Cam overlay — idle-only manual lope effect via switch or Sport Mode.
 	// Must run after engineSmIsIdle, engineSmIsLimp and engineSmIsSportMode are set.
 	updateGhostCam();
@@ -157,10 +170,13 @@ void EngineStateMachine::updateEcoMode(EngineStateMachineState currentState) {
 		return;
 	}
 
-	// Instant drop: only the Cruising state accumulates time. Any other state pins the timer at
-	// zero, so re-entry must accumulate the full ecoModeCruisingTime again before eco re-engages.
+	// Instant drop: Cruising and brief AE-driven Transient blips both accumulate time -- a
+	// throttle flutter that immediately settles back to Cruising is AE noise, not a driver-
+	// initiated tip-in/tip-out, and shouldn't cost eco its progress. Any other state (genuine
+	// Accelerating/Decelerating/Overrun/etc.) pins the timer at zero, so re-entry must
+	// accumulate the full ecoModeCruisingTime again before eco re-engages.
 	bool cruiseElapsed = false;
-	if (currentState == EngineStateMachineState::Cruising) {
+	if (currentState == EngineStateMachineState::Cruising || currentState == EngineStateMachineState::Transient) {
 		cruiseElapsed = m_ecoCruiseTimer.hasElapsedSec(getCustomPage()->ecoModeCruisingTime);
 	} else {
 		m_ecoCruiseTimer.reset();
@@ -515,8 +531,11 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps,
 	// lag is negligible at ~100 ms). Thresholds of 0 disable the respective state.
 	// Skipped while the IdleController considers us in closed-loop idle territory: RPM rate
 	// noise from idle hunting or AC/load compensation must not be misread as a driver-initiated
-	// tip-in/tip-out.
-	if (idlePhase != IIdleController::Phase::Idling) {
+	// tip-in/tip-out. Also skipped for m_ecoSettleHoldoffRemaining ticks after an eco engage/
+	// disengage edge, for the same reason (see onSlowCallback()).
+	if (m_ecoSettleHoldoffRemaining > 0) {
+		m_ecoSettleHoldoffRemaining--;
+	} else if (idlePhase != IIdleController::Phase::Idling) {
 		int16_t accelThr = getCustomPage()->smAccelRateThreshold;
 		int16_t decelThr = getCustomPage()->smDecelRateThreshold;
 

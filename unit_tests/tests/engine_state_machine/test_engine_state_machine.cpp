@@ -953,6 +953,114 @@ TEST(EngineStateMachine, overrunBreaksAcceleratingHoldImmediately) {
 	EXPECT_EQ(EngineStateMachineState::Coasting, runAndGetState()); // t=150 ms
 }
 
+// ---- Eco Mode settle holdoff ----
+//
+// Eco Mode's own actuation (ecoThrottleMult / VVT override) is a real RPM-rate transient once
+// engineSmIsEcoMode flips, but it isn't driver-initiated. determineState() must not misread that
+// transient as Accelerating right after the edge, or eco would immediately bounce itself back
+// off. m_ecoSettleHoldoffRemaining (armed for smTransientHoldoffCallbacks ticks on the edge)
+// suppresses the RPM-rate check for that window, then lets real detection resume.
+TEST(EngineStateMachine, ecoEngageSuppressesFalseAcceleratingDuringSettleHoldoff) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	// m_lastRpmRate is only ever computed inside updateShiftAccumulator(), which
+	// updateShiftDetection() skips entirely unless a clutch switch is configured.
+	getCustomPage()->smUpshiftClutchSwitch       = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smAccelRateThreshold        = 500; // RPM/s
+	getCustomPage()->smRpmRateWindowMs           = 50;  // one tick
+	getCustomPage()->smTransientHoldoffCallbacks = 3;    // settle window after the eco edge
+
+	getCustomPage()->ecoModeEnabled      = true;
+	getCustomPage()->ecoModeCruisingTime = 0; // engage as soon as Cruising is seen
+	getCustomPage()->ecoModeMapLimit     = 0;
+	getCustomPage()->ecoModeMinVss       = 0;
+	getCustomPage()->ecoModeSwitchMode   = eco_mode_switch_mode_e::Off;
+
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
+
+	enterRunning(2000.0f, 50.0f);
+	auto& sm = getSm();
+	ASSERT_EQ(EngineStateMachineState::Cruising, sm.getCurrentState());
+	ASSERT_TRUE(sm.engineSmIsEcoMode); // engaged this tick -> settle holdoff armed
+
+	// Eco's own actuation now drives an RPM ramp comfortably above smAccelRateThreshold, standing
+	// in for the ecoThrottleMult/VVT step. Despite the ramp, the settle-holdoff ticks must not
+	// read it as Accelerating, so eco must not drop.
+	float rpm = 2000.0f;
+	for (int i = 0; i < 3; i++) {
+		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+		rpm += 200.0f;
+		engine->rpmCalculator.setRpmValue(rpm);
+		engine->periodicSlowCallback();
+		EXPECT_NE(EngineStateMachineState::Accelerating, sm.getCurrentState());
+		EXPECT_TRUE(sm.engineSmIsEcoMode);
+	}
+
+	// Once the holdoff is exhausted, a persisting high rate is (correctly) detected as real
+	// Accelerating, and eco drops -- the suppression is a brief settle window, not a permanent
+	// blind spot.
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	rpm += 200.0f;
+	engine->rpmCalculator.setRpmValue(rpm);
+	engine->periodicSlowCallback();
+	EXPECT_EQ(EngineStateMachineState::Accelerating, sm.getCurrentState());
+	EXPECT_FALSE(sm.engineSmIsEcoMode);
+}
+
+// A disengage caused by a genuine, already-detected Accelerating/Decelerating must NOT arm the
+// settle holdoff -- that's real driver input, not eco noise, and suppressing further detection
+// would blind the state machine to the driver's continued acceleration.
+TEST(EngineStateMachine, genuineAccelerationDropsEcoWithoutArmingHoldoff) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupSmConfig();
+	getCustomPage()->smUpshiftClutchSwitch       = sm_clutch_switch_e::ClutchDown;
+	getCustomPage()->smAccelRateThreshold        = 500; // RPM/s
+	getCustomPage()->smRpmRateWindowMs           = 50;  // one tick
+	getCustomPage()->smTransientHoldoffCallbacks = 3;
+
+	getCustomPage()->ecoModeEnabled      = true;
+	getCustomPage()->ecoModeCruisingTime = 0;
+	getCustomPage()->ecoModeMapLimit     = 0;
+	getCustomPage()->ecoModeMinVss       = 0;
+	getCustomPage()->ecoModeSwitchMode   = eco_mode_switch_mode_e::Off;
+
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
+
+	enterRunning(2000.0f, 50.0f);
+	auto& sm = getSm();
+	ASSERT_TRUE(sm.engineSmIsEcoMode); // engaging itself arms a 3-tick settle holdoff
+
+	// Burn through the initial engage-edge settle holdoff with a hard, sustained ramp -- once it
+	// expires (4 ticks: 3 suppressed + 1 that sees the now-stale-but-still-high rate), the ramp is
+	// (correctly) detected as real Accelerating and eco drops.
+	float rpm = 2000.0f;
+	for (int i = 0; i < 3; i++) {
+		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+		rpm += 400.0f;
+		engine->rpmCalculator.setRpmValue(rpm);
+		engine->periodicSlowCallback();
+	}
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	rpm += 400.0f;
+	engine->rpmCalculator.setRpmValue(rpm);
+	engine->periodicSlowCallback();
+	EXPECT_EQ(EngineStateMachineState::Accelerating, sm.getCurrentState());
+	EXPECT_FALSE(sm.engineSmIsEcoMode);
+
+	// The very next tick, RPM keeps climbing at the same hard rate -- if this disengage had
+	// (incorrectly) armed a new settle holdoff, this tick would be masked back to Cruising/Idle
+	// instead of staying Accelerating.
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	rpm += 400.0f;
+	engine->rpmCalculator.setRpmValue(rpm);
+	engine->periodicSlowCallback();
+	EXPECT_EQ(EngineStateMachineState::Accelerating, sm.getCurrentState());
+}
+
 // ---- Clutch-Up-only shift detection (single switch, no Clutch-Down wired) ----
 
 static void setupClutchUpOnlyConfig() {

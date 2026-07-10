@@ -78,6 +78,43 @@ TEST(EcoMode, InstantDropOnLeavingCruising) {
 	EXPECT_FALSE(ecoActive(eth));
 }
 
+TEST(EcoMode, TransientBlipDoesNotDropAlreadyActiveEco) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupEco();
+	setTimeNowUs(1e6);
+	tickEco(eth, EngineStateMachineState::Idle);
+	advanceTimeUs(3e6);
+	tickEco(eth, EngineStateMachineState::Cruising);
+	ASSERT_TRUE(ecoActive(eth));
+
+	// A brief AE-driven Transient blip is throttle noise, not a driver tip-in -- eco should
+	// ride through it rather than dropping.
+	tickEco(eth, EngineStateMachineState::Transient);
+	EXPECT_TRUE(ecoActive(eth));
+
+	tickEco(eth, EngineStateMachineState::Cruising);
+	EXPECT_TRUE(ecoActive(eth));
+}
+
+TEST(EcoMode, TransientBlipDuringAccumulationStillEngages) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupEco();
+	setTimeNowUs(1e6);
+	tickEco(eth, EngineStateMachineState::Idle); // arm: timer reset at t=1s
+
+	advanceTimeUs(1.0e6); // t=2s
+	tickEco(eth, EngineStateMachineState::Cruising);
+	EXPECT_FALSE(ecoActive(eth));
+
+	// A blip through Transient midway through accumulation must not reset the timer.
+	tickEco(eth, EngineStateMachineState::Transient);
+	EXPECT_FALSE(ecoActive(eth));
+
+	advanceTimeUs(1.5e6); // t=3.5s, 2.5s of (Cruising+Transient) elapsed >= 2s
+	tickEco(eth, EngineStateMachineState::Cruising);
+	EXPECT_TRUE(ecoActive(eth));
+}
+
 TEST(EcoMode, LimpModeOutVotesEco) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupEco();
