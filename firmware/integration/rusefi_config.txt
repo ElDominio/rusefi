@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260705
+#define FLASH_DATA_VERSION 260710
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -834,6 +834,7 @@ engineSyncCam_e engineSyncCam;Select which cam is used for engine sync. Other ca
 	uint16_t autoscale vssGearRatio;Number of turns of your vehicle speed sensor per turn of the wheels. For example if your sensor is on the transmission output, enter your axle/differential ratio. If you are using a hub-mounted sensor, enter a value of 1.0.;"ratio", 0.001, 0, 0, 60, 3
 	uint8_t vssFilterReciprocal;Set this so your vehicle speed signal is responsive, but not noisy. Larger value give smoother but slower response.;"", 1, 0, @@VSS_FILTER_MIN@@, @@VSS_FILTER_MAX@@, 0
 	uint8_t vssToothCount;Number of pulses output per revolution of the shaft where your VSS is mounted. For example, GM applications of the T56 output 17 pulses per revolution of the transmission output shaft.;"count", 1, 0, 1, 100, 0
+	uint8_t vssMaxAcceleration;Reject VSS pulses that imply a faster acceleration or deceleration than this, and dead-reckon speed from the last known rate of change instead. Helps reject a single noisy tooth. Set to 0 to disable.;"km/h/sec", 1, 0, 0, 200, 0
 
 	#define ve_override_e_enum "None", "MAP", "TPS"
 	custom ve_override_e 1 bits, U08, @OFFSET@, [0:1], @@ve_override_e_enum@@
@@ -2354,8 +2355,8 @@ uint16_t[ALS_RPM_SIZE] alsIgnSkiprpmBins;;"RPM",	   1, 0, 0, 25000, 0
 
 #define BLEND_TABLE_COUNT 8
 
-struct blend_table_s<TABLE_SCALE>
-	int16_t[BLEND_TABLE_COUNT x BLEND_TABLE_COUNT] autoscale table;;"", @@TABLE_SCALE@@, 0, -100, 100, 1
+struct blend_table_s<TABLE_SCALE,TABLE_DIGITS>
+	int16_t[BLEND_TABLE_COUNT x BLEND_TABLE_COUNT] autoscale table;;"", @@TABLE_SCALE@@, 0, -100, 100, @@TABLE_DIGITS@@
 	uint16_t[BLEND_TABLE_COUNT] loadBins;;"Load", 1, 0, 0, 1000, 0
 	uint16_t[BLEND_TABLE_COUNT] rpmBins;;"RPM", 1, 0, 0, 18000, 0
 
@@ -2367,8 +2368,8 @@ struct blend_table_s<TABLE_SCALE>
 	uint8_t[BLEND_FACTOR_SIZE] autoscale blendValues;;"%", 0.5, 0, 0, 100, 1
 end_struct
 
-blend_table_s<BLEND_PRECISION>[IGN_BLEND_COUNT iterate] ignBlends
-blend_table_s<BLEND_PRECISION>[VE_BLEND_COUNT iterate] veBlends
+blend_table_s<BLEND_PRECISION, 1>[IGN_BLEND_COUNT iterate] ignBlends
+blend_table_s<BLEND_PRECISION, 1>[VE_BLEND_COUNT iterate] veBlends
 
 ! secondVe and secondIgnition fields moved to config_page_4.txt (page4_s / TS page 4)
 #define THR_EST_SIZE 12
@@ -2376,8 +2377,8 @@ blend_table_s<BLEND_PRECISION>[VE_BLEND_COUNT iterate] veBlends
 uint16_t[THR_EST_SIZE] autoscale throttleEstimateEffectiveAreaBins;;"%", 0.1, 0, 0, 100, 1
 uint16_t[THR_EST_SIZE] autoscale throttleEstimateEffectiveAreaValues;In units of g/s normalized to choked flow conditions;"g/s", 0.1, 0, 0, 6500, 1
 
-blend_table_s<BLEND_PRECISION>[BOOST_BLEND_COUNT iterate] boostOpenLoopBlends
-blend_table_s<BLEND_PRECISION>[BOOST_BLEND_COUNT iterate] boostClosedLoopBlends
+blend_table_s<BLEND_PRECISION, 1>[BOOST_BLEND_COUNT iterate] boostOpenLoopBlends
+blend_table_s<BLEND_PRECISION, 1>[BOOST_BLEND_COUNT iterate] boostClosedLoopBlends
 
 float[RANGE_INPUT_COUNT] tcu_rangeP;;"level", 1, 0, 0, 200000, 0
 float[RANGE_INPUT_COUNT] tcu_rangeR;;"level", 1, 0, 0, 200000, 0
@@ -2513,7 +2514,7 @@ include_file controllers/modules/check_engine_light/check_engine_config.txt
 uint8_t[8] autoscale minimumOilPressureBins;;"RPM", @@RPM_AS_BYTE_SCALE@@, 0, 0, @@RPM_AS_BYTE_LIMIT@@, 0
 uint8_t[8] autoscale minimumOilPressureValues;;{bitStringValue(pressureUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 10 : 1.45038}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 1000 : 145}, 0
 
-blend_table_s<TARGET_AFR_BLEND_PRECISION>[TARGET_AFR_BLEND_COUNT iterate] targetAfrBlends
+blend_table_s<TARGET_AFR_BLEND_PRECISION, 2>[TARGET_AFR_BLEND_COUNT iterate] targetAfrBlends
 
 #define DYNO_RPM_STEP_UNITS "Rpm"
 #define DYNO_RPM_STEP_TOOLTIP "RPM Trim Window, Leave on 100 if you dont know what this does"

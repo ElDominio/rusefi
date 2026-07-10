@@ -50,3 +50,40 @@ TEST(VehicleSpeed, RealCases) {
 	// 48 tooth abs sensor
 	EXPECT_NEAR_M3(191.816f, GetVssFor(391, 1, 48, 1000));
 }
+
+TEST(VehicleSpeed, PlausibilityFilterDisabledByDefault) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	VehicleSpeedConverter dut;
+
+	engineConfiguration->driveWheelRevPerKm = 500;
+	engineConfiguration->vssGearRatio = 5;
+	engineConfiguration->vssToothCount = 10;
+	// vssMaxAcceleration left at 0 -> filter disabled
+
+	EXPECT_NEAR_M3(144, dut.convert(1000).value_or(-1));
+	// Even an impossible jump passes straight through when disabled
+	EXPECT_NEAR_M3(720, dut.convert(5000).value_or(-1));
+}
+
+TEST(VehicleSpeed, PlausibilityFilterRejectsSpike) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	VehicleSpeedConverter dut;
+
+	engineConfiguration->driveWheelRevPerKm = 500;
+	engineConfiguration->vssGearRatio = 5;
+	engineConfiguration->vssToothCount = 10;
+	engineConfiguration->vssMaxAcceleration = 50; // km/h/sec
+
+	// Bootstrap: the very first reading is always accepted, however implausible
+	EXPECT_NEAR_M3(144, dut.convert(1000).value_or(-1));
+
+	// A single-pulse jump to 720 km/h implies ~576 km/h/s of acceleration -
+	// far past the 50 km/h/s threshold, so it's rejected and held at the
+	// last accepted value. The reject budget is 30 readings.
+	for (int i = 0; i < 30; i++) {
+		EXPECT_NEAR_M3(144, dut.convert(5000).value_or(-1));
+	}
+
+	// Budget exhausted - trust the sensor again and accept the new reading.
+	EXPECT_NEAR_M3(720, dut.convert(5000).value_or(-1));
+}
