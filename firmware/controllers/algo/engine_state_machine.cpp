@@ -662,6 +662,16 @@ void EngineStateMachine::updateShiftAccumulator(float rpm, float vss, efitimems_
 		return;
 	}
 
+	// Dwell tracking for the smAccumulatorSnapTimeMs override below: reset the instant we leave
+	// the respective state(s) so the timer measures time since the most recent entry.
+	if (m_currentState != EngineStateMachineState::Accelerating) {
+		m_accelStateTimer.reset();
+	}
+	if (m_currentState != EngineStateMachineState::Decelerating &&
+			m_currentState != EngineStateMachineState::Overrun) {
+		m_decelStateTimer.reset();
+	}
+
 	float dt = dtMs / 1000.0f;
 	float gain      = getCustomPage()->smAccumulatorGain;
 	float decayRate = getCustomPage()->smAccumulatorDecayRate;
@@ -683,6 +693,26 @@ void EngineStateMachine::updateShiftAccumulator(float rpm, float vss, efitimems_
 		decay();
 		engineSmShiftAccumulator = m_shiftAccumulator;
 		return;
+	}
+
+	// Time-based override: a same-gear direction reversal (e.g. a long Overrun run immediately
+	// followed by acceleration) would otherwise need an equally long run the other way just to
+	// null out a large stale opposite-sign accumulator, risking a stale shift-direction call
+	// (e.g. a spurious downshift blip on clutch-in shortly after tipping back into the
+	// throttle). Once we've dwelled continuously in the state long enough, force the accumulator
+	// to 0 so it starts accumulating fresh evidence for the new direction below instead of
+	// waiting it out. smAccumulatorSnapTimeMs == 0 disables this (legacy decay/cross behavior).
+	uint16_t snapTimeMs = getCustomPage()->smAccumulatorSnapTimeMs;
+	if (snapTimeMs > 0) {
+		float snapTimeMsF = static_cast<float>(snapTimeMs);
+		if (m_currentState == EngineStateMachineState::Accelerating && m_shiftAccumulator < 0 &&
+				m_accelStateTimer.hasElapsedMs(snapTimeMsF)) {
+			m_shiftAccumulator = 0;
+		} else if ((m_currentState == EngineStateMachineState::Decelerating ||
+				m_currentState == EngineStateMachineState::Overrun) && m_shiftAccumulator > 0 &&
+				m_decelStateTimer.hasElapsedMs(snapTimeMsF)) {
+			m_shiftAccumulator = 0;
+		}
 	}
 
 	// Accumulator integrates only in Accelerating (positive) and Overrun (negative).

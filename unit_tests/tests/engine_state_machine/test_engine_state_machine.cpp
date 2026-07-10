@@ -582,6 +582,89 @@ TEST(EngineStateMachine, noShiftBitsWithoutClutchSwitch) {
 	EXPECT_FALSE(getSm().engineSmIsDownshifting);
 }
 
+// ---- Time-based accumulator snap (smAccumulatorSnapTimeMs) ----
+//
+// A same-gear direction reversal (e.g. a long Overrun run immediately followed by acceleration)
+// would otherwise need an equally long run the other way just to null out a large stale
+// opposite-sign accumulator, risking a stale shift-direction call (e.g. a spurious downshift
+// blip on clutch-in shortly after tipping back into the throttle). smAccumulatorSnapTimeMs
+// forces the accumulator to 0 once we've dwelled continuously in the opposing state long enough,
+// instead of waiting for it to decay/climb across zero on its own.
+
+// Reversing RPM direction takes ~3 callbacks to show up in the SM's classified state, due to the
+// deliberate one-callback lag documented on determineState() (it consumes the *previous* tick's
+// rate) stacked with recordRpmSampleAndComputeRate()'s own recompute-then-hold behavior. The ramp
+// lengths below give that entry lag plus a full smAccumulatorSnapTimeMs dwell (5 callbacks here)
+// room to elapse before asserting.
+TEST(EngineStateMachine, accumulatorSnapsToZeroAfterSustainedAcceleration) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupRpmRateModeConfig();
+	getCustomPage()->smAccumulatorSnapTimeMs = 250; // 5 callbacks @ 50 ms
+
+	// Build a strongly negative accumulator via a sustained decel (falling RPM, TPS closed) --
+	// same setup as downshiftDetectedRpmMode, ~ -70 % after 20 callbacks.
+	enterRunning(4000.0f, 0.0f);
+	seedRampedRpm(4000.0f, -100.0f, 20, 0.0f);
+	ASSERT_LT(getSm().engineSmShiftAccumulator, -50.0f);
+
+	// Reverse into a sustained Accelerating ramp (2000 RPM/s, well above the 500 RPM/s
+	// threshold, +4 %/callback). Without the snap this would take many more callbacks to climb
+	// back across zero; verify it happens far sooner once the configured dwell time elapses.
+	seedRampedRpm(2100.0f, 100.0f, 9, 50.0f);
+
+	EXPECT_EQ(EngineStateMachineState::Accelerating, getSm().getCurrentState());
+	EXPECT_GT(getSm().engineSmShiftAccumulator, 0.0f);
+}
+
+TEST(EngineStateMachine, accumulatorDoesNotSnapWhenDisabled) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupRpmRateModeConfig();
+	getCustomPage()->smAccumulatorSnapTimeMs = 0; // disabled (legacy decay/cross-only behavior)
+
+	enterRunning(4000.0f, 0.0f);
+	seedRampedRpm(4000.0f, -100.0f, 20, 0.0f);
+	ASSERT_LT(getSm().engineSmShiftAccumulator, -50.0f);
+
+	// Same reversal as the test above, but with the snap disabled the accumulator only climbs by
+	// normal integration and stays deep in negative territory instead of jumping to positive.
+	seedRampedRpm(2100.0f, 100.0f, 9, 50.0f);
+
+	EXPECT_EQ(EngineStateMachineState::Accelerating, getSm().getCurrentState());
+	EXPECT_LT(getSm().engineSmShiftAccumulator, -40.0f);
+}
+
+TEST(EngineStateMachine, accumulatorSnapsToZeroAfterSustainedOverrun) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupRpmRateModeConfig();
+	getCustomPage()->smAccumulatorSnapTimeMs = 250; // 5 callbacks @ 50 ms
+
+	// Force Overrun to be reachable regardless of the real IdleController's own settle timing --
+	// same technique as overrunWhenDfcoConditionsMet.
+	engineConfiguration->coastingFuelCutTps     = 5;
+	engineConfiguration->coastingFuelCutRpmHigh = 2000;
+	engineConfiguration->coastingFuelCutRpmLow  = 1500;
+	engineConfiguration->coastingFuelCutVssHigh = 0;
+	engineConfiguration->coastingFuelCutVssLow  = 0;
+	engineConfiguration->coastingFuelCutMap     = 0;
+	MockIdleController mockIdle;
+	engine->engineModules.get<IdleController>().set(&mockIdle);
+	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Coasting));
+
+	// Build a strongly positive accumulator via a sustained Accelerating ramp -- same setup as
+	// upshiftDetectedRpmMode, ~ +70 % after 20 callbacks.
+	enterRunning(2000.0f, 50.0f);
+	seedRampedRpm(2000.0f, 100.0f, 20, 50.0f);
+	ASSERT_GT(getSm().engineSmShiftAccumulator, 50.0f);
+
+	// Reverse into a sustained Overrun (falling RPM, TPS closed). Without the snap this would
+	// take many more callbacks to fall back across zero; verify it happens far sooner once the
+	// configured dwell time elapses. RPM stays well above coastingFuelCutRpmHigh throughout.
+	seedRampedRpm(3900.0f, -100.0f, 9, 0.0f);
+
+	EXPECT_EQ(EngineStateMachineState::Overrun, getSm().getCurrentState());
+	EXPECT_LT(getSm().engineSmShiftAccumulator, 0.0f);
+}
+
 // ---- RPM/t configurable rate window ----
 
 // For a linear RPM ramp, the rate is identical regardless of window length, because the rate

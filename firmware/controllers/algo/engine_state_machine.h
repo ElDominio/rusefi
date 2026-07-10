@@ -119,6 +119,12 @@ private:
 	float        m_accumulatorLastRpm   = 0;
 	float        m_accumulatorLastVss   = 0;
 
+	// Continuous dwell in the Accelerating state / Decelerating+Overrun states, used by the
+	// smAccumulatorSnapTimeMs override: reset the instant we leave the respective state(s), so
+	// hasElapsedMs() measures time since the most recent entry (see updateShiftAccumulator()).
+	Timer        m_accelStateTimer;
+	Timer        m_decelStateTimer;
+
 	// Accelerating hold: reset every tick the rate threshold is met, so a fresh crossing
 	// extends the hold back to the full smAccelHoldMs duration (see determineState()).
 	Timer m_accelHoldTimer;

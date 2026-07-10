@@ -181,6 +181,8 @@ struct_no_prefix page6_s
 	float smAccumulatorGain;Engine SM: Accumulator climb rate in %/s per 1x threshold ratio. At exactly the threshold rate, the accumulator changes by this many %/s. Larger = faster response.;"%/s", 1, 0, 0, 200, 1
 	float smAccumulatorDecayRate;Engine SM: Rate at which the accumulator decays toward 0 (%/s) when the signal is within the ±threshold dead-band. Larger = faster decay.;"%/s", 1, 0, 0, 200, 1
 
+	uint16_t smAccumulatorSnapTimeMs;Engine SM: once continuously in the Accelerating state for this long, a still-negative accumulator (left over from a prior decel run) is forced to 0 instead of waiting for it to decay/climb across zero on its own. Symmetrically, once continuously in Decelerating or Overrun for this long, a still-positive accumulator is forced to 0. Lets a same-gear direction reversal (e.g. a long overrun immediately followed by acceleration) shed a large stale opposite-sign accumulator quickly, rather than needing an equally long run the other way to null it out and risking a stale shift-direction call (e.g. a spurious downshift blip on clutch-in right after tipping back into the throttle). 0 = disabled (legacy decay/cross-only behavior).;"ms", 1, 0, 0, 10000, 0
+
 	! --- Limp Mode (Engine State Machine sub-feature) ---
 	! These limits are enforced only while the state machine has latched the Limp state.
 	! Limp mode is triggered by an ETB jam (see limp_manager.cpp reportEtbJammed ->
