@@ -81,6 +81,13 @@ IIdleController::TargetInfo IdleController::getTargetRpm(float clt) {
  *
  * Hysteresis is applied via IdleEntryRpm / IdleExitRpm so we don't oscillate
  * between Idling and Coasting near the threshold.
+ *
+ * Ghost Cam deliberately makes RPM hunt around its target (VVT overlap + rich AFR lope), so
+ * while it's active the RPM-based Coasting classification below is bypassed -- otherwise the
+ * lope's own excursions would trip Coasting, dropping engineSmIsIdle and killing both Ghost
+ * Cam itself and the idle timing PID correction every time RPM swings past IdleExitRpm. The
+ * throttle- and VSS-based Running checks (real safety exits: driver on the pedal, vehicle
+ * moving) are untouched and still apply even with Ghost Cam active.
  */
 IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController::TargetInfo targetRpm, SensorResult tps, float vss, float crankingTaperFraction) {
 #if EFI_SHAFT_POSITION_INPUT
@@ -100,6 +107,11 @@ IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController
 		return Phase::Running;
 	}
 
+	bool ghostCamBypassesCoasting = false;
+#if EFI_GHOST_CAM
+	ghostCamBypassesCoasting = engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam;
+#endif // EFI_GHOST_CAM
+
 	// If rpm too high (but throttle not pressed), we're coasting
 	// ALSO, if still in the cranking taper, disable coasting
   if (rpm > targetRpm.IdleExitRpm) {
@@ -109,7 +121,7 @@ IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController
  	}
 
  	looksLikeCrankToIdle = crankingTaperFraction < 1;
-	if (looksLikeCoasting && !looksLikeCrankToIdle) {
+	if (looksLikeCoasting && !looksLikeCrankToIdle && !ghostCamBypassesCoasting) {
 		return Phase::Coasting;
 	}
 

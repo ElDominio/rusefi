@@ -11,6 +11,7 @@
 #include "efi_pid.h"
 #include "idle_thread.h"
 #include "electronic_throttle.h"
+#include "engine_state_machine.h"
 
 using ::testing::StrictMock;
 using ::testing::_;
@@ -119,6 +120,38 @@ TEST(idle_v2, testDeterminePhase) {
 	// Below TPS but above RPM should be outside the zone
 	EXPECT_EQ(ICP::Coasting, dut.determinePhase(1101, targetInfo, 0, 0, 10));
 	EXPECT_EQ(ICP::Coasting, dut.determinePhase(5000, targetInfo, 0, 0, 10));
+}
+
+// Ghost Cam deliberately makes RPM hunt around its target -- while active, RPM excursions that
+// would normally read as Coasting must still classify as Idling, so the lope itself doesn't
+// drop the idle timing PID (and engineSmIsIdle) every time RPM swings past IdleExitRpm. Throttle
+// and VSS Running exits must remain unaffected -- those are real safety exits.
+TEST(idle_v2, ghostCamBypassesCoastingClassification) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+
+	engineConfiguration->idlePidDeactivationTpsThreshold = 5;
+	engineConfiguration->maxIdleVss = 10;
+
+	TgtInfo targetInfo;
+	targetInfo.IdleEntryRpm = 1000 + 100;
+	targetInfo.IdleExitRpm = 1000 + 100;
+
+	engine->rpmCalculator.setRpmValue(1000);
+
+	// Without ghost cam, an RPM excursion past IdleExitRpm reads as Coasting (baseline).
+	EXPECT_EQ(ICP::Coasting, dut.determinePhase(1200, targetInfo, 0, 0, 10));
+
+	engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam = true;
+
+	// With ghost cam active, the same RPM excursion must stay Idling instead.
+	EXPECT_EQ(ICP::Idling, dut.determinePhase(1200, targetInfo, 0, 0, 10));
+
+	// But throttle input still forces Running -- ghost cam must not mask driver throttle.
+	EXPECT_EQ(ICP::Running, dut.determinePhase(1200, targetInfo, 10, 0, 10));
+
+	// And vehicle speed still forces Running -- ghost cam must not mask vehicle motion.
+	EXPECT_EQ(ICP::Running, dut.determinePhase(1200, targetInfo, 0, 25, 10));
 }
 
 TEST(idle_v2, crankingOpenLoop) {
@@ -838,4 +871,57 @@ TEST(idle_v2, offIdleAdder_abortsOnRecrankFromAnyState) {
 	// Once cranking has reset the adder, resuming Idling must not resurrect the
 	// stale decay - it should stay off until re-armed via Running/Coasting.
 	EXPECT_FLOAT_EQ(0, dut.getOffIdleAdder(ICP::Idling, 1000));
+}
+
+// While Ghost Cam is active and useIdleTimingPidControl is on, the idle timing PID must run
+// with the page-6 ghostCamTimingPid_* gains (swapped in by getIdlePosition()), not the normal
+// idleTimingPid gains -- and must not silently fall back to zero correction.
+TEST(idle_v2, ghostCamOverridesIdleTimingPid) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	dut.init();
+
+	engineConfiguration->useIdleTimingPidControl = true;
+	engineConfiguration->idleTimingSoftEntryTime = 0.0f;
+	engineConfiguration->idleTimingPid.pFactor = 0.1f;
+	engineConfiguration->idleTimingPid.minValue = -10;
+	engineConfiguration->idleTimingPid.maxValue = 10;
+
+	getCustomPage()->ghostCamTimingPid_pFactor = 1.0f;
+	getCustomPage()->ghostCamTimingPid_iFactor = 0;
+	getCustomPage()->ghostCamTimingPid_dFactor = 0;
+	getCustomPage()->ghostCamTimingPid_minValue = -20;
+	getCustomPage()->ghostCamTimingPid_maxValue = 20;
+	getCustomPage()->ghostCamIdleRpm = 1000;
+
+	engineConfiguration->idlePidDeactivationTpsThreshold = 5;
+	engineConfiguration->maxIdleVss = 10;
+	engineConfiguration->idlePidRpmUpperLimit = 500;
+
+	for (size_t i = 0; i < efi::size(config->cltIdleRpmBins); i++) {
+		config->cltIdleRpmBins[i] = i * 10;
+		config->cltIdleRpm[i] = 1000;
+	}
+
+	// Push the cranking->idle taper to fully complete so phase resolves to Idling.
+	setArrayValues(config->afterCrankingIACtaperHoldDuration, (uint16_t)0);
+	setArrayValues(config->afterCrankingIACtaperDuration, (uint16_t)1);
+	for (int i = 0; i < 10; i++) {
+		engine->rpmCalculator.onNewEngineCycle();
+	}
+
+	engine->rpmCalculator.setRpmValue(1050);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0);
+	Sensor::setMockValue(SensorType::VehicleSpeed, 0);
+	Sensor::setMockValue(SensorType::Clt, 70);
+
+	engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam = true;
+
+	dut.getIdlePosition(1050);
+
+	// Ghost cam target is 1000rpm; at 1050rpm actual, error = -50. With the ghost cam gains
+	// (pFactor=1, clamped to [-20, 20]) this must clamp to -20 -- not the normal-PID -5, and
+	// not the 0 you'd get if ghost cam failed to override and the idle-timing PID fell through
+	// to open loop.
+	EXPECT_FLOAT_EQ(-20, dut.getIdleTimingAdjustment(1050));
 }

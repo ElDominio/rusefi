@@ -527,7 +527,7 @@ struct_no_prefix page6_s
 	! and AFR are secondary. On deactivation, CLID and CLII integrators reset to zero for a clean
 	! re-entry to normal idle.
 	bit ghostCamEnabled,"enabled","disabled";Ghost Cam: master enable.
-	bit ghostCamActivationSource,"Switch","Sport Mode";Ghost Cam: activation source. Switch = hardware switch pin; Sport Mode = follows the global Sport Mode flag. Only the selected source is checked.
+	bit ghostCamActivationSource,"Sport Mode","Switch";Ghost Cam: activation source. Switch = hardware switch pin; Sport Mode = follows the global Sport Mode flag. Only the selected source is checked.
 
 	switch_input_pin_e ghostCamActivatePin;Ghost Cam: hardware switch pin. Asserting this pin while idle conditions are met engages ghost cam.
 	pin_input_mode_e ghostCamActivatePinMode;
