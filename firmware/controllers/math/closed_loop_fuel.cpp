@@ -28,8 +28,8 @@ ft_region_e ShortTermFuelTrim::regionForSmState(EngineStateMachineState state) {
 	switch (state) {
 		case EngineStateMachineState::Idle:
 		case EngineStateMachineState::Afterstart:
-			return ftRegionIdle;
 		case EngineStateMachineState::Coasting:
+			return ftRegionIdle;
 		case EngineStateMachineState::Overrun:
 			return ftRegionOverrun;
 		case EngineStateMachineState::WOT:

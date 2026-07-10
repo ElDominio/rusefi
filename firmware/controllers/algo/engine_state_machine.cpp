@@ -41,7 +41,7 @@ void EngineStateMachine::onSlowCallback() {
 	float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
 
 	// Primary state determination (engine lifecycle, throttle position)
-	EngineStateMachineState newState = determineState(rpm, tps);
+	EngineStateMachineState newState = determineState(rpm, tps, vss);
 	m_currentState = newState;
 
 	uint8_t stateNum = static_cast<uint8_t>(newState);
@@ -477,7 +477,7 @@ bool EngineStateMachine::isPopsAndBangsBlocked() const {
 	return sportModeBlocked || cutoutBlocked;
 }
 
-EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps) {
+EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps, float vss) {
 	// Priority 1: engine not spinning
 	if (engine->rpmCalculator.isStopped()) {
 		return EngineStateMachineState::Off;
@@ -551,7 +551,8 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 
 	// Priorities 5–8: defer to IdleController — it is the single source of truth for the idle corner.
 	// CrankToIdleTaper → Afterstart (taper table drives duration, CLT-indexed, same as idle control).
-	// Idling → Idle; Coasting → Coasting or Overrun; Running → fall through to Cruising.
+	// Idling → Idle; Coasting (elevated RPM) → Coasting or Overrun; Running → Coasting (still
+	// rolling, off-throttle) or Cruising.
 	{
 		if (idlePhase == IIdleController::Phase::CrankToIdleTaper) {
 			return EngineStateMachineState::Afterstart;
@@ -563,23 +564,52 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps)
 
 		if (idlePhase == IIdleController::Phase::Coasting) {
 			bool tpsClosed = tps < engineConfiguration->coastingFuelCutTps;
-			if (tpsClosed && rpm > engineConfiguration->coastingFuelCutRpmHigh) {
-				// Overrun requires the transmission to be engaged. With VSS, the gear detector
-				// reflects clutch state (DetectedGear == 0 when clutch is out). Without VSS,
-				// we cannot determine clutch state so we fall back to the RPM/TPS check alone.
-				auto gearResult = Sensor::get(SensorType::DetectedGear);
-				bool vssPresent   = Sensor::hasSensor(SensorType::VehicleSpeed);
-				bool transmissionEngaged = !vssPresent || (gearResult.Valid && gearResult.Value > 0);
-				if (transmissionEngaged) {
-					return EngineStateMachineState::Overrun;
-				}
+			// Overrun means the transmission is actively spinning the engine (torque flowing
+			// from the wheels) -- that requires the transmission engaged, per isTransmissionEngaged().
+			if (tpsClosed && rpm > engineConfiguration->coastingFuelCutRpmHigh && isTransmissionEngaged()) {
+				return EngineStateMachineState::Overrun;
 			}
+			return EngineStateMachineState::Coasting;
+		}
+	}
+
+	// idlePhase is Running here. If the throttle is closed but the vehicle is still rolling
+	// above maxIdleVss, the engine is unloaded (idling, producing no ground torque) even though
+	// the car is moving -- that's Coasting, not Cruising, even though IdleController itself
+	// bows out of closed-loop idle control at this speed.
+	{
+		uint8_t maxIdleVss = engineConfiguration->maxIdleVss;
+		if (maxIdleVss != 0 && vss > static_cast<float>(maxIdleVss) &&
+				tps < engineConfiguration->idlePidDeactivationTpsThreshold) {
 			return EngineStateMachineState::Coasting;
 		}
 	}
 
 	// Default: part-throttle cruising (IdleController phase is Running)
 	return EngineStateMachineState::Cruising;
+}
+
+// Steady-state clutch read: is the transmission currently transmitting road load to the engine?
+// Unlike the shift-detection clutch handling elsewhere in this file, this is a level read, not
+// edge-triggered, and it is intentionally decoupled from VSS/DetectedGear -- a clutch switch is a
+// direct mechanical read and should win over a speed-derived guess. With no switch configured we
+// have no way to know the clutch is out, so we assume the transmission is always engaged (i.e.
+// Decelerating aside, engine-braking classification can only ever resolve to Overrun, never be
+// suppressed by an undetectable disengaged clutch).
+bool EngineStateMachine::isTransmissionEngaged() const {
+	sm_clutch_switch_e upSw = getCustomPage()->smUpshiftClutchSwitch;
+	sm_clutch_switch_e dnSw = getCustomPage()->smDownshiftClutchSwitch;
+
+	// Clutch-Down reads true when the pedal is pressed (clutch disengaged).
+	if (upSw == sm_clutch_switch_e::ClutchDown || dnSw == sm_clutch_switch_e::ClutchDown) {
+		return !engine->engineState.clutchDownState;
+	}
+	// Clutch-Up reads true when the pedal is at rest (clutch engaged).
+	if (upSw == sm_clutch_switch_e::ClutchUp || dnSw == sm_clutch_switch_e::ClutchUp) {
+		return engine->engineState.clutchUpState != 0;
+	}
+
+	return true;
 }
 
 float EngineStateMachine::recordRpmSampleAndComputeRate(float rpm, efitimems_t nowMs) {

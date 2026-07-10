@@ -76,10 +76,14 @@ public:
 	void reportLimpCondition();
 
 private:
-	EngineStateMachineState determineState(float rpm, float tps);
+	EngineStateMachineState determineState(float rpm, float tps, float vss);
 	void updateShiftDetection(float tps, float rpm, float vss, efitimems_t nowMs);
 	void updateShiftAccumulator(float rpm, float vss, efitimems_t nowMs);
 	bool evaluateShiftDirection(bool isUpshift, float currentVss);
+	// Steady-state clutch read (not edge-triggered) used to decide whether the transmission is
+	// currently transmitting road load to the engine. Defaults to "always engaged" when no
+	// clutch switch is configured, per smUpshiftClutchSwitch/smDownshiftClutchSwitch.
+	bool isTransmissionEngaged() const;
 
 	// Remaining slow-callback hold-off periods after AE threshold drops
 	uint8_t m_transientHoldoffRemaining = 0;
