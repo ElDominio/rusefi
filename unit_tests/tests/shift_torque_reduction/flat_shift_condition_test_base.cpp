@@ -24,8 +24,6 @@ void FlatShiftConditionTestBase::SetUp() {
         .setTorqueReductionIgnitionCut(m_torqueReductionIgnitionCut)
         .setTorqueReductionIgnitionRetard(m_torqueReductionIgnitionRetard)
     );
-
-    getTestEngineConfiguration().configureLaunchSpeedThreshold(0); // to satisfy isSpeedConditionSatisfied
 }
 
 void FlatShiftConditionTestBase::satisfyFlatShiftCondition() {

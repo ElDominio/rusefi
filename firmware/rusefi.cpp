@@ -151,11 +151,6 @@ static char panicMessage[200];
 
 static virtual_timer_t resetTimer;
 
-// todo: move this into a hw-specific file
-void rebootNow() {
-	NVIC_SystemReset();
-}
-
 /**
  * Some configuration changes require full firmware reset.
  * Once day we will write graceful shutdown, but that would be one day.
@@ -217,6 +212,15 @@ void runRusEfi() {
 
   // at the moment that's always hellen board ID
 	detectBoardType();
+
+	// Start LED blinking as early as possible: the blinking task runs on virtual timer
+	// interrupts, so the board shows signs of life even if configuration loading or
+	// later initialization raises a critical error or hangs the main thread.
+	// Note that loadConfiguration() has not happened yet: engineConfiguration points at
+	// valid (statically allocated) but not-yet-loaded settings, so nothing inside
+	// startStatusThreads() is allowed to read them - LED pins are compile-time board
+	// constants. It does need initPinRepository() and detectBoardType() above.
+	startStatusThreads();
 
 	engine->engineModules.apply_all([](auto & m) {
 		m.initNoConfiguration();

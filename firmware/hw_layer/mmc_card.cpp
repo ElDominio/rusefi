@@ -5,6 +5,8 @@
  * @author Kot_dnz
  * @author Andrey Belomutskiy, (c) 2012-2020
  *
+ * SD card logging overview: docs/AI/sd_card_logging.md
+ *
  * default pinouts in case of SPI2 connected to MMC: PB13 - SCK, PB14 - MISO, PB15 - MOSI, PD4 - CS, 3.3v
  * default pinouts in case of SPI3 connected to MMC: PB3  - SCK, PB4  - MISO, PB5  - MOSI, PD4 - CS, 3.3v
  *
@@ -12,6 +14,7 @@
  *  - sdinfo
  *  - sdsuppresslogging
  *  - del <filename>
+ *  - sd_test_write1mb
  *  - sdmode <pc|ecu|off|unmount|auto|format>
  *  - delreports
  *
@@ -38,9 +41,14 @@
 #include "sd_log_trigger.h"
 
 // Divide logs into 32Mb chunks.
-// With this opstion defined SW will pre-allocate file with given size and
-// should not touch FAT structures until file is fully filled
-// This should protect FS from corruption at sudden power loss
+// When defined, every log file is pre-allocated to this size with f_expand() on create
+// and shrunk back to the actually-written size with f_truncate() on close - see
+// sdLoggerCreateFile()/sdLoggerCloseFile(). While writes stay inside the pre-allocated
+// area they never modify FAT/allocation structures, so a sudden power loss can lose
+// buffered data but should not corrupt the filesystem itself.
+// .mlg logs also roll over to a new file at this size (see sdLoggerMlg()); .teeth files
+// have no such cap and just degrade to normal allocation past this point.
+// See docs/AI/sd_card_logging.md for the full overview.
 #define LOGGER_MAX_FILE_SIZE	(32 * 1024 * 1024)
 
 // at about 20Hz we write about 2Kb per second, looks like we flush once every ~2 seconds
@@ -144,7 +152,7 @@ static bool sdNeedRemoveReports = false;
 
 #if HAL_USE_MMC_SPI
 /**
- * on't re-read SD card spi device after boot - it could change mid transaction (TS thread could preempt),
+ * Don't re-read SD card spi device after boot - it could change mid transaction (TS thread could preempt),
  * which will cause disaster (usually multiple-unlock of the same mutex in UNLOCK_SD_SPI)
  */
 static spi_device_e mmcSpiDevice = SPI_NONE;
@@ -162,6 +170,9 @@ static MMCConfig mmccfg = {
 	.hscfg = &mmc_hs_spicfg
 };
 
+// When MMC_USE_MUTUAL_EXCLUSION is enabled the ChibiOS MMC driver serializes SPI bus
+// access itself, so these become no-ops; otherwise we must lock the bus manually since
+// other devices (and threads) may share the same SPI peripheral.
 #if MMC_USE_MUTUAL_EXCLUSION == TRUE
 #define LOCK_SD_SPI()
 #define UNLOCK_SD_SPI()
@@ -177,13 +188,21 @@ static MMCConfig mmccfg = {
  */
 static NO_CACHE FATFS MMC_FS;
 
+/**
+ * SD card state persisted in battery-backed RAM (a single 32-bit word) so that after
+ * a reset we can tell whether the previous power-off happened while the filesystem
+ * was still mounted - i.e. an "unsafe unmount" that risks FAT corruption.
+ */
 union SdBackupState {
 	struct {
 		SD_MODE mode;
 		SD_STATUS status;
+		// how many times power was lost while the card was mounted, saturates at 255
 		uint8_t unsafeUnmountCnt;
+		// magic marker 0x5A: anything else means backup RAM content is uninitialized/lost
 		uint8_t valid;
 	} __attribute__((packed));
+	// raw access for backupRamLoad()/backupRamSave()
 	uint32_t x;
 };
 
@@ -206,6 +225,13 @@ static void sdCardShowBackupState() {
 	efiPrintf("total unsafe power offs %d", state.unsafeUnmountCnt);
 }
 
+/**
+ * Inspect the backup RAM state left over from the previous boot and re-initialize it.
+ * If the card was left in a mounted mode (anything but IDLE/UNMOUNT) the previous
+ * shutdown was unsafe, so bump the unsafe unmount counter.
+ *
+ * @return true if backup RAM contained a valid state from a previous boot
+ */
 static bool sdCardInitBackupState() {
 	SdBackupState state;
 	state.x = backupRamLoad(backup_ram_e::MccStatus);
@@ -295,6 +321,8 @@ void printFatFsError(const char *str, FRESULT f_error) {
 }
 
 // format, file access and MSD are used exclusively, we can union.
+// All members are only touched from the MMC thread (see MMCmonThread), which is what
+// makes the union safe - see sdTestWrite1Mb() for what to do from other threads.
 static union {
 	// Warning: shared between all FS users, please release it after use
 	FIL fd;
@@ -330,7 +358,8 @@ static void sdStatistics() {
 	efiPrintf("HS clock %d Hz", spiGetBaseClock(mmccfg.spip) / (2 << ((mmc_hs_spicfg.cr1 & SPI_CR1_BR_Msk) >> SPI_CR1_BR_Pos)));
 	efiPrintf("LS clock %d Hz", spiGetBaseClock(mmccfg.spip) / (2 << ((mmc_ls_spicfg.cr1 & SPI_CR1_BR_Msk) >> SPI_CR1_BR_Pos)));
 #else
-	efiPrintf("not implemented");
+	efiPrintf("HS clock %d Hz", spiGetBaseClock(mmccfg.spip) / (2 << ((mmc_hs_spicfg.cfg1 & SPI_CFG1_MBR_Msk) >> SPI_CFG1_MBR_Pos)));
+	efiPrintf("LS clock %d Hz", spiGetBaseClock(mmccfg.spip) / (2 << ((mmc_ls_spicfg.cfg1 & SPI_CFG1_MBR_Msk) >> SPI_CFG1_MBR_Pos)));
 #endif
 #else
 	efiPrintf("SDIO mode");
@@ -340,6 +369,9 @@ static void sdStatistics() {
 	}
 #if EFI_FILE_LOGGING
 	efiPrintf("%d SD card fields", MLG::getSdCardFieldsCount());
+#endif
+#if HAL_USE_USB_MSD
+	printMsdDiagnostics();
 #endif
 }
 
@@ -411,11 +443,16 @@ static int sdLoggerCreateFile(FIL *fd) {
 	}
 
 #ifdef LOGGER_MAX_FILE_SIZE
-	//pre-allocate data ahead
+	// Pre-allocate the whole file as one contiguous cluster chain (opt=1: allocate now,
+	// not just find; requires FF_USE_EXPAND in ffconf.h). All FAT updates happen here,
+	// up-front: subsequent f_write() calls inside this area only touch data sectors,
+	// which protects the filesystem from corruption at sudden power loss.
 	err = f_expand(fd, LOGGER_MAX_FILE_SIZE, /* Find and allocate */ 1);
 	if (err != FR_OK) {
 		printFatFsError("pre-allocate", err);
-		// this is not critical
+		// Not critical: happens on a fragmented card with no 32Mb contiguous run.
+		// FatFS falls back to growing the file cluster-by-cluster on write - logging
+		// still works, just without the power-loss protection above.
 	}
 #endif
 
@@ -428,7 +465,10 @@ static int sdLoggerCreateFile(FIL *fd) {
 static void sdLoggerCloseFile(FIL *fd)
 {
 #ifdef LOGGER_MAX_FILE_SIZE
-	// truncate file to actual size
+	// Shrink the file from the 32Mb f_expand() pre-allocation back to the size actually
+	// written, returning the unused tail to free space. A file that never got this
+	// treatment (power loss) stays at full 32Mb with trailing garbage - log readers
+	// stop at the last valid record.
 	f_truncate(fd);
 #endif
 
@@ -446,6 +486,57 @@ static void removeFile(const char *pathx) {
 	}
 
 	f_unlink(pathx);
+}
+
+#define SD_TEST_FILE_NAME "test1mb.bin"
+#define SD_TEST_FILE_SIZE (1024 * 1024)
+
+// Writes a 1Mb test file filled with an incrementing 32 bit counter, reports throughput
+static void sdTestWrite1Mb() {
+	if (sdMode != SD_MODE_ECU) {
+		efiPrintf("SD card should be mounted to ECU");
+		return;
+	}
+
+	// own descriptor and buffer: shared 'resources' union belongs to the logger thread
+	static NO_CACHE FIL testFd;
+	static NO_CACHE uint32_t testBuffer[128];
+
+	memset(&testFd, 0, sizeof(testFd));
+	FRESULT err = f_open(&testFd, SD_TEST_FILE_NAME, FA_CREATE_ALWAYS | FA_WRITE);
+	if (err != FR_OK) {
+		printFatFsError("test file create", err);
+		return;
+	}
+
+	efiPrintf("SD: writing %d bytes to %s...", SD_TEST_FILE_SIZE, SD_TEST_FILE_NAME);
+
+	uint32_t counter = 0;
+	size_t written = 0;
+	systime_t before = chVTGetSystemTime();
+
+	while (written < SD_TEST_FILE_SIZE) {
+		for (size_t i = 0; i < efi::size(testBuffer); i++) {
+			testBuffer[i] = counter++;
+		}
+
+		UINT bytesWritten = 0;
+		err = f_write(&testFd, testBuffer, sizeof(testBuffer), &bytesWritten);
+		if ((err != FR_OK) || (bytesWritten != sizeof(testBuffer))) {
+			printFatFsError("test file write", err);
+			break;
+		}
+		written += bytesWritten;
+	}
+
+	f_close(&testFd);
+
+	sysinterval_t elapsed = chVTTimeElapsedSinceX(before);
+	uint32_t elapsedMs = TIME_I2MS(elapsed);
+	if (elapsedMs == 0) {
+		elapsedMs = 1;
+	}
+	efiPrintf("SD: wrote %d bytes in %lu ms, %lu Kb/sec", written, elapsedMs, (uint32_t)(written / elapsedMs * 1000 / 1024));
 }
 
 #if HAL_USE_USB_MSD
@@ -485,6 +576,8 @@ static BaseBlockDevice* initializeMmcBlockDevice() {
 	}
 
 	// max SPI rate is 25 MHz after init
+	// TODO: change to 26 MHz for some H7 devices where SPI PCLK is 52 MHz
+	// so we can get 26MHz instead of current 13MHz. This is 4% overclock.
 	spiCalcClockDiv(mmccfg.spip, &mmc_hs_spicfg, 25 * 1000 * 1000);
 	// and 250 KHz during initialization
 	spiCalcClockDiv(mmccfg.spip, &mmc_ls_spicfg, 250 * 1000);
@@ -658,6 +751,13 @@ static bool sdLoggerFailed = false;
 static bool sdLoggedSuppressed = false;
 
 #if EFI_TOOTH_LOGGER
+/**
+ * One iteration of trigger tooth logging: lazily creates a .teeth file once tooth
+ * data shows up, appends whatever the tooth logger has buffered, and closes the file
+ * when the data stream ends so the next burst starts a fresh file.
+ *
+ * @return positive number of bytes written, 0 if there was nothing to do, negative on error
+ */
 static int sdLoggerTooth(FIL *fd) {
 	int ret = 0;
 
@@ -715,7 +815,13 @@ static int sdLoggerTooth(FIL *fd) {
 }
 #endif
 
-// actually write mlg log on SD card
+/**
+ * One iteration of MLG logging: lazily creates the log file on first call, writes one
+ * log line (rate-limited inside mlgLogger()), and rolls over to a new file when the
+ * current one reaches LOGGER_MAX_FILE_SIZE.
+ *
+ * @return positive number of bytes written, negative on error
+ */
 static int sdLoggerMlg(FIL *fd) {
 	int ret = 0;
 
@@ -833,6 +939,13 @@ exit:
 	return (ret ? false : true);
 }
 
+/**
+ * Tear down whatever the current mode was using (logger + FS mount for ECU mode,
+ * USB mass storage attachment for PC mode) so the card is free for the next mode.
+ * All mode transitions go through IDLE - see sdModeSwitcher().
+ *
+ * @return 0 on success
+ */
 static int sdModeSwitchToIdle(SD_MODE from)
 {
 	switch (from) {
@@ -857,7 +970,12 @@ static int sdModeSwitchToIdle(SD_MODE from)
 	return -1;
 }
 
-// manages SD card mode depending on current power scheme
+/**
+ * Decide which mode the SD card should be in right now.
+ * A user request (sdmode console command / TS) always wins; otherwise the mode is
+ * derived from the power state: unmount when both USB and ignition are gone (we are
+ * about to lose power), expose the card to the PC when USB is connected, log otherwise.
+ */
 static SD_MODE sdModeSelector() {
 	if (sdTargetModeRequested) {
 		// user force selected mode
@@ -884,6 +1002,13 @@ static SD_MODE sdModeSelector() {
 	return SD_MODE_ECU;
 }
 
+/**
+ * Move the SD card from 'mode' towards 'target'. Any transition first passes through
+ * IDLE (releasing the resources of the old mode) and then enters the target mode.
+ *
+ * @return the mode actually reached - equal to 'target' on success, otherwise the
+ * mode we ended up stuck in (e.g. IDLE if the mount failed)
+ */
 static SD_MODE sdModeSwitcher(SD_MODE mode, SD_MODE target) {
 	// No request to switch to any mode
 	if (target == SD_MODE_IDLE) {
@@ -938,6 +1063,12 @@ static SD_MODE sdModeSwitcher(SD_MODE mode, SD_MODE target) {
 	return mode;
 }
 
+/**
+ * Do one iteration of work for the current mode. Only ECU (logging) mode has ongoing
+ * work: checking the log trigger and writing log data. All other modes just sleep.
+ *
+ * @return positive number of bytes written, 0 if idle (caller sleeps), negative on error
+ */
 static int sdModeExecuter(SD_MODE mode)
 {
 	switch (mode) {
@@ -1014,6 +1145,14 @@ PUBLIC_API_WEAK bool boardSdCardDisable() {
 }
 
 static THD_WORKING_AREA(mmcThreadStack, 3 * UTILITY_THREAD_STACK_SIZE);		// MMC monitor thread
+
+/**
+ * The SD card thread: owns the card and the 'resources' union for its whole lifetime.
+ * After one-time init (backup RAM check, card detection, crash report handling) it
+ * runs the mode state machine forever: sdModeSelector() picks the desired mode,
+ * sdModeSwitcher() transitions to it, sdModeExecuter() does that mode's work.
+ * If the card fails to initialize the thread parks itself until the next boot.
+ */
 static THD_FUNCTION(MMCmonThread, arg) {
 	(void)arg;
 
@@ -1092,6 +1231,13 @@ die:
 	}
 }
 
+/**
+ * Write one MLG log line and pace the logger: sleeps so that lines are written at
+ * engineConfiguration->sdCardLogFrequency Hz (clamped to 1..250), and syncs the file
+ * to media every F_SYNC_FREQUENCY lines rather than after every write.
+ *
+ * @return number of bytes written, or negative if the buffer writer has failed
+ */
 static int mlgLogger() {
 	static size_t writeCounter = 0;
 	// TODO: move this check somewhere out of here!
@@ -1161,6 +1307,7 @@ void initEarlyMmcCard() {
     efiPrintf("Suppressed!");
   });
 	addConsoleActionS("del", removeFile);
+	addConsoleAction("sd_test_write1mb", sdTestWrite1Mb);
 	// sdmode pc
 	// sdmode ecu
 	// sdmode off
@@ -1184,6 +1331,14 @@ void initMmcCard() {
 
 #if EFI_PROD_CODE
 
+/**
+ * Ask the SD thread to switch to the given mode (from console 'sdmode' command or TS).
+ * The switch is asynchronous - it happens on the next MMCmonThread loop iteration.
+ * A user-requested mode sticks until power off; requesting SD_MODE_IDLE clears the
+ * user override and returns mode selection to automatic (see sdModeSelector()).
+ *
+ * @return 0 if the request was accepted
+ */
 int sdCardRequestMode(SD_MODE mode)
 {
 	if (!isSdCardEnabled()) {

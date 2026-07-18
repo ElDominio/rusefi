@@ -233,7 +233,9 @@ public:
 #if EFI_LTFT_CONTROL
         LongTermFuelTrim,
 #endif
+#if EFI_ENGINE_CONTROL
         ShortTermFuelTrim,
+#endif // EFI_ENGINE_CONTROL
 
 #include "modules_list_generated.h"
 
@@ -279,9 +281,9 @@ public:
 //    SoftSparkLimiter ALSsoftSparkLimiter{false};
 #endif /* EFI_ANTILAG_SYSTEM */
 
-#if EFI_SHAFT_POSITION_INPUT
+#if EFI_SHAFT_POSITION_INPUT && EFI_ENGINE_CONTROL
     LambdaMonitor lambdaMonitor{};
-#endif // EFI_ENGINE_CONTROL
+#endif // EFI_SHAFT_POSITION_INPUT && EFI_ENGINE_CONTROL
 
 #if ROTATIONAL_IDLE_CONTROLLER
     RotationalIdle rotationalIdleController{};

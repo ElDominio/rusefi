@@ -92,6 +92,7 @@
 #define BOARD_TLE6240_COUNT         0
 #define BOARD_MC33972_COUNT			0
 #define BOARD_TLE8888_COUNT 	0
+#define BOARD_MC33810_COUNT		0
 
 #define EFI_TEXT_LOGGING TRUE
 
@@ -187,7 +188,9 @@
 
 #define EFI_BOARD_TEST FALSE
 
+#ifndef EFI_LUA
 #define EFI_LUA TRUE
+#endif
 #define LUA_USER_HEAP 100000
 
 #ifndef TRUE

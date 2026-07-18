@@ -169,7 +169,7 @@ void EngineState::periodicFastCallback() {
 
 	engine->tractionController.update();
 
-#if EFI_SHAFT_POSITION_INPUT
+#if EFI_SHAFT_POSITION_INPUT && EFI_ENGINE_CONTROL
 	if (!engine->slowCallBackWasInvoked) {
 		warning(ObdCode::CUSTOM_SLOW_NOT_INVOKED, "Slow not invoked yet");
 	}

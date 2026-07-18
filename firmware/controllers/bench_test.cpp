@@ -211,7 +211,7 @@ static void doRunSolenoidBench(size_t humanIndex, float onTime, float offTime, i
 	pinbench(onTime, offTime, count, &enginePins.tcuSolenoids[humanIndex - 1]);
 }
 
-static void doRunBenchTestLuaOutput(size_t humanIndex, float onTimeMs, float offTimeMs, int count) {
+void doRunBenchTestLuaOutput(size_t humanIndex, float onTimeMs, float offTimeMs, int count) {
 	if (humanIndex < 1 || humanIndex > LUA_PWM_COUNT) {
 		efiPrintf("Invalid index: %d", humanIndex);
 		return;
@@ -736,6 +736,7 @@ void processCanEcuControl(const CANRxFrame& frame) {
 #endif // EFI_CAN_SUPPORT
 
 std::optional<setup_custom_board_ts_command_override_type> custom_board_ts_command;
+std::optional<board_ts_binary_command_type> custom_board_ts_binary_command;
 
 void executeTSCommand(uint16_t subsystem, uint16_t index) {
 	efiPrintf("IO test subsystem=%d index=%d", subsystem, index);
@@ -927,17 +928,6 @@ void initBenchTest() {
   });
 #endif // EFI_CAN_SUPPORT
 
-#if EFI_LUA
-  // this commands facilitates TS Lua Button scripts development
-  addConsoleActionI("lua_button", [](int index) {
-    if (index < 0 || index > LUA_BUTTON_COUNT)
-      return;
-    luaCommandCounters[index - 1]++;
-  });
-  addConsoleActionFFFF("luabench2", [](float humanIndex, float onTime, float offTimeMs, float count) {
-	  doRunBenchTestLuaOutput((int)humanIndex, onTime, offTimeMs, (int)count);
-  });
-#endif // EFI_LUA
 	instance.start();
 	onConfigurationChangeBenchTest();
 }

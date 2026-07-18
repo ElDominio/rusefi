@@ -1,6 +1,6 @@
 #include "global.h"
 #include "rusefi_enums.h"
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Tue Jun 09 04:55:05 AST 2026
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat Jul 18 15:31:32 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -46,6 +46,8 @@ const char *getInjectorNonlinearMode(InjectorNonlinearMode value) {
 			return "INJ_FordModel";
 		case INJ_None:
 			return "INJ_None";
+		case INJ_PercentCurve:
+			return "INJ_PercentCurve";
 		case INJ_PolynomialAdder:
 			return "INJ_PolynomialAdder";
 	}
@@ -245,6 +247,8 @@ const char *getAir_pressure_sensor_type_e(air_pressure_sensor_type_e value) {
 	switch (value) {
 		case MT_BOSCH_2_5:
 			return "MT_BOSCH_2_5";
+		case MT_BOSCH_3_BAR:
+			return "MT_BOSCH_3_BAR";
 		case MT_CUSTOM:
 			return "MT_CUSTOM";
 		case MT_DENSO183:
@@ -339,6 +343,17 @@ const char *getCan_baudrate_e(can_baudrate_e value) {
 			return "B666KBPS";
 		case B83KBPS:
 			return "B83KBPS";
+	}
+	return NULL;
+}
+const char *getCan_broadcast_channel_e(can_broadcast_channel_e value) {
+	switch (value) {
+		case CAN_BUS_FIRST:
+			return "CAN_BUS_FIRST";
+		case CAN_BUS_SECOND:
+			return "CAN_BUS_SECOND";
+		case CAN_BUS_THIRD:
+			return "CAN_BUS_THIRD";
 	}
 	return NULL;
 }
@@ -539,6 +554,17 @@ const char *getDc_function_e(dc_function_e value) {
 	}
 	return NULL;
 }
+const char *getDfco_fuel_cut_mode_e(dfco_fuel_cut_mode_e value) {
+	switch (value) {
+		case dfco_fuel_cut_mode_e::Both:
+			return "Both";
+		case dfco_fuel_cut_mode_e::Decel:
+			return "Decel";
+		case dfco_fuel_cut_mode_e::Overrun:
+			return "Overrun";
+	}
+	return NULL;
+}
 const char *getDisplay_mode_e(display_mode_e value) {
 	switch (value) {
 		case DM_HD44780:
@@ -547,6 +573,15 @@ const char *getDisplay_mode_e(display_mode_e value) {
 			return "DM_HD44780_OVER_PCF8574";
 		case DM_NONE:
 			return "DM_NONE";
+	}
+	return NULL;
+}
+const char *getEco_mode_switch_mode_e(eco_mode_switch_mode_e value) {
+	switch (value) {
+		case eco_mode_switch_mode_e::Inhibit:
+			return "Inhibit";
+		case eco_mode_switch_mode_e::Off:
+			return "Off";
 	}
 	return NULL;
 }
@@ -569,10 +604,12 @@ const char *getEgo_sensor_e(ego_sensor_e value) {
 }
 const char *getExhaust_cutout_activation_e(exhaust_cutout_activation_e value) {
 	switch (value) {
-		case EXHAUST_CUTOUT_LUA_GAUGE:
-			return "EXHAUST_CUTOUT_LUA_GAUGE";
+		case EXHAUST_CUTOUT_AUTO_SPORT_MODE:
+			return "EXHAUST_CUTOUT_AUTO_SPORT_MODE";
 		case EXHAUST_CUTOUT_OFF:
 			return "EXHAUST_CUTOUT_OFF";
+		case EXHAUST_CUTOUT_SPORT_MODE:
+			return "EXHAUST_CUTOUT_SPORT_MODE";
 		case EXHAUST_CUTOUT_SWITCH:
 			return "EXHAUST_CUTOUT_SWITCH";
 	}
@@ -597,6 +634,17 @@ const char *getExhaust_cutout_output_mode_e(exhaust_cutout_output_mode_e value) 
 			return "EXHAUST_CUTOUT_OUTPUT_HBRIDGE";
 		case EXHAUST_CUTOUT_OUTPUT_PWM:
 			return "EXHAUST_CUTOUT_OUTPUT_PWM";
+	}
+	return NULL;
+}
+const char *getFan_ac_mode_e(fan_ac_mode_e value) {
+	switch (value) {
+		case fan_ac_mode_e::Disabled:
+			return "Disabled";
+		case fan_ac_mode_e::Pressure:
+			return "Pressure";
+		case fan_ac_mode_e::Relay:
+			return "Relay";
 	}
 	return NULL;
 }
@@ -753,6 +801,36 @@ const char *getHpfp_cam_e(hpfp_cam_e value) {
 	}
 	return NULL;
 }
+const char *getI2c_bus_e(i2c_bus_e value) {
+	switch (value) {
+		case I2C_BUS_1:
+			return "I2C_BUS_1";
+		case I2C_BUS_2:
+			return "I2C_BUS_2";
+		case I2C_BUS_3:
+			return "I2C_BUS_3";
+		case I2C_BUS_4:
+			return "I2C_BUS_4";
+		case I2C_NONE:
+			return "I2C_NONE";
+	}
+	return NULL;
+}
+const char *getI2c_speed_e(i2c_speed_e value) {
+	switch (value) {
+		case I2C_SPEED_100K:
+			return "I2C_SPEED_100K";
+		case I2C_SPEED_1M:
+			return "I2C_SPEED_1M";
+		case I2C_SPEED_3p4M:
+			return "I2C_SPEED_3p4M";
+		case I2C_SPEED_400K:
+			return "I2C_SPEED_400K";
+		case I2C_SPEED_5M:
+			return "I2C_SPEED_5M";
+	}
+	return NULL;
+}
 const char *getIdle_mode_e(idle_mode_e value) {
 	switch (value) {
 		case idle_mode_e::IM_AUTO:
@@ -789,6 +867,17 @@ const char *getIgnition_mode_e(ignition_mode_e value) {
 			return "IM_TWO_COILS";
 		case IM_WASTED_SPARK:
 			return "IM_WASTED_SPARK";
+	}
+	return NULL;
+}
+const char *getImrc_mode_e(imrc_mode_e value) {
+	switch (value) {
+		case IMRC_DISABLED:
+			return "IMRC_DISABLED";
+		case IMRC_HBRIDGE:
+			return "IMRC_HBRIDGE";
+		case IMRC_SOLENOID:
+			return "IMRC_SOLENOID";
 	}
 	return NULL;
 }
@@ -850,12 +939,23 @@ const char *getLaunchActivationMode_e(launchActivationMode_e value) {
 			return "ALWAYS_ACTIVE_LAUNCH";
 		case CLUTCH_INPUT_LAUNCH:
 			return "CLUTCH_INPUT_LAUNCH";
+		case CLUTCH_UP_INPUT_LAUNCH:
+			return "CLUTCH_UP_INPUT_LAUNCH";
 		case LUA_LAUNCH:
 			return "LUA_LAUNCH";
 		case STOP_INPUT_LAUNCH:
 			return "STOP_INPUT_LAUNCH";
 		case SWITCH_INPUT_LAUNCH:
 			return "SWITCH_INPUT_LAUNCH";
+	}
+	return NULL;
+}
+const char *getLimiter_adder_source_e(limiter_adder_source_e value) {
+	switch (value) {
+		case LIMITER_ADDER_LUA_GAUGE:
+			return "LIMITER_ADDER_LUA_GAUGE";
+		case LIMITER_ADDER_SPORT_MODE:
+			return "LIMITER_ADDER_SPORT_MODE";
 	}
 	return NULL;
 }
@@ -983,16 +1083,23 @@ const char *getPin_output_mode_e(pin_output_mode_e value) {
 	}
 	return NULL;
 }
-const char *getPops_and_bangs_disable_mode_e(pops_and_bangs_disable_mode_e value) {
+const char *getPops_and_bangs_cutout_inhibit_e(pops_and_bangs_cutout_inhibit_e value) {
 	switch (value) {
-		case POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE:
-			return "POPS_AND_BANGS_DISABLE_MODE_LUA_GAUGE";
-		case POPS_AND_BANGS_DISABLE_MODE_NONE:
-			return "POPS_AND_BANGS_DISABLE_MODE_NONE";
-		case POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT:
-			return "POPS_AND_BANGS_DISABLE_MODE_SWITCH_INPUT";
-		case POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE:
-			return "POPS_AND_BANGS_DISABLE_MODE_SWITCH_OR_LUA_GAUGE";
+		case pops_and_bangs_cutout_inhibit_e::Inhibit:
+			return "Inhibit";
+		case pops_and_bangs_cutout_inhibit_e::Off:
+			return "Off";
+	}
+	return NULL;
+}
+const char *getRpmUpdateMode_e(rpmUpdateMode_e value) {
+	switch (value) {
+		case rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER:
+			return "RPM_UPDATE_FIRST_ORDER";
+		case rpmUpdateMode_e::RPM_UPDATE_INSTANT:
+			return "RPM_UPDATE_INSTANT";
+		case rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE:
+			return "RPM_UPDATE_PER_CYCLE";
 	}
 	return NULL;
 }
@@ -1011,8 +1118,6 @@ const char *getSm_shift_detection_mode_e(sm_shift_detection_mode_e value) {
 	switch (value) {
 		case sm_shift_detection_mode_e::RpmRate:
 			return "RpmRate";
-		case sm_shift_detection_mode_e::SimpleThrottle:
-			return "SimpleThrottle";
 		case sm_shift_detection_mode_e::VssRate:
 			return "VssRate";
 	}
@@ -1034,6 +1139,28 @@ const char *getSpi_device_e(spi_device_e value) {
 			return "SPI_DEVICE_6";
 		case SPI_NONE:
 			return "SPI_NONE";
+	}
+	return NULL;
+}
+const char *getSport_mode_activation_e(sport_mode_activation_e value) {
+	switch (value) {
+		case SPORT_MODE_LUA_GAUGE:
+			return "SPORT_MODE_LUA_GAUGE";
+		case SPORT_MODE_OFF:
+			return "SPORT_MODE_OFF";
+		case SPORT_MODE_SWITCH:
+			return "SPORT_MODE_SWITCH";
+	}
+	return NULL;
+}
+const char *getSport_pedal_activation_e(sport_pedal_activation_e value) {
+	switch (value) {
+		case SPORT_PEDAL_OFF:
+			return "SPORT_PEDAL_OFF";
+		case SPORT_PEDAL_SPORT_MODE:
+			return "SPORT_PEDAL_SPORT_MODE";
+		case SPORT_PEDAL_SWITCH:
+			return "SPORT_PEDAL_SWITCH";
 	}
 	return NULL;
 }
@@ -1174,6 +1301,10 @@ const char *getVvt_mode_e(vvt_mode_e value) {
 			return "VVT_CUSTOM_25";
 		case VVT_CUSTOM_26:
 			return "VVT_CUSTOM_26";
+		case VVT_CUSTOM_3:
+			return "VVT_CUSTOM_3";
+		case VVT_CUSTOM_4:
+			return "VVT_CUSTOM_4";
 		case VVT_DEV:
 			return "VVT_DEV";
 		case VVT_FORD_COYOTE:

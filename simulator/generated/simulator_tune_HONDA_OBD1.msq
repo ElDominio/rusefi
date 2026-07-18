@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <msq xmlns="http://www.msefi.com/:msq">
     <page/>
-    <page number="0" size="15736">
+    <page number="0" size="15784">
         <constant name="accelEnrichmentMode">"MS Adder"</constant>
         <constant name="accelerometerCsPin">"NONE"</constant>
         <constant name="accelerometerCsPinMode">"default"</constant>
@@ -561,7 +561,7 @@
         <constant name="brakePedalPin">"NONE"</constant>
         <constant name="brakePedalPinMode">"PULLUP"</constant>
         <constant digits="0" name="byFirmwareVersion" units="index">0</constant>
-        <constant digits="0" name="calibrationBirthday" units="">20260704</constant>
+        <constant digits="0" name="calibrationBirthday" units="">20260717</constant>
         <constant digits="0" name="camDecoder2jzPosition" units="angle">95</constant>
         <constant digits="0" name="camDecoder2jzPrecision" units="">40</constant>
         <constant name="camInputs1">"NONE"</constant>
@@ -1676,6 +1676,22 @@
 </constant>
         <constant name="hpfpValvePin">"NONE"</constant>
         <constant name="hpfpValvePinMode">"default"</constant>
+        <constant name="i2c1_enabled">"no"</constant>
+        <constant name="i2c1_sclPin">"NONE"</constant>
+        <constant name="i2c1_sdaPin">"NONE"</constant>
+        <constant name="i2c1_speed">"Standart mode 100K"</constant>
+        <constant name="i2c2_enabled">"no"</constant>
+        <constant name="i2c2_sclPin">"NONE"</constant>
+        <constant name="i2c2_sdaPin">"NONE"</constant>
+        <constant name="i2c2_speed">"Standart mode 100K"</constant>
+        <constant name="i2c3_enabled">"no"</constant>
+        <constant name="i2c3_sclPin">"NONE"</constant>
+        <constant name="i2c3_sdaPin">"NONE"</constant>
+        <constant name="i2c3_speed">"Standart mode 100K"</constant>
+        <constant name="i2c4_enabled">"no"</constant>
+        <constant name="i2c4_sclPin">"NONE"</constant>
+        <constant name="i2c4_sdaPin">"NONE"</constant>
+        <constant name="i2c4_speed">"Standart mode 100K"</constant>
         <constant digits="1" name="iacByTpsDecayTime" units="seconds">0.0</constant>
         <constant digits="1" name="iacByTpsHoldTime" units="seconds">0.0</constant>
         <constant digits="0" name="iacByTpsTaper" units="percent">2</constant>
@@ -2764,6 +2780,7 @@
         <constant digits="0" name="launchFuelAdderPercent" units="%">0</constant>
         <constant name="launchFuelCutEnable">"no"</constant>
         <constant digits="0" name="launchRpm" units="rpm">3000</constant>
+        <constant digits="0" name="launchRpmThreshold" units="rpm">0</constant>
         <constant digits="0" name="launchRpmWindow" units="RPM">500</constant>
         <constant name="launchSmoothRetard">"disabled"</constant>
         <constant name="launchSparkCutEnable">"no"</constant>
@@ -4639,6 +4656,7 @@
         <constant name="useBiQuadOnAuxSpeedSensors">"no"</constant>
         <constant name="useCicPidForIdle">"Industrial"</constant>
         <constant name="useCltBasedRpmLimit">"no"</constant>
+        <constant name="useCompensatedMap">"disabled"</constant>
         <constant name="useEeprom">"no"</constant>
         <constant name="useFixedBaroCorrFromMap">"no"</constant>
         <constant name="useFordRedundantPps">"no"</constant>
@@ -5074,13 +5092,17 @@
         <constant name="watchOutForLinearTime">"yes"</constant>
         <constant name="widebandOnSecondBus">"CAN1"</constant>
         <constant name="wizardCamTrigger">"no"</constant>
+        <constant name="wizardCltSensor">"no"</constant>
         <constant name="wizardCrankTrigger">"no"</constant>
         <constant name="wizardDisplacement">"no"</constant>
         <constant name="wizardFiringOrder">"no"</constant>
+        <constant name="wizardIgnitionOutputs">"no"</constant>
         <constant name="wizardInjectorFlow">"no"</constant>
+        <constant name="wizardInjectorOutputs">"no"</constant>
         <constant name="wizardMapSensorType">"no"</constant>
         <constant name="wizardNumberOfCylinders">"no"</constant>
         <constant digits="0" name="wizardPanelToShow" units="">0</constant>
+        <constant name="wizardTps">"no"</constant>
         <constant digits="2" name="wwaeBeta" units="Fraction">0.3</constant>
         <constant digits="2" name="wwaeTau" units="Seconds">0.3</constant>
         <constant cols="1" digits="2" name="wwBetaCltValues" rows="8" units="">
@@ -5145,8 +5167,8 @@
 </constant>
         <constant name="yesUnderstandLocking">"no"</constant>
     </page>
-    <versionInfo firmwareInfo="20260704" nPages="1" signature="rusEFI master.2026.07.04.f407-discovery.3159370586" version="5.0"/>
-    <bibliography author="rusEFI 20260704" writeDate="date"/>
+    <versionInfo firmwareInfo="20260716" nPages="1" signature="rusEFI master.2026.07.17.f407-discovery.2664846314" version="5.0"/>
+    <bibliography author="rusEFI 20260716" writeDate="date"/>
     <settings/>
     <userComments/>
 </msq>

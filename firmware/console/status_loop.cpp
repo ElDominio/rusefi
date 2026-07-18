@@ -56,6 +56,7 @@
 #include "frequency_sensor.h"
 #include "digital_input_exti.h"
 #include "dc_motors.h"
+#include "init.h"
 
 #if EFI_PROD_CODE
 // todo: move this logic to algo folder!
@@ -235,8 +236,10 @@ void initWarningRunningPins() {
 
 #if EFI_PROD_CODE
 static void initStatusLeds() {
+	// getCommsLedPin() is a hard-coded per-board constant - this runs before settings are loaded
 	enginePins.communicationLedPin.initPin("led: comm status", getCommsLedPin(), LED_PIN_MODE, true);
-	// checkEnginePin is already initialized by the time we get here
+	// checkEnginePin is config-dependent and initialized later during initHardware();
+	// until then setValue() on it is a no-op
 }
 
 static bool isTriggerErrorNow() {
@@ -416,6 +419,7 @@ static void updateThrottles() {
 }
 
 static void updateLambda() {
+#if EFI_ENGINE_CONTROL
 	float lambdaValue = Sensor::getOrDefault(SensorType::Lambda1, 0.5 / STOICH_RATIO, 0.0 / STOICH_RATIO, 30.5 / STOICH_RATIO);
 	engine->outputChannels.lambdaValue = lambdaValue;
 	engine->outputChannels.AFRValue = lambdaValue * engine->fuelComputer.stoichiometricRatio;
@@ -429,6 +433,7 @@ static void updateLambda() {
 	// TODO: this can be calculated on PC side!
 	engine->outputChannels.afr2GasolineScale = lambda2Value * STOICH_RATIO;
 	engine->outputChannels.SmoothedAFRValue2 = Sensor::getOrZero(SensorType::SmoothedLambda2);
+#endif // EFI_ENGINE_CONTROL
 }
 
 static void updateFuelSensors() {
@@ -500,6 +505,12 @@ static void updateRawSensors() {
 	engine->outputChannels.rawIat = Sensor::getRaw(SensorType::Iat);
 	engine->outputChannels.rawAuxTemp1 = Sensor::getRaw(SensorType::AuxTemp1);
 	engine->outputChannels.rawAuxTemp2 = Sensor::getRaw(SensorType::AuxTemp2);
+
+	// Live thermistor resistance as computed inside the firmware, for calibration dialogs, see issue #9788
+	engine->outputChannels.cltResistance = getThermistorResistance(SensorType::Clt);
+	engine->outputChannels.iatResistance = getThermistorResistance(SensorType::Iat);
+	engine->outputChannels.auxTemp1Resistance = getThermistorResistance(SensorType::AuxTemp1);
+	engine->outputChannels.auxTemp2Resistance = getThermistorResistance(SensorType::AuxTemp2);
 	engine->outputChannels.rawAmbientTemp = Sensor::getRaw(SensorType::AmbientTemperature);
 	engine->outputChannels.rawOilPressure = Sensor::getRaw(SensorType::OilPressure);
 	engine->outputChannels.rawFuelLevel = Sensor::getRaw(SensorType::FuelLevel);
@@ -544,7 +555,9 @@ static void updatePressures() {
 
  	engine->outputChannels.compressorDischargePressure = Sensor::getOrZero(SensorType::CompressorDischargePressure);
  	engine->outputChannels.throttleInletPressure = Sensor::getOrZero(SensorType::ThrottleInletPressure);
+#if EFI_ENGINE_CONTROL
  	engine->outputChannels.throttlePressureRatio = getThrottlePressureRatio(mapValue);
+#endif // EFI_ENGINE_CONTROL
 
 	engine->outputChannels.auxLinear1 = Sensor::getOrZero(SensorType::AuxLinear1);
 	engine->outputChannels.auxLinear2 = Sensor::getOrZero(SensorType::AuxLinear2);
@@ -784,10 +797,16 @@ void updateTunerStudioState() {
 
 #endif /* EFI_TUNER_STUDIO */
 
+// Invoked from runRusEfi() BEFORE loadConfiguration() so that the LED blinks even if
+// config load/validation fails: nothing reachable from here may read engineConfiguration
+// (values are defaults/zeros at that point). Pin selection relies on compile-time board
+// constants only, and CommunicationBlinkingTask reads global flags, never settings.
+// Prerequisites: initPinRepository() and detectBoardType() must have already run.
 void startStatusThreads() {
 	// todo: refactoring needed, this file should probably be split into pieces
 #if EFI_PROD_CODE
 	initStatusLeds();
+	// runs on virtual timer interrupts, keeps blinking even if the main thread hangs
 	communicationsBlinkingTask.start();
 #endif /* EFI_PROD_CODE */
 }

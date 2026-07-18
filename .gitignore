@@ -56,3 +56,7 @@ bean_encoder_test.csv
 venv/
 coverage_reports/
 
+# AI
+.ai/mcp
+
+.claude/settings.local.json

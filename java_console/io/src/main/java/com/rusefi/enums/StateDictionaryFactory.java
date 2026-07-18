@@ -1,5 +1,5 @@
 package com.rusefi.enums;
-//was generated automatically by rusEFI tool config_definition_base-all.jar based on StateDictionaryGenerator integration/LiveData.yaml on Thu Jun 11 02:31:32 AST 2026
+//was generated automatically by rusEFI tool config_definition_base-all.jar based on StateDictionaryGenerator integration/LiveData.yaml on Sat Jul 18 15:31:31 AST 2026
 
 import com.rusefi.config.generated.*;
 import com.rusefi.ldmp.StateDictionary;
@@ -26,6 +26,7 @@ public class StateDictionaryFactory {
         stateDictionary.register(live_data_e.LDS_fuel_pump_control, "fuel_pump");
         stateDictionary.register(live_data_e.LDS_main_relay, "main_relay");
         stateDictionary.register(live_data_e.LDS_exhaust_cutout, "exhaust_cutout");
+        stateDictionary.register(live_data_e.LDS_imrc_controller, "imrc_controller");
         stateDictionary.register(live_data_e.LDS_engine_state, "engine");
         stateDictionary.register(live_data_e.LDS_tps_accel_state, "accel_enrichment");
         stateDictionary.register(live_data_e.LDS_trigger_central, "trigger_central");
@@ -52,9 +53,16 @@ public class StateDictionaryFactory {
         stateDictionary.register(live_data_e.LDS_short_term_fuel_trim_state, "short_term_fuel_trim");
         stateDictionary.register(live_data_e.LDS_vvl_controller_state, "vvl_controller_state");
         stateDictionary.register(live_data_e.LDS_cdv_controller_state, "cdv_controller_state");
+        stateDictionary.register(live_data_e.LDS_launch_power_ramp_state, "launch_power_ramp_state");
+        stateDictionary.register(live_data_e.LDS_rolling_launch_state, "rolling_launch_state");
+        stateDictionary.register(live_data_e.LDS_burst_knock_state, "burst_knock_state");
+        stateDictionary.register(live_data_e.LDS_wot_enrichment_state, "wot_enrichment_state");
+        stateDictionary.register(live_data_e.LDS_check_engine_light_state, "check_engine_light_state");
         stateDictionary.register(live_data_e.LDS_live_data_rotational_idle, "live_data_rotational_idle");
         stateDictionary.register(live_data_e.LDS_engine_state_machine_state, "engine_state_machine_state");
+        stateDictionary.register(live_data_e.LDS_misfire_detection_state, "misfire_detection_state");
         stateDictionary.register(live_data_e.LDS_downshift_blipper_state, "downshift_blipper_state");
+        stateDictionary.register(live_data_e.LDS_upshift_rpm_hold_state, "upshift_rpm_hold_state");
         stateDictionary.register(live_data_e.LDS_dfco_state, "dfco_state");
     }
 }

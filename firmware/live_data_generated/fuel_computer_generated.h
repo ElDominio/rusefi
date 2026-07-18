@@ -107,15 +107,17 @@ struct fuel_computer_s {
 	/**
 	 * offset 52
 	 */
-	uint8_t brokenInjector = (uint8_t)0;
-	/**
-	 * offset 53
-	 */
-	uint8_t unused88 = (uint8_t)0;
+	uint16_t idealEngineTorque = (uint16_t)0;
 	/**
 	 * offset 54
 	 */
-	uint16_t idealEngineTorque = (uint16_t)0;
+	uint8_t brokenInjector = (uint8_t)0;
+	/**
+	 * need 4 byte alignment
+	 * units: units
+	 * offset 55
+	 */
+	uint8_t alignmentFill_at_55[1] = {};
 	/**
 	offset 56 bit 0 */
 	bool injectorHwIssue : 1 {};

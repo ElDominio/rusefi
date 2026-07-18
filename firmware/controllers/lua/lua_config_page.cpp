@@ -16,6 +16,7 @@ static_assert(sizeof(page5_container_s) % 32 == 0,
 // page 6, page 6 fits before sector end) lives in extra_flash_pages.cpp where all
 // page types and offsets are in scope. Failing that assert is a per-board compile
 // error: lower LUA_SCRIPT_SIZE or reduce page 6 size.
+// [tag:persistent-container-magic-size]
 #if (EFI_STORAGE_INT_FLASH == TRUE) && (EFI_STORAGE_MFS != TRUE) && !EFI_SIMULATOR
 static_assert(LUA_PAGE_SECTOR_OFFSET + sizeof(page5_container_s) <= 128u * 1024u,
 	"Lua config page does not fit in the flash sector — reduce LUA_SCRIPT_SIZE for this board");

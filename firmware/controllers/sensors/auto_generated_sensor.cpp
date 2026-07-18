@@ -1,6 +1,6 @@
 #include "global.h"
 #include "sensor_type.h"
-// was generated automatically by rusEFI tool  from sensor_type.h // by enum_to_string.jar tool on Sat Apr 04 11:57:47 UTC 2026
+// was generated automatically by rusEFI tool  from sensor_type.h // by enum_to_string.jar tool on Sat Jul 18 15:31:33 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -57,10 +57,14 @@ const char *getSensorType(SensorType value) {
 			return "BatteryVoltage";
 		case SensorType::Clt:
 			return "Clt";
+		case SensorType::ClutchPressure:
+			return "ClutchPressure";
 		case SensorType::CompressorDischargePressure:
 			return "CompressorDischargePressure";
 		case SensorType::CompressorDischargeTemperature:
 			return "CompressorDischargeTemperature";
+		case SensorType::CylinderHeadTemperature:
+			return "CylinderHeadTemperature";
 		case SensorType::DashOverrideBatteryVoltage:
 			return "DashOverrideBatteryVoltage";
 		case SensorType::DashOverrideClt:

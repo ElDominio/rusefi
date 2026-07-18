@@ -10,7 +10,7 @@ struct misfire_detection_state_s {
 	offset 0 bit 0 */
 	bool misfireDetectionActive : 1 {};
 	/**
-	 * Misfire: MIL latched
+	 * Misfire: DTC latched
 	offset 0 bit 1 */
 	bool misfireLatched : 1 {};
 	/**

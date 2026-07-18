@@ -70,53 +70,64 @@ struct engine_state_machine_state_s {
 	offset 0 bit 15 */
 	bool engineSmIsPopsAndBangs : 1 {};
 	/**
+	 * Engine SM: P&B spark cut
 	offset 0 bit 16 */
-	bool unusedBit_16_16 : 1 {};
+	bool engineSmPnbSparkCut : 1 {};
 	/**
+	 * Engine SM: Eco mode active
 	offset 0 bit 17 */
-	bool unusedBit_16_17 : 1 {};
+	bool engineSmIsEcoMode : 1 {};
 	/**
+	 * Engine SM: Cold engine
 	offset 0 bit 18 */
-	bool unusedBit_16_18 : 1 {};
+	bool engineSmIsCold : 1 {};
 	/**
+	 * Engine SM: At operating temp
 	offset 0 bit 19 */
-	bool unusedBit_16_19 : 1 {};
+	bool engineSmIsOperating : 1 {};
 	/**
+	 * Engine SM: Hot engine
 	offset 0 bit 20 */
-	bool unusedBit_16_20 : 1 {};
+	bool engineSmIsHot : 1 {};
 	/**
+	 * Engine SM: Quick Warmup active
 	offset 0 bit 21 */
-	bool unusedBit_16_21 : 1 {};
+	bool engineSmIsQuickWarmup : 1 {};
 	/**
+	 * Engine SM: Accelerating
 	offset 0 bit 22 */
-	bool unusedBit_16_22 : 1 {};
+	bool engineSmIsAccelerating : 1 {};
 	/**
+	 * Engine SM: Decelerating
 	offset 0 bit 23 */
-	bool unusedBit_16_23 : 1 {};
+	bool engineSmIsDecelerating : 1 {};
 	/**
+	 * Engine SM: Ghost Cam active
 	offset 0 bit 24 */
-	bool unusedBit_16_24 : 1 {};
+	bool engineSmIsGhostCam : 1 {};
 	/**
+	 * Engine SM: Sport Pedal active
 	offset 0 bit 25 */
-	bool unusedBit_16_25 : 1 {};
+	bool engineSmIsSportPedal : 1 {};
 	/**
+	 * Engine SM: Sport Mode active
 	offset 0 bit 26 */
-	bool unusedBit_16_26 : 1 {};
+	bool engineSmIsSportMode : 1 {};
 	/**
 	offset 0 bit 27 */
-	bool unusedBit_16_27 : 1 {};
+	bool unusedBit_27_27 : 1 {};
 	/**
 	offset 0 bit 28 */
-	bool unusedBit_16_28 : 1 {};
+	bool unusedBit_27_28 : 1 {};
 	/**
 	offset 0 bit 29 */
-	bool unusedBit_16_29 : 1 {};
+	bool unusedBit_27_29 : 1 {};
 	/**
 	offset 0 bit 30 */
-	bool unusedBit_16_30 : 1 {};
+	bool unusedBit_27_30 : 1 {};
 	/**
 	offset 0 bit 31 */
-	bool unusedBit_16_31 : 1 {};
+	bool unusedBit_27_31 : 1 {};
 	/**
 	 * Engine SM: primary state
 	 * offset 4
@@ -128,8 +139,19 @@ struct engine_state_machine_state_s {
 	 * offset 5
 	 */
 	uint8_t alignmentFill_at_5[3] = {};
+	/**
+	 * Engine SM: Shift accumulator
+	 * offset 8
+	 */
+	float engineSmShiftAccumulator = (float)0;
+	/**
+	 * Engine SM: RPM rate (RPM/t)
+	 * units: RPM/s
+	 * offset 12
+	 */
+	float engineSmRpmRate = (float)0;
 };
-static_assert(sizeof(engine_state_machine_state_s) == 8);
+static_assert(sizeof(engine_state_machine_state_s) == 16);
 
 // end
 // this section was generated automatically by rusEFI tool config_definition_base-all.jar based on (unknown script) controllers/algo/engine_state_machine_state.txt

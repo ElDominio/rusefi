@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "misfire_detection.h"
 
-#if EFI_MISFIRE_DETECTION
+#if EFI_ENGINE_CONTROL && EFI_MISFIRE_DETECTION
 
 #include "custom_page.h"
 #include "engine_state_machine.h"

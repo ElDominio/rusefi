@@ -106,11 +106,11 @@ On some Ford and Toyota vehicles one of the throttle sensors is not linear on th
 ### overrideTriggerGaps
 
 
-### enableFan1WithAc
-Turn on this fan when AC is on.
+### chtSensorPulldown
 
-### enableFan2WithAc
-Turn on this fan when AC is on.
+
+### useLinearChtSensor
+
 
 ### enableTrailingSparks
 Enable secondary spark outputs that fire after the primary (rotaries, twin plug engines).
@@ -143,7 +143,7 @@ This uses separate ignition timing and VE tables not only for idle conditions, a
 
 
 ### useRunningMathForCranking
-For cranking either use the specified fixed base fuel mass, or use the normal running math (VE table).
+For cranking either use the specified fixed base fuel mass, or use the normal running math (VE table). Note: in 'Fuel Map' (running math) mode the base mass already reflects the flex-adjusted stoich ratio, so the cranking flex multipliers act as ADDITIONAL enrichment on top of that - do not re-apply the full ethanol correction there.
 
 ### crankingAirAmountEnabled
 Enable CLT-based cranking air amount table. During cranking, open-loop valve position is taken from this table instead of the running idle tables.
@@ -202,11 +202,20 @@ This sets the RPM limit below which the ECU will use cranking fuel and ignition 
 ### ignitionDwellForCrankingMs
 Dwell duration while cranking
 
-### etbRevLimitStart
-Once engine speed passes this value, start reducing ETB angle.
-
 ### etbRevLimitRange
-This far above 'Soft limiter start', fully close the throttle. At the bottom of the range, throttle control is normal. At the top of the range, the throttle is fully closed.
+RPM below the hard RPM limit at which the ETB rev limiter PID starts managing throttle position. Below this window throttle control is normal.
+
+### etbRevLimitSeedTps
+Throttle position the ETB rev limiter PID seeds itself with as soon as it engages, so it starts near the right operating point instead of ramping up from zero.
+
+### etbRevLimitKp
+Proportional gain for the ETB rev limiter PID.
+
+### etbRevLimitKi
+Integral gain for the ETB rev limiter PID.
+
+### etbRevLimitKd
+Derivative gain for the ETB rev limiter PID.
 
 ### map.sensor.lowValue
 kPa/psi value at low volts
@@ -343,6 +352,12 @@ null
 ### disableFan2AtSpeed
 null
 
+### disableFan1AtSpeedHysteresis
+Hysteresis below the disable-at-speed threshold before the fan is allowed back on. Prevents rapid on/off cycling at the threshold speed.
+
+### disableFan2AtSpeedHysteresis
+Hysteresis below the disable-at-speed threshold before the fan is allowed back on. Prevents rapid on/off cycling at the threshold speed.
+
 ### disableFan1WhenStopped
 Inhibit operation of this fan while the engine is not running.
 
@@ -462,6 +477,9 @@ Set this so your vehicle speed signal is responsive, but not noisy. Larger value
 
 ### vssToothCount
 Number of pulses output per revolution of the shaft where your VSS is mounted. For example, GM applications of the T56 output 17 pulses per revolution of the transmission output shaft.
+
+### vssMaxAcceleration
+Reject VSS pulses that imply a faster acceleration or deceleration than this, and dead-reckon speed from the last known rate of change instead. Helps reject a single noisy tooth. Set to 0 to disable.
 
 ### fuelPumpControl.pFactor
 
@@ -592,65 +610,8 @@ AEM X-Series or rusEFI Wideband
 ### useAbsolutePressureForLagTime
 
 
-### mainRelayDisableTime
-Time after ignition turn-off before the main relay is disabled.
-
-### verboseCanBaseAddress
-
-
-### mc33_hvolt
-Boost Voltage
-
-### minimumBoostClosedLoopMap
-Minimum MAP before closed loop boost is enabled. Use to prevent misbehavior upon entering boost.
-
-### initialIgnitionCutPercent
-The percentage of ignition events to cut when entering the launch control window (e.g., at Launch RPM minus Launch Control Window).
-
-### finalIgnitionCutPercentBeforeLaunch
-The percentage of ignition events to cut when the engine speed reaches the end of the corrections RPM (Launch RPM minus Launch Corrections End RPM). Between the start of the window and the end of corrections RPM, the cut percentage interpolates linearly from initial to final cut percentage.
-
-### idlePidRpmUpperLimit
-How far above idle speed do we consider idling, i.e. coasting detection threshold.\nFor example, if target = 800, this param = 200, then anything below 1000 RPM is considered idle.
-
-### applyNonlinearBelowPulse
-Apply nonlinearity correction below a pulse of this duration. Pulses longer than this duration will receive no adjustment.
-
-### torqueReductionArmingRpm
-Since torque reduction pin is usually shared with launch control, most people have an RPM where behavior under that is Launch Control, over that is Flat Shift/Torque Reduction
-
-### stoichRatioSecondary
-Stoichiometric ratio for your secondary fuel. This value is used when the Flex Fuel sensor indicates E100, typically 9.0
-
-### etbMaximumPosition
-Maximum allowed ETB position. Some throttles go past fully open, so this allows you to limit it to fully open.
-
-### sdCardLogFrequency
-Rate the ECU will log to the SD card, in hz (log lines per second).
-
-### launchCorrectionsEndRpm
-The RPM difference below the Launch RPM at which corrections (timing retard interpolation and/or ignition cut ramp) reach their final/maximum target. For example, if Launch RPM is 4000, and this is 50, corrections reach their final target at 3950 RPM.
-
-### lambdaProtectionRestoreRpm
-
-
-### mapMinBufferLength
-This many MAP samples are used to estimate the current MAP. This many samples are considered, and the minimum taken. Recommended value is 1 for single-throttle engines, and your number of cylinders for individual throttle bodies.
-
-### idlePidDeactivationTpsThreshold
-Below this throttle position, the engine is considered idling. If you have an electronic throttle, this checks accelerator pedal position instead of throttle position, and should be set to 1-2%.
-
-### stepperParkingExtraSteps
-
-
-### startCrankingDuration
-Maximum time to crank starter when start/stop button is pressed
-
-### lambdaProtectionMinTps
-
-
-### lambdaProtectionTimeout
-Only respond once lambda is out of range for this period of time. Use to avoid transients triggering lambda protection when not needed
+### idleReturnTargetRamp
+Ramp the idle target down from the entry threshold over N seconds when returning to idle. Helps prevent overshooting (below) the idle target while returning to idle from coasting.
 
 ### useInjectorFlowLinearizationTable
 
@@ -730,14 +691,77 @@ When set to yes, it enables intake air temperature-based corrections for Alpha-N
 ### tcuEnabled
 
 
-### canBroadcastUseChannelTwo
-
-
 ### useRawOutputToDriveIdleStepper
 If enabled we use four Push-Pull outputs to directly drive stepper idle air valve coils
 
 ### verboseCan2
 Print incoming and outgoing second bus CAN messages in rusEFI console
+
+### mainRelayDisableTime
+Time after ignition turn-off before the main relay is disabled.
+
+### verboseCanBaseAddress
+
+
+### mc33_hvolt
+Boost Voltage
+
+### minimumBoostClosedLoopMap
+Minimum MAP before closed loop boost is enabled. Use to prevent misbehavior upon entering boost.
+
+### initialIgnitionCutPercent
+The percentage of ignition events to cut when entering the launch control window (e.g., at Launch RPM minus Launch Control Window).
+
+### finalIgnitionCutPercentBeforeLaunch
+The percentage of ignition events to cut when the engine speed reaches the end of the corrections RPM (Launch RPM minus Launch Corrections End RPM). Between the start of the window and the end of corrections RPM, the cut percentage interpolates linearly from initial to final cut percentage.
+
+### idlePidRpmUpperLimit
+How far above idle speed do we consider idling, i.e. coasting detection threshold.\nFor example, if target = 800, this param = 200, then anything below 1000 RPM is considered idle.
+
+### applyNonlinearBelowPulse
+Apply nonlinearity correction below a pulse of this duration. Pulses longer than this duration will receive no adjustment.
+
+### torqueReductionArmingRpm
+Since torque reduction pin is usually shared with launch control, most people have an RPM where behavior under that is Launch Control, over that is Flat Shift/Torque Reduction
+
+### stoichRatioSecondary
+Stoichiometric ratio for your secondary fuel. This value is used when the Flex Fuel sensor indicates E100, typically 9.0
+
+### etbMaximumPosition
+Maximum allowed ETB position. Some throttles go past fully open, so this allows you to limit it to fully open.
+
+### sdCardLogFrequency
+Rate the ECU will log to the SD card, in hz (log lines per second).
+
+### launchCorrectionsEndRpm
+The RPM difference below the Launch RPM at which corrections (timing retard interpolation and/or ignition cut ramp) reach their final/maximum target. For example, if Launch RPM is 4000, and this is 50, corrections reach their final target at 3950 RPM.
+
+### lambdaProtectionRestoreRpm
+
+
+### mapMinBufferLength
+This many MAP samples are used to estimate the current MAP. This many samples are considered, and the minimum taken. Recommended value is 1 for single-throttle engines, and your number of cylinders for individual throttle bodies.
+
+### idlePidDeactivationTpsThreshold
+Below this throttle position, the engine is considered idling. If you have an electronic throttle, this checks accelerator pedal position instead of throttle position, and should be set to 1-2%.
+
+### stepperParkingExtraSteps
+
+
+### startCrankingDuration
+Maximum time to crank starter when start/stop button is pressed
+
+### lambdaProtectionMinTps
+
+
+### lambdaProtectionTimeout
+Only respond once lambda is out of range for this period of time. Use to avoid transients triggering lambda protection when not needed
+
+### canBroadcastUseChannelTwo
+
+
+### disableLaunchWithClutchUp
+When Launch Control is NOT activated by Clutch Up, use the Clutch Up switch to positively confirm the clutch has been released and disable launch.
 
 ### boostPid.pFactor
 
@@ -940,9 +964,6 @@ When enabled if TPS is held above 95% no fuel is injected while cranking to clea
 ### complexWallModel
 Should we use tables to vary tau/beta based on CLT/MAP, or just with fixed values?
 
-### alwaysInstantRpm
-RPM is measured based on last 720 degrees while instant RPM is measured based on the last 90 degrees of crank revolution
-
 ### isMapAveragingEnabled
 
 
@@ -974,7 +995,10 @@ In Constant mode, timing is automatically tapered to running as RPM increases.\n
 This enables the various ignition corrections during cranking (IAT, CLT and PID idle).\nYou probably don't need this.
 
 ### flexCranking
-Enable a second cranking table to use for E100 flex fuel, interpolating between the two based on flex fuel sensor.
+Enable flex-fuel compensation for engine start. When on (and a flex fuel sensor is present) the cranking coolant multiplier and the priming pulse mass each come from a 2D table over coolant and ethanol % (crankingFuelFlexTable / primeFlexTable, 4-row ethanol axis) instead of their 1D coolant curves. When off, the 1D curves (crankingFuelCoef / primeValues) are used.
+
+### flexFuelTransientComp
+Enable flex-fuel transient fueling compensation (acceleration enrichment and wall wetting tau/beta) based on ethanol content and coolant temperature.
 
 ### useIacPidMultTable
 This flag allows to use a special 'PID Multiplier' table (0.0-1.0) to compensate for nonlinear nature of IAC-RPM controller
@@ -1018,6 +1042,9 @@ If increased VVT duty cycle increases the indicated VVT angle, set this to 'adva
 ### sdCardConditionalLogging
 Only write the SD log while trigger conditions are met (start/stop). Off = always log, the current behavior.
 
+### useCompensatedMap
+Compensated MAP: in Speed Density mode, normalize MAP by barometric pressure before it is used as a table load axis.\nMAP_ref = MAP / (baro / 101.325 kPa) feeds the VE lookup and the fuel/spark load axes, so the same table cells are hit regardless of altitude (WOT reads ~100 kPa at any elevation).\nThe physical air mass calculation still uses actual MAP. Requires a barometric pressure sensor; without a valid baro reading no compensation is applied.\nWorks together with the Barometric pressure correction table, which serves a different goal: this setting keeps table lookups stable across altitude, while the baro table multiplies fueling for exhaust-side scavenging effects. Either or both can be used.
+
 ### sdLogStartRpm
 Start logging at/above this RPM
 
@@ -1035,6 +1062,9 @@ Also require MAP at/above this to start logging (0 = ignore)
 
 ### sdLogMinVss
 Also require vehicle speed at/above this to start logging (0 = ignore)
+
+### rpmRateSmoothingPct
+Only used by First Order RPM mode. Smoothing applied to the RPM rate of change (the slope used to extrapolate RPM between cycles) each engine cycle. 0% = fully raw: the slope is replaced by the latest cycle-to-cycle measurement every cycle (most responsive, but cycle-to-cycle combustion/measurement noise passes straight through). Higher % blends in more of the previous slope, smoothing that noise out at the cost of slower response to genuine acceleration/deceleration. Capped at 95%: at 100% the slope would never incorporate a new measurement and would freeze permanently.
 
 ### engineChartSize
 
@@ -1774,6 +1804,9 @@ Degrees of timing REMOVED from actual timing during soft RPM limit window
 ### rpmHardLimitHyst
 Sets a buffer below the RPM hard limit, helping avoid rapid cycling of cut actions by defining a range within which RPM must drop before cut actions are re-enabled.\nHysterisis: if the hard limit is 7200rpm and rpmHardLimitHyst is 200rpm, then when the ECU sees 7200rpm, fuel/ign will cut, and stay cut until 7000rpm (7200-200) is reached
 
+### rpmSoftLimitRange
+Width of the RPM window below the RPM hard limit over which the Soft RPM Limit's timing retard and fuel added ramp from zero up to their full configured value at the hard limit. Independent of RPM limit hysteresis, which only controls when cut actions re-enable.
+
 ### benchTestOffTime
 Time between bench test pulses
 
@@ -1876,6 +1909,51 @@ Pull-up resistor value on your board
 ### compressorDischargeTemperature.config.bias_resistor
 Pull-up resistor value on your board
 
+### chtSensor.config.tempC_1
+
+
+### chtSensor.config.tempC_2
+
+
+### chtSensor.config.tempC_3
+
+
+### chtSensor.config.resistance_1
+
+
+### chtSensor.config.resistance_2
+
+
+### chtSensor.config.resistance_3
+
+
+### chtSensor.config.bias_resistor
+Pull-up resistor value on your board
+
+### eotEstK0
+EOT-from-CHT/IAT estimation: base delta. The head/block runs this many deg C hotter than the oil at zero IAT influence.
+
+### eotEstK1
+EOT-from-CHT/IAT estimation: CHT coefficient. This fraction of the current CHT reading is added to the delta (hotter head = harder to reject heat into the oil).
+
+### eotEstK2
+EOT-from-CHT/IAT estimation: IAT coefficient. Additional deg C of delta per deg C of intake air temperature (cooler incoming air increases the delta).
+
+### eotEstK3
+EOT-from-CHT/IAT estimation: oil pressure coefficient. Additional deg C of delta per kPa of oil pressure. Higher pressure means more oil flow and better convective heat transfer, typically shrinking the delta (negative value).
+
+### eotEstTauHeat
+EOT-from-CHT/IAT estimation: heating time factor in seconds. Short blips barely register while sustained load integrates fully.
+
+### eotEstTauCool
+EOT-from-CHT/IAT estimation: cooling time factor in seconds. How long it takes for the delta to decay after load drops. Usually longer than heating because oil retains heat after load disappears.
+
+### eotEstFallbackEot
+Fallback EOT value used when the CHT sensor or oil pressure reads invalid.
+
+### pad_eot_reserved
+
+
 ### speedometerPulsePerKm
 Number of speedometer pulses per kilometer travelled.
 
@@ -1935,6 +2013,18 @@ value of A/C pressure in kPa/psi before that compressor is disengaged
 
 ### maxAcPressure
 value of A/C pressure in kPa/psi after that compressor is disengaged
+
+### clutchPressure.v1
+
+
+### clutchPressure.value1
+
+
+### clutchPressure.v2
+
+
+### clutchPressure.value2
+
 
 ### minimumOilPressureTimeout
 Delay before cutting fuel due to low oil pressure. Use this to ignore short pressure blips and sensor noise.
@@ -2019,6 +2109,18 @@ Deactivate CDV solenoid when clutch pedal is released
 
 ### luaLimiterEnabled
 
+
+### cdvSmartMode
+Clutch Delay Valve activation mode. Simple: activate on launch/pre-launch entry. Smart: also require clutch pressure to be inside the configured window (cdvSmartMinPressure/cdvSmartMaxPressure) before activating, and deactivate immediately on leaving the window.
+
+### cutEtbOnRpmLimit
+Uses Electronic Throttle Limiting (a PID) to try to hold engine RPM about 50rpm below the hard RPM limit, instead of (or in addition to) cutting fuel/spark at the limit. This is a real distinction from the hard RPM limit: the hard limit only cuts, while this tries to actively manage throttle to stay just under it.
+
+### coastingFuelCutRequiresGear
+When enabled, overrun fuel cut will not engage while the transmission is in neutral (DetectedGear sensor reads neutral).\nRequires the gear ratio table (Total Gear Count / gear ratios) to be configured: if it is not set up, the detected gear always reads neutral and fuel cut will never engage.
+
+### eotFromIatCht
+Use CHT/IAT sensors to estimate oil temperature (EOT) via first-order thermal model. Disable if a real oil temp sensor is wired.
 
 ### nitrousLuaGaugeArmingValue
 
@@ -2128,6 +2230,9 @@ Rotational Idle Auto engage CLT
 ### rotationalIdleController.auto_engage_clt
 Rotational Idle Auto engage CLT.
 
+### launchRpmThreshold
+Launch RPM Threshold: when above 0, launch only engages if the activation switch (button/clutch) is pressed at or below this RPM, and stays latched while held - even past this RPM. This lets a standing launch (switch pressed low, revved up) coexist with flat shift / torque reduction (switch blipped high during an upshift). 0 disables the gate (legacy behavior).
+
 ### popsAndBangsEnabled
 Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce turbocharger life.
 
@@ -2216,5 +2321,20 @@ Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce
 
 
 ### wizardInjectorFlow
+
+
+### wizardDisplacement
+
+
+### wizardCltSensor
+
+
+### wizardTps
+
+
+### wizardIgnitionOutputs
+
+
+### wizardInjectorOutputs
 
 

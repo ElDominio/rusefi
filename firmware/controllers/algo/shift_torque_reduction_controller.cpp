@@ -20,10 +20,9 @@ void ShiftTorqueReductionController::update() {
         updateTimeConditionSatisfied();
         updateRpmConditionSatisfied();
         updateAppConditionSatisfied();
-        updateSpeedConditionSatisfied();
 
         isFlatShiftConditionSatisfied = torqueReductionTriggerPinState && isTimeConditionSatisfied
-            && isRpmConditionSatisfied && isAppConditionSatisfied && isSpeedConditionSatisfied;
+            && isRpmConditionSatisfied && isAppConditionSatisfied && !engine->launchController.ownsSharedTrigger();
     }
 }
 
@@ -157,19 +156,6 @@ void ShiftTorqueReductionController::updateAppConditionSatisfied() {
     } else {
         isAppConditionSatisfied = false;
     }
-}
-
-void ShiftTorqueReductionController::updateSpeedConditionSatisfied() {
-    if (engineConfiguration->launchSpeedThreshold == 0) {
-        isSpeedConditionSatisfied = true;
-        return;
-    }
-
-    // Shares launchSpeedThreshold with Launch Control, which only allows launch strictly
-    // below the threshold: using ">=" here keeps the two features mutually exclusive even
-    // when they're driven off the same clutch/switch pin (see calculateRPMLaunchCondition).
-    int speed = Sensor::getOrZero(SensorType::VehicleSpeed);
-    isSpeedConditionSatisfied = speed >= engineConfiguration->launchSpeedThreshold;
 }
 
 float ShiftTorqueReductionController::getTorqueReductionIgnitionRetard() {

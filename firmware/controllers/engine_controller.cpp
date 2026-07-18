@@ -70,10 +70,6 @@
 #include "logic_analyzer.h"
 #endif /* EFI_LOGIC_ANALYZER */
 
-#if defined(EFI_BOOTLOADER_INCLUDE_CODE)
-#include "bootloader/bootloader.h"
-#endif /* EFI_BOOTLOADER_INCLUDE_CODE */
-
 #include "periodic_task.h"
 #include "board_overrides.h"
 
@@ -204,6 +200,14 @@ static void doPeriodicSlowCallback() {
 #endif // EFI_TCU
 
 	tryResetWatchdog();
+
+#if EFI_PROD_CODE
+	// single-shot reset all counter after 5 second of happines
+	static unsigned int slow_counter = 5 * 1000 / SLOW_CALLBACK_PERIOD_MS;
+	if ((slow_counter) && (--slow_counter == 0)) {
+		errorHandlerResetCounters();
+	}
+#endif // EFI_PROD_CODE
 }
 
 void initPeriodicEvents() {
@@ -486,6 +490,10 @@ void commonInitEngineController() {
 
   engine->tractionController.init();
 
+#if EFI_ENGINE_CONTROL
+  initIgnitionAdvanceControl();
+#endif // EFI_ENGINE_CONTROL
+
 #if EFI_UNIT_TEST
 	engine->rpmCalculator.Register();
 #endif /* EFI_UNIT_TEST */
@@ -500,7 +508,9 @@ void commonInitEngineController() {
 
 	initSpeedometer();
 
+#if EFI_ENGINE_CONTROL
 	initStft();
+#endif // EFI_ENGINE_CONTROL
 #if EFI_LTFT_CONTROL
 	initLtft();
 #endif
@@ -539,12 +549,14 @@ bool validateConfigOnStartUpOrBurn() {
   if (!validateGdi()) {
     return false;
   }
+#if EFI_ELECTRONIC_THROTTLE_BODY
   if (engineConfiguration->etbMinimumPosition + 1 >= engineConfiguration->etbMaximumPosition) {
 		criticalError("Broken ETB min/max %d %d",
 		  engineConfiguration->etbMinimumPosition,
 		  engineConfiguration->etbMaximumPosition);
 		return false;
   }
+#endif
 
   if (engineConfiguration->knockFrequency != 0 && engineConfiguration->knockFrequency < 100) {
     // todo: migrate from hard error to soft error
@@ -578,10 +590,10 @@ bool validateConfigOnStartUpOrBurn() {
 		return false;
 	}
 
+#if EFI_ENGINE_CONTROL
 	ensureArrayIsAscending("Injector deadtime vBATT", engineConfiguration->injector.battLagCorrBattBins);
 	ensureArrayIsAscending("Injector deadtime Pressure", engineConfiguration->injector.battLagCorrPressBins);
 
-#if EFI_ENGINE_CONTROL
 	// Fueling
 	{
 		ensureArrayIsAscending("VE load", config->veLoadBins);
@@ -655,6 +667,7 @@ bool validateConfigOnStartUpOrBurn() {
 
 // todo: huh? why does this not work on CI?	ensureArrayIsAscendingOrDefault("Dwell Correction Voltage", engineConfiguration->dwellVoltageCorrVoltBins);
 
+#if EFI_ENGINE_CONTROL
 	ensureArrayIsAscending("MAF transfer function", config->mafDecodingBins);
 
 	// Cranking tables
@@ -667,6 +680,7 @@ bool validateConfigOnStartUpOrBurn() {
 	ensureArrayIsAscending("Idle target RPM", config->cltIdleRpmBins);
 	ensureArrayIsAscending("Idle warmup mult CLT", config->cltIdleCorrBins);
 	ensureArrayIsAscending("Idle warmup mult RPM", config->rpmIdleCorrBins);
+#endif // EFI_ENGINE_CONTROL
 	ensureArrayIsAscendingOrDefault("Idle coasting RPM", config->iacCoastingRpmBins);
 	ensureArrayIsAscendingOrDefault("Idle VE RPM", config->idleVeRpmBins);
 	ensureArrayIsAscendingOrDefault("Idle VE Load", config->idleVeLoadBins);
@@ -743,8 +757,7 @@ bool validateConfigOnStartUpOrBurn(bool isRunningOnBurn) {
 #if !EFI_UNIT_TEST
 
 void commonEarlyInit() {
-	// Start this early - it will start LED blinking and such
-	startStatusThreads();
+	// note: LED blinking is started even earlier, see startStatusThreads() call in runRusEfi()
 
 #if EFI_SHAFT_POSITION_INPUT
 	// todo: figure out better startup logic
@@ -801,11 +814,6 @@ void initRealHardwareEngineController() {
  * See also SIGNATURE_HASH
  */
 int getRusEfiVersion() {
-#if defined(EFI_BOOTLOADER_INCLUDE_CODE)
-	// make bootloader code happy too
-	if (initBootloader() != 0)
-		return 123;
-#endif /* EFI_BOOTLOADER_INCLUDE_CODE */
 	return VCS_DATE;
 }
 #endif /* EFI_UNIT_TEST */
