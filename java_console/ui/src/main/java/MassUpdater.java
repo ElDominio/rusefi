@@ -1,9 +1,9 @@
 import com.devexperts.logging.Logging;
 import com.rusefi.ConnectivityContext;
 import com.rusefi.PortResult;
+import com.rusefi.ProductionConnectivity;
 import com.rusefi.SerialPortType;
 import com.rusefi.UiVersion;
-import com.rusefi.io.BootloaderHelper;
 import com.rusefi.io.ConnectionStatusLogic;
 import com.rusefi.io.LinkManager;
 import com.rusefi.io.UpdateOperationCallbacks;
@@ -35,14 +35,16 @@ public class MassUpdater {
 
     private final AtomicBoolean flashInProgress = new AtomicBoolean();
     private boolean multipleWarned;
+    private final ConnectivityContext connectivityContext;
 
     public MassUpdater(ConnectivityContext connectivityContext, SerialPortType target) {
+        this.connectivityContext = connectivityContext;
         mainStatus.showFrame("Mass Updater " + UiVersion.CONSOLE_VERSION);
 
         final AtomicBoolean previousDfuState = new AtomicBoolean();
         AtomicBoolean isUsingDfu = new AtomicBoolean(); // it seems like DFU detection is not 100% reliable? a work-around to avoid double-DFU
 
-        connectivityContext.getSerialPortScanner().addListener(currentHardware -> {
+        connectivityContext.getPortScanner().addListener(currentHardware -> {
 
             if (!isUsingDfu.get() && currentHardware.isDfuFound() != previousDfuState.get()) {
                 mainStatus.getContent().logLine(currentHardware.isDfuFound() ? "I see a DFU device!" : "No DFU...");
@@ -72,7 +74,7 @@ public class MassUpdater {
                         public void clear() {}
                     };
                     SwingUtilities.invokeLater(() -> AsyncJobExecutor.INSTANCE.executeJobWithStatusWindow(
-                        new DfuManualJob(),
+                        new DfuManualJob(connectivityContext.getConnectedEcuTarget()),
                         releaseSemaphore,
                         () -> {}
                     ));
@@ -100,7 +102,7 @@ public class MassUpdater {
                     knownPorts.add(openPort.port);
                     mainStatus.getContent().logLine("New port " + openPort);
 
-                    OpenBltManualJob job = new OpenBltManualJob(openPort, mainStatus.getContent());
+                    OpenBltManualJob job = OpenBltManualJobFactory.createProduction(openPort, mainStatus.getContent(), connectivityContext);
                     SwingUtilities.invokeLater(() -> AsyncJobExecutor.INSTANCE.executeJobWithStatusWindow(job));
                 }
             }
@@ -154,7 +156,7 @@ public class MassUpdater {
      */
     private void runAutoJob(final PortResult openPort) {
         try {
-            final LinkManager lm = new LinkManager()
+            final LinkManager lm = new LinkManager(connectivityContext.getConnectedEcuTarget())
                 .setNeedPullText(false)
                 .setNeedPullLiveData(true);
             final CountDownLatch connected = new CountDownLatch(1);
@@ -190,7 +192,7 @@ public class MassUpdater {
                 return;
             }
 
-            final OpenBltAutoJob job = new OpenBltAutoJob(openPort, mainStatus.getContent(), ConnectivityContext.INSTANCE, lm);
+            final OpenBltAutoJob job = new OpenBltAutoJob(openPort, mainStatus.getContent(), connectivityContext, lm);
             final UpdateOperationCallbacks callbacks = createStatusWindow(job.getName());
             // Synchronous: blocks this worker thread until the whole flash sequence is done.
             job.doJob(callbacks, () -> {});
@@ -216,7 +218,7 @@ public class MassUpdater {
         log.error("Target port type: " + target);
 
         ToolButtons.showDeviceManager();
-        SwingUtilities.invokeAndWait(() -> new MassUpdater(ConnectivityContext.INSTANCE, target));
+        SwingUtilities.invokeAndWait(() -> new MassUpdater(ProductionConnectivity.CONTEXT, target));
     }
 
     private static @NotNull SerialPortType getTargetFromArguments(String[] args) {

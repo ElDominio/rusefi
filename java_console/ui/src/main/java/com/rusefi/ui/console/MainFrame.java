@@ -16,7 +16,6 @@ import com.rusefi.core.SignatureHelper;
 import com.rusefi.maintenance.VersionChecker;
 import com.rusefi.core.preferences.storage.Node;
 import com.rusefi.core.ui.FrameHelper;
-import com.rusefi.ui.basic.FirmwareUpdateTab;
 import com.rusefi.ui.basic.LoadTuneHelper;
 import com.rusefi.util.ExitUtil;
 import javax.swing.Action;
@@ -61,6 +60,10 @@ public class MainFrame {
     private JMenuItem updateSoftwareItem;
     private JMenuItem updateEcuItem;
     private Runnable updateEcuAction;
+    private Runnable exitRequestHandler;
+    private boolean firmwareUpdateInProgress;
+    private boolean updateSoftwareAvailable;
+    private boolean updateEcuAvailable;
 
     public MainFrame(ConsoleUI consoleUI, TabbedPanel tabbedPane) {
         this(consoleUI, tabbedPane, null);
@@ -75,7 +78,7 @@ public class MainFrame {
         this.tabbedPane = tabbedPane;
         listener = ConnectionStatusLogic.Listener.VOID;
         // reuseFrame == null creates a new window; non-null reuses the splash frame in place (#9715).
-        this.frame = new FrameHelper(reuseFrame, JFrame.DISPOSE_ON_CLOSE) {
+        this.frame = new FrameHelper(reuseFrame, JFrame.DO_NOTHING_ON_CLOSE) {
             @Override
             protected void onWindowOpened() {
                 log.info("onWindowOpened");
@@ -87,6 +90,11 @@ public class MainFrame {
                 // close the port, then the log file
                 windowClosedHandler();
                 log.info("onWindowClosed");
+            }
+
+            @Override
+            protected void onWindowClosing() {
+                requestExit();
             }
         };
 
@@ -112,10 +120,7 @@ public class MainFrame {
 
         JMenuItem exitItem = new JMenuItem("Exit");
         exitItem.setMnemonic(KeyEvent.VK_X);
-        exitItem.addActionListener(e -> {
-            // This triggers the same cleanup logic as closing the window
-            frame.getFrame().dispose();
-        });
+        exitItem.addActionListener(e -> requestExit());
         fileMenu.add(exitItem);
 
         menuBar.add(fileMenu);
@@ -144,6 +149,30 @@ public class MainFrame {
 
     public void setUpdateEcuAction(Runnable action) {
         this.updateEcuAction = action;
+    }
+
+    public void setExitRequestHandler(Runnable exitRequestHandler) {
+        this.exitRequestHandler = exitRequestHandler;
+    }
+
+    private void requestExit() {
+        if (firmwareUpdateInProgress) {
+            int choice = JOptionPane.showConfirmDialog(
+                frame.getFrame(),
+                "A firmware update is still in progress. Exiting now may leave the ECU unfinished. Exit anyway?",
+                "Firmware Update In Progress",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+            );
+            if (choice != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
+        if (exitRequestHandler == null) {
+            frame.getFrame().dispose();
+        } else {
+            exitRequestHandler.run();
+        }
     }
 
 
@@ -176,7 +205,7 @@ public class MainFrame {
             log.info("checkFirmwareUpdate: no srec file found");
             SwingUtilities.invokeLater(() -> {
                 updateEcuItem.setText("No updates available");
-                updateEcuItem.setEnabled(false);
+                setUpdateEcuAvailable(false);
             });
             return;
         }
@@ -185,13 +214,13 @@ public class MainFrame {
         boolean needsUpdate = needsFirmwareUpdate(ecuSig, srecName);
         log.info("checkFirmwareUpdate: needsUpdate=" + needsUpdate);
         SwingUtilities.invokeLater(() -> {
-            updateEcuItem.setText(needsUpdate ? "Update ECU" : "No updates available");
-            updateEcuItem.setEnabled(needsUpdate);
+            updateEcuItem.setText(needsUpdate ? "Update ECU Firmware" : "No updates available");
+            setUpdateEcuAvailable(needsUpdate);
         });
     }
 
     private void onUpdateSoftwareClicked() {
-        updateSoftwareItem.setEnabled(false);
+        setUpdateSoftwareAvailable(false);
         Thread updateThread = new Thread(() ->
             Autoupdate.runManualUpdate(msg -> {
                 if (msg != null) {
@@ -205,11 +234,18 @@ public class MainFrame {
     private void windowOpenedHandler() {
         setTitle();
         tabbedPane.tabbedPane.addPropertyChangeListener("isUpdating", e -> SwingUtilities.invokeLater(this::setTitle));
-        if (!AutoupdateProperty.get()) {
+        tabbedPane.tabbedPane.addPropertyChangeListener("bootloaderMode", e -> SwingUtilities.invokeLater(this::setTitle));
+        // [tag:offline_tune] Refresh the OFFLINE title when offline mode toggles (e.g. Load Tune while
+        // disconnected) — otherwise the title would lag until the next connection event. #9730
+        consoleUI.uiContext.addOfflineModeListener(o -> SwingUtilities.invokeLater(this::setTitle));
+
+        // Offer manual update whenever the launch-time silent update did not run - either because
+        // the user preference is off or because the bundle hard-disables auto-update (#9775).
+        if (!Autoupdate.isAutoUpdateEnabled()) {
             Thread checkThread = new Thread(() -> {
                 boolean available = Autoupdate.isUpdateAvailable();
                 if (available) {
-                    SwingUtilities.invokeLater(() -> updateSoftwareItem.setEnabled(true));
+                    SwingUtilities.invokeLater(() -> setUpdateSoftwareAvailable(true));
                 }
             }, "update-availability-check");
             checkThread.setDaemon(true);
@@ -234,7 +270,7 @@ public class MainFrame {
                 }
             } else {
                 updateEcuItem.setText("No updates available");
-                updateEcuItem.setEnabled(false);
+                setUpdateEcuAvailable(false);
             }
         }));
 
@@ -301,6 +337,29 @@ public class MainFrame {
         saveTuneItem.setAction(saveAction);
         saveTuneItem.setText(LoadTuneHelper.SAVE_TUNE_TEXT);
         saveTuneItem.setMnemonic(KeyEvent.VK_S);
+        refreshFirmwareUpdateExclusion();
+    }
+
+    public void setFirmwareUpdateInProgress(boolean firmwareUpdateInProgress) {
+        this.firmwareUpdateInProgress = firmwareUpdateInProgress;
+        refreshFirmwareUpdateExclusion();
+    }
+
+    private void setUpdateSoftwareAvailable(boolean available) {
+        updateSoftwareAvailable = available;
+        refreshFirmwareUpdateExclusion();
+    }
+
+    private void setUpdateEcuAvailable(boolean available) {
+        updateEcuAvailable = available;
+        refreshFirmwareUpdateExclusion();
+    }
+
+    private void refreshFirmwareUpdateExclusion() {
+        Action loadAction = loadTuneItem.getAction();
+        loadTuneItem.setEnabled(!firmwareUpdateInProgress && loadAction != null && loadAction.isEnabled());
+        updateSoftwareItem.setEnabled(!firmwareUpdateInProgress && updateSoftwareAvailable);
+        updateEcuItem.setEnabled(!firmwareUpdateInProgress && updateEcuAvailable);
     }
 
     public FrameHelper getFrame() {
@@ -310,8 +369,12 @@ public class MainFrame {
     private void setTitle() {
         String consoleVersion = "Console " + Launcher.CONSOLE_VERSION;
         String frameTitle;
+        Object bootloaderMode = tabbedPane.tabbedPane.getClientProperty("bootloaderMode");
         if (Boolean.TRUE.equals(tabbedPane.tabbedPane.getClientProperty("isUpdating"))) {
             frameTitle = "UPDATING " + consoleVersion;
+        } else if (bootloaderMode != null) {
+            // Board sitting in a bootloader [tag:better_ux_for_flashing] — not connected, but not a plain "disconnected" state.
+            frameTitle = bootloaderMode + " BOOTLOADER " + consoleVersion;
         } else if (ConnectionStatusLogic.INSTANCE.isConnected()) {
             BinaryProtocol bp = consoleUI.uiContext.getBinaryProtocol();
             String signature = bp == null ? "not loaded" : bp.signature;

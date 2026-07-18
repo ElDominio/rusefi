@@ -5,6 +5,7 @@ import com.opensr5.ConfigurationImage;
 import com.opensr5.ini.IniFileModel;
 import com.opensr5.ini.PrimeTunerStudioCache;
 import com.rusefi.autoupdate.Autoupdate;
+import com.rusefi.binaryprotocol.BinaryProtocol;
 import com.rusefi.core.net.ConnectionAndMeta;
 import com.rusefi.core.net.PropertiesHolder;
 import com.rusefi.core.preferences.storage.PersistentConfiguration;
@@ -26,18 +27,17 @@ import com.rusefi.ui.wizard.WizardStepDescriptor;
 import com.rusefi.ui.duplicates.ConsoleBundleUtil;
 import com.rusefi.ui.util.HorizontalLine;
 import com.rusefi.ui.util.URLLabel;
-import com.rusefi.ui.util.UiUtils;
-import com.rusefi.io.DoubleCallbacks;
 import com.rusefi.maintenance.jobs.AsyncJob;
 import com.rusefi.maintenance.jobs.DfuAutoJob;
 import com.rusefi.maintenance.jobs.ExportTuneJob;
 import com.rusefi.maintenance.jobs.ImportTuneJob;
 import com.rusefi.maintenance.jobs.OpenBltAutoJob;
 import com.rusefi.maintenance.jobs.OpenBltSwitchJob;
-import com.rusefi.ui.basic.FirmwareUpdateTab;
+import com.rusefi.ui.basic.StartupUpdateActions;
 import com.rusefi.ui.basic.SingleAsyncJobExecutor;
 import com.rusefi.ui.basic.StatusPanelWithProgressBar;
 import com.rusefi.ui.basic.TuneManagementTab;
+import com.rusefi.ui.basic.UpdateFirmwareResult;
 import com.rusefi.ui.widgets.StatusPanel;
 import com.rusefi.ui.widgets.ToolButtons;
 import net.miginfocom.swing.MigLayout;
@@ -52,6 +52,7 @@ import java.awt.event.*;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -124,13 +125,13 @@ public class StartupFrame {
     private final StatusPanelWithProgressBar firmwareStatusPanel = new StatusPanelWithProgressBar();
     private final StatusPanel tuneStatusPanel = new StatusPanel(250);
     private final SingleAsyncJobExecutor asyncJobExecutor = new SingleAsyncJobExecutor(
-        new DoubleCallbacks(firmwareStatusPanel, tuneStatusPanel));
+        job -> job instanceof ImportTuneJob ? tuneStatusPanel : firmwareStatusPanel);
     private final AtomicReference<Optional<PortResult>> ecuPortToUse = new AtomicReference<>(Optional.empty());
-    private FirmwareUpdateTab firmwareUpdateTab;
-    private StatusAnimation firmwareTabStatus;
+    private StartupUpdateActions startupUpdateActions;
     private JTabbedPane outerTabs;
 
     private final UIContext uiContext;
+    private final CompletableFuture<Autoupdate.UpdateOutcome> softwareUpdateOutcome;
     private final JPanel rootContent = new JPanel(new CardLayout());
     // The large "scanning" card shown first (#9715); its status line is updated to "Connecting to X…"
     // if a single-ECU auto-connect fires before the controls are revealed.
@@ -151,15 +152,21 @@ public class StartupFrame {
     // Saved in releaseSplashConnection() for tune import/export jobs; restored in onLiveConnectionJobFinished().
     private PortResult postLiveConnectionJobPort;
 
-    public StartupFrame(ConnectivityContext connectivityContext, UIContext uiContext) {
+    public StartupFrame(ConnectivityContext connectivityContext, UIContext uiContext,
+                        CompletableFuture<Autoupdate.UpdateOutcome> softwareUpdateOutcome) {
         this.connectivityContext = connectivityContext;
         this.uiContext = uiContext;
+        this.softwareUpdateOutcome = softwareUpdateOutcome;
         // Firmware-update and tune operations open the serial port themselves via a fresh
         // LinkManager. If our splash auto-connect is holding the same port, they'd deadlock on
         // "Connecting...". Release the splash connection just before any job starts so the port
         // is free for the exclusive operation.
+        asyncJobExecutor.addOnJobAboutToStartListener(() -> SwingUtilities.invokeLater(() ->
+            setStartupFirmwareUpdateInProgress(isFirmwareOperationInProgress())));
         asyncJobExecutor.addOnJobAboutToStartListener(this::releaseSplashConnection);
         asyncJobExecutor.addOnJobInProgressFinishedListener(this::onLiveConnectionJobFinished);
+        asyncJobExecutor.addOnJobInProgressFinishedListener(() -> SwingUtilities.invokeLater(() ->
+            setStartupFirmwareUpdateInProgress(false)));
         String title = UiProperties.getWhiteLabel() + " console " + Launcher.CONSOLE_VERSION;
         log.info(title);
         noPortsMessage.setForeground(Color.red);
@@ -172,6 +179,24 @@ public class StartupFrame {
 
         frame = FrameHelper.createFrame(title).getFrame();
         frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent ev) {
+                if (!isFirmwareOperationInProgress()) {
+                    frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                    return;
+                }
+                int choice = JOptionPane.showConfirmDialog(
+                    frame,
+                    "A firmware update is still in progress. Exiting now may leave the ECU unfinished. Exit anyway?",
+                    "Firmware Update In Progress",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE
+                );
+                frame.setDefaultCloseOperation(choice == JOptionPane.YES_OPTION
+                    ? JFrame.EXIT_ON_CLOSE
+                    : JFrame.DO_NOTHING_ON_CLOSE);
+            }
+
             @Override
             public void windowClosed(WindowEvent ev) {
                 if (!isProceeding) {
@@ -186,6 +211,11 @@ public class StartupFrame {
             }
         });
         new NamedThreadFactory("ecuDef primer").newThread(PrimeTunerStudioCache::primeWithLocalFile).start();
+        softwareUpdateOutcome.thenAccept(outcome -> {
+            if (outcome == Autoupdate.UpdateOutcome.UPDATED) {
+                SwingUtilities.invokeLater(this::restartConsole);
+            }
+        });
     }
 
     public void showUi() {
@@ -302,7 +332,13 @@ public class StartupFrame {
         });
         realHardwarePanel.add(openTunerStudio, "right, wrap");
 
-        connectivityContext.getSerialPortScanner().addListener(currentHardware -> SwingUtilities.invokeLater(() -> {
+        connectivityContext.getPortScanner().addListener(currentHardware -> SwingUtilities.invokeLater(() -> {
+            // [tag:better_ux_for_flashing]: after a normal handoff the live console (DeviceSessionManager) owns device state —
+            // the scanner stays alive but this splash listener must stop mutating the repurposed splash
+            // widgets. The offline-tune path (isProceeding && offlineConsoleOpen) still needs the branch below.
+            if (isProceeding && !offlineConsoleOpen) {
+                return;
+            }
             if (offlineConsoleOpen) {
                 // [tag:offline_tune] Splash UI is disposed; keep only the auto-connect path alive so
                 // plugging in an ECU transitions the already-open offline console online (see onSplashConnected).
@@ -349,7 +385,7 @@ public class StartupFrame {
         miscPanel.add(buttonLogViewer, "wrap");
         miscPanel.add(new HorizontalLine(), "wrap");
 */
-        miscPanel.add(SimulatorHelper.createSimulatorComponent(this));
+        miscPanel.add(SimulatorHelper.createSimulatorComponent(this, connectivityContext));
 
         JPanel rightPanel = new JPanel(new VerticalFlowLayout());
 
@@ -392,40 +428,45 @@ public class StartupFrame {
                 return new Dimension(superPref.width, 100 + connectTabHeight);
             }
         };
-        firmwareUpdateTab = new FirmwareUpdateTab(
-            connectivityContext, UiProperties.getWhiteLabel(),
-            firmwareStatusPanel, asyncJobExecutor, ecuPortToUse);
+        BinaryProtocol.iniFileProvider.setStatusConsumer(firmwareStatusPanel);
+        startupUpdateActions = new StartupUpdateActions(connectivityContext, firmwareStatusPanel,
+            asyncJobExecutor, ecuPortToUse, softwareUpdateOutcome);
 
         JPanel firmwareTopPanel = new JPanel(new BorderLayout(0, 0));
         firmwareTopPanel.add(selector.getControl(), BorderLayout.NORTH);
-        firmwareTopPanel.add(firmwareUpdateTab.getBasicUpdaterPanel().getMigrateSettings(), BorderLayout.SOUTH);
+        JPanel updateButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        updateButtons.add(startupUpdateActions.getUpdateSoftwareStatus());
+        updateButtons.add(startupUpdateActions.getUpdateSoftwareButton());
+        updateButtons.add(startupUpdateActions.getUpdateFirmwareButton());
+        firmwareTopPanel.add(updateButtons, BorderLayout.CENTER);
+        firmwareTopPanel.add(startupUpdateActions.getMigrateSettings(), BorderLayout.SOUTH);
 
         JPanel firmwareTabPanel = new JPanel(new BorderLayout(0, 0));
         firmwareTabPanel.add(firmwareTopPanel, BorderLayout.NORTH);
         firmwareTabPanel.add(firmwareStatusPanel.getContent(), BorderLayout.CENTER);
         outerTabs.addTab("Update Firmware", firmwareTabPanel);
-        outerTabs.addTab("Manage Tunes", new TuneManagementTab(
+        final TuneManagementTab tuneManagementTab = new TuneManagementTab(
             connectivityContext,
             uiContext,
-            firmwareUpdateTab.getBasicUpdaterPanel().getImportTuneButton().getContent(),
+            startupUpdateActions.getImportTuneButton(),
             asyncJobExecutor,
             tuneStatusPanel,
+            () -> outerTabs.setSelectedIndex(1),
             this::openOfflineConsole
-        ).getContent());
+        );
+        outerTabs.addTab("Manage Tunes", tuneManagementTab.getContent());
         outerTabs.addTab("Connect", connectTabWrapper);
 
         int savedTabIndex = getConfig().getRoot().getIntProperty(STARTUP_TAB_INDEX, 0);
         outerTabs.setSelectedIndex(Math.min(savedTabIndex, outerTabs.getTabCount() - 1));
 
-        connectivityContext.getSerialPortScanner().addListener(currentHardware -> SwingUtilities.invokeLater(() -> {
-            if (firmwareTabStatus != null)
-                firmwareTabStatus.stop();
-            firmwareUpdateTab.getBasicUpdaterPanel().onHardwareUpdated();
+        connectivityContext.getPortScanner().addListener(currentHardware -> SwingUtilities.invokeLater(() -> {
+            // [tag:better_ux_for_flashing]: stop updating splash firmware-tab widgets once the live console has taken over.
+            if (isProceeding && !offlineConsoleOpen) {
+                return;
+            }
+            startupUpdateActions.onHardwareUpdated();
         }));
-
-        firmwareTabStatus = new StatusAnimation(
-            msg -> firmwareUpdateTab.getBasicUpdaterPanel().updateStatus(msg),
-            SCANNING_PORTS);
 
         wizardContainer = new WizardContainer(uiContext, /*compact=*/true);
         wizardContainer.setOnWizardExit(() -> {
@@ -536,7 +577,10 @@ public class StartupFrame {
 
     private void updateConnectButtonState() {
         PortResult selectedItem = (PortResult) portsComboBox.getComboPorts().getSelectedItem();
-        connectButton.setEnabled(selectedItem != null && selectedItem.type != OpenBlt);
+        // OpenBLT bootloader and DFU are not connectable — they are firmware-update targets [tag:better_ux_for_flashing].
+        connectButton.setEnabled(selectedItem != null
+            && selectedItem.type != OpenBlt
+            && selectedItem.type != SerialPortType.Dfu);
     }
 
     private void applyKnownPorts(AvailableHardware currentHardware) {
@@ -600,11 +644,20 @@ public class StartupFrame {
         make baud rate combo box much less visible #9103
         BaudRateHolder.INSTANCE.baudRate = Integer.parseInt((String) comboSpeeds.getSelectedItem());
 */
+        if (!asyncJobExecutor.isNotInProgress()) {
+            return;
+        }
         PortResult selectedPort = ((PortResult)portsComboBox.getComboPorts().getSelectedItem());
+        if (selectedPort == null) {
+            return;
+        }
         connect(selectedPort);
     }
 
     private void connect(PortResult selectedPort) {
+        if (!asyncJobExecutor.isNotInProgress()) {
+            return;
+        }
         log.info("connect: port=" + selectedPort.port);
         boolean alreadyConnected = isAutoConnected(selectedPort);
         log.info("connect: alreadyConnected=" + alreadyConnected);
@@ -620,38 +673,28 @@ public class StartupFrame {
         prepareForHandoff();
         LoadingOverlay.show(frame, "Loading console…", LogoHelper.createLogoLabel());
         SwingUtilities.invokeLater(() ->
-            new ConsoleUI(uiContext, selectedPort.port, selectedPort.type, alreadyConnected, frame));
+            new ConsoleUI(uiContext, selectedPort.port, selectedPort.type, alreadyConnected, frame, connectivityContext));
     }
 
     /**
      * [tag:offline_tune]
      * Opens the full console in offline mode with a pre-loaded tune, reusing the shared {@link UIContext}.
-     * Disposes the splash window but keeps the serial-port scanner running so that plugging in an ECU
-     * later auto-connects and the offline console transitions itself online — without spawning a second
+     * Reuses this maximized splash frame (same handoff as {@link #connect}, #9715) instead of opening a
+     * second window, and keeps the serial-port scanner running so that plugging in an ECU later
+     * auto-connects and the offline console transitions itself online — without spawning a second
      * console (see the {@link #offlineConsoleOpen} guards).
      */
     public void openOfflineConsole(IniFileModel ini, ConfigurationImage image) {
-        log.info("openOfflineConsole: launching offline console on shared uiContext");
+        if (!asyncJobExecutor.isNotInProgress()) {
+            return;
+        }
+        log.info("openOfflineConsole: handing off splash frame to offline ConsoleUI");
         offlineConsoleOpen = true;
-        isProceeding = true;
-        // Drop the splash-scoped connection listener so it can't mutate the disposed splash widgets.
-        if (splashListener != null) {
-            ConnectionStatusLogic.INSTANCE.removeListener(splashListener);
-            splashListener = null;
-        }
-        saveTabIndex();
-        getConfig().save();
-        frame.dispose();
-        status.stop();
-        if (revealControlsTimer != null) {
-            revealControlsTimer.stop();
-        }
-        if (firmwareTabStatus != null) {
-            firmwareTabStatus.stop();
-        }
-        // NOTE: intentionally do NOT call serialPortScanner.stopTimer() — the offline console relies on
-        // the scanner's auto-connect to go online.
-        new ConsoleUI(uiContext, ini, image);
+        // Shared teardown-without-dispose; keeps the scanner alive for later auto-connect.
+        prepareForHandoff();
+        LoadingOverlay.show(frame, "Loading console…", LogoHelper.createLogoLabel());
+        SwingUtilities.invokeLater(() ->
+            new ConsoleUI(uiContext, ini, image, frame, connectivityContext));
     }
 
     /**
@@ -675,6 +718,31 @@ public class StartupFrame {
         return asyncJobExecutor.isNotInProgress();
     }
 
+    private boolean isFirmwareOperationInProgress() {
+        return asyncJobExecutor.getJobInProgress()
+            .map(job -> !(job instanceof ImportTuneJob) && !(job instanceof ExportTuneJob))
+            .orElse(false);
+    }
+
+    private void setStartupFirmwareUpdateInProgress(boolean inProgress) {
+        if (outerTabs == null) {
+            return;
+        }
+        if (inProgress) {
+            outerTabs.setSelectedIndex(0);
+        }
+        outerTabs.setEnabledAt(0, true);
+        outerTabs.setEnabledAt(1, !inProgress);
+        outerTabs.setEnabledAt(2, !inProgress);
+        startupUpdateActions.getMigrateSettings().setEnabled(!inProgress);
+        portsComboBox.getComboPorts().setEnabled(!inProgress);
+        if (inProgress) {
+            connectButton.setEnabled(false);
+        } else {
+            updateConnectButtonState();
+        }
+    }
+
     private void autoConnect(PortResult target) {
         autoConnectedPort = target;
         // A single-ECU auto-connect is starting: cancel the reveal timer and reflect status on the
@@ -688,7 +756,7 @@ public class StartupFrame {
         if (offlineConsoleOpen) {
             // [tag:offline_tune] Pre-cache the target so the scanner skips re-inspecting it during the
             // connect read window — otherwise a scan tick could reopen the port mid-read and hang in LOADING.
-            connectivityContext.getSerialPortScanner().cachePort(new PortResult(target.port, target.type));
+            connectivityContext.getPortScanner().cachePort(new PortResult(target.port, target.type));
         }
         connectButton.setEnabled(false);
         connectButton.setText("Connecting...");
@@ -821,7 +889,7 @@ public class StartupFrame {
             // under a different port name — auto-reconnects (handled via onSplashDisconnected re-arming).
             // Do NOT open a second console.
             log.info("onSplashConnected: offline console online on " + target.port + " — caching port, scanner kept alive");
-            connectivityContext.getSerialPortScanner().cachePort(new PortResult(target.port, target.type));
+            connectivityContext.getPortScanner().cachePort(new PortResult(target.port, target.type));
             return;
         }
         connectButton.setText("Connect");
@@ -838,7 +906,7 @@ public class StartupFrame {
         // Hand the live LinkManager to firmware-update jobs so they can disconnect/reconnect
         // cleanly instead of closing and re-opening the port from scratch.
         final LinkManager lm = uiContext.getLinkManager();
-        firmwareUpdateTab.getBasicUpdaterPanel().setSplashLinkManager(lm);
+        startupUpdateActions.setSplashLinkManager(lm);
         selector.setLinkManager(lm);
 
         maybeAutoCreateTsProject(target);
@@ -900,7 +968,7 @@ public class StartupFrame {
             splashListener = null;
         }
         // Clear the LM reference so it is rebuilt fresh after reconnect.
-        firmwareUpdateTab.getBasicUpdaterPanel().setSplashLinkManager(null);
+        startupUpdateActions.setSplashLinkManager(null);
 
         if (isFirmwareJob) {
             // Firmware job owns disconnect/reconnect.  Register a one-shot listener so we
@@ -913,13 +981,15 @@ public class StartupFrame {
                     ConnectionStatusLogic.INSTANCE.removeListener(this);
                     if (this == postFlashReconnectListener) postFlashReconnectListener = null;
                     SwingUtilities.invokeLater(() -> {
-                        noPortsMessage.setForeground(Color.darkGray);
-                        noPortsMessage.setText("Connected to " + savedPort.port + " — click Connect to open console");
+                        // persistent success/failure indication that outlives the transient status panel (#9832)
+                        final UpdateFirmwareResult updateResult = startupUpdateActions.getLastUpdateResult();
+                        noPortsMessage.setForeground(updateResult.bannerColor());
+                        noPortsMessage.setText(updateResult.bannerText(savedPort.port));
                         noPortsMessage.setVisible(true);
                         connectPanel.setVisible(true);
                         final LinkManager reconnectedLm = uiContext.getLinkManager();
                         autoConnectedPort = savedPort;
-                        firmwareUpdateTab.getBasicUpdaterPanel().setSplashLinkManager(reconnectedLm);
+                        startupUpdateActions.setSplashLinkManager(reconnectedLm);
                         selector.setLinkManager(reconnectedLm);
                         // Restore the port in the combo so the user can switch if needed.
                         portsComboBox.getComboPorts().removeAllItems();
@@ -927,7 +997,7 @@ public class StartupFrame {
                         portsComboBox.getComboPorts().setSelectedItem(savedPort);
                         // Restore ecuPortToUse so the Upload Tune button is enabled.
                         ecuPortToUse.set(Optional.of(savedPort));
-                        firmwareUpdateTab.getBasicUpdaterPanel().refreshButtons();
+                        startupUpdateActions.refreshButtons();
                     });
                 }
             };
@@ -936,8 +1006,8 @@ public class StartupFrame {
             autoConnectThread = null;
             SwingUtilities.invokeLater(() -> {
                 connectButton.setText("Connect");
-                connectButton.setEnabled(true);
-                portsComboBox.getComboPorts().setEnabled(true);
+                connectButton.setEnabled(asyncJobExecutor.isNotInProgress());
+                portsComboBox.getComboPorts().setEnabled(asyncJobExecutor.isNotInProgress());
                 noPortsMessage.setForeground(Color.darkGray);
                 noPortsMessage.setText("Updating firmware...");
                 noPortsMessage.setVisible(true);
@@ -959,8 +1029,8 @@ public class StartupFrame {
         // Reset UI on the Connect tab so the user sees a normal state after the job finishes.
         SwingUtilities.invokeLater(() -> {
             connectButton.setText("Connect");
-            connectButton.setEnabled(true);
-            portsComboBox.getComboPorts().setEnabled(true);
+            connectButton.setEnabled(asyncJobExecutor.isNotInProgress());
+            portsComboBox.getComboPorts().setEnabled(asyncJobExecutor.isNotInProgress());
             noPortsMessage.setForeground(Color.darkGray);
             noPortsMessage.setText("");
             noPortsMessage.setVisible(false);
@@ -983,7 +1053,7 @@ public class StartupFrame {
             }
             selector.setLinkManager(lm);
             autoConnectedPort = savedPort;
-            firmwareUpdateTab.getBasicUpdaterPanel().setSplashLinkManager(lm);
+            startupUpdateActions.setSplashLinkManager(lm);
             noPortsMessage.setForeground(Color.darkGray);
             noPortsMessage.setText("Connected to " + savedPort.port + " — click Connect to open console");
             noPortsMessage.setVisible(true);
@@ -1000,14 +1070,14 @@ public class StartupFrame {
             ConnectionStatusLogic.INSTANCE.removeListener(splashListener);
             splashListener = null;
         }
-        firmwareUpdateTab.getBasicUpdaterPanel().setSplashLinkManager(null);
+        startupUpdateActions.setSplashLinkManager(null);
         // Sets isStarted=false so the next connect() can create a new LinkManager connector.
         uiContext.getLinkManager().close();
         if (offlineConsoleOpen && autoConnectedPort != null) {
             // [tag:offline_tune] The offline console is still up. Re-arm scanner-driven auto-connect and
             // let the scanner re-inspect the (now stale) port so the console reconnects when the board
             // comes back — possibly under a different port name (USB re-enumeration).
-            connectivityContext.getSerialPortScanner().invalidatePort(autoConnectedPort.port);
+            connectivityContext.getPortScanner().invalidatePort(autoConnectedPort.port);
             firstTimeAutoConnect = true;
         }
         autoConnectedPort = null;
@@ -1107,9 +1177,11 @@ public class StartupFrame {
         status.stop();
         if (revealControlsTimer != null)
             revealControlsTimer.stop();
-        if (firmwareTabStatus != null)
-            firmwareTabStatus.stop();
-        connectivityContext.getSerialPortScanner().stopTimer();
+        // [tag:better_ux_for_flashing]: keep the port scanner alive through handoff so the live console (its
+        // DeviceSessionManager) keeps seeing hotplug / DFU / OpenBLT transitions. The scanner's worker
+        // is a daemon thread and the console exits via ExitUtil.exit, so no explicit stop is needed.
+        // The splash's own scanner listeners are guarded by isProceeding so they stop mutating the
+        // (now-repurposed) splash widgets after handoff.
     }
 
     public void disposeFrameAndProceed() {

@@ -1,15 +1,22 @@
 package com.rusefi.ui.wizard;
 
+import com.opensr5.ConfigurationImage;
+import com.opensr5.ConfigurationImageGetterSetter;
+import com.opensr5.ini.IniFileModel;
+import com.opensr5.ini.field.IniField;
 import com.rusefi.ui.UIContext;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.function.Consumer;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 
 public class NumberOfCylindersPanel extends AbstractWizardStep {
+    private static final String TWO_STROKE_FIELD = "twoStroke";
+    private static final String FOUR_STROKE_VALUE = "Four Stroke";
+    private static final String TWO_STROKE_VALUE = "Two Stroke";
+
     private final JLayeredPane layeredPane = new JLayeredPane();
     private final JPanel mainPanel = new JPanel(new GridBagLayout());
     private final JPanel overlayPanel = new JPanel() {
@@ -22,11 +29,6 @@ public class NumberOfCylindersPanel extends AbstractWizardStep {
     };
 
     private final UIContext uiContext;
-    private Consumer<Integer> onCylindersSelected;
-
-    public void setOnCylindersSelected(Consumer<Integer> onCylindersSelected) {
-        this.onCylindersSelected = onCylindersSelected;
-    }
 
     public NumberOfCylindersPanel(UIContext uiContext) {
         super("Number of Cylinders", "wizardNumberOfCylinders");
@@ -64,8 +66,25 @@ public class NumberOfCylindersPanel extends AbstractWizardStep {
         gbc.anchor = GridBagConstraints.CENTER;
 
         JLabel label = new JLabel("How many cylinders?");
-        scale(label, 3);
+        styleTitle(label);
         mainPanel.add(label, gbc);
+
+        gbc.gridy++;
+        JToggleButton fourStroke = new JToggleButton("4 Stroke", true);
+        JToggleButton twoStroke = new JToggleButton("2 Stroke");
+        styleButton(fourStroke);
+        styleButton(twoStroke);
+        scale(fourStroke, 1.2f);
+        scale(twoStroke, 1.2f);
+        fourStroke.setMargin(new Insets(9, 18, 9, 18));
+        twoStroke.setMargin(new Insets(9, 18, 9, 18));
+        ButtonGroup strokeGroup = new ButtonGroup();
+        strokeGroup.add(fourStroke);
+        strokeGroup.add(twoStroke);
+        JPanel strokePanel = new JPanel(new GridLayout(1, 2, 10, 0));
+        strokePanel.add(fourStroke);
+        strokePanel.add(twoStroke);
+        mainPanel.add(strokePanel, gbc);
 
         gbc.gridy++;
         JPanel buttonsPanel = new JPanel(new GridLayout(3, 4, 10, 10));
@@ -73,7 +92,8 @@ public class NumberOfCylindersPanel extends AbstractWizardStep {
 
         for (int option : options) {
             JButton button = new JButton(String.valueOf(option));
-            scale(button, 3);
+            scale(button, 1.5f);
+            stylePrimaryAction(button);
             buttonsPanel.add(button);
 
             boolean isGotcha = option == 7 || option == 9 || option == 16;
@@ -91,16 +111,33 @@ public class NumberOfCylindersPanel extends AbstractWizardStep {
                 button.addActionListener(new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
-                        if (onCylindersSelected != null) {
-                            onCylindersSelected.accept(option);
+                        WizardConfig cfg = WizardConfig.snapshot(uiContext);
+                        if (cfg == null) {
+                            return;
                         }
-                        fireCompleted(new WizardStepResult("cylindersCount", String.valueOf(option)));
+                        WizardStepResult result = createResult(cfg.ini, cfg.image, option, twoStroke.isSelected());
+                        if (result == null) {
+                            return;
+                        }
+                        fireCompleted(result);
                     }
                 });
             }
         }
 
         mainPanel.add(buttonsPanel, gbc);
+    }
+
+    static WizardStepResult createResult(IniFileModel ini, ConfigurationImage image, int cylinders, boolean twoStroke) {
+        IniField field = ini.findIniField(TWO_STROKE_FIELD).orElse(null);
+        if (field == null) {
+            return null;
+        }
+
+        ConfigurationImage modified = image.clone();
+        ConfigurationImageGetterSetter.setValue2(field, modified, TWO_STROKE_FIELD,
+            twoStroke ? TWO_STROKE_VALUE : FOUR_STROKE_VALUE);
+        return new WizardStepResult("cylindersCount", String.valueOf(cylinders), modified);
     }
 
     private void updateOverlayBounds() {

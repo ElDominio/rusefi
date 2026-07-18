@@ -37,6 +37,7 @@ public class Integration {
 	public static final String CMD_INJECTION = "injection";
 	public static final String CMD_INJECTION_PIN = "set_injection_pin";
 	public static final String CMD_LOGIC_PIN = "set_logic_input_pin";
+	public static final String CMD_LUA_RESET = "luareset";
 	public static final String CMD_MIL_BENCH = "milbench";
 	public static final String CMD_PINS = "pins";
 	public static final String CMD_PWM = "pwm";
@@ -89,6 +90,7 @@ public class Integration {
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX = "generated/simulator_tune_image";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX = ".bin";
 	public static final String TOP_DEAD_CENTER_MESSAGE = "r";
+	public static final char TS_BOARD_COMMAND = 'j';
 	public static final char TS_BURN_COMMAND = 'B';
 	public static final char TS_CHUNK_WRITE_COMMAND = 'C';
 	public static final char TS_COMMAND_F = 'F';

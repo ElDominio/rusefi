@@ -5,8 +5,10 @@ import com.rusefi.ui.UIContext;
 import com.rusefi.ui.hd81.HdConstants;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
@@ -15,12 +17,39 @@ import static org.mockito.Mockito.when;
 public class WizardCatalogTest {
 
     @Test
+    public void flaggedStepsHaveStableOrderAndTitles() {
+        List<WizardStepDescriptor> flagged = WizardCatalog.flaggedSteps();
+        assertEquals(Arrays.asList(
+            "wizardNumberOfCylinders", "wizardFiringOrder", "wizardMapSensorType",
+            "wizardTps", "wizardCltSensor", "wizardCrankTrigger", "wizardCamTrigger",
+            "wizardIgnitionOutputs", "wizardInjectorOutputs", "wizardInjectorFlow"),
+            flagged.stream().map(d -> d.flagName).collect(java.util.stream.Collectors.toList()));
+        assertEquals(Arrays.asList(
+            "Cylinders", "Firing Order", "MAP Sensor", "TPS", "CLT Sensor",
+            "Crank Trigger", "Cam Trigger", "Ignition Outputs", "Injector Outputs", "Injector Flow"),
+            flagged.stream().map(d -> d.displayTitle).collect(java.util.stream.Collectors.toList()));
+    }
+
+    @Test
     public void flaggedStepsAreAllFlagged() {
         List<WizardStepDescriptor> flagged = WizardCatalog.flaggedSteps();
         assertFalse(flagged.isEmpty());
         for (WizardStepDescriptor d : flagged) {
             assertTrue(d.isFlagged(), "flaggedSteps() returned non-flagged entry: " + d.flagName);
         }
+    }
+
+    @Test
+    public void tpsAndCltFollowMapAndApplyToAllBoards() {
+        List<WizardStepDescriptor> flagged = WizardCatalog.flaggedSteps();
+        List<String> names = flagged.stream().map(d -> d.flagName).collect(Collectors.toList());
+        int mapIndex = names.indexOf("wizardMapSensorType");
+
+        assertTrue(mapIndex >= 0);
+        assertEquals("wizardTps", names.get(mapIndex + 1));
+        assertEquals("wizardCltSensor", names.get(mapIndex + 2));
+        assertTrue(flagged.get(mapIndex + 1).applicable.test(mock(UIContext.class)));
+        assertTrue(flagged.get(mapIndex + 2).applicable.test(mock(UIContext.class)));
     }
 
     @Test

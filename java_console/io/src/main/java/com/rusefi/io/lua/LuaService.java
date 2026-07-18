@@ -6,6 +6,7 @@ import com.opensr5.ini.IniFileModel;
 import com.opensr5.ini.field.StringIniField;
 import com.rusefi.autodetect.PortDetector;
 import com.rusefi.binaryprotocol.BinaryProtocol;
+import com.rusefi.config.generated.Integration;
 import com.rusefi.io.ConnectionStatusLogic;
 import com.rusefi.io.LinkManager;
 import com.rusefi.io.commands.BurnCommand;
@@ -48,7 +49,12 @@ public class LuaService {
         IniFileModel iniFile = bp.getIniFileNullable();
         if (iniFile == null)
             return null;
-        return (StringIniField) iniFile.getIniField(LUASCRIPT_FIELD);
+        // findIniField searches both the main page (old firmware) and secondary
+        // pages (new firmware places luaScript on its own dedicated TS page)
+        return iniFile.findIniField(LUASCRIPT_FIELD)
+                .filter(f -> f instanceof StringIniField)
+                .map(f -> (StringIniField) f)
+                .orElse(null);
     }
 
     /** Autodetect a serial port; returns {@code null} if no ECU is found. */
@@ -130,10 +136,11 @@ public class LuaService {
                 byte[] padded = new byte[field.getSize()];
                 byte[] scriptBytes = script.getBytes(StandardCharsets.US_ASCII);
                 System.arraycopy(scriptBytes, 0, padded, 0, scriptBytes.length);
-                log.info("Writing " + scriptBytes.length + " bytes to ECU at offset " + field.getOffset());
-                bp.writeInBlocks(padded, 0, field.getOffset(), padded.length);
-                boolean burned = BurnCommand.execute(bp);
-                linkManager.getCommandQueue().write("luareset");
+                log.info("Writing " + scriptBytes.length + " bytes to ECU at offset " + field.getOffset()
+                        + " page " + field.getPageIndex());
+                bp.writeInBlocks(padded, 0, field.getOffset(), padded.length, field.getPageIndex());
+                boolean burned = BurnCommand.execute(bp, field.getPageIndex());
+                linkManager.getCommandQueue().write(Integration.CMD_LUA_RESET);
                 Thread.sleep(LUARESET_GRACE_MS);
                 result.set(LuaApplyResult.success(scriptBytes.length, field.getSize(), burned));
             } catch (Throwable t) {
@@ -149,20 +156,52 @@ public class LuaService {
         return result.get();
     }
 
-    /** Read the current LUASCRIPT field from the cached controller image. */
-    public static String readLuaScript(LinkManager linkManager) {
+    /** Read the current LUASCRIPT field: cached image for page 0, live page read otherwise. */
+    public static String readLuaScript(LinkManager linkManager) throws InterruptedException {
+        // secondary-page reads talk to the ECU, so everything runs on the link thread
+        AtomicReference<Object> outcome = new AtomicReference<>();
+        CountDownLatch done = new CountDownLatch(1);
+        linkManager.submit(() -> {
+            try {
+                outcome.set(readLuaScriptOnLinkThread(linkManager));
+            } catch (Throwable t) {
+                outcome.set(t);
+            } finally {
+                done.countDown();
+            }
+        });
+        if (!done.await(60, TimeUnit.SECONDS))
+            throw new IllegalStateException("Timeout reading luaScript");
+        if (outcome.get() instanceof Throwable) {
+            Throwable t = (Throwable) outcome.get();
+            throw t instanceof RuntimeException ? (RuntimeException) t : new IllegalStateException(t);
+        }
+        return (String) outcome.get();
+    }
+
+    private static String readLuaScriptOnLinkThread(LinkManager linkManager) {
         BinaryProtocol bp = linkManager.getBinaryProtocol();
         if (bp == null)
             throw new IllegalStateException("BinaryProtocol is null");
         StringIniField field = getLuaScriptField(bp);
         if (field == null)
             throw new IllegalStateException("LUASCRIPT field not found");
-        ConfigurationImage image = bp.getControllerConfiguration();
-        if (image == null)
-            throw new IllegalStateException("No configuration image");
-        ByteBuffer buf = image.getByteBuffer(field.getOffset(), field.getSize());
-        byte[] arr = new byte[field.getSize()];
-        buf.get(arr);
+        byte[] arr;
+        if (field.getPageIndex() == 0) {
+            // main settings page: comes from the already-fetched controller image
+            ConfigurationImage image = bp.getControllerConfiguration();
+            if (image == null)
+                throw new IllegalStateException("No configuration image");
+            ByteBuffer buf = image.getByteBuffer(field.getOffset(), field.getSize());
+            arr = new byte[field.getSize()];
+            buf.get(arr);
+        } else {
+            // secondary page (new firmware places luaScript on its own TS page);
+            // the cached image only holds page 0, so fetch directly from the ECU
+            arr = bp.readFromPage(field.getPageIndex(), field.getOffset(), field.getSize());
+            if (arr == null)
+                throw new IllegalStateException("Failed to read luaScript from page " + field.getPageIndex());
+        }
         int end = 0;
         while (end < arr.length && arr[end] != 0) end++;
         return new String(arr, 0, end, StandardCharsets.US_ASCII);
@@ -170,7 +209,7 @@ public class LuaService {
 
     /** Send {@code luareset} via the standard command queue. */
     public static void luaReset(LinkManager linkManager) {
-        linkManager.getCommandQueue().write("luareset");
+        linkManager.getCommandQueue().write(Integration.CMD_LUA_RESET);
     }
 
     /** Send an arbitrary text command via the standard command queue. */

@@ -5,6 +5,7 @@ import com.rusefi.autodetect.PortDetector;
 import com.rusefi.autodetect.SerialAutoChecker;
 import com.rusefi.config.generated.Integration;
 import com.rusefi.core.FindFileHelper;
+import com.rusefi.core.io.ConnectedEcuTarget;
 import com.rusefi.core.net.ConnectionAndMeta;
 import com.rusefi.binaryprotocol.BinaryProtocol;
 import com.rusefi.io.BootloaderHelper;
@@ -55,13 +56,16 @@ public class DfuFlasher {
         final ConnectivityContext connectivityContext
     ) {
         return CalibrationsHelper.updateFirmwareAndRestorePreviousCalibrations(
-            parent, port, bp, lm, callbacks, () -> dfuUpdateFirmware(parent, port.port, callbacks), connectivityContext);
+            parent, port, bp, lm, callbacks,
+            () -> dfuUpdateFirmware(parent, port.port, callbacks, connectivityContext.getConnectedEcuTarget()),
+            connectivityContext);
     }
 
     private static boolean dfuUpdateFirmware(
         final JComponent parent,
         final String port,
-        final UpdateOperationCallbacks callbacks
+        final UpdateOperationCallbacks callbacks,
+        final ConnectedEcuTarget connectedEcuTarget
     ) {
         if (port == null) {
             JOptionPane.showMessageDialog(parent, "Failed to locate serial ports");
@@ -79,7 +83,7 @@ public class DfuFlasher {
             }
 
             timeForDfuSwitch(callbacks);
-            if (executeDFU(callbacks, FindFileHelper.findFirmwareFile())) {
+            if (executeDFU(callbacks, FindFileHelper.findFirmwareFileForConnectedBoard(connectedEcuTarget), connectedEcuTarget)) {
                 // We need to wait to allow connection to ECU port (see #7403)
                 timeForDfuSwitch(callbacks);
                 return true;
@@ -167,19 +171,30 @@ public class DfuFlasher {
         }
     }
 
-    public static void runDfuProgramming(UpdateOperationCallbacks callbacks, final Runnable onJobFinished) {
+    public static void runDfuProgramming(UpdateOperationCallbacks callbacks, final Runnable onJobFinished,
+                                         final ConnectedEcuTarget connectedEcuTarget) {
         submitAction(() -> {
             JobHelper.doJob(
-                () -> executeDfuAndPaintStatusPanel(callbacks, FindFileHelper.findFirmwareFile()),
+                () -> {
+                    // A board sitting in DFU has no live signature, so fetch the right firmware for the
+                    // persisted last-connected board first; fail closed rather than flash the bundle
+                    // default onto a different board on a universal bundle. [tag:better_ux_for_flashing] / #9714
+                    if (!MaintenanceUtil.ensureFirmwareForConnectedTarget(callbacks, connectedEcuTarget)) {
+                        callbacks.error();
+                        return;
+                    }
+                    executeDfuAndPaintStatusPanel(callbacks, FindFileHelper.findFirmwareFileForConnectedBoard(connectedEcuTarget), connectedEcuTarget);
+                },
                 onJobFinished
             );
         });
     }
 
-    public static void runOpenBltInitialProgramming(UpdateOperationCallbacks callbacks, final Runnable onJobFinished) {
+    public static void runOpenBltInitialProgramming(UpdateOperationCallbacks callbacks, final Runnable onJobFinished,
+                                                    final ConnectedEcuTarget connectedEcuTarget) {
         submitAction(() -> {
             JobHelper.doJob(
-                () -> executeDfuAndPaintStatusPanel(callbacks, DfuFlasher.BOOTLOADER_BIN_FILE),
+                () -> executeDfuAndPaintStatusPanel(callbacks, DfuFlasher.BOOTLOADER_BIN_FILE, connectedEcuTarget),
                 onJobFinished
             );
         });
@@ -187,17 +202,24 @@ public class DfuFlasher {
 
     private static void executeDfuAndPaintStatusPanel(
         final UpdateOperationCallbacks callbacks,
-        final String firmwareBinFile
+        final String firmwareBinFile,
+        final ConnectedEcuTarget connectedEcuTarget
     ) {
-        if (executeDFU(callbacks, firmwareBinFile)) {
+        if (executeDFU(callbacks, firmwareBinFile, connectedEcuTarget)) {
             callbacks.done();
         } else {
             callbacks.error();
         }
     }
 
-    private static boolean executeDFU(UpdateOperationCallbacks callbacks, String firmwareBinFile) {
-        boolean driverIsHappy = detectSTM32BootloaderDriverState(callbacks);
+    private static boolean executeDFU(UpdateOperationCallbacks callbacks, String firmwareBinFile,
+                                      ConnectedEcuTarget connectedEcuTarget) {
+        // Refuse to silently flash firmware built for a different board (brick guard, [tag:better_ux_for_flashing]).
+        if (!MaintenanceUtil.confirmFirmwareMatchesBoard(firmwareBinFile, callbacks, connectedEcuTarget)) {
+            callbacks.logLine("Firmware update aborted — firmware/board mismatch.");
+            return false;
+        }
+        boolean driverIsHappy = detectSTM32BootloaderDriverState(callbacks, connectedEcuTarget);
         if (!driverIsHappy) {
             callbacks.logLine("*** DRIVER ERROR? *** Did you have a chance to try 'Install Drivers' button on top of rusEFI console start screen?");
             return false;
@@ -234,10 +256,17 @@ public class DfuFlasher {
         }
     }
 
-    public static boolean detectSTM32BootloaderDriverState(UpdateOperationCallbacks callbacks) {
+    public static boolean detectSTM32BootloaderDriverState(UpdateOperationCallbacks callbacks,
+                                                           ConnectedEcuTarget connectedEcuTarget) {
+        if (!FileLog.isWindows()) {
+            // The WMIC/driver check below is Windows-only. On Linux the STM32 system bootloader is
+            // visible directly over USB as 0483:df11 ("STM Device in DFU Mode"), so probe lsusb so the
+            // console at least reflects the DFU state (flashing it is still Windows-only, see [tag:better_ux_for_flashing]).
+            return FileLog.isLinux() && detectStm32DfuViaLsusb(callbacks);
+        }
         // #9714: a universal bundle's is_h7 property can't cover every board, so trust the connected
         // ECU's target first (e.g. "uaefi_pro_h7"), falling back to the bundled is_h7 property.
-        String effectiveTarget = com.rusefi.core.io.ConnectedEcuTarget.effectiveTarget();
+        String effectiveTarget = connectedEcuTarget.effectiveTarget();
         boolean isH7 = (effectiveTarget != null && effectiveTarget.contains("h7")) || ConnectionAndMeta.getBoolean("is_h7");
         String command = isH7 ? WMIC_DFU_QUERY_H7_COMMAND : WMIC_DFU_QUERY_COMMAND;
         try {
@@ -245,6 +274,28 @@ public class DfuFlasher {
         } catch (ErrorExecutingCommand e) {
             dfuDetectionCommandFailed = true;
             callbacks.logLine("detectSTM32BootloaderDriverState IOError: " + e);
+            return false;
+        }
+    }
+
+    // STM32 system bootloader enumerates as USB 0483:df11 regardless of chip family; detect it on Linux
+    // via lsusb so a board reset into DFU surfaces in the console instead of leaving the watchdog spinning
+    // on the vanished serial port. [tag:better_ux_for_flashing]
+    private static boolean detectStm32DfuViaLsusb(UpdateOperationCallbacks callbacks) {
+        try {
+            Process process = new ProcessBuilder("lsusb").redirectErrorStream(true).start();
+            StringBuilder output = new StringBuilder();
+            try (java.io.BufferedReader reader =
+                     new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append('\n');
+                }
+            }
+            process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+            return output.toString().toLowerCase().contains("0483:df11");
+        } catch (Exception e) {
+            callbacks.logLine("lsusb DFU probe failed: " + e);
             return false;
         }
     }

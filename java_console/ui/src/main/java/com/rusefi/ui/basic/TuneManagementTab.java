@@ -7,7 +7,7 @@ import com.rusefi.ConnectivityContext;
 import com.rusefi.binaryprotocol.BinaryProtocol;
 import com.rusefi.core.net.PropertiesHolder;
 import com.rusefi.core.ui.AutoupdateUtil;
-import com.rusefi.core.ui.ErrorMessageHelper;
+import com.rusefi.io.ConnectionStatusLogic;
 import com.rusefi.io.LinkManager;
 import com.rusefi.maintenance.OfflineTuneLoader;
 import com.rusefi.maintenance.jobs.ImportTuneJob;
@@ -25,7 +25,6 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableColumn;
 import java.awt.*;
-import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,12 +41,16 @@ public class TuneManagementTab {
     private static final int SIZE_INDEX = 2;
     private static final int BUTTON_COLUMN = 3;
 
-    private final JPanel totalContent = new JPanel(new BorderLayout());
+    private static final String MAIN_CARD = "main";
+    private static final String IMPORT_CARD = "import";
+
+    private final JPanel totalContent = new JPanel(new CardLayout());
+    private final JPanel mainContent = new JPanel(new BorderLayout());
     private final JLabel status = new JLabel("Downloading tunes...");
     private final JTable table = new JTable(new MyTableModel());
     private final JPanel centerPanel = new JPanel(new BorderLayout());
     private JScrollPane tableScroll;
-    private final JProgressBar uploadProgress = new JProgressBar();
+    private final TuneOperationStatusPanel importStatusPanel;
     private final AtomicBoolean awaitingCompletion = new AtomicBoolean(false);
     private List<TuneModel> tunes = new ArrayList<>();
 
@@ -56,19 +59,40 @@ public class TuneManagementTab {
 
     public TuneManagementTab(ConnectivityContext connectivityContext,
                              UIContext uiContext,
-                             Component importTuneButton,
+                             ImportTuneControl importTuneControl,
                              SingleAsyncJobExecutor singleAsyncJobExecutor,
                              StatusPanel statusPanelTuneTab,
+                             Runnable showTuneTab,
                              java.util.function.BiConsumer<IniFileModel, ConfigurationImage> offlineConsoleLauncher) {
         this.offlineConsoleLauncher = offlineConsoleLauncher;
-        uploadProgress.setIndeterminate(true);
-        uploadProgress.setStringPainted(true);
-        uploadProgress.setString("Loading tune...");
-        uploadProgress.setVisible(false);
+        Component importTuneButton = importTuneControl.getContent();
+        importStatusPanel = new TuneOperationStatusPanel(statusPanelTuneTab, this::showMainContent);
+
+        importTuneControl.setImportErrorHandler(message -> showImportError(message, statusPanelTuneTab, showTuneTab));
+
+        singleAsyncJobExecutor.addOnJobAboutToStartListener(() -> {
+            if (singleAsyncJobExecutor.getJobInProgress().filter(ImportTuneJob.class::isInstance).isPresent()) {
+                awaitingCompletion.set(true);
+                SwingUtilities.invokeLater(() -> {
+                    showTuneTab.run();
+                    showImportProgress();
+                });
+            }
+        });
+
+        singleAsyncJobExecutor.addOnJobInProgressFinishedListener(() -> {
+            if (!awaitingCompletion.compareAndSet(true, false)) {
+                return;
+            }
+            SwingUtilities.invokeLater(() -> {
+                showTuneTab.run();
+                showImportResult(statusPanelTuneTab.isInErrorState());
+            });
+        });
 
         String tunesManifestUrl = getTunesManifestUrl();
         if (tunesManifestUrl != null) {
-            totalContent.add(status, BorderLayout.NORTH);
+            mainContent.add(status, BorderLayout.NORTH);
 
             tableScroll = new JScrollPane(table, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED) {
                 @Override
@@ -78,20 +102,6 @@ public class TuneManagementTab {
             };
 
             centerPanel.add(tableScroll, BorderLayout.CENTER);
-            centerPanel.add(uploadProgress, BorderLayout.SOUTH);
-
-            singleAsyncJobExecutor.addOnJobInProgressFinishedListener(() -> {
-                if (!awaitingCompletion.compareAndSet(true, false))
-                    return;
-                SwingUtilities.invokeLater(() -> {
-                    uploadProgress.setVisible(false);
-                    if (statusPanelTuneTab.isInErrorState()) {
-                        showErrorLogPopup(statusPanelTuneTab.getLogText());
-                    } else {
-                        status.setText("Tune loaded successfully.");
-                    }
-                });
-            });
 
             new Thread(new Runnable() {
                 @Override
@@ -126,28 +136,24 @@ public class TuneManagementTab {
                 String localFolderForSpecificUrl = getLocalFolder(tunesManifestUrl);
                 String tuneFileName = localFolderForSpecificUrl + model.getSaferLocalFileName();
                 if (!new File(tuneFileName).exists()) {
-                    ErrorMessageHelper.showErrorDialog("Failed to load " + model.getUrl(), "Tune error");
+                    showImportError("Failed to load " + model.getUrl(), statusPanelTuneTab, showTuneTab);
                 } else if (!singleAsyncJobExecutor.isNotInProgress()) {
-                    status.setText("Another job is already running, please wait.");
+                    showImportError("Another job is already running, please wait.", statusPanelTuneTab, showTuneTab);
                 } else {
                     BinaryProtocol liveBp = uiContext.getBinaryProtocol();
                     LinkManager lm = uiContext.getLinkManager();
                     if (liveBp != null && lm != null) {
                         log.info("Let's load " + tuneFileName + " via live connection");
-                        awaitingCompletion.set(true);
-                        uploadProgress.setVisible(true);
-                        status.setText("Loading tune...");
                         ImportTuneJob.importTuneIntoDeviceViaLiveConnection(
-                            liveBp, lm, status, connectivityContext, tuneFileName, singleAsyncJobExecutor);
+                            liveBp, lm, status, connectivityContext, tuneFileName, singleAsyncJobExecutor,
+                            message -> showImportError(message, statusPanelTuneTab, showTuneTab));
                     } else if (lm != null) {
                         log.info("Let's load " + tuneFileName + " via LM");
-                        awaitingCompletion.set(true);
-                        uploadProgress.setVisible(true);
-                        status.setText("Loading tune...");
                         ImportTuneJob.importTuneIntoDeviceViaLiveConnection(
-                            lm, status, connectivityContext, tuneFileName, singleAsyncJobExecutor);
+                            lm, status, connectivityContext, tuneFileName, singleAsyncJobExecutor,
+                            message -> showImportError(message, statusPanelTuneTab, showTuneTab));
                     } else {
-                        status.setText("Not connected?");
+                        showImportError("Device is not connected", statusPanelTuneTab, showTuneTab);
                     }
                 }
             }
@@ -159,8 +165,26 @@ public class TuneManagementTab {
         loadTuneFileButton.setFont(loadTuneFileButton.getFont().deriveFont(Font.BOLD, 16f));
         loadTuneFileButton.setMargin(new Insets(12, 28, 12, 28));
 
+        // [tag:offline_tune] Explain what this screen does — without it the splash is three silent
+        // buttons and no hint that a tune can be edited with no ECU attached (#9730).
+        JLabel offlineHint = new JLabel("<html><div style='text-align:center;'>"
+                + "No ECU connected. Load a tune file to view and edit it offline,<br>"
+                + "then connect an ECU to burn your changes.</div></html>");
+        offlineHint.setForeground(Color.DARK_GRAY);
+
+        // [tag:offline_tune] The import pair pushes a tune to a *connected* ECU; on this pre-connection
+        // splash it has nothing to talk to (clicking just prints "Not connected?"), so only show it
+        // once an ECU is actually connected.
+        Runnable updateImportVisibility = () ->
+                importTuneButton.setVisible(com.rusefi.io.ConnectionStatusLogic.INSTANCE.isConnected());
+        updateImportVisibility.run();
+        com.rusefi.io.ConnectionStatusLogic.INSTANCE.addListener(
+                c -> SwingUtilities.invokeLater(updateImportVisibility));
+
         JPanel buttonPanel = new JPanel();
         buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
+        buttonPanel.add(centerHorizontally(offlineHint));
+        buttonPanel.add(Box.createVerticalStrut(20));
         buttonPanel.add(centerHorizontally(importTuneButton));
         buttonPanel.add(Box.createVerticalStrut(28));
         buttonPanel.add(centerHorizontally(loadTuneFileButton));
@@ -181,13 +205,17 @@ public class TuneManagementTab {
             c.fill = GridBagConstraints.NONE;
             c.anchor = GridBagConstraints.CENTER;
             body.add(buttonPanel, c);
-            totalContent.add(body, BorderLayout.CENTER);
+            mainContent.add(body, BorderLayout.CENTER);
         } else {
             // No tune list available — just center the buttons in the tab (#9715).
             JPanel centered = new JPanel(new GridBagLayout());
             centered.add(buttonPanel, new GridBagConstraints());
-            totalContent.add(centered, BorderLayout.CENTER);
+            mainContent.add(centered, BorderLayout.CENTER);
         }
+
+        totalContent.add(mainContent, MAIN_CARD);
+        totalContent.add(importStatusPanel.getContent(), IMPORT_CARD);
+        showMainContent();
     }
 
     private static JPanel centerHorizontally(Component c) {
@@ -196,24 +224,28 @@ public class TuneManagementTab {
         return row;
     }
 
-    private void showErrorLogPopup(String logText) {
-        try {
-            Toolkit.getDefaultToolkit().getSystemClipboard()
-                .setContents(new StringSelection(logText), null);
-        } catch (Throwable e) {
-            log.error("clipboard error " + e, e);
-        }
-        JTextArea textArea = new JTextArea(logText, 20, 60);
-        textArea.setEditable(false);
-        textArea.setLineWrap(true);
-        textArea.setCaretPosition(0);
-        JScrollPane scroll = new JScrollPane(textArea);
-        JOptionPane.showMessageDialog(
-            totalContent,
-            new Object[]{"Tune upload failed. Log (already copied to clipboard):", scroll},
-            "Tune Upload Error",
-            JOptionPane.ERROR_MESSAGE
-        );
+    private void showImportProgress() {
+        importStatusPanel.showProgress("Importing tune...");
+        ((CardLayout) totalContent.getLayout()).show(totalContent, IMPORT_CARD);
+    }
+
+    private void showImportResult(boolean failed) {
+        importStatusPanel.showResult("Tune imported successfully", "Tune import failed", failed);
+        ((CardLayout) totalContent.getLayout()).show(totalContent, IMPORT_CARD);
+    }
+
+    private void showImportError(String message, StatusPanel statusPanelTuneTab, Runnable showTuneTab) {
+        SwingUtilities.invokeLater(() -> {
+            showTuneTab.run();
+            statusPanelTuneTab.clear();
+            statusPanelTuneTab.logLine(message);
+            statusPanelTuneTab.error();
+            SwingUtilities.invokeLater(() -> showImportResult(true));
+        });
+    }
+
+    private void showMainContent() {
+        ((CardLayout) totalContent.getLayout()).show(totalContent, MAIN_CARD);
     }
 
     private void displayTunes(List<TuneModel> tunes) {

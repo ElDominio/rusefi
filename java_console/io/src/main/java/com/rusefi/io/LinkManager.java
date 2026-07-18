@@ -35,6 +35,9 @@ public class LinkManager implements Closeable {
     private static final Logging log = getLogging(LinkManager.class);
     public static final String PCAN = "PCAN";
     public static final String SOCKET_CAN = "SocketCAN";
+    // Synthetic marker for a board in the STM32 built-in bootloader (DFU). Not a real serial port —
+    // never opened as a stream; used only to surface DFU in the ports list [tag:better_ux_for_flashing].
+    public static final String DFU = "DFU";
 
     @NotNull
     public static final LogLevel LOG_LEVEL = LogLevel.INFO;
@@ -61,7 +64,17 @@ public class LinkManager implements Closeable {
     private boolean isDisconnectedByUser;
     private boolean notifyGlobalStatusOnClose = true;
 
+    // The board identity this link records at connect time. Defaults to a private instance (probe/tool
+    // LinkManagers); production consoles share ConnectivityContext's instance so flashing decisions see
+    // the live-connected board. [tag:better_ux_for_flashing]
+    private final com.rusefi.core.io.ConnectedEcuTarget connectedEcuTarget;
+
     public LinkManager() {
+        this(new com.rusefi.core.io.ConnectedEcuTarget());
+    }
+
+    public LinkManager(com.rusefi.core.io.ConnectedEcuTarget connectedEcuTarget) {
+        this.connectedEcuTarget = connectedEcuTarget;
         engineState = new EngineState(new EngineState.EngineStateListenerImpl() {
             @Override
             public void beforeLine(String fullLine) {
@@ -70,6 +83,11 @@ public class LinkManager implements Closeable {
             }
         });
         commandQueue = new CommandQueue(this);
+    }
+
+    @NotNull
+    public com.rusefi.core.io.ConnectedEcuTarget getConnectedEcuTarget() {
+        return connectedEcuTarget;
     }
 
     @NotNull
@@ -208,6 +226,29 @@ public class LinkManager implements Closeable {
         restart();
     }
 
+    /**
+     * Reconnect to a specific port, updating {@link #lastTriedPort} so the watchdog follows it too. Used
+     * after a firmware flash when the board re-enumerates onto a different port (Linux ttyACMx
+     * renumbering) than the one we were originally connected to. [tag:better_ux_for_flashing]
+     */
+    public void reconnect(String port) {
+        log.info("reconnect " + port);
+        Objects.requireNonNull(port, "port");
+        isDisconnectedByUser = false;
+        lastTriedPort = port;
+        restart();
+    }
+
+    /** Port name of the most recent connect attempt, or null before the first one. */
+    public String getLastTriedPort() {
+        return lastTriedPort;
+    }
+
+    /** True once {@link #disconnect()} was called and no reconnect has happened since. */
+    public boolean isDisconnectedByUser() {
+        return isDisconnectedByUser;
+    }
+
     public enum LogLevel {
         INFO,
         DEBUG,
@@ -333,8 +374,13 @@ public class LinkManager implements Closeable {
         this.connector = connector;
     }
 
+    private static boolean isDfu(String port) {
+        return DFU.equals(port);
+    }
+
     public static boolean isSpecialNotSerial(String port) {
-        return isLogViewerMode(port) || isPcanPort(port) || isSocketCan(port) || TcpConnector.isTcpPort(port);
+        // DFU is a synthetic, non-serial marker [tag:better_ux_for_flashing] — never open it as a stream.
+        return isLogViewerMode(port) || isPcanPort(port) || isSocketCan(port) || TcpConnector.isTcpPort(port) || isDfu(port);
     }
 
     public static boolean isLogViewerMode(String port) {

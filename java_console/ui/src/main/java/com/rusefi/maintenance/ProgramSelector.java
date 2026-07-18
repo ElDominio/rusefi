@@ -7,7 +7,6 @@ import com.rusefi.binaryprotocol.BinaryProtocol;
 import com.rusefi.config.generated.Integration;
 import com.rusefi.core.FindFileHelper;
 import com.rusefi.autodetect.PortDetector;
-import com.rusefi.io.BootloaderHelper;
 import com.rusefi.io.LinkManager;
 import com.rusefi.io.UpdateOperationCallbacks;
 import com.rusefi.core.ui.AutoupdateUtil;
@@ -23,15 +22,12 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.io.EOFException;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static com.devexperts.logging.Logging.getLogging;
 import static com.rusefi.SerialPortType.OpenBlt;
@@ -39,14 +35,13 @@ import static com.rusefi.maintenance.CalibrationsHelper.*;
 import static com.rusefi.maintenance.CallbacksWaitingUtil.TOTAL_WAIT_SECONDS;
 import static com.rusefi.maintenance.CallbacksWaitingUtil.waitForPredicate;
 import static com.rusefi.maintenance.UpdateMode.*;
-import static java.lang.Boolean.parseBoolean;
 
 public class ProgramSelector {
     private static final Logging log = getLogging(ProgramSelector.class);
     private final JPanel content = new JPanel(new BorderLayout());
     private final JLabel noHardware = new JLabel("Nothing detected");
     private final JPanel updateModeAndButton = new JPanel(new FlowLayout());
-    private final JSplitButton splitButton = new JSplitButton("Update Firmware", AutoupdateUtil.loadIcon("upload48.png"));
+    private final JSplitButton splitButton = new JSplitButton("Update ECU Firmware", AutoupdateUtil.loadIcon("upload48.png"));
     private final ConnectivityContext connectivityContext;
     private final JComboBox<PortResult> comboPorts;
     @Nullable
@@ -57,6 +52,8 @@ public class ProgramSelector {
     public ProgramSelector(ConnectivityContext connectivityContext, JComboBox<PortResult> comboPorts) {
         this.connectivityContext = connectivityContext;
         this.comboPorts = comboPorts;
+        noHardware.setBorder(BorderFactory.createEmptyBorder(5, 8, 5, 8));
+        noHardware.setFont(noHardware.getFont().deriveFont(noHardware.getFont().getSize2D() + 2));
         content.add(updateModeAndButton, BorderLayout.NORTH);
         content.add(noHardware, BorderLayout.SOUTH);
 
@@ -64,8 +61,8 @@ public class ProgramSelector {
         updateModeAndButton.add(splitButton);
 
         splitButton.addActionListener(e -> {
-            final PortResult selectedPort = (PortResult) comboPorts.getSelectedItem();
-            executeJob(splitButton, mainButtonModeFor(selectedPort), selectedPort);
+            final PortResult targetPort = resolveFlashPort();
+            executeJob(splitButton, mainButtonModeFor(targetPort), targetPort);
         });
 
         // Keep the main button label in sync with whatever port is currently selected. The combo is
@@ -84,14 +81,92 @@ public class ProgramSelector {
      * so {@link #linkManager} is never set for it and {@link UpdateMode#OPENBLT_AUTO} (which reboots a
      * live ECU into the bootloader) cannot work. Flash it directly via {@link UpdateMode#OPENBLT_MANUAL}.
      */
-    private static UpdateMode mainButtonModeFor(@Nullable PortResult selectedPort) {
-        return (selectedPort != null && selectedPort.type == OpenBlt) ? OPENBLT_MANUAL : OPENBLT_AUTO;
+    private UpdateMode mainButtonModeFor(@Nullable PortResult selectedPort) {
+        return mainButtonModeFor(selectedPort, isLiveConnection());
+    }
+
+    /**
+     * Pure decision logic behind the main Update-Firmware button mode, extracted so it can be unit tested
+     * without Swing/hardware-detection singletons. [tag:better_ux_for_flashing]
+     */
+    static UpdateMode mainButtonModeFor(@Nullable PortResult selectedPort, boolean liveConnection) {
+        if (selectedPort != null && selectedPort.type == OpenBlt) {
+            return OPENBLT_MANUAL;
+        }
+        // A DFU device is a board already sitting in the STM32 built-in bootloader: it has no running
+        // firmware to reboot and never auto-connects, so flash it directly via DFU_MANUAL rather than
+        // mislabeling the button as a (dead) OpenBLT action. [tag:better_ux_for_flashing]
+        if (selectedPort != null && selectedPort.type == SerialPortType.Dfu) {
+            return DFU_MANUAL;
+        }
+        // OPENBLT_AUTO reboots a *live* ECU into the bootloader; with no live connection there is nothing
+        // to reboot and awaitBinaryProtocol would just time out. So when offline — including a board
+        // sitting in a bootloader whose detection is momentarily flickering to Unknown — flash manually
+        // rather than flip-flopping into a dead AUTO job. [tag:better_ux_for_flashing]
+        if (!liveConnection) {
+            return OPENBLT_MANUAL;
+        }
+        return OPENBLT_AUTO;
     }
 
     private void refreshMainButtonText() {
-        final PortResult selectedPort = (PortResult) comboPorts.getSelectedItem();
-        final boolean isOpenBltBoard = mainButtonModeFor(selectedPort) == OPENBLT_MANUAL;
-        splitButton.setText(isOpenBltBoard ? OPENBLT_MANUAL.displayText : "Update Firmware");
+        final UpdateMode mode = mainButtonModeFor(resolveFlashPort());
+        if (mode == OPENBLT_MANUAL) {
+            splitButton.setText(OPENBLT_MANUAL.displayText);
+        } else if (mode == DFU_MANUAL) {
+            splitButton.setText(DFU_MANUAL.displayText);
+        } else {
+            splitButton.setText("Update Firmware");
+        }
+    }
+
+    private boolean isLiveConnection() {
+        return linkManager != null && linkManager.getBinaryProtocol() != null;
+    }
+
+    /**
+     * Resolve which port the main Update-Firmware action targets. A board already in the OpenBLT
+     * bootloader is flashed manually and needs no live connection, so — when the combo selection isn't
+     * itself a bootloader and we're offline — prefer any detected OpenBLT port over the connection-
+     * dependent AUTO path (which reboots a *running* ECU and just times out with no live BinaryProtocol).
+     * This covers the offline "open a tune, plug an OpenBLT board" flow where the combo selection may be
+     * null/stale right after the hot-plug. [tag:better_ux_for_flashing]
+     */
+    private PortResult resolveFlashPort() {
+        final PortResult selected = (PortResult) comboPorts.getSelectedItem();
+        return resolveFlashPort(
+            selected,
+            isLiveConnection(),
+            connectivityContext.getCurrentHardware().getKnownPorts(SerialPortType.Dfu),
+            connectivityContext.getCurrentHardware().getKnownPorts(OpenBlt)
+        );
+    }
+
+    /**
+     * Pure port-resolution logic behind the main Update-Firmware action, extracted so it can be unit
+     * tested without Swing/hardware-detection singletons. [tag:better_ux_for_flashing]
+     */
+    static PortResult resolveFlashPort(
+        @Nullable final PortResult selected,
+        final boolean liveConnection,
+        final List<PortResult> dfuPorts,
+        final List<PortResult> bltPorts
+    ) {
+        if (selected != null && (selected.type == OpenBlt || selected.type == SerialPortType.Dfu)) {
+            return selected;
+        }
+        if (!liveConnection) {
+            // A board sitting in the STM32 built-in bootloader is flashed manually via DFU; prefer it over
+            // the connection-dependent AUTO path (and over a null/stale combo selection right after launch)
+            // so the button isn't mislabeled as a dead OpenBLT action. [tag:better_ux_for_flashing]
+            if (!dfuPorts.isEmpty()) {
+                return dfuPorts.get(0);
+            }
+            if (!bltPorts.isEmpty()) {
+                return bltPorts.get(0);
+            }
+        }
+        return selected;
     }
 
     private void executeJob(JComponent parent, UpdateMode selectedMode, PortResult selectedPort) {
@@ -103,25 +178,25 @@ public class ProgramSelector {
                 job = new DfuAutoJob(selectedPort, parent, connectivityContext, linkManager);
                 break;
             case DFU_MANUAL:
-                job = new DfuManualJob();
+                job = new DfuManualJob(connectivityContext.getConnectedEcuTarget());
                 break;
             case INSTALL_OPENBLT:
-                job = new InstallOpenBltJob();
+                job = new InstallOpenBltJob(connectivityContext.getConnectedEcuTarget());
                 break;
             case ST_LINK:
-                job = new StLinkJob(parent);
+                job = new StLinkJob(parent, connectivityContext.getConnectedEcuTarget());
                 break;
             case DFU_SWITCH:
                 job = new DfuSwitchJob(selectedPort, parent);
                 break;
             case OPENBLT_SWITCH:
-                job = new OpenBltSwitchJob(selectedPort, parent, linkManager);
+                job = new OpenBltSwitchJob(selectedPort, parent, linkManager, OpenbltRebooter.PRODUCTION_REBOOTER);
                 break;
             case OPENBLT_CAN:
                 job = new OpenBltCanJob(parent);
                 break;
             case OPENBLT_MANUAL:
-                job = new OpenBltManualJob(selectedPort, parent);
+                job = OpenBltManualJobFactory.createProduction(selectedPort, parent, connectivityContext);
                 break;
             case OPENBLT_AUTO:
                 job = new OpenBltAutoJob(selectedPort, parent, connectivityContext, linkManager);
@@ -152,6 +227,20 @@ public class ProgramSelector {
         this.linkManager = linkManager;
     }
 
+    /**
+     * Programmatically trigger the main "Update Firmware" action for the currently selected port —
+     * same as clicking the split button. Used by the console's "Update ECU" menu shortcut [tag:better_ux_for_flashing].
+     */
+    public void triggerUpdateFirmware() {
+        final PortResult targetPort = resolveFlashPort();
+        if (targetPort == null) {
+            // Nothing detected/selected — mirrors the split button being disabled in apply(). [tag:better_ux_for_flashing]
+            log.info("triggerUpdateFirmware: no port to flash, ignoring");
+            return;
+        }
+        executeJob(splitButton, mainButtonModeFor(targetPort), targetPort);
+    }
+
     public static void rebootToDfu(JComponent parent, String selectedPort, UpdateOperationCallbacks callbacks) {
         String port = selectedPort == null ? PortDetector.AUTO : selectedPort;
         DfuFlasher.rebootToDfu(parent, port, callbacks, Integration.CMD_REBOOT_DFU);
@@ -160,14 +249,6 @@ public class ProgramSelector {
     public static void rebootToOpenblt(JComponent parent, String selectedPort, UpdateOperationCallbacks callbacks) {
         String port = selectedPort == null ? PortDetector.AUTO : selectedPort;
         DfuFlasher.rebootToDfu(parent, port, callbacks, Integration.CMD_REBOOT_OPENBLT);
-    }
-
-    /**
-     * Send reboot-to-OpenBLT via an already-open BinaryProtocol connection.
-     * Use this from ConsoleUI context where the port is held by LinkManager.
-     */
-    public static void rebootToOpenblt(JComponent parent, BinaryProtocol binaryProtocol, UpdateOperationCallbacks callbacks) {
-        BootloaderHelper.sendBootloaderRebootCommand(parent, binaryProtocol.signature, binaryProtocol.getStream(), callbacks, Integration.CMD_REBOOT_OPENBLT);
     }
 
     public static void flashOpenBltCan(JComponent parent, UpdateOperationCallbacks callbacks) {
@@ -275,7 +356,7 @@ public class ProgramSelector {
         // Suspend the scanner for the entire reboot → detect → flash sequence so it
         // never races with our direct port probes for exclusive COM port access on Windows.
         try {
-            connectivityContext.getSerialPortScanner().suspend().await(30, TimeUnit.SECONDS);
+            connectivityContext.getPortScanner().suspend().await(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -284,8 +365,8 @@ public class ProgramSelector {
         } finally {
             // Invalidate the cache so the scanner re-inspects the port (now running new
             // firmware) on its first post-resume scan cycle.
-            connectivityContext.getSerialPortScanner().invalidatePort(ecuPort.port);
-            connectivityContext.getSerialPortScanner().resume();
+            connectivityContext.getPortScanner().invalidatePort(ecuPort.port);
+            connectivityContext.getPortScanner().resume();
         }
     }
 
@@ -325,7 +406,7 @@ public class ProgramSelector {
 
         callbacks.logLine("Serial port " + openbltPort + " appeared, programming firmware...");
 
-        return flashOpenbltSerial(parent, openbltPort, callbacks);
+        return flashOpenbltSerial(parent, openbltPort, callbacks, connectivityContext.getConnectedEcuTarget());
     }
 
     private static OpenbltJni.OpenbltCallbacks makeOpenbltCallbacks(UpdateOperationCallbacks callbacks) {
@@ -357,7 +438,8 @@ public class ProgramSelector {
             "Error", JOptionPane.ERROR_MESSAGE);
     }
 
-    public static boolean flashOpenbltSerial(JComponent parent, String port, UpdateOperationCallbacks callbacks) {
+    public static boolean flashOpenbltSerial(JComponent parent, String port, UpdateOperationCallbacks callbacks,
+                                             com.rusefi.core.io.ConnectedEcuTarget connectedEcuTarget) {
         if (FileLog.is32bitJava()) {
             showError32bitJava(parent);
             return false;
@@ -365,9 +447,14 @@ public class ProgramSelector {
 
         OpenbltJni.OpenbltCallbacks cb = makeOpenbltCallbacks(callbacks);
 
-        String fileName = FindFileHelper.findSrecFile();
+        String fileName = FindFileHelper.findSrecFileForConnectedBoard(connectedEcuTarget);
         if (fileName == null) {
             callbacks.logLine(".srec image file not found");
+            return false;
+        }
+        // refuse to silently flash firmware built for a different board (e.g. a dev-build fallback or a naming quirk). [tag:better_ux_for_flashing]
+        if (!MaintenanceUtil.confirmFirmwareMatchesBoard(fileName, callbacks, connectedEcuTarget)) {
+            callbacks.logLine("Firmware update aborted — firmware/board mismatch.");
             return false;
         }
         try {
@@ -402,7 +489,8 @@ public class ProgramSelector {
         JPopupMenu popupMenu = new JPopupMenu();
 
         if (FileLog.isWindows()) {
-            boolean requireBlt = FindFileHelper.isObfuscated() || isForeignBoardOnUniversalBundle();
+            boolean requireBlt = FindFileHelper.isObfuscated()
+                || isForeignBoardOnUniversalBundle(connectivityContext.getConnectedEcuTarget());
 
             if (!requireBlt) {
                 if (hasSerialPorts) {
@@ -437,6 +525,10 @@ public class ProgramSelector {
         splitButton.setMainButtonEnabled(hasSerialPorts && !isJobRunning);
         splitButton.setArrowButtonEnabled(menuItemCount > 0 && !isJobRunning);
 
+        // Keep the main-button mode/label in sync with the connection state too (not just combo changes):
+        // once the board is a live ECU again the button must go back to AUTO. [tag:better_ux_for_flashing]
+        refreshMainButtonText();
+
         AutoupdateUtil.trueLayoutAndRepaint(splitButton);
         AutoupdateUtil.trueLayoutAndRepaint(content);
     }
@@ -445,11 +537,13 @@ public class ProgramSelector {
      * #9714: is the connected ECU a different board than this bundle? If so, a universal bundle will
      * download that board's firmware on demand and we cannot yet tell whether it is obfuscated, so the
      * caller forces OpenBLT (works for every board here; DFU would fail for obfuscated firmware).
-     * When no ECU is connected {@code effectiveTarget()} equals the bundle target, so this is false.
+     * With no live ECU, {@code effectiveTarget()} falls back to the persisted last-connected board (or the
+     * bundle target if none) — so a board sitting in a bootloader after a restart is still treated as its
+     * real (foreign) board here; the flash guard confirms that unverified target before programming.
      */
-    private static boolean isForeignBoardOnUniversalBundle() {
+    private static boolean isForeignBoardOnUniversalBundle(com.rusefi.core.io.ConnectedEcuTarget connectedEcuTarget) {
         String bundleTarget = com.rusefi.core.io.BundleUtil.getBundleTarget();
-        String connected = com.rusefi.core.io.ConnectedEcuTarget.effectiveTarget();
+        String connected = connectedEcuTarget.effectiveTarget();
         return bundleTarget != null && connected != null && !bundleTarget.equalsIgnoreCase(connected);
     }
 

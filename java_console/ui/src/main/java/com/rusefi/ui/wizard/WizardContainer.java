@@ -15,18 +15,22 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntPredicate;
+import java.util.function.Predicate;
 
 import static com.devexperts.logging.Logging.getLogging;
 
 public class WizardContainer extends JPanel {
     private static final Logging log = getLogging(WizardContainer.class);
     private static final List<WizardStepDescriptor> FLAGGED = WizardCatalog.flaggedSteps();
-    private static final int TOTAL_STEPS = FLAGGED.size();
+    private static final int FO_1 = 0;
+    private static final int FO_1_2 = 8;
 
     private final UIContext uiContext;
-    private final JLabel stepLabel = new JLabel();
+    private final WizardProgressPanel progressPanel = new WizardProgressPanel();
     private final JPanel stepContentPanel = new JPanel(new CardLayout());
     private final List<WizardStep> steps = new ArrayList<>();
+    private final List<Integer> visibleCatalogIndices = new ArrayList<>();
 
     // Debug panel labels, keyed by flag name
     private final Map<String, JLabel> debugLabels = new LinkedHashMap<>();
@@ -35,7 +39,8 @@ public class WizardContainer extends JPanel {
     private Runnable onWizardExit;
     private Runnable onAllStepsComplete;
     private int currentStepIndex = 0;
-    private int totalSteps = TOTAL_STEPS;
+    private int activeStepIndex = -1;
+    private boolean singleStepMode;
     private int selectedCylinders = 4; // default, updated by step 0
 
     public WizardContainer(UIContext uiContext) {
@@ -51,20 +56,23 @@ public class WizardContainer extends JPanel {
         super(new BorderLayout());
         this.uiContext = uiContext;
 
-        // Header panel
         JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
-
-        if (!compact) scaleComponent(stepLabel, 1.5f);
-        headerPanel.add(stepLabel, BorderLayout.CENTER);
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(
+            compact ? WizardStyle.GAP : WizardStyle.LARGE_GAP,
+            WizardStyle.LARGE_GAP,
+            WizardStyle.GAP,
+            WizardStyle.LARGE_GAP));
+        headerPanel.add(progressPanel, BorderLayout.CENTER);
 
         JButton cancelButton = new JButton("Exit Wizard");
-        if (!compact) scaleComponent(cancelButton, 1.5f);
+        AbstractWizardStep.styleButton(cancelButton);
         cancelButton.addActionListener(e -> exitWizard());
         headerPanel.add(cancelButton, BorderLayout.EAST);
+        progressPanel.setOnCompletedSelected(this::showStep);
 
         add(headerPanel, BorderLayout.NORTH);
-        stepContentPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 20, 20));
+        stepContentPanel.setBorder(BorderFactory.createEmptyBorder(
+            WizardStyle.GAP, WizardStyle.LARGE_GAP, WizardStyle.LARGE_GAP, WizardStyle.LARGE_GAP));
         add(stepContentPanel, BorderLayout.CENTER);
 
         // Debug panel at the bottom showing wizard flag states
@@ -168,11 +176,13 @@ public class WizardContainer extends JPanel {
     }
 
     public void startWizard() {
+        hideCurrentStep();
         currentStepIndex = 0;
-        totalSteps = TOTAL_STEPS;
+        singleStepMode = false;
+        progressPanel.setVisible(true);
         onAllStepsComplete = this::showCompletionCard;
-        // uncomment to show the debug panel; we need it to reset the flags on local env
         // debugPanel.setVisible(true);
+        refreshDebugFlags();
         steps.clear();
         stepContentPanel.removeAll();
 
@@ -182,8 +192,10 @@ public class WizardContainer extends JPanel {
             if (result.value != null) {
                 selectedCylinders = Integer.parseInt(result.value);
             }
-            // Create FiringOrderPanel lazily now that we know the cylinder count
-            createFiringOrderStep();
+            if (implicitFiringOrderOrdinal(selectedCylinders) == null) {
+                createFiringOrderStep();
+            }
+            rebuildVisibleCatalogIndices();
             onStepCompleted(result, steps.get(0));
         });
         steps.add(cylPanel);
@@ -200,31 +212,58 @@ public class WizardContainer extends JPanel {
         steps.add(mapPanel);
         stepContentPanel.add(mapPanel.getPanel(), "step2");
 
-        // Step 3: Crank Trigger
+        // Step 3: TPS
+        TpsPanel tpsPanel = new TpsPanel(uiContext);
+        wireStep(tpsPanel, 3);
+        steps.add(tpsPanel);
+        stepContentPanel.add(tpsPanel.getPanel(), "step3");
+
+        // Step 4: CLT Sensor
+        CltSensorPanel cltPanel = new CltSensorPanel(uiContext);
+        wireStep(cltPanel, 4);
+        steps.add(cltPanel);
+        stepContentPanel.add(cltPanel.getPanel(), "step4");
+
+        // Step 5: Crank Trigger
         CrankTriggerPanel crankPanel = new CrankTriggerPanel(uiContext);
-        wireStep(crankPanel, 3);
+        wireStep(crankPanel, 5);
         steps.add(crankPanel);
-        stepContentPanel.add(crankPanel.getPanel(), "step3");
+        stepContentPanel.add(crankPanel.getPanel(), "step5");
 
-        // Step 4: Cam Trigger
+        // Step 6: Cam Trigger
         CamTriggerPanel camPanel = new CamTriggerPanel(uiContext);
-        wireStep(camPanel, 4);
+        wireStep(camPanel, 6);
         steps.add(camPanel);
-        stepContentPanel.add(camPanel.getPanel(), "step4");
+        stepContentPanel.add(camPanel.getPanel(), "step6");
 
-        // Step 5: Injector Flow
+        // Step 7: Ignition Outputs
+        OutputAssignmentPanel ignitionOutputs = new OutputAssignmentPanel(
+            uiContext, OutputAssignmentPanel.OutputType.IGNITION);
+        wireStep(ignitionOutputs, 7);
+        steps.add(ignitionOutputs);
+        stepContentPanel.add(ignitionOutputs.getPanel(), "step7");
+
+        // Step 8: Injector Outputs
+        OutputAssignmentPanel injectorOutputs = new OutputAssignmentPanel(
+            uiContext, OutputAssignmentPanel.OutputType.INJECTOR);
+        wireStep(injectorOutputs, 8);
+        steps.add(injectorOutputs);
+        stepContentPanel.add(injectorOutputs.getPanel(), "step8");
+
+        // Step 9: Injector Flow
         InjectorFlowPanel injPanel = new InjectorFlowPanel(uiContext);
-        wireStep(injPanel, 5);
+        wireStep(injPanel, 9);
         steps.add(injPanel);
-        stepContentPanel.add(injPanel.getPanel(), "step5");
+        stepContentPanel.add(injPanel.getPanel(), "step9");
 
         // Completion card
         JPanel completionPanel = new JPanel(new GridBagLayout());
         JLabel doneLabel = new JLabel("Wizard Complete!");
-        scaleComponent(doneLabel, 3);
+        doneLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        AbstractWizardStep.styleTitle(doneLabel);
         completionPanel.add(doneLabel);
         JButton doneButton = new JButton("Return to Console");
-        scaleComponent(doneButton, 2);
+        AbstractWizardStep.stylePrimaryAction(doneButton);
         doneButton.addActionListener(e -> exitWizard());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridy = 1;
@@ -232,17 +271,20 @@ public class WizardContainer extends JPanel {
         completionPanel.add(doneButton, gbc);
         stepContentPanel.add(completionPanel, "complete");
 
-        // If step 0 is already done, read cylindersCount from the ECU and create FiringOrderPanel now
+        // If step 0 is already done, read cylindersCount before building the remaining flow.
         if (isStepSatisfied(0)) {
             selectedCylinders = readCylindersCountFromEcu();
-            createFiringOrderStep();
+            if (implicitFiringOrderOrdinal(selectedCylinders) == null) {
+                createFiringOrderStep();
+            }
         }
 
         refreshDebugFlags();
+        rebuildVisibleCatalogIndices();
 
         // Skip to the first incomplete step
         int firstIncomplete = findFirstIncompleteStep();
-        if (firstIncomplete >= TOTAL_STEPS) {
+        if (firstIncomplete < 0) {
             showCompletionCard();
         } else {
             showStep(firstIncomplete);
@@ -254,8 +296,10 @@ public class WizardContainer extends JPanel {
      * satisfied), the wizard auto-exits. Used for targeted prompts like an empty-VIN auto-launch.
      */
     public void startSingleStep(WizardStep step) {
+        hideCurrentStep();
         currentStepIndex = 0;
-        totalSteps = 1;
+        singleStepMode = true;
+        progressPanel.setVisible(false);
         onAllStepsComplete = this::exitWizard;
         debugPanel.setVisible(false);
         steps.clear();
@@ -270,7 +314,9 @@ public class WizardContainer extends JPanel {
     }
 
     private void showCompletionCard() {
-        stepLabel.setText("Configuration Complete");
+        hideCurrentStep();
+        currentStepIndex = -1;
+        refreshProgress();
         CardLayout cl = (CardLayout) stepContentPanel.getLayout();
         cl.show(stepContentPanel, "complete");
     }
@@ -292,30 +338,74 @@ public class WizardContainer extends JPanel {
     }
 
     private int findFirstIncompleteStep() {
-        for (int i = 0; i < TOTAL_STEPS; i++) {
-            if (!isStepSatisfied(i)) {
-                return i;
+        return findFirstIncomplete(visibleCatalogIndices, this::isStepSatisfied);
+    }
+
+    static int findFirstIncomplete(List<Integer> visibleIndices, IntPredicate satisfied) {
+        for (int index : visibleIndices) {
+            if (!satisfied.test(index)) return index;
+        }
+        return -1;
+    }
+
+    private void rebuildVisibleCatalogIndices() {
+        visibleCatalogIndices.clear();
+        visibleCatalogIndices.addAll(findVisibleCatalogIndices(uiContext, uiContext.iniFileState.getIniFileModel()));
+        hideImplicitFiringOrderStep(visibleCatalogIndices, selectedCylinders);
+        refreshProgress();
+    }
+
+    static void hideImplicitFiringOrderStep(List<Integer> visibleIndices, int cylindersCount) {
+        if (implicitFiringOrderOrdinal(cylindersCount) != null) {
+            visibleIndices.remove(Integer.valueOf(1));
+        }
+    }
+
+    static Integer implicitFiringOrderOrdinal(int cylindersCount) {
+        if (cylindersCount == 1) {
+            return FO_1;
+        }
+        if (cylindersCount == 2) {
+            return FO_1_2;
+        }
+        return null;
+    }
+
+    static List<Integer> findVisibleCatalogIndices(UIContext context, IniFileModel ini) {
+        List<Integer> result = new ArrayList<>();
+        if (ini != null) {
+            for (int i = 0; i < FLAGGED.size(); i++) {
+                WizardStepDescriptor descriptor = FLAGGED.get(i);
+                IniField flag = ini.findIniField(descriptor.flagName).orElse(null);
+                if (descriptor.applicable.test(context) && flag instanceof EnumIniField) {
+                    result.add(i);
+                }
             }
         }
-        return TOTAL_STEPS;
+        return result;
     }
 
-    /** Total flagged steps applicable to this board — drives the "of N" denominator shown to the user. */
-    private int applicableFlaggedCount() {
-        int count = 0;
-        for (WizardStepDescriptor d : FLAGGED) {
-            if (d.applicable.test(uiContext)) count++;
-        }
-        return count;
+    private void refreshProgress() {
+        progressPanel.setItems(buildProgressItems(visibleCatalogIndices, currentStepIndex, this::isFlagSet));
     }
 
-    /** 1-based position of flagged step {@code index} among applicable steps — drives the "Step N" numerator. */
-    private int applicableCountUpTo(int index) {
-        int count = 0;
-        for (int i = 0; i <= index && i < FLAGGED.size(); i++) {
-            if (FLAGGED.get(i).applicable.test(uiContext)) count++;
+    static List<WizardProgressPanel.Item> buildProgressItems(List<Integer> visibleIndices, int currentIndex,
+                                                              Predicate<String> completed) {
+        List<WizardProgressPanel.Item> items = new ArrayList<>();
+        for (int i = 0; i < visibleIndices.size(); i++) {
+            int catalogIndex = visibleIndices.get(i);
+            WizardStepDescriptor descriptor = FLAGGED.get(catalogIndex);
+            WizardProgressPanel.State state;
+            if (catalogIndex == currentIndex) {
+                state = WizardProgressPanel.State.CURRENT;
+            } else if (completed.test(descriptor.flagName)) {
+                state = WizardProgressPanel.State.COMPLETED;
+            } else {
+                state = WizardProgressPanel.State.UPCOMING;
+            }
+            items.add(new WizardProgressPanel.Item(catalogIndex, i + 1, descriptor.displayTitle, state));
         }
-        return count;
+        return items;
     }
 
     /**
@@ -329,7 +419,7 @@ public class WizardContainer extends JPanel {
         WizardStepDescriptor d = FLAGGED.get(stepIndex);
         if (!d.applicable.test(uiContext)) return true;
         IniFileModel ini = uiContext.iniFileState.getIniFileModel();
-        if (ini != null && !ini.findIniField(d.flagName).isPresent()) return true;
+        if (ini != null && !(ini.findIniField(d.flagName).orElse(null) instanceof EnumIniField)) return true;
         return isFlagSet(d.flagName);
     }
 
@@ -393,6 +483,7 @@ public class WizardContainer extends JPanel {
 
         // Set the wizard progress flag to "yes" (ordinal 1), if this step has one
         String flagName = step.getWizardFlagFieldName();
+        clearDependentWizardFlags(flagName, ini, modified);
         if (flagName != null) {
             IniField flagField = ini.findIniField(flagName).orElse(null);
             if (flagField instanceof EnumIniField) {
@@ -402,6 +493,7 @@ public class WizardContainer extends JPanel {
                 log.warn("Wizard: flag field not found or not enum: " + flagName);
             }
         }
+        completeImplicitFiringOrder(flagName, result.value, ini, modified);
 
         // Upload + burn on IO thread, advance step on EDT
         uiContext.getLinkManager().submit(() -> {
@@ -413,15 +505,59 @@ public class WizardContainer extends JPanel {
         });
     }
 
-    private void advanceToNextStep() {
-        // Skip ahead past satisfied steps (already-set flag or non-applicable to this board)
-        int next = currentStepIndex + 1;
-        while (next < totalSteps && next < FLAGGED.size() && isStepSatisfied(next)) {
-            log.info("Wizard: skipping satisfied step " + next + " (" + FLAGGED.get(next).flagName + ")");
-            next++;
+    static void clearDependentWizardFlags(String completedFlag, IniFileModel ini, ConfigurationImage image) {
+        if (!"wizardNumberOfCylinders".equals(completedFlag)) return;
+
+        for (String flagName : new String[]{
+            "wizardFiringOrder", "wizardIgnitionOutputs", "wizardInjectorOutputs"
+        }) {
+            IniField flag = ini.findIniField(flagName).orElse(null);
+            if (flag instanceof EnumIniField) {
+                image.setBitValue((EnumIniField) flag, 0);
+            }
+        }
+    }
+
+    static void completeImplicitFiringOrder(String completedFlag, String cylindersValue,
+                                             IniFileModel ini, ConfigurationImage image) {
+        if (!"wizardNumberOfCylinders".equals(completedFlag) || cylindersValue == null) {
+            return;
         }
 
-        if (next < totalSteps) {
+        final int cylindersCount;
+        try {
+            cylindersCount = Integer.parseInt(cylindersValue);
+        } catch (NumberFormatException e) {
+            return;
+        }
+
+        Integer firingOrderOrdinal = implicitFiringOrderOrdinal(cylindersCount);
+        if (firingOrderOrdinal == null) {
+            return;
+        }
+
+        IniField firingOrderField = ini.findIniField("firingOrder").orElse(null);
+        IniField firingOrderFlag = ini.findIniField("wizardFiringOrder").orElse(null);
+        if (!(firingOrderField instanceof EnumIniField) || !(firingOrderFlag instanceof EnumIniField)) {
+            log.warn("Wizard: cannot complete implicit firing order for " + cylindersCount + " cylinders");
+            return;
+        }
+
+        image.setBitValue((EnumIniField) firingOrderField, firingOrderOrdinal);
+        image.setBitValue((EnumIniField) firingOrderFlag, 1);
+        log.info("Wizard: set firingOrder ordinal = " + firingOrderOrdinal + " and wizardFiringOrder = yes");
+    }
+
+    private void advanceToNextStep() {
+        if (singleStepMode) {
+            if (onAllStepsComplete != null) {
+                onAllStepsComplete.run();
+            }
+            return;
+        }
+
+        int next = findFirstIncompleteStep();
+        if (next >= 0) {
             showStep(next);
         } else if (onAllStepsComplete != null) {
             onAllStepsComplete.run();
@@ -431,18 +567,15 @@ public class WizardContainer extends JPanel {
     }
 
     private void showStep(int index) {
+        hideCurrentStep();
         currentStepIndex = index;
-        WizardStep step = steps.get(index);
-        String title = step != null ? step.getTitle() : "...";
-        if (totalSteps == 1) {
-            // Single-step mode (e.g. VIN auto-launch): the panel renders its own title,
-            // so hide the header label to avoid duplicating it.
-            stepLabel.setText("");
-            stepLabel.setVisible(false);
-        } else {
-            stepLabel.setVisible(true);
-            stepLabel.setText("Step " + applicableCountUpTo(index) + " of " + applicableFlaggedCount() + ": " + title);
+        if (index == 1 && steps.get(index) == null) {
+            selectedCylinders = readCylindersCountFromEcu();
+            createFiringOrderStep();
         }
+        WizardStep step = steps.get(index);
+        activeStepIndex = index;
+        refreshProgress();
         CardLayout cl = (CardLayout) stepContentPanel.getLayout();
         cl.show(stepContentPanel, "step" + index);
         if (step != null) {
@@ -451,13 +584,31 @@ public class WizardContainer extends JPanel {
     }
 
     private void exitWizard() {
+        hideCurrentStep();
         if (onWizardExit != null) {
             onWizardExit.run();
         }
     }
 
-    private void scaleComponent(JComponent component, float factor) {
-        Font font = component.getFont();
-        component.setFont(font.deriveFont(font.getSize() * factor));
+    private void hideCurrentStep() {
+        if (activeStepIndex >= 0 && activeStepIndex < steps.size()) {
+            WizardStep active = steps.get(activeStepIndex);
+            if (active != null) {
+                active.onHide();
+            }
+        }
+        activeStepIndex = -1;
+    }
+
+    List<String> assembledStepFlagsForTests() {
+        List<String> result = new ArrayList<>();
+        for (WizardStep step : steps) {
+            result.add(step == null ? "wizardFiringOrder" : step.getWizardFlagFieldName());
+        }
+        return result;
+    }
+
+    boolean isProgressVisibleForTests() {
+        return progressPanel.isVisible();
     }
 }
