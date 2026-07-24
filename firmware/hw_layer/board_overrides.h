@@ -58,7 +58,6 @@ extern std::optional<custom_validate_config_type> custom_board_validateConfig;
 using custom_fix_configuration_type = bool (*)();
 extern std::optional<custom_fix_configuration_type> custom_board_fix_configuration;
 
-
 using setup_custom_board_ts_command_override_type = void (*)(uint16_t /*subsystem*/, uint16_t /*index*/);
 extern std::optional<setup_custom_board_ts_command_override_type> custom_board_ts_command;
 
