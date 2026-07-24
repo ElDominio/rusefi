@@ -528,6 +528,7 @@ void requestBurn() {
 }
 
 #if EFI_TUNER_STUDIO
+#if EFI_PROD_CODE || EFI_SIMULATOR
 /**
  * 'Burn' command is a command to commit the changes
  */
@@ -566,6 +567,7 @@ static void handleBurnCommand(TsChannelBase* tsChannel, uint16_t page) {
 
 	tsChannel->writeCrcResponse(TS_RESPONSE_BURN_OK);
 }
+#endif // EFI_PROD_CODE || EFI_SIMULATOR
 
 #if (EFI_PROD_CODE || EFI_SIMULATOR)
 

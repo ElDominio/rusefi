@@ -21,8 +21,6 @@ TEST(cranking, realCrankingFromFile) {
 	EngineTestHelper eth (engine_type_e::FRANKENSO_MIATA_NA6_MAP);
 	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
-	ssize_t read;
-
 	for (int i = 0; i < 11; i++) {
 		reader.readLine(&eth);
 	}

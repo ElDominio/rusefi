@@ -119,7 +119,7 @@ float AirmassVeModelBase::getVe(float rpm, float load, bool postState) const {
 		engine->engineState.currentVe = ve;
 		engine->engineState.veTableYAxis = load;
 		engine->engineState.veTableIdleYAxis = idleVeLoad;
-#if EFI_PROD_CODE
+#if EFI_PROD_CODE || EFI_UNIT_TEST
 		engine->engineState.isSecondVeTableActive = switchTableActive;
 #endif
 	}
