@@ -130,7 +130,7 @@ void setDynoDefaults() {
     config->dynoCarFrontalAreaM2 = 1.85;
  }
 
-void defaultsOrFixOnBurn() {
+void applyDefaultsOrFixAfterBurn() {
   if (config->dynoCarCarMassKg == 0) {
     setDynoDefaults();
   }
@@ -556,7 +556,7 @@ void setDefaultBaseEngine() {
 	config->tcuIdleShiftToFirstEnabled = true;
 
   // we invoke this last so that we can validate even defaults
-  defaultsOrFixOnBurn();
+  applyDefaultsOrFixAfterBurn();
 }
 
 void setPPSInputs(adc_channel_e pps1, adc_channel_e pps2) {
