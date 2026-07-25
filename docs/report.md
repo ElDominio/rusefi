@@ -390,3 +390,45 @@ Open follow-ups:
   wedge never reaches the new recovery path (lib_scsi is in ChibiOS-Contrib).
 - The loss-of-cdc.pcapng pre-capture wedge could not be attributed (stale
   firmware vs blkRead wedge); confirm the flashed build via sdinfo counters.
+
+## 2026-07-23 - alphax-4chan_f7: Lua script (TS page 5) not persisting across reboot
+
+Reported symptom: sending a Lua script to the ECU via console on
+alphax-4chan_f7 runs immediately but does not survive a power cycle, while
+the same workflow is fine on alphax-s550-pnp (also an F7/mm176 board).
+
+Root cause: page5_s (which holds page5_s::luaScript,
+firmware/integration/config_page_5.txt:7) is an "extra page" - on F7 boards
+it only gets an internal-flash backend if board.mk both (a) includes
+hw_layer/ports/stm32/2mb_flash.mk, which relocates config storage above the
+first 1.5MB of flash into 128KB sectors (the only F7 layout where extra-page
+piggybacking is valid, per the STM32F7XX guard in
+storage_flash.cpp::getExtraPageFlashAddr()), and (b) sets
+-DEFI_STORAGE_SD=FALSE so a stale SD custom_page.bin doesn't clobber the
+flash copy of page 5 on read (EFI_STORAGE_SD defaults TRUE). Without both,
+the page has no backend and silently resets to defaults every boot - live
+uploads work because they only touch RAM.
+
+This is the same defect class previously found and fixed on alphax-gold (see
+FLASH_DATA_VERSION / page-5 flash persistence history). alphax-4chan's F7
+branch in firmware/config/boards/hellen/alphax-4chan/board.mk was never
+given the fix; alphax-gold, alphax-s550-pnp, alphax-4K-GDI, uaefi, and
+super-uaefi all already include 2mb_flash.mk.
+
+Fix: added the same two lines (2mb_flash.mk include + EFI_STORAGE_SD=FALSE)
+inside the ARCH_STM32F7 branch of alphax-4chan/board.mk, mirroring
+alphax-s550-pnp's board.mk verbatim (comments included).
+
+Validation: `./compile_alphax-4chan_f7.sh -j12` builds clean. Flash layout
+now shows the same relocated split as alphax-gold (flash0 1504KB / flash1
+1504KB, 44.56%/33.34% used) instead of a single un-split flash region.
+Hardware validation (flash Lua script, power-cycle, confirm it survives) not
+yet performed - firmware image only.
+
+Open follow-ups:
+- Flash the built image to hardware and confirm the Lua script (and other
+  page 5 fields, e.g. custom lookup tables) survive a real power cycle.
+- Consider a compile-time guard (like the existing page5_container_s static
+  assert) that fails the build for any F7 board defining page-5-backed
+  features without EFI_STORAGE_INT_FLASH properly wired, so this class of
+  bug can't recur silently on a new board.
