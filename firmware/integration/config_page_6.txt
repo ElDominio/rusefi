@@ -397,9 +397,11 @@ struct_no_prefix page6_s
 	! fan for A/C. 'Relay' turns the fan on whenever the A/C compressor relay is active.
 	! 'Pressure' (EFI_AC_PRESSURE_FAN) uses a high-side pressure sensor threshold instead: the
 	! fan turns ON above fanNAcPressureOn and OFF below fanNAcPressureOff (hysteresis band
-	! prevents rapid cycling). Requires SensorType::AcPressure to be wired.
-	fan_ac_mode_e fan1AcMode;Fan 1: A/C fan control mode. 'Disabled' never runs the fan for A/C. 'Relay' turns the fan on whenever the A/C compressor is active. 'Pressure' uses the high-side pressure thresholds below and requires an A/C pressure sensor.
-	fan_ac_mode_e fan2AcMode;Fan 2: A/C fan control mode. 'Disabled' never runs the fan for A/C. 'Relay' turns the fan on whenever the A/C compressor is active. 'Pressure' uses the high-side pressure thresholds below and requires an A/C pressure sensor.
+	! prevents rapid cycling). Requires SensorType::AcPressure to be wired. Pressure is the
+	! command in this mode: the fan follows the sensor reading regardless of whether the A/C
+	! compressor is currently engaged (eg static high-side heat soak with the clutch open).
+	fan_ac_mode_e fan1AcMode;Fan 1: A/C fan control mode. 'Disabled' never runs the fan for A/C. 'Relay' turns the fan on whenever the A/C compressor is active. 'Pressure' uses the high-side pressure thresholds below, independent of compressor state, and requires an A/C pressure sensor.
+	fan_ac_mode_e fan2AcMode;Fan 2: A/C fan control mode. 'Disabled' never runs the fan for A/C. 'Relay' turns the fan on whenever the A/C compressor is active. 'Pressure' uses the high-side pressure thresholds below, independent of compressor state, and requires an A/C pressure sensor.
 	uint16_t fan1AcPressureOn;Fan 1: A/C high-side pressure above which fan 1 turns on (pressure mode only).;"kPa", 1, 0, 0, 4000, 0
 	uint16_t fan1AcPressureOff;Fan 1: A/C high-side pressure below which fan 1 turns off (hysteresis lower bound). Must be less than fan1AcPressureOn.;"kPa", 1, 0, 0, 4000, 0
 	uint16_t fan2AcPressureOn;Fan 2: A/C high-side pressure above which fan 2 turns on (pressure mode only).;"kPa", 1, 0, 0, 4000, 0

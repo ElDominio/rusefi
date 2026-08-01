@@ -507,3 +507,40 @@ Open follow-ups:
   vssToothCount when shared is enabled, if users find the duplicate field
   confusing in practice.
 
+## 2026-07-31 - A/C pressure fan mode: pressure is now the command, independent of compressor state
+
+What was done:
+- Fixed `FanController::enabledForAcByPressure()` (firmware/controllers/modules/fan_control/fan_control.cpp)
+  in the existing `EFI_AC_PRESSURE_FAN` / `fan_ac_mode_e::Pressure` feature: previously it
+  required `acActive` (A/C compressor currently enabled) AND a valid AcPressure reading before
+  the fan could be commanded on. Per user direction, when a fan is set to Pressure mode the
+  high-side pressure reading is the command by itself - if pressure is over the On threshold,
+  the fan turns on regardless of whether the A/C compressor is currently engaged (e.g. static
+  heat soak with the clutch open still raises high-side pressure and should still get airflow).
+- Dropped the now-unused `acActive` parameter from `enabledForAcByPressure()` (and its call site
+  in `FanController::getState()`); Relay mode is untouched and still gates on `acActive`.
+- Updated the `fan1AcMode`/`fan2AcMode` field docs and the struct comment block in
+  firmware/integration/config_page_6.txt to state that Pressure mode is independent of
+  compressor state.
+
+Decisions:
+- Scoped strictly to the on/off relay-mode fan logic (`getState`/`enabledForAcByPressure`).
+  Left the PWM-mode A/C adder path (`onSlowCallbackPwm`, still keyed off `acActive` via
+  `getPwmAcAdder()`) untouched - it's a separate pre-existing TODO (pressure-proportional PWM
+  curve) not part of this request.
+
+Validation:
+- Added `Actuators.FanAcPressureModeIgnoresCompressorState` in
+  unit_tests/tests/actuators/test_fan_control.cpp: with the mock A/C compressor OFF, drives
+  AcPressure sensor above/below the on/off thresholds and confirms the fan follows pressure
+  alone (also covers invalid-pressure-reading fail-safe: fan not commanded on).
+- `unit_tests/test.sh Actuators.FanAcPressureModeIgnoresCompressorState` - passes.
+- Full `test.sh "Actuators.Fan*"` re-run after the (separately fixed) Oil Life Monitor
+  gauge-name-length codegen issue was resolved: codegen and build now succeed; all 10
+  Actuators.Fan* tests pass, including the new
+  Actuators.FanAcPressureModeIgnoresCompressorState.
+
+Open follow-ups:
+- Consider whether the PWM-mode A/C adder should eventually get the same pressure-is-the-command
+  treatment as the relay-mode path (existing TODO in fan_control.cpp).
+

@@ -290,6 +290,39 @@ TEST(Actuators, FanVssHysteresis) {
 	EXPECT_EQ(false, engine->module<FanControl1>()->disabledBySpeed);
 }
 
+TEST(Actuators, FanAcPressureModeIgnoresCompressorState) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	MockAcOff mockAc;
+	engine->module<AcController>().set(&mockAc);
+
+	// Cold CLT and speed/etc. all neutral so only the pressure logic can turn the fan on.
+	engineConfiguration->fanOnTemperature = 200;
+	engineConfiguration->fanOffTemperature = 190;
+	Sensor::setMockValue(SensorType::Clt, 75);
+
+	getCustomPage()->fan1AcMode = fan_ac_mode_e::Pressure;
+	getCustomPage()->fan1AcPressureOn = 1400;
+	getCustomPage()->fan1AcPressureOff = 1100;
+
+	// Compressor is off, but pressure is above the On threshold -> fan must turn on anyway.
+	Sensor::setMockValue(SensorType::AcPressure, 1500);
+	updateFans();
+	EXPECT_EQ(true, enginePins.fanRelay.getLogicValue());
+
+	// Pressure drops below the Off threshold -> fan turns back off, still with compressor off.
+	Sensor::setMockValue(SensorType::AcPressure, 1000);
+	updateFans();
+	EXPECT_EQ(false, enginePins.fanRelay.getLogicValue());
+
+	// Invalid pressure reading -> fan must not be commanded on by pressure logic.
+	Sensor::setMockValue(SensorType::AcPressure, 1500);
+	updateFans();
+	EXPECT_EQ(true, enginePins.fanRelay.getLogicValue());
+	Sensor::setInvalidMockValue(SensorType::AcPressure);
+	updateFans();
+	EXPECT_EQ(false, enginePins.fanRelay.getLogicValue());
+}
+
 TEST(Actuators, FanPwm_RelayModeUnchanged) {
 	// Ensure PWM disabled still uses the existing on/off relay path
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);

@@ -30,7 +30,7 @@ private:
 	void onSlowCallbackPwm(bool acActive);
 
 #if EFI_AC_PRESSURE_FAN
-	bool enabledForAcByPressure(bool acActive, bool lastState);
+	bool enabledForAcByPressure(bool lastState);
 #endif
 
 	SimplePwm m_pwm;

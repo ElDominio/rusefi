@@ -67,7 +67,7 @@ bool FanController::getState(bool acActive, bool lastState) {
 		radiatorFanStatus = (int)RadiatorFanState::CltBroken;
 		return true;
 #if EFI_AC_PRESSURE_FAN
-	} else if (acMode == fan_ac_mode_e::Pressure && enabledForAcByPressure(acActive, lastState)) {
+	} else if (acMode == fan_ac_mode_e::Pressure && enabledForAcByPressure(lastState)) {
 		return true;
 	} else if (acMode == fan_ac_mode_e::Relay && enabledForAc) {
 #else
@@ -89,9 +89,11 @@ bool FanController::getState(bool acActive, bool lastState) {
 }
 
 #if EFI_AC_PRESSURE_FAN
-bool FanController::enabledForAcByPressure(bool acActive, bool lastState) {
+bool FanController::enabledForAcByPressure(bool lastState) {
+	// Pressure is the command here: high-side pressure drives the fan regardless of
+	// whether the compressor is currently engaged (eg static heat soak with clutch open).
 	auto acPressure = Sensor::get(SensorType::AcPressure);
-	if (!acActive || !acPressure.Valid) {
+	if (!acPressure.Valid) {
 		enabledForAcPressure = false;
 		return false;
 	}
