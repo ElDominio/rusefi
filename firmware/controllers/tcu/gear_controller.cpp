@@ -64,6 +64,9 @@ void initGearController() {
 	case GearControllerMode::ButtonShift :
 		engine->gearController = getButtonShiftController();
 		break;
+	case GearControllerMode::Automatic :
+		engine->gearController = getAutomaticGearController();
+		break;
 	case GearControllerMode::Generic :
 		engine->gearController = getGenericGearController();
 		break;
