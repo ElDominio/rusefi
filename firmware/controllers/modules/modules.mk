@@ -19,6 +19,7 @@ include $(PROJECT_DIR)/controllers/modules/launch_power_ramp/launch_power_ramp.m
 include $(PROJECT_DIR)/controllers/modules/rolling_launch/rolling_launch.mk
 include $(PROJECT_DIR)/controllers/modules/burst_knock/burst_knock.mk
 include $(PROJECT_DIR)/controllers/modules/wot_enrichment/wot_enrichment.mk
+include $(PROJECT_DIR)/controllers/modules/oil_life_monitor/oil_life_monitor.mk
 include $(PROJECT_DIR)/controllers/modules/check_engine_light/check_engine_light.mk
 include $(PROJECT_DIR)/controllers/modules/sd_log_trigger/sd_log_trigger.mk
 include $(PROJECT_DIR)/controllers/modules/configuration_wizard/configuration_wizard.mk

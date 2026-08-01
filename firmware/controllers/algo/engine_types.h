@@ -409,6 +409,7 @@ typedef enum {
 	LUA_COMMAND_9,
 	LUA_COMMAND_10,
 	BENCH_BOOST_VALVE,
+	OIL_LIFE_RESET,
 } bench_mode_e;
 
 // Reason why SD logging is or is not currently writing (for the SD: Logging state indicator)

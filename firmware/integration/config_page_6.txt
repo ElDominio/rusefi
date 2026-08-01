@@ -54,6 +54,8 @@ custom sport_mode_activation_e 1 bits, U08, @OFFSET@, [0:1], @@sport_mode_activa
 custom limiter_adder_source_e 1 bits, U08, @OFFSET@, [0:0], @@limiter_adder_source_e_enum@@
 #define fan_ac_mode_e_enum "Disabled", "Relay", "Pressure"
 custom fan_ac_mode_e 1 bits, U08, @OFFSET@, [0:1], @@fan_ac_mode_e_enum@@
+#define oil_life_temp_source_e_enum "Oil Temp (EOT)", "Coolant Temp (CLT)"
+custom oil_life_temp_source_e 1 bits, U08, @OFFSET@, [0:1], @@oil_life_temp_source_e_enum@@
 
 custom fuel_pump_mode_e 1 bits, U08, @OFFSET@, [0:1], "Single", "Dual", "PWM"
 
@@ -580,5 +582,29 @@ struct_no_prefix page6_s
 
 	int16_t cltEstRadiatorReferenceTemp;CLT estimation: intake/ambient air temp at which radiator effectiveness is defined as 100% (multiplier = 1.0). Set this to whatever air temp you consider "typical" -- the gain below then scales effectiveness up/down from there. Formula: iatFactor = clamp(0, 1 + cltEstRadiatorEffectivenessIatGain * (IAT - cltEstRadiatorReferenceTemp), 4).;"deg C", 1, 0, -40, 60, 0
 	float cltEstRadiatorEffectivenessIatGain;CLT estimation: how much radiator effectiveness changes per degree C the intake/ambient air runs above (or below) the reference temp. Negative means hotter incoming air makes the radiator less effective. Entered/displayed as a percent per C (e.g. -2.5 = -0.025 ratio per C) for a friendlier decimal precision. Formula: iatFactor = clamp(0, 1 + cltEstRadiatorEffectivenessIatGain * (IAT - cltEstRadiatorReferenceTemp), 4).;"% per C", 100, 0, -10, 10, 2
+
+	! --- Weighted Engine Oil Life Monitor (EFI_OIL_LIFE_MONITOR) ---
+	! Tracks a weighted revolution counter (engine cycles x temperature-zone multiplier).
+	! Primary source is user-selectable (oilLifePrimarySource); the other source is used
+	! whenever the selected one is invalid. Either may be a real sensor or an estimated value
+	! (EOT/CLT-from-CHT) transparently published under the same sensor type -- coolant-tier
+	! multipliers are harsher since coolant under-represents true oil stress.
+	! Zone thresholds (70/105/125 C) are FIXED in firmware; only the multipliers are tunable.
+	! oilLifePercent = clamp(0,100, (1 - weightedRevs / (oilLifeRevsScaleMillions * 1e6)) * 100).
+	! Persisted to flash ONLY on ignition-off (needs EFI_MAIN_RELAY_CONTROL); never during a run.
+	bit oilLifeMonitorEnabled,"enabled","disabled";Oil Life Monitor: master enable.
+
+	oil_life_temp_source_e oilLifePrimarySource;Oil Life Monitor: primary temperature source. Falls back to the other sensor if the selected one is invalid.
+
+	uint8_t oilLifeRevsScaleMillions;Oil Life Monitor: millions of weighted revolutions for 0% oil life (e.g. 6 = 6,000,000 revs).;"M revs", 1, 0, 1, 100, 0
+
+	float oilLifeMultOilCold;Oil Life Monitor: multiplier, oil temp below 70C (cold).;"x", 1, 0, 0.1, 10, 2
+	float oilLifeMultOilOptimal;Oil Life Monitor: multiplier, oil temp 70-105C (optimal).;"x", 1, 0, 0.1, 10, 2
+	float oilLifeMultOilHighHeat;Oil Life Monitor: multiplier, oil temp 105-125C (high heat).;"x", 1, 0, 0.1, 10, 2
+	float oilLifeMultOilExtreme;Oil Life Monitor: multiplier, oil temp above 125C (extreme).;"x", 1, 0, 0.1, 10, 2
+	float oilLifeMultCoolantCold;Oil Life Monitor: coolant-fallback multiplier, below 70C.;"x", 1, 0, 0.1, 10, 2
+	float oilLifeMultCoolantOptimal;Oil Life Monitor: coolant-fallback multiplier, 70-105C.;"x", 1, 0, 0.1, 10, 2
+	float oilLifeMultCoolantHighHeat;Oil Life Monitor: coolant-fallback multiplier, 105-125C.;"x", 1, 0, 0.1, 10, 2
+	float oilLifeMultCoolantExtreme;Oil Life Monitor: coolant-fallback multiplier, above 125C.;"x", 1, 0, 0.1, 10, 2
 
 end_struct

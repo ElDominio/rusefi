@@ -544,3 +544,76 @@ Open follow-ups:
 - Consider whether the PWM-mode A/C adder should eventually get the same pressure-is-the-command
   treatment as the relay-mode path (existing TODO in fan_control.cpp).
 
+## 2026-07-31 - Feature: Weighted Engine Oil Life Monitor (EFI_OIL_LIFE_MONITOR)
+
+What was done:
+- New AlphaX page-6 feature: tracks a temperature-weighted cumulative engine-revolution counter
+  and reports remaining oil life as a percentage (`oilLifePercent` output channel), plus which
+  temperature source is active (`oilLifeTempSource`).
+- New module `firmware/controllers/modules/oil_life_monitor/` (`OilLifeMonitor : EngineModule`),
+  registered in `engine.h`'s `type_list` and `modules/modules.mk`, gated by a new
+  `EFI_OIL_LIFE_MONITOR` flag (FALSE on f4, TRUE on f7/h7 - see FEATURE_FLAGS.md).
+- Algorithm: every `onSlowCallback()` tick, diffs `getRevolutionCounter()` against the last-seen
+  value, reads `SensorType::OilTemperature` (falls back to `SensorType::Clt` if invalid, tracked
+  via an internal `TempSource` enum), looks up a per-zone multiplier (fixed thresholds 70/105/125
+  degC; 8 TS-tunable multipliers, oil vs. coolant-fallback x 4 zones), and accumulates
+  `revs * multiplier` into an in-RAM `uint32_t`. `oilLifePercent = clamp(0,100, (1 - weightedRevs /
+  (oilLifeRevsScaleMillions * 1e6)) * 100)`; `oilLifeRevsScaleMillions` is a TS-tunable 1-100 scalar.
+- Persistence: deliberately NOT periodic. Accumulates in RAM for the whole time the ECU is
+  powered and flushes to flash exactly once, on ignition-off, via a new `EFI_OIL_LIFE_RECORD_ID`
+  storage item (`storage.h`/`storage.cpp`/`storage_sd.cpp`) and the `needsDelayedShutoff()`
+  EngineModule hook (holds the main relay open until the write completes). Because of this, the
+  feature requires `EFI_MAIN_RELAY_CONTROL` and enforces it with a compile-time `#error` guard -
+  confirmed firing correctly for all four TRUE/FALSE combinations via a standalone preprocessor
+  check. Consequently the feature is intentionally NOT enabled in the simulator
+  (`simulator/simulator/efifeatures.h` sets `EFI_MAIN_RELAY_CONTROL FALSE`).
+- Reset: both a TS command button (new `OIL_LIFE_RESET` in `bench_mode_e`, wired through
+  `bench_test.cpp` / `cmd_oil_life_reset` / a new dialog under `&Advanced`) and a Lua function
+  `resetOilLifeMonitor()` (`lua_hooks.cpp`, documented in `docs/AI/lua_scripting.md`), both calling
+  the same `OilLifeMonitor::reset()`.
+- Config fields added to `config_page_6.txt` (`PAGE6_DATA_VERSION` bumped 19 -> 20, defaults added
+  in `custom_page.cpp`); output channels added to `console/binary/output_channels.txt` and wired
+  in `status_loop.cpp`.
+
+Decisions:
+- Config scope: user chose AlphaX page 6 + dedicated `EFI_` flag (not a master-portable
+  `rusefi_config.txt` addition), matching every other custom feature already on this branch.
+- Zone multipliers are 8 discrete named TS fields, not a `float[8]` array - the zones are a fixed
+  step function, not an interpolated curve, so discrete labeled fields read clearer in the TS UI.
+- No periodic flash save (unlike the LTFT `SAVE_AFTER_HITS` precedent this was originally modeled
+  on) - user explicitly rejected it: flash can't be written while the engine runs on most boards
+  anyway, so the only meaningful save point is ignition-off.
+- `oilLifePercent` is an `output_channels.txt` gauge only, no `LiveData.yaml` live-dialog-panel
+  addition (used by Misfire/Burst Knock/WOT Enrichment) - not required by the spec.
+
+Validation:
+- `unit_tests/tests/test_oil_life_monitor.cpp` (6 tests: percent formula incl. div-by-zero
+  fail-open, zone boundary edges for both temp sources, sensor fallback flip/recovery,
+  weighted-rev accumulation math, shutdown-save `needsDelayedShutoff()` transition, reset) - all
+  pass. Plus `LuaHooks.ResetOilLifeMonitor` in `test_lua_hooks.cpp` exercising the actual Lua
+  binding. Full `unit_tests/test.sh` run: 1305/1306 pass; the one failure
+  (`ClosedLoopFuel.StateBasedRegionMapping`) is pre-existing and unrelated (confirmed failing in
+  isolation on a clean `git status` for the STFT files it touches).
+- Full firmware build: `proteus` F7 (`EFI_OIL_LIFE_MONITOR=TRUE`) links successfully. `f407-discovery`
+  F4 (`EFI_OIL_LIFE_MONITOR=FALSE`, stub path) - all Oil-Life-Monitor-touched object files
+  (`oil_life_monitor.o`, `storage.o`, `custom_page.o`, `status_loop.o`, `bench_test.o`,
+  `lua_hooks.o`, `storage_sd.o`) compiled cleanly; the board's full link was blocked by a
+  pre-existing, unrelated `ramdisk_image` codegen issue on this branch (stale placeholder left
+  over from a prior `proteus_f7` build; matches a previously-recorded F4 INI-ramdisk-limit issue on
+  this branch) - not caused by this feature, not fixed here.
+- Found (via a concurrent session's report entry above, which hit it as a side effect) and fixed a
+  real bug this feature introduced: the initial `oilLifePercent`/`oilLifeTempSource` output-channel
+  comments exceeded `DataLogConsumer`'s 34-char gauge-name limit, breaking `LiveDataProcessor`
+  codegen for every board. Fixed by giving both fields a short first-line gauge name
+  (`Oil Life %` / `Oil Life Temp Src`) with the longer description on a second `\n`-separated line,
+  matching the existing `actualLastInjectionRatio`-style convention.
+- Confirmed the `#error` guard with a standalone `g++` preprocessor check across all four
+  `EFI_OIL_LIFE_MONITOR` x `EFI_MAIN_RELAY_CONTROL` TRUE/FALSE combinations.
+
+Open follow-ups:
+- The pre-existing `ramdisk_image` / F4 INI codegen issue still blocks a full f407-discovery link;
+  unrelated to this feature.
+- The pre-existing `ClosedLoopFuel.StateBasedRegionMapping` unit test failure is unrelated and
+  still open.
+- No hardware validation yet (flash persistence across a real power cycle, TS dialog/button
+  round-trip) - only unit tests and firmware compilation were exercised this session.

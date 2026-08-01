@@ -404,6 +404,9 @@ float mapFast
 	uint16_t testBenchIter;;"count",1, 0, 0, 0, 0
 
 	int16_t autoscale oilTemp;;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
+	float oilLifePercent;Oil Life %\nOil Life Monitor: estimated remaining oil life.;"%", 1, 0, 0, 100, 1
+	uint8_t oilLifeTempSource;Oil Life Temp Src\nOil Life Monitor: 0 = oil temp sensor, 1 = coolant fallback.;"", 1, 0, 0, 1, 0
+	uint32_t oilRevsUsedDrive;Oil Revs Used\nOil Life Monitor: weighted revs consumed this drive cycle, resets on ignition-on.;"revs", 1, 0, 0, 0, 0
 	int16_t autoscale eotEstDeltaTActual;EOT estimator dT actual;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
 	int16_t autoscale eotEstDeltaTTarget;EOT estimator dT target;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1
 	int16_t autoscale fuelTemp;;"deg C",{1/@@PACK_MULT_TEMPERATURE@@}, 0, 0, 0, 1

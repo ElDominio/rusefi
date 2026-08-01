@@ -167,6 +167,7 @@ script-owned curves/tables/settings defined in the tune.
 | `getTimeSinceTriggerEventMs()` | Staleness of last trigger event |
 | `isFirmwareError()` | `hasFirmwareError()` |
 | `getConsumedGrams()` / `getConsumedGramsRemainder()` / `getConsumptionGramPerSecond()` / `resetOdometer()` | TripOdometer fuel-consumption tracking (EFI_VEHICLE_SPEED + MODULE_ODOMETER) |
+| `resetOilLifeMonitor()` | Resets the Weighted Engine Oil Life Monitor's accumulated counter to 0 (100% oil life) and requests an immediate flash flush (EFI_OIL_LIFE_MONITOR) |
 | `secondsSinceTsActivity()` | Time since last TunerStudio/console request - e.g. for "PC connected" logic |
 | `getTsButtonCount(humanIdx)` | Click counter of TS Lua buttons 1..LUA_BUTTON_COUNT (10) |
 

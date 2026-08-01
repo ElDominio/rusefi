@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 19;
+static constexpr uint32_t PAGE6_DATA_VERSION = 21;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -279,6 +279,19 @@ void customPageSetDefaults() {
 	d.rollingLaunchTimingRetard   = 10;    // 10 deg pulled while held to build boost
 	d.rollingLaunchFuelAdderPercent = 5;   // 5% richer while held
 	d.rollingLaunchRampOutTime    = 1.0f;  // pulled timing decays to zero over 1 s on release
+
+	// Weighted Engine Oil Life Monitor — disabled by default; conservative starting multipliers.
+	d.oilLifeMonitorEnabled = false;
+	d.oilLifePrimarySource = oil_life_temp_source_e::OilTemp;
+	d.oilLifeRevsScaleMillions = 6;      // 6,000,000 weighted revs = 0% oil life
+	d.oilLifeMultOilCold      = 3.0f;
+	d.oilLifeMultOilOptimal   = 1.0f;
+	d.oilLifeMultOilHighHeat  = 1.8f;
+	d.oilLifeMultOilExtreme   = 4.0f;
+	d.oilLifeMultCoolantCold     = 3.5f;
+	d.oilLifeMultCoolantOptimal  = 1.1f;
+	d.oilLifeMultCoolantHighHeat = 2.0f;
+	d.oilLifeMultCoolantExtreme  = 4.5f;
 }
 
 void loadCustomPage() {

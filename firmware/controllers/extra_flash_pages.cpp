@@ -10,6 +10,7 @@
 #include "second_tables.h"
 #include "lua_config_page.h"
 #include "custom_page.h"
+#include "oil_life_monitor.h"
 #include "flash_main.h"
 #include "persistent_configuration.h"
 
@@ -29,13 +30,23 @@ static_assert(sizeof(persistent_config_container_s) <= PAGE4_SECTOR_OFFSET,
 static constexpr size_t PAGE6_SECTOR_OFFSET =
 	(LUA_PAGE_SECTOR_OFFSET + sizeof(ExtraPageContainer<page5_s, 0u>) + 31u) & ~31u;
 
+// Oil Life Monitor's persisted counter (a single uint32_t wrapped in an ExtraPageContainer,
+// see oil_life_monitor.cpp) is placed right after page 6. Reserved unconditionally (regardless
+// of EFI_OIL_LIFE_MONITOR) so the flash layout is stable across builds with the flag on or off.
+// The container is small enough that its 32-byte-aligned size is always exactly 32 bytes.
+static constexpr size_t OIL_LIFE_SECTOR_OFFSET =
+	(PAGE6_SECTOR_OFFSET + sizeof(ExtraPageContainer<page6_s, 0u>) + 31u) & ~31u;
+static constexpr size_t OIL_LIFE_RECORD_SIZE = 32u;
+
 #if (EFI_STORAGE_INT_FLASH == TRUE) && (EFI_STORAGE_MFS != TRUE) && !EFI_SIMULATOR
 static_assert(PAGE4_SECTOR_OFFSET + sizeof(ExtraPageContainer<page4_s, 0u>) <= LUA_PAGE_SECTOR_OFFSET,
 	"page 4 region overlaps Lua page — increase LUA_PAGE_SECTOR_OFFSET");
 static_assert(LUA_PAGE_SECTOR_OFFSET + sizeof(ExtraPageContainer<page5_s, 0u>) <= PAGE6_SECTOR_OFFSET,
 	"Lua page overlaps page 6 — PAGE6_SECTOR_OFFSET derivation is broken");
-static_assert(PAGE6_SECTOR_OFFSET + sizeof(ExtraPageContainer<page6_s, 0u>) <= 128u * 1024u,
-	"page 6 does not fit in the flash sector — reduce LUA_SCRIPT_SIZE or page 6 size");
+static_assert(PAGE6_SECTOR_OFFSET + sizeof(ExtraPageContainer<page6_s, 0u>) <= OIL_LIFE_SECTOR_OFFSET,
+	"page 6 overlaps the Oil Life Monitor record — OIL_LIFE_SECTOR_OFFSET derivation is broken");
+static_assert(OIL_LIFE_SECTOR_OFFSET + OIL_LIFE_RECORD_SIZE <= 128u * 1024u,
+	"Oil Life Monitor record does not fit in the flash sector — reduce LUA_SCRIPT_SIZE or page 6 size");
 #endif
 
 void resetExtraPages() {
@@ -85,6 +96,11 @@ void burnExtraFlashPages() {
 	storageWrite(EFI_CUSTOM_PAGE_RECORD_ID,
 		customPageGetStoragePtr(),
 		customPageGetStorageSize());
+
+	// Oil Life Monitor: no-op when EFI_OIL_LIFE_MONITOR is off (see the stub in
+	// oil_life_monitor.cpp). Unlike the pages above it isn't a TS-editable page, just a raw
+	// persisted counter, so it has no getTsPage()/GetStorageSize() pair to call here.
+	oilLifeMonitorBurnToFlash();
 
 	// When extracting a new config page from the main config, add a
 	// storageWrite() call here
@@ -149,6 +165,8 @@ void burnExtraFlashPage(StorageItemId id) {
 		storageWrite(EFI_CUSTOM_PAGE_RECORD_ID,
 			customPageGetStoragePtr(),
 			customPageGetStorageSize());
+	} else if (id == EFI_OIL_LIFE_RECORD_ID) {
+		oilLifeMonitorBurnToFlash();
 	}
 
 	// When extracting a new config page from the main config, add an
@@ -166,6 +184,8 @@ size_t getExtraPageFlashOffset(StorageItemId id) {
 		return LUA_PAGE_SECTOR_OFFSET;
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		return PAGE6_SECTOR_OFFSET;
+	} else if (id == EFI_OIL_LIFE_RECORD_ID) {
+		return OIL_LIFE_SECTOR_OFFSET;
 	}
 
 	// When adding a new extra page, add an else-if branch here

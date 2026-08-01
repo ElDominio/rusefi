@@ -68,6 +68,11 @@
 #define EFI_SPORT_PEDAL TRUE
 #endif
 
+// Weighted Engine Oil Life Monitor (temperature-weighted revolution counter, TS page 6 config)
+#ifndef EFI_OIL_LIFE_MONITOR
+#define EFI_OIL_LIFE_MONITOR TRUE
+#endif
+
 // Ghost Cam Mode (idle lope via VVT overlap + AFR/ignition overrides; needs Engine State Machine)
 #ifndef EFI_GHOST_CAM
 #define EFI_GHOST_CAM TRUE

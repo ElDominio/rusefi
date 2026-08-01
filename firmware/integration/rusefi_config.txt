@@ -2699,6 +2699,7 @@ end_struct
 #define ts_show_sport_pedal true
 #define ts_show_ghost_cam true
 #define ts_show_wot_enrichment true
+#define ts_show_oil_life_monitor true
 #define ts_show_hbridge_function true
 #define ts_show_aux_sensors true
 #define ts_show_clutch_up true

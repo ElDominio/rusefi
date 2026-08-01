@@ -432,6 +432,11 @@ void handleBenchCategory(uint16_t index) {
 		devPokeLongTermFuelTrim();
 		return;
 #endif // EFI_LTFT_CONTROL
+#if EFI_OIL_LIFE_MONITOR
+	case OIL_LIFE_RESET:
+		resetOilLifeMonitor();
+		return;
+#endif // EFI_OIL_LIFE_MONITOR
 #if EFI_HD_ACR
 	case HD_ACR:
 		hdAcrBench(0);

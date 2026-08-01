@@ -50,6 +50,7 @@
 #include "rolling_launch.h"
 #include "burst_knock.h"
 #include "wot_enrichment.h"
+#include "oil_life_monitor.h"
 #include "check_engine_light.h"
 #include "ac_control.h"
 #include "type_list.h"
@@ -193,6 +194,9 @@ public:
 #if EFI_WOT_ENRICHMENT
         WotEnrichment,
 #endif // EFI_WOT_ENRICHMENT
+#if EFI_OIL_LIFE_MONITOR
+        OilLifeMonitor,
+#endif // EFI_OIL_LIFE_MONITOR
 #if EFI_CHECK_ENGINE_TRIGGERING
         CheckEngineTriggering,
 #endif // EFI_CHECK_ENGINE_TRIGGERING

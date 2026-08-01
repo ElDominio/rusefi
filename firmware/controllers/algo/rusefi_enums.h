@@ -1035,6 +1035,12 @@ enum class sm_shift_detection_mode_e : uint8_t {
 	VssRate = 1,
 };
 
+// Values must match oil_life_temp_source_e_enum order in config_page_6.txt
+enum class oil_life_temp_source_e : uint8_t {
+	OilTemp = 0,
+	CoolantTemp = 1,
+};
+
 // Values must match dfco_fuel_cut_mode_e_enum order in rusefi_config.txt
 enum class dfco_fuel_cut_mode_e : uint8_t {
 	Overrun = 0,

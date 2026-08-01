@@ -30,7 +30,14 @@ bool storageAllowWriteID(StorageItemId id)
 {
 #if (EFI_STORAGE_INT_FLASH == TRUE) || defined(EFI_UNIT_TEST)
 	if ((id == EFI_SETTINGS_RECORD_ID) ||
-		(id == EFI_SETTINGS_BACKUP_RECORD_ID)) {
+		(id == EFI_SETTINGS_BACKUP_RECORD_ID)
+#if EFI_OIL_LIFE_MONITOR
+		// Oil Life Monitor is only ever flushed once, on ignition-off with the engine already
+		// stopping -- but wait for a confirmed stop the same way settings do, for MCUs that
+		// cannot flash while running.
+		|| (id == EFI_OIL_LIFE_RECORD_ID)
+#endif // EFI_OIL_LIFE_MONITOR
+		) {
 		// special case, settings can be stored in internal flash
 
 		// writing internal flash can cause cpu freeze
@@ -103,6 +110,16 @@ static bool storageWriteID(uint32_t id) {
 		engine->module<LongTermFuelTrim>()->store();
 		return true;
 #endif
+#if EFI_OIL_LIFE_MONITOR
+	} else if (id == EFI_OIL_LIFE_RECORD_ID) {
+		// Routed through burnExtraFlashPage(), NOT a direct store() call: on INT_FLASH-only
+		// boards a raw storageWrite() here would write into a shared, not-freshly-erased
+		// sector -- burnExtraFlashPage() knows to fold this into a full config burn instead
+		// (see extra_flash_pages.cpp). needsDelayedShutoff() stays true until store() actually
+		// runs as part of that sequence, so the main relay is held open the whole time.
+		burnExtraFlashPage(EFI_OIL_LIFE_RECORD_ID);
+		return true;
+#endif
 	} else if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		burnExtraFlashPage(EFI_SECOND_TABLES_RECORD_ID);
 		return true;
@@ -129,6 +146,11 @@ static bool storageReadID(uint32_t id) {
 #if EFI_LTFT_CONTROL
 	} else if (id == EFI_LTFT_RECORD_ID) {
 		engine->module<LongTermFuelTrim>()->load();
+		return true;
+#endif
+#if EFI_OIL_LIFE_MONITOR
+	} else if (id == EFI_OIL_LIFE_RECORD_ID) {
+		engine->module<OilLifeMonitor>()->load();
 		return true;
 #endif
 	} else if (id == EFI_SECOND_TABLES_RECORD_ID) {

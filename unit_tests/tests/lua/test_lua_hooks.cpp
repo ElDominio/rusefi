@@ -214,3 +214,29 @@ end
 TEST(LuaHooks, LuaPid) {
 	EXPECT_EQ(testLuaReturnsNumber(pidTest), 0);
 }
+
+#if EFI_OIL_LIFE_MONITOR
+TEST(LuaHooks, ResetOilLifeMonitor) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	getCustomPage()->oilLifeMonitorEnabled = true;
+	getCustomPage()->oilLifeRevsScaleMillions = 1;
+
+	auto& olm = engine->module<OilLifeMonitor>().unmock();
+	olm.init();
+
+	// Optimal zone (1.0x multiplier) so a handful of revs measurably eats into oil life.
+	Sensor::setMockValue(SensorType::OilTemperature, 90);
+	for (int i = 0; i < 500'000; i++) {
+		engine->rpmCalculator.onNewEngineCycle();
+	}
+	olm.onSlowCallback();
+
+	EXPECT_LT(olm.getOilLifePercent(), 100.0f);
+
+	// Exercise the actual Lua binding, not just the underlying C++ reset().
+	EXPECT_NO_THROW(testLuaExecString("resetOilLifeMonitor()"));
+
+	EXPECT_FLOAT_EQ(olm.getOilLifePercent(), 100.0f);
+}
+#endif // EFI_OIL_LIFE_MONITOR

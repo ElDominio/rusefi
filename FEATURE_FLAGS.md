@@ -91,6 +91,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_VVT_COMPENSATION` | VVT timing/fuel compensation | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_CHECK_ENGINE_TRIGGERING` | Check Engine Triggering (TS-configurable threshold checks with a points-gated CEL; TPS Stuck High/Low implemented, others reserved) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_CHT_CLT_ESTIMATOR` | CLT Estimator (estimates coolant temp from CHT via a competing-rate radiator model, with a lagged thermostat valve simulating the crossing/dip/recover hunting behavior) | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_OIL_LIFE_MONITOR` | Weighted Engine Oil Life Monitor (temperature-weighted revolution counter, oil-life % gauge; accumulates in RAM only and flushes to flash exactly once on ignition-off; **requires `EFI_MAIN_RELAY_CONTROL`** — a build error if the flag is on without it, and consequently not enabled in the simulator, which sets `EFI_MAIN_RELAY_CONTROL FALSE`) | FALSE (f4) / TRUE (f7,h7) |
 
 ## All flags
 
@@ -167,6 +168,7 @@ EFI_MC33816
 EFI_MCP_3208
 EFI_MISFIRE_DETECTION            ← AlphaX (idle misfire detection)
 EFI_OFF_IDLE_RPM_ADDER           ← AlphaX (off-idle RPM adder)
+EFI_OIL_LIFE_MONITOR              ← AlphaX (weighted oil life monitor, needs EFI_MAIN_RELAY_CONTROL)
 EFI_ONBOARD_MEMS
 EFI_PERF_METRICS
 EFI_POTENTIOMETER

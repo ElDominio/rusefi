@@ -613,9 +613,18 @@ static void updateFuelResults() {
 #endif // EFI_VEHICLE_SPEED MODULE_ODOMETER
 }
 
+static void updateOilLifeMonitor() {
+#if EFI_OIL_LIFE_MONITOR
+	engine->outputChannels.oilLifePercent = engine->module<OilLifeMonitor>()->getOilLifePercent();
+	engine->outputChannels.oilLifeTempSource = engine->module<OilLifeMonitor>()->getTempSourceForOutput();
+	engine->outputChannels.oilRevsUsedDrive = engine->module<OilLifeMonitor>()->getWeightedRevsThisDrive();
+#endif // EFI_OIL_LIFE_MONITOR
+}
+
 static void updateFuelInfo() {
 	updateFuelCorrections();
 	updateFuelResults();
+	updateOilLifeMonitor();
 #if EFI_ENGINE_CONTROL
 	const auto& wallFuel = engine->injectionEvents.elements[0].getWallFuel();
 	engine->outputChannels.wallFuelAmount = wallFuel.getWallFuel() * 1000;			// Convert grams to mg

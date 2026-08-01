@@ -11,7 +11,8 @@
 // Page 4 (second tables) sits at 72 KB; the Lua page starts at 76 KB and extends
 // to (76 KB + sizeof(Lua container)), board-specific per LUA_SCRIPT_SIZE.
 // Page 6 (AlphaX custom) is placed immediately after the Lua container by
-// extra_flash_pages.cpp — its offset is not fixed and is not exported here.
+// extra_flash_pages.cpp. The Oil Life Monitor's tiny counter record sits right after page 6.
+// Neither offset is fixed and neither is exported here.
 static constexpr size_t PAGE4_SECTOR_OFFSET = 72u * 1024u;
 static constexpr size_t LUA_PAGE_SECTOR_OFFSET = 76u * 1024u;
 static_assert(LUA_PAGE_SECTOR_OFFSET % 32 == 0,

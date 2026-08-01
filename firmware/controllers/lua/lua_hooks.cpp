@@ -736,6 +736,12 @@ void configureRusefiLuaHooks(lua_State* lState) {
 		return 0;
 	});
 #endif // EFI_VEHICLE_SPEED WITH_LUA_CONSUMPTION MODULE_ODOMETER
+#if EFI_OIL_LIFE_MONITOR
+	lua_register(lState, "resetOilLifeMonitor", [](lua_State*) {
+		engine->module<OilLifeMonitor>()->reset();
+		return 0;
+	});
+#endif // EFI_OIL_LIFE_MONITOR
 	lua_register(lState, "table3d", [](lua_State* l) {
 		auto humanTableIdx = luaL_checkinteger(l, 1);
 		auto x = luaL_checknumber(l, 2);

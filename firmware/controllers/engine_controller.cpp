@@ -514,6 +514,9 @@ void commonInitEngineController() {
 #if EFI_LTFT_CONTROL
 	initLtft();
 #endif
+#if EFI_OIL_LIFE_MONITOR
+	initOilLifeMonitor();
+#endif
 }
 
 bool validateBoardConfig() {
