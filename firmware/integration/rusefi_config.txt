@@ -1338,7 +1338,7 @@ tps_limit_t tps2Max;Fully opened voltage for primary throttle position sensor
 	bit startRequestPinInverted,"Inverted","Normal"
 	bit tcu_rangeSensorPulldown,"yes","no"
 	bit devBit01,"true","false"
-	bit devBit0,"true","false"
+	bit tcuInputSpeedSensorSharedWithVss,"Enabled","Disabled";Input speed sensor is the same physical sensor as the main VSS
 	bit devBit1,"true","false"
 	bit devBit2,"true","false"
 	bit devBit3,"true","false"

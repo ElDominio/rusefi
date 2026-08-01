@@ -432,3 +432,78 @@ Open follow-ups:
   assert) that fails the build for any F7 board defining page-5-backed
   features without EFI_STORAGE_INT_FLASH properly wired, so this class of
   bug can't recur silently on a new board.
+
+## 2026-07-30 - TCU Input Speed Sensor: "shared with main VSS" toggle
+
+What was done:
+- Added a dropdown to the TCU Input Speed Sensor panel letting the user mark
+  that sensor as physically the same wire as the main Chassis VSS, instead of
+  a second independent input.
+
+Key decisions and why:
+- Config field: repurposed the unused `devBit0` placeholder
+  (firmware/integration/rusefi_config.txt) as
+  `tcuInputSpeedSensorSharedWithVss` rather than growing the struct, avoiding
+  a FLASH_DATA_VERSION bump (see FLASH_DATA_VERSION bump history). Removed
+  its stale `field = devBit0, devBit0` line from the "Experimental 3" parking
+  lot dialog in tunerstudio.template.ini.
+- Investigated whether "shared" could simply mean pointing
+  tcuInputSpeedSensorPin at the same physical pin as
+  vehicleSpeedSensorInputPin. Ruled out: firmware/hw_layer/digital_input/digital_input_exti.cpp
+  keeps one ExtiChannel per physical pin index (`channels[16]`); a second
+  FrequencySensor::initIfValid() on an already-claimed pin hard-fails via
+  firmwareError(CUSTOM_ERR_PIN_ALREADY_USED_2) and returns -1 - two
+  independent EXTI registrations on one pin are not possible on STM32.
+- Implemented instead as edge fan-out inside FrequencySensor
+  (firmware/controllers/sensors/frequency_sensor.{h,cpp}): a FrequencySensor
+  can now be initialized via initShared() to skip owning a pin/EXTI callback
+  entirely and instead receive the raw edge frequency from another
+  FrequencySensor's onEdge() through a new onSharedEdge() path
+  (setSharedListener()/m_sharedListener). Each side still applies its own
+  biquad filter and its own SensorConverter (VehicleSpeedConverter vs.
+  InputShaftSpeedConverter) independently on top of the same raw frequency,
+  so filter tuning (vssFilterReciprocal vs issFilterReciprocal) and units
+  (km/h via gear ratio vs. RPM via tooth count) stay fully independent even
+  though the physical signal is shared.
+- firmware/init/sensor/init_input_shaft_speed_sensor.cpp now branches on
+  engineConfiguration->tcuInputSpeedSensorSharedWithVss: shared mode calls
+  inputShaftSpeedSensor.initShared(...) and attaches it as
+  vehicleSpeedSensor's shared listener (extern-declared from
+  init_vehicle_speed_sensor.cpp); non-shared mode is unchanged
+  (initIfValid on tcuInputSpeedSensorPin). Both init and deinit paths clear
+  the listener to avoid a stale pointer across a mode switch or engine
+  reconfiguration.
+- TS UI (tunerstudio.template.ini, inputSpeedSensorPanel): added the
+  "Shared with main VSS" field; "Input Pin" is now hidden when shared is
+  enabled; "Filter parameter" stays visible either way since it still
+  applies to the shared reading. tcuInputSpeedSensorTeeth is left
+  independently user-editable in both modes (not auto-derived from
+  vssToothCount) - kept the change minimal since only the pin-sharing
+  dropdown was requested.
+
+Validation:
+- `./gradlew -p java_tools :config_definition:shadowJar` - rebuilt a stale
+  config_definition-all.jar first (unrelated pre-existing issue on this
+  branch, see Stale config_definition jar history: a page5_s static_assert
+  was failing at 8000 vs 10000 bytes purely from the stale jar, nothing to
+  do with this change).
+- `unit_tests/test.sh` - full suite compiles and links; 1297/1298 pass. The
+  one failure (ClosedLoopFuel.StateBasedRegionMapping, a
+  ShortTermFuelTrim::regionForSmState(S::Coasting) mismatch) is unrelated to
+  this change - none of the edited files touch STFT/region-mapping code -
+  and predates this session's work.
+- Confirmed generated INI (firmware/tunerstudio/generated/rusefi_f407-discovery.ini)
+  renders the field correctly: `tcuInputSpeedSensorSharedWithVss = bits, U32,
+  1680, [18:18], "Disabled", "Enabled"` (defaults to Disabled/not-shared),
+  and the Input Pin field's visibility condition
+  `{ !tcuInputSpeedSensorSharedWithVss }` is present.
+- Not yet built for a real board or tested on hardware.
+
+Open follow-ups:
+- Hardware validation: confirm InputShaftSpeed reads sensibly when
+  tcuInputSpeedSensorSharedWithVss is enabled and vehicleSpeedSensorInputPin
+  is wired to the transmission input shaft sensor.
+- Consider whether tcuInputSpeedSensorTeeth should warn/default from
+  vssToothCount when shared is enabled, if users find the duplicate field
+  confusing in practice.
+
