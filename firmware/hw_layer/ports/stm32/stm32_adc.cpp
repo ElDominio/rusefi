@@ -73,6 +73,13 @@ bool adcIsMuxedInput(adc_channel_e hwChannel) {
     if ((hwChannel >= EFI_ADC_40) && (hwChannel < static_cast<adc_channel_e>(EFI_ADC_40 + ADC3_SLOW_CHANNEL_COUNT))) {
         return true;
     }
+#elif defined(EFI_SLOW_ADC) && (EFI_SLOW_ADC == ADCD3)
+    // Boards with EFI_SLOW_ADC redirected onto ADCD3 have no dedicated ADC3_SLOW_CHANNEL_COUNT
+    // group, but still populate EFI_ADC_40-47 as the muxed counterparts of EFI_ADC_32-39 - see
+    // the "EFI_SLOW_ADC == ADCD3" aliasing block in stm32_adc_v2.cpp::readSlowAnalogInputs().
+    if ((hwChannel >= EFI_ADC_40) && (hwChannel <= EFI_ADC_47)) {
+        return true;
+    }
 #endif
     return false;
 #else
@@ -92,6 +99,11 @@ adc_channel_e adcMuxedGetParent(adc_channel_e hwChannel)
 #ifdef ADC3_SLOW_CHANNEL_COUNT
     // ADC3 muxed channels: EFI_ADC_40-47 -> EFI_ADC_32-39
     if ((hwChannel >= EFI_ADC_40) && (hwChannel < static_cast<adc_channel_e>(EFI_ADC_40 + ADC3_SLOW_CHANNEL_COUNT))) {
+        return (adc_channel_e)(EFI_ADC_32 + (hwChannel - EFI_ADC_40));
+    }
+#elif defined(EFI_SLOW_ADC) && (EFI_SLOW_ADC == ADCD3)
+    // See matching comment in adcIsMuxedInput() above.
+    if ((hwChannel >= EFI_ADC_40) && (hwChannel <= EFI_ADC_47)) {
         return (adc_channel_e)(EFI_ADC_32 + (hwChannel - EFI_ADC_40));
     }
 #endif

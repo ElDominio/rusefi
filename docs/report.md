@@ -617,3 +617,80 @@ Open follow-ups:
   still open.
 - No hardware validation yet (flash persistence across a real power cycle, TS dialog/button
   round-trip) - only unit tests and firmware compilation were exercised this session.
+
+## 2026-08-01 - alphax-s550-pnp: A/C Pressure reads wrong on power-on until pin is re-selected
+
+**Symptom** (user-reported, real hardware): on the S550 PNP board, the A/C Pressure sensor
+(PF9 mux=1, `EFI_ADC_43` which is numerically channel 44 - this board's `adc_channel_e` enum
+has a permanent +1 offset from `EFI_ADC_NONE=0`) reads a plausible-looking but wrong voltage
+(~0.8-0.9V) from power-on, and only reads correctly (~1.45-1.5V, matching real A/C system
+pressure) after the user manually re-selects the input in TunerStudio away from A/C Pressure
+and back (any burn touching that specific field - "any burn" alone, e.g. an unrelated fan
+setting, does not fix it).
+
+**Investigation path** (several disproven theories worth recording so they aren't re-tried):
+- Not a mux-GPIO-polarity/boot-race issue (this board sets `ADC_MUX_PIN_INVERTED=1`) - a patch
+  forcing the mux to its documented primary state at `portInitAdc()` was written, then reverted
+  once hardware data contradicted it (the bad reading is stable/rock-steady for 10+ seconds,
+  not a one-cycle race that a low-pass filter would self-correct).
+- Not `AdcSubscription`'s per-channel `VoltsPerAdcVolt` divider-coefficient caching - the
+  `sensorinfo` console command showed `divider=2.00` identically in both the wrong and fixed
+  states.
+- Not a silent ADC3 conversion failure - `ECU: Slow ADC errors`/`overruns` sat at flat 0 in the
+  user's `.msl` log throughout the bad-reading window.
+- Not a slow analog RC settling time on the sensor's own input filter - proven wrong by the
+  user: leaving the (still-wrong) reading untouched for 20-30+ seconds does not make it
+  converge; it only ever fixes instantly, exactly when the A/C-Pressure channel field itself is
+  reconfigured+burned.
+- A real, reproducible-on-the-bench-with-nothing-connected anomaly was key: added a `muxdiag`
+  console command (`stm32_adc_v2.cpp`) dumping the mux GPIO logic level, PF9's *actual* GPIO
+  mode/pull straight from the hardware registers (`debugBrainPin(..., Gpio::F9)`), and raw
+  ADC counts for both mux positions of all 16 standard channels - all in one shot, so a "stuck
+  wrong" state and a "just fixed" state can be compared without needing to catch a boot-time
+  transient (the bad reading persists indefinitely once present). This showed PF9 sitting at
+  **`Input Pull-down`** (not `Mode Analog`) whenever A/C Pressure read wrong, flipping to
+  `Mode Analog` the instant the fix was applied - with nothing connected on the bench, ruling
+  out any real sensor/hardware explanation entirely.
+
+**Root cause**: `adcIsMuxedInput()`/`adcMuxedGetParent()` (`firmware/hw_layer/ports/stm32/
+stm32_adc.cpp`) only recognize `adc_channel_e` values 40-47 as "muxed" (an alias of a lower
+root channel, needing pin-ownership-bypass handling) when `ADC3_SLOW_CHANNEL_COUNT` is defined
+- and grepping the whole repo confirms **no board anywhere defines that macro**; it's dead
+code. This board (alphax-s550-pnp) populates channels 40-47 through a *different*, unguarded
+mechanism instead (`board.mk`'s `-DEFI_SLOW_ADC=ADCD3`, aliased in `stm32_adc_v2.cpp::
+readSlowAnalogInputs()`'s `EFI_SLOW_ADC == ADCD3` block), which those two lookup functions
+didn't know about. Consequence: A/C Pressure's channel (44) was never recognized as muxed, so
+`getAdcChannelBrainPin()` couldn't even resolve it to a physical pin (its lookup table only
+lists root channels; the 44->36 alias translation is exactly what `adcMuxedGetParent()` is
+supposed to provide and didn't), and `AdcSubscription::SubscribeSensor()` therefore never
+touched PF9's GPIO pad mode at all on a normal boot - it just sat at this MCU's power-on
+default (`stm32f7/board.h`: `EFI_DR_DEFAULT = PIN_PUPDR_PULLDOWN`, applied to *every* pin),
+which is noisy enough (digital input circuitry active) to overpower the board's 680k pulldown
+and read a plausible-but-wrong voltage. TPS/PPS live on the exact same shared-pin structure
+(e.g. TPSA/PPSB are also in the unrecognized 40-47 range) but were never affected, because
+their *root* counterpart (TPSB/PPSA, `setTPS1Inputs`/`setPPSInputs`) is *also* permanently,
+independently subscribed and correctly configures the shared physical pin regardless - A/C
+Pressure's root-channel sibling (Fuel Rail Pressure) is not independently active in this tune,
+so nothing else ever came along to fix the pin, until the user's manual pin-swap-and-back
+incidentally did (by momentarily subscribing the root/Fuel-Rail-Pressure channel, which *is*
+correctly resolved, setting PF9 to analog and leaving it there).
+
+**Fix**: extended `adcIsMuxedInput()`/`adcMuxedGetParent()` with an `#elif defined(EFI_SLOW_ADC)
+&& (EFI_SLOW_ADC == ADCD3)` branch recognizing 40-47 unconditionally in that case. Scoped
+correctly - confirmed via repo-wide grep that alphax-s550-pnp is the only board defining
+`EFI_SLOW_ADC=ADCD3`, so this is a no-op for every other board.
+
+**Validation**: full firmware build for alphax-s550 (F7) succeeds. User confirmed on real
+hardware, via the new `muxdiag` command: PF9 now reads `Mode Analog` on a fresh reboot with
+no pin-swap workaround needed at all (previously always `Input Pull-down` until manually
+fixed). Did not run `unit_tests/test.sh` - this fix lives entirely in `EFI_PROD_CODE`-only,
+STM32-hardware-specific files with no host-side test coverage.
+
+**Kept**: the `muxdiag` console command (`stm32_adc_v2.cpp`, gated `#if ADC1_SLOW_MUXED`) -
+cheap, generically useful for this whole shared-mux board family for any future "which mux
+channel is actually configured how" debugging, not just this one bug.
+
+Open follow-ups: none identified for this specific bug. Worth a broader repo grep next time
+someone touches `ADC3_SLOW_CHANNEL_COUNT` to confirm whether that whole code path (also
+unreferenced by any board) should be removed outright rather than left as effectively-dead
+code that nearly caused a second maintenance-time mix-up.

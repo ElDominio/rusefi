@@ -199,7 +199,47 @@ float getMcuVbatVoltage() {
 static volatile NO_CACHE adcsample_t slowSampleBuffer[SLOW_ADC_OVERSAMPLE * adcChannelCount];
 #if ADC1_SLOW_MUXED
 static volatile NO_CACHE adcsample_t slowSampleBufferMuxed[SLOW_ADC_OVERSAMPLE * adcChannelCount];
+
+// Diagnostic: dump the mux GPIO's current logic level plus the raw (pre-divider) 12-bit
+// ADC samples for both mux positions of all 16 standard channels (AN0-AN15) in one shot,
+// so a "stuck wrong" read and a "just fixed" read can be compared without needing to
+// catch the exact moment of a power-on transient.
+static void printMuxDiag() {
+	static const char* names[adcChannelCount] = {
+		"AN0", "AN1", "AN2", "AN3", "AN4(PF6)", "AN5(PF7)", "AN6(PF8)", "AN7(PF9)",
+		"AN8(PF10)", "AN9(PF3)", "AN10", "AN11", "AN12", "AN13", "AN14(PF4)", "AN15(PF5)"
+	};
+
+#ifdef ADC_MUX_PIN
+	efiPrintf("mux pin current logic value: %d", muxControl.getLogicValue() ? 1 : 0);
 #endif
+
+	{
+		// PF9 (AN7) is shared by Fuel Rail Pressure (mux=0) and AC Pressure (mux=1) -
+		// print its actual GPIO mode/pull config directly from the hardware registers,
+		// independent of the ADC subscription layer, to check whether it's really
+		// sitting in analog mode or has drifted into some other mode.
+		char pinState[64];
+		debugBrainPin(pinState, sizeof(pinState), Gpio::F9);
+		efiPrintf("PF9 raw pin state: %s", pinState);
+	}
+
+	for (size_t i = 0; i < adcChannelCount; i++) {
+		uint32_t sumPrimary = 0;
+		uint32_t sumMuxed = 0;
+		for (size_t j = 0; j < SLOW_ADC_OVERSAMPLE; j++) {
+			size_t index = i + j * adcChannelCount;
+			sumPrimary += slowSampleBuffer[index];
+			sumMuxed += slowSampleBufferMuxed[index];
+		}
+
+		efiPrintf("%s (idx %d): primary(mux=0) raw=%d muxed(mux=1) raw=%d",
+			names[i], (int)i,
+			(int)(sumPrimary / SLOW_ADC_OVERSAMPLE),
+			(int)(sumMuxed / SLOW_ADC_OVERSAMPLE));
+	}
+}
+#endif // ADC1_SLOW_MUXED
 
 #ifdef ADC3_SLOW_CHANNEL_COUNT
 // ADC3-only channels: PF6(IN4)=EFI_ADC_32, PF7(IN5)=_33, PF8(IN6)=_34, PF9(IN7)=_35,
@@ -259,6 +299,7 @@ static bool readBatchAdc3(adcsample_t* convertedSamples, adcsample_t* b) {
 	}
 	return true;
 }
+
 #endif // ADC3_SLOW_CHANNEL_COUNT
 
 static void slowAdcErrorCB(ADCDriver *, adcerror_t err) {
@@ -654,6 +695,10 @@ void portInitAdc() {
 #ifdef ADC_MUX_PIN
 	muxControl.initPin("ADC Mux", ADC_MUX_PIN);
 #endif //ADC_MUX_PIN
+
+#if ADC1_SLOW_MUXED
+	addConsoleAction("muxdiag", printMuxDiag);
+#endif // ADC1_SLOW_MUXED
 
 	// Init slow ADC
 	adcStart(&EFI_SLOW_ADC, NULL);
