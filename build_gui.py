@@ -949,32 +949,46 @@ class App(tk.Tk):
                     self.append_log(f"Deleting zip file: {dest_zip}\n", "info")
                     os.remove(dest_zip)
 
-            # Copy the canonical OpenBLT update .srec directly from the build directory.
+            # Copy the canonical OpenBLT update .srec and complete .bin image directly from
+            # the build/deliver directories rather than relying on the zip's copies.
             # The bundle's own .srec embeds a SIGNATURE_HASH read via a recursively-expanded
             # $(shell) in bundle.mk; because the signature header is regenerated mid-build, that
             # hash can change between when the .srec is written and when it is zipped, so the srec
             # is frequently missing (or stale) inside rusefi_bundle_*.zip. build/rusefi.srec is the
             # CRC'd image OpenBLT actually needs and is unaffected by the filename-hash race.
-            self.append_log("\n--- Copying OpenBLT update image (.srec) ---\n", "info")
+            self.append_log("\n--- Copying firmware images (.srec / .bin) ---\n", "info")
             build_srec = os.path.join(self.firmware_dir, "build", "rusefi.srec")
+            build_bin = os.path.join(deliver_dir, "rusefi.bin")
+
+            target_dir = None
+            if extract_zip:
+                updater_sh = None
+                for _root, _dirs, _files in os.walk(extract_path):
+                    if "rusefi_updater.sh" in _files:
+                        updater_sh = os.path.join(_root, "rusefi_updater.sh")
+                        break
+                if updater_sh:
+                    target_dir = os.path.dirname(updater_sh)
+                else:
+                    self.append_log("[WARNING] rusefi_updater.sh not found in extracted bundle; placing images at bundle root.\n", "stderr")
+                    target_dir = extract_path
+
             if os.path.exists(build_srec):
-                if extract_zip:
-                    updater_sh = None
-                    for _root, _dirs, _files in os.walk(extract_path):
-                        if "rusefi_updater.sh" in _files:
-                            updater_sh = os.path.join(_root, "rusefi_updater.sh")
-                            break
-                    if updater_sh:
-                        srec_dest = os.path.join(os.path.dirname(updater_sh), "rusefi_update.srec")
-                    else:
-                        self.append_log("[WARNING] rusefi_updater.sh not found in extracted bundle; placing srec at bundle root.\n", "stderr")
-                        srec_dest = os.path.join(extract_path, "rusefi_update.srec")
+                if target_dir:
+                    srec_dest = os.path.join(target_dir, "rusefi_update.srec")
                     self.append_log(f"Copying {build_srec}\n  -> {srec_dest}\n", "info")
                     shutil.copy2(build_srec, srec_dest)
                 else:
                     self.append_log("[INFO] Zip not extracted; skipping srec placement.\n", "info")
             else:
                 self.append_log(f"[WARNING] Expected srec not found at {build_srec}; OpenBLT image not copied.\n", "stderr")
+
+            if os.path.exists(build_bin):
+                bin_dest = os.path.join(target_dir if target_dir else dest, "rusefi.bin")
+                self.append_log(f"Copying {build_bin}\n  -> {bin_dest}\n", "info")
+                shutil.copy2(build_bin, bin_dest)
+            else:
+                self.append_log(f"[WARNING] Expected bin not found at {build_bin}; complete firmware image not copied.\n", "stderr")
 
             # Generate double-clickable launcher scripts inside the extracted bundle folder.
             # The .sh uses $(dirname "$0") so it works even if the folder is moved.
