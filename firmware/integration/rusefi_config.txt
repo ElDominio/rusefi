@@ -178,6 +178,11 @@ struct_no_prefix engine_configuration_s
 #define RE_obfuscated "false"
 
 #define TCU_SOLENOID_COUNT 6
+// Only Solenoid 1 & 2 are currently exposed in the TS "Shift Solenoids" dialog, matching
+// Generic4TransmissionController (the hardcoded default controller). Up to 6 shift solenoids
+// are supported at the config-struct level for a future controller targeting more complex
+// transmissions (e.g. a Ford 10R80-style unit uses 6 shift solenoids plus several ancillary
+// solenoids) -- see tcu_solenoid3..6 and tcuSolenoidTable.
 
 #define RANGE_INPUT_COUNT 6
 #define TCU_RANGE_COUNT 11
@@ -1360,7 +1365,7 @@ tps_limit_t tps2Max;Fully opened voltage for primary throttle position sensor
 
 #define AUX_SPEED_SENSOR_COUNT 2
     brain_input_pin_e[AUX_SPEED_SENSOR_COUNT iterate] auxSpeedSensorInputPin;
-	uint8_t totalGearsCount;;"", 1, 0, 1, @@TCU_GEAR_COUNT@@, 0
+	uint8_t totalGearsCount;Number of forward gears, shared by GearDetector (any count) and the TCU's Automatic mode (currently hardcoded to a 4-gear GEAR_1..GEAR_4 state machine, 5-10 gear support planned for a future release). Configured together with the per-gear ratios in the Speed Sensor dialog.;"", 1, 0, 1, @@TCU_GEAR_COUNT@@, 0
 
 	custom InjectionTimingMode 1 bits, U08, @OFFSET@, [0:1], "End of injection", "Start of injection", "Center of injection"
 	InjectionTimingMode injectionTimingMode;Defines when fuel is injected relative to the intake valve opening. Options include End of Injection or other timing references.
@@ -2492,6 +2497,8 @@ uint8_t[TCU_TABLE_WIDTH] tcu_shiftSpeed32;;{bitStringValue(velocityUnitsLabels, 
 uint8_t[TCU_TABLE_WIDTH] tcu_shiftSpeed43;;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
 
 float tcu_shiftTime;;"ms", 1, 0, 0, 3000, 0
+bit tcuIdleShiftToFirstEnabled,"Enabled","Disabled"
+uint8_t tcuIdleShiftToFirstMaxVss;Idle-shift VSS threshold. A value of 0 disables the speed check entirely, so only the idle RPM/TPS condition is required.;"km/h", 1, 0, 0, 255, 0
 
 #define ALTERNATOR_VOLTAGE_TARGET_SIZE 4
 #define ALTERNATOR_VOLTAGE_RPM_SIZE 4

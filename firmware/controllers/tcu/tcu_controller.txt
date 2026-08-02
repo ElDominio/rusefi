@@ -6,4 +6,9 @@ struct_no_prefix tcu_controller_s
 	int8_t pressureControlDuty;"TCU: EPC Duty";"%",1,0,0,100,0
 	int8_t torqueConverterDuty;"TCU: TC Duty";"%",1,0,0,100,0
 	bit isShifting;
+	bit tcu_solenoid1On;TCU: Solenoid 1 On
+	bit tcu_solenoid2On;TCU: Solenoid 2 On
+	bit tcu_idleShiftToFirst;TCU: Idle Shift to 1st
+	int16_t autoscale tcu_upshiftMargin;TCU: Upshift Margin\nVehicle speed remaining before the next upshift, in the same units as the Automatic Shift Points table (VSS display units).;"", 0.1, 0, -100, 100, 1
+	int16_t autoscale tcu_downshiftMargin;TCU: Downshift Margin\nVehicle speed remaining before the next downshift, in the same units as the Automatic Shift Points table (VSS display units).;"", 0.1, 0, -100, 100, 1
 end_struct

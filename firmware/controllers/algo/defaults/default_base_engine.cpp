@@ -143,6 +143,19 @@ void defaultsOrFixOnBurn() {
     engineConfiguration->mainRelayDisableTime = 1;
   }
 
+  // Transmission Settings no longer exposes Gear Controller / Transmission Controller
+  // dropdowns (nor the Button Shift / range-selector dialogs those other modes need to
+  // function), so Automatic + Generic4 is the only mode combination reachable through the UI
+  // at all. Force it unconditionally whenever TCU is enabled -- not just when still at None --
+  // so a tune left over from before this UI change (e.g. stuck on Generic with no way to
+  // configure or even see its now-invisible range-selector pins) gets unstuck instead of
+  // silently sitting at NEUTRAL forever. This intentionally overrides any other mode a tune
+  // might have, including configureTcu4R70W()'s explicit Generic selection.
+  if (engineConfiguration->tcuEnabled) {
+    engineConfiguration->gearControllerMode = GearControllerMode::Automatic;
+    engineConfiguration->transmissionControllerMode = TransmissionControllerMode::Generic4;
+  }
+
   // Seed the 2D cranking flex table for tunes that predate it (all-zero ethanol axis). Mirror the existing
   // E0 coolant curve at every ethanol level so turning on flexCranking stays neutral with respect to ethanol
   // until the user calibrates it.
@@ -537,6 +550,10 @@ void setDefaultBaseEngine() {
 	// Engine State Machine enable bit (the sm* thresholds + shift detection now live in
 	// TS page 5; their defaults are set in customPageSetDefaults() in custom_page.cpp).
 	engineConfiguration->useEngineStateMachine = false;
+
+	// On by default so a fresh TCU config keeps working out of the box; tcuIdleShiftToFirstMaxVss
+	// defaults to 0 (speed check disabled, idle state alone is sufficient), the safe/neutral value.
+	config->tcuIdleShiftToFirstEnabled = true;
 
   // we invoke this last so that we can validate even defaults
   defaultsOrFixOnBurn();

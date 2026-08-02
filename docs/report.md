@@ -618,6 +618,157 @@ Open follow-ups:
 - No hardware validation yet (flash persistence across a real power cycle, TS dialog/button
   round-trip) - only unit tests and firmware compilation were exercised this session.
 
+## 2026-08-01 - Transmission Settings / TCU: trim UI to a minimal working subset, add 5 gauges
+
+Context: the native TCU stack (`firmware/controllers/tcu/`) is marked by its own readme as
+"very unfinished... no plans to invest into this area" (09/2022). Its TS "Transmission
+Settings" surface had accumulated dialogs for features that either don't work end-to-end
+(line-pressure-per-gear/per-shift, 3-2 solenoid duty table - all `Gm4l6x`-only) or become
+unreachable once mode-selection dropdowns are removed (range-selector matrix belongs to
+`GearControllerMode::Generic`, button-shift belongs to `ButtonShift` - neither is the mode
+being defaulted to). User also supplied a working reference Lua TCU script (CAN-sourced
+sensors, VSS/TPS shift tables + WOT curves, 2-solenoid PWM, idle-forced-1st-gear, 5
+`setLuaGauge()` outputs) to compare against the native implementation and mine for gauge
+ideas. Comparison finding: the Lua script isn't a new architecture, it's a more complete,
+currently-functional version of what `AutomaticGearController`/`SimpleTransmissionController`
+already do on paper (VSS/TPS shift-table state machine, per-gear solenoid pattern table) -
+just missing WOT curves, idle-shift, and gear-verification timeout. This pass ports the gauge
+surface only, not the WOT-curve algorithm (separate future project).
+
+What was done:
+- `tunerstudio.template.ini`: rewrote `transmissionPanel` (kept TCU Enabled, added "# of
+  Gears" locked to 4), `shiftSolenoidPanel` (trimmed from 6 solenoids + 3-2 solenoid down to
+  just Solenoid 1 & 2), `otherSolenoidPanel` (kept TCC on/off, TCC PWM, pressure control -
+  ungated by mode), migrated `inputSpeedSensorPanel` into `tcuControls` as a 5th panel.
+  Deleted `buttonShiftInputPanel`, `rangeMatrixInputPanel`, `gearControls` (emptied once its
+  two panels were removed), `inputSpeedSensor` (standalone wrapper), `pcPerGearDialog`,
+  `pcPerShiftDialog`, `32Dialog`, `rangeMatrixDocumentation`, `rangeMatrixDialog`. Left
+  `shiftSpeedDialog`, `tccCurves`, `tcuSolenoidTableTbl` untouched per explicit user decision.
+- `top_level_menu.ini`: removed the 6 now-dead subMenu lines to match.
+- `rusefi_config.txt`: `totalGearsCount` (pre-existing but never TS-exposed field) got its
+  `lo,hi` clamped from `1, TCU_GEAR_COUNT` to `4,4` plus a descriptive comment - this is the
+  zero-risk way to render a scalar as a locked spinner in this ini dialect (no per-field
+  min/max override syntax exists). Added a `//`-comment near `TCU_SOLENOID_COUNT` documenting
+  future 6-solenoid support (10R80 motivating example).
+- `default_base_engine.cpp`: `defaultsOrFixOnBurn()` now forces `gearControllerMode` ->
+  `Automatic` and `transmissionControllerMode` -> `Generic4` whenever `tcuEnabled` is true and
+  they're still `None` (the as-shipped default) - the established idiom for "hardcode a
+  default without a config-layout change" (see `docs/calibration-compatibility.md`), so TCU
+  works without the now-removed mode dropdowns. Guarded by `== None` so explicit presets
+  (`configureTcu4R70W()`) and existing unit tests are untouched.
+- `tcu_controller.txt` + `simple_tcu.cpp` + `gc_auto.cpp` + `gauge_declarations.ini`: added 5
+  new fields modeled on the Lua script's gauges, all under the existing `gaugeCategory =
+  Transmission` block, gated `@@if_show_tcu_gauges` like their nearest siblings:
+  `tcu_solenoid1On`/`tcu_solenoid2On` (read back from the existing `tcuSolenoidTable` lookup
+  in `SimpleTransmissionController::update()`), `tcu_idleShiftToFirst` (new behavior - forces
+  a downshift to 1st at idle in `AutomaticGearController::update()`, previously nothing did
+  this), `tcu_upshiftMargin`/`tcu_downshiftMargin` (captured from the existing `curveSpeed`
+  computation in `AutomaticGearController::shift()`).
+- `unit_tests/tests/test_tcu.cpp`: added 5 new tests (mode defaulting on/off, mode not
+  clobbered when already explicit, idle-shift-to-first fires and clears, solenoid/margin
+  gauge values against the `TCU_4R70W` preset's known shift tables at a bin-aligned TPS).
+
+Gotchas hit:
+- `rusefi_config.txt`/`*.txt` struct-definition comments do NOT support `;`-prefixed
+  standalone line comments (that's an `.ini`-only convention) - `ConfigDefinition` throws
+  `Cannot parse line`. Standalone comments in these files use `//` (or legacy `!`).
+- The 34-char `DataLogConsumer` gauge-name limit (documented in CLAUDE.md for
+  `output_channels.txt`) also applies to `tcu_controller.txt` struct-field comments feeding
+  `LiveData.yaml` - `tcu_upshiftMargin`'s first attempt (a long single-line comment) broke
+  `LiveDataProcessor` codegen for every board. Fixed with the `\n`-split short-name/long-desc
+  convention.
+- Confirmed via `gauge_declarations.ini:330` that `tcuDesiredGear`/`desiredGearGauge` (the
+  Lua script's gauge #1, "intended gear") already existed - zero new plumbing needed for it.
+
+Validation:
+- `unit_tests/test.sh`: 1314/1315 pass. The one failure, `ClosedLoopFuel.StateBasedRegionMapping`,
+  is unrelated (STFT region-for-state mapping, no file this session touched) and reproduces in
+  isolation - pre-existing on this branch.
+- All 7 tests in the `tcu` suite pass (2 pre-existing + 5 new).
+- `firmware/gen_config_board.sh config/boards/proteus proteus_f7` regenerated cleanly; manually
+  inspected the generated `rusefi_proteus_f7.ini` to confirm the trimmed `tcuControls` dialog
+  matches spec exactly and all 9 deleted dialogs are absent, and that the 5 new gauge fields
+  (`entry =`, `indicator =`, `graphLine =`) are present.
+
+Open follow-ups:
+- TCC PWM Solenoid fields stay visible per user's explicit "keep the tcc solenoids" (plural)
+  instruction, but `Generic4TransmissionController` (the hardcoded default) never drives that
+  pin - only `Gm4l6xTransmissionController` does. So those 3 fields are currently assignable
+  but inert plumbing under the new default. Flagged to the user before implementation; no
+  change requested.
+- 5-10 gear support and the WOT-curve shift logic from the reference Lua script are explicitly
+  out of scope - `AutomaticGearController`/`Generic4TransmissionController` remain hardcoded
+  to a 4-gear, non-WOT-aware state machine.
+- No hardware/TS-console validation this session (both `ts_show_tcu` and `show_tcu_gauges`
+  alpha flags stay `false` by default, unchanged) - only codegen + unit tests were exercised.
+- `ClosedLoopFuel.StateBasedRegionMapping` remains open and unrelated to this work.
+
+## 2026-08-01 - TCU follow-up: fix invisible gauges, make idle-shift-to-first configurable + SM-driven
+
+Two corrections to the same-day TCU rework above, both reported by the user after reviewing
+the generated console.
+
+**1. New Transmission gauges were invisible in TunerStudio.** All 5 new gauges added earlier
+today were gated `@@if_show_tcu_gauges`, matching `desiredGearGauge`/`currentGearGauge`/
+`ISSGauge`/`tcRatioGauge` (the "most similar" siblings, per that session's own flagged
+judgment call). Checked every `board.mk`/`prepend*.txt` in the repo: `show_tcu_gauges`
+defaults `false` (`rusefi_config.txt:2941`) and **no board anywhere overrides it to `true`** -
+so that gate is dead code, permanently hiding anything behind it. Fix: dropped the
+`@@if_show_tcu_gauges` suffix from the 5 new gauge lines in `gauge_declarations.ini` to match
+the *majority* of the category's gauges (`detectedGearGauge`, `speedToRpmRatioGauge`,
+`shiftTimeGauge`, `idealEngineTorqueGauge`, `pressureControlGauge`, `torqueConverterGauge`,
+all ungated). Verified by regenerating `protorico-econoline`'s `.ini` (`EFI_TCU=TRUE`,
+`ts_show_tcu=true`) - all 5 now appear under `gaugeCategory = Transmission`. Did not touch the
+4 pre-existing gauges still gated behind the same dead flag (out of scope, pre-existed before
+today's TCU rework).
+
+**2. Idle-shift-to-first made configurable and delegated to the Engine State Machine.** The
+feature was unconditionally on with hardcoded RPM/TPS/VSS thresholds duplicated in
+`gc_auto.cpp`. Per user request:
+- Added `bit tcuIdleShiftToFirstEnabled` and `uint8_t tcuIdleShiftToFirstMaxVss` (km/h, 0 =
+  ignore speed entirely) to `rusefi_config.txt`, exposed in the `shiftSettingsPanel` of
+  Transmission Settings as "Shift to First if Idle" / "Idle Shift Max Speed (km/h, 0 = ignore
+  speed)", the latter greyed out unless the former is checked.
+- Then, per a second follow-up request, replaced the hardcoded RPM/TPS idle check entirely
+  with a query to the Engine State Machine's `engineSmIsIdle` bit
+  (`engine->module<EngineStateMachine>().unmock().engineSmIsIdle`) - the exact same
+  idiom `MisfireController::onEnginePhase` already uses for its own idle-only gating
+  (`misfire_detection.cpp:194`). `gc_auto.cpp` no longer computes idle itself at all; it just
+  asks the state machine and applies the optional VSS gate on top.
+- Default `tcuIdleShiftToFirstEnabled = true` set in `setDefaultBaseEngine()` (not
+  `defaultsOrFixOnBurn()` - a plain bit has no "unset" sentinel distinguishable from a
+  deliberate `false`, so the migration-safe `== 0` guard pattern doesn't apply here; this is a
+  brand-new field on an unreleased feature, so a real factory default in the reset-to-defaults
+  path is correct and won't fight a user's later choice to disable it on burn).
+  `tcuIdleShiftToFirstMaxVss` needs no explicit default - 0 (ignore speed) is naturally both
+  the zero-init value and the safe/neutral choice per `docs/calibration-compatibility.md`.
+
+Gotcha hit: `tcuEnabled`/`gearControllerMode`/`totalGearsCount` (accessed via
+`engineConfiguration->`) and `tcu_shiftTime`/`tcu_shiftSpeed12`/my new idle fields (accessed
+via `config->`) are declared in the *same* `rusefi_config.txt` file but land in two different
+generated C++ structs - `engine_configuration_s` (lines 1375-6824 of the generated header) vs.
+a second struct nested in `persistent_config_s` alongside it (~lines 6982-8821). Using the
+wrong pointer for a new field compiles fine for `.ini`/gauge purposes (TS's flat field
+namespace doesn't care) but fails C++ compilation with a "no member named X" error that
+doesn't obviously point at the real cause. Fixed by matching the pointer convention of the
+nearest pre-existing sibling field in the `.txt` file (`config->tcu_shiftTime` right next to
+my insertion), not by assuming `engineConfiguration`/`config` are interchangeable aliases.
+
+Validation: `unit_tests/test.sh` - 1316/1317 pass (all 9 `tcu` tests, including 2 new:
+`testIdleShiftToFirstDisabled`, `testIdleShiftToFirstVssThreshold`; `testIdleShiftToFirst`
+rewritten to drive `engineSmIsIdle` directly instead of mocking RPM/TPS/VSS). The one failure
+is the same pre-existing unrelated `ClosedLoopFuel.StateBasedRegionMapping`. One test-design
+pitfall worth noting for future TCU tests: forcing `desiredGear` down via the idle-shift path
+and then leaving VSS at a "driving" value in the same update() call lets the *ordinary*
+VSS/TPS shift-table logic in the same `update()` immediately shift back up before the test can
+observe the idle-forced gear - discovered via `testIdleShiftToFirst` failing until the idle
+step's VSS mock was also dropped to a realistic (stopped) value; the dedicated VSS-threshold
+test sidesteps this by using a TPS value (11%, `tcu_shiftTpsBins[0]`) whose ordinary shift
+thresholds sit safely below every VSS value the test uses.
+
+Open follow-ups: same as the original TCU entry above (no >4 gear/WOT support, no hardware/TS
+validation, `ClosedLoopFuel.StateBasedRegionMapping` still open).
+
 ## 2026-08-01 - alphax-s550-pnp: A/C Pressure reads wrong on power-on until pin is re-selected
 
 **Symptom** (user-reported, real hardware): on the S550 PNP board, the A/C Pressure sensor
@@ -694,6 +845,157 @@ Open follow-ups: none identified for this specific bug. Worth a broader repo gre
 someone touches `ADC3_SLOW_CHANNEL_COUNT` to confirm whether that whole code path (also
 unreferenced by any board) should be removed outright rather than left as effectively-dead
 code that nearly caused a second maintenance-time mix-up.
+
+## 2026-08-01 - TCU follow-up 2: expose commanded gear, wire "Current Gear" to real gear detection
+
+User reported live-testing: at conditions where the TCU should be commanding 1st gear, the
+"TCU: Solenoid 1 On" gauge read 0 despite the configured solenoid table requiring solenoid 1
+on / solenoid 2 off for gear 1. Asked for a "commanded gear" gauge to cross-check against.
+
+Investigation found the diagnostic tool they needed already existed but was invisible:
+`desiredGearGauge`/`currentGearGauge`/`ISSGauge`/`tcRatioGauge` in `gauge_declarations.ini`
+were still gated `@@if_show_tcu_gauges` - the same dead flag fixed for the 5 gauges added
+earlier today, just not touched then because that fix was scoped to only the new gauges.
+`tcuDesiredGear` ("Desired Gear") is exactly "the gear passed to the solenoid lookup table" -
+`GearControllerBase::update()` calls `transmissionController->update(getDesiredGear())`
+directly, and that same value indexes `tcuSolenoidTable` in `SimpleTransmissionController::
+update()`. Un-gated all 4 remaining `@@if_show_tcu_gauges`-gated Transmission-category gauges
+so the user can now see it. Re-verified the solenoid capture formula added earlier
+(`config->tcuSolenoidTable[i][static_cast<int>(gear) + 1]`) is byte-for-byte identical to the
+pre-existing formula that drives the physical solenoid pins (`simple_tcu.cpp`), so a gauge/pin
+mismatch given the same commanded gear should not be possible - the live-test discrepancy is
+most likely explained by the commanded gear not actually being 1 at that moment, or testing
+against a pre-today firmware build; newly-visible "Desired Gear" should confirm which.
+
+Follow-up user request, addressed in the same session: **redefine gauge semantics.**
+"Desired Gear" should stay as-is (commanded/solenoid-lookup value). "Current Gear" should
+instead be *derived from the VSS/RPM ratio* (same concept as "Detected Gear" - user explicitly
+equated the two), not a mirror of the commanded value.
+
+Found `firmware/controllers/modules/gear_detector/gear_detector.cpp` (`GearDetector`, compiled
+into every board unconditionally via `controllers/modules/modules.mk`) already does exactly
+this: computes driveshaft RPM from `SensorType::VehicleSpeed` + `driveWheelRevPerKm` +
+`finalGearRatio`, compares against `InputShaftSpeed` (or `Rpm` if no ISS), matches the ratio
+against a per-gear `gearRatio[]` table, and publishes the result as `SensorType::DetectedGear`.
+This module was previously dormant/disconnected from the TCU work: `gearRatio[]` (the
+threshold table it needs) was declared in `rusefi_config.txt` but had **zero TS exposure
+anywhere** - so it was permanently all-zeros, which would trigger `GearDetector::
+initGearDetector()`'s `criticalError("Expecting positive gear ratio for #%d", ...)` (halts the
+engine) for anyone who happened to have `totalGearsCount != 0`. It stayed silently safe only
+because nothing ever set `totalGearsCount` either.
+
+Also found (before making any change) that `totalGearsCount` and a full 10-entry `gearRatio1..
+10` table **already exist** in a pre-existing `gearDetection` panel inside the "Speed sensor"
+dialog (`tunerstudio.template.ini:4478`, part of the always-visible `speedSensor` dialog) -
+this morning's earlier TCU pass had duplicated `totalGearsCount` into a new "# of Gears" field
+inside Transmission Settings without knowing this, and additionally clamped its `lo,hi` to
+`4,4` in `rusefi_config.txt` - which would have silently broken `gearDetection`'s existing
+5th-10th-gear fields (and any non-TCU/manual-transmission use of `GearDetector`) for every
+board, since the field is shared, not TCU-exclusive.
+
+Asked the user whether `GearDetector` should auto-arm with placeholder ratios or stay
+opt-in-only; they chose opt-in (matches existing default, zero risk) and specified the gear
+ratio table belongs solely in the Speed Sensor dialog, not duplicated into Transmission
+Settings. Implemented:
+- `rusefi_config.txt`: reverted `totalGearsCount`'s `lo,hi` from `4,4` back to `1,
+  @@TCU_GEAR_COUNT@@` (its original range); updated its comment to explain the field is shared
+  between `GearDetector` (any count) and TCU Automatic mode (hardcoded to 4 gears regardless of
+  this count) and that it's configured in the Speed Sensor dialog.
+- `tunerstudio.template.ini`: removed the duplicate "# of Gears" field + its comment block from
+  `transmissionPanel`, replaced with a single `field = "!..."` pointer note directing to the
+  Speed Sensor dialog.
+- `tcu.cpp`: `TransmissionControllerBase::postState()` no longer sets `tcuCurrentGear =
+  getCurrentGear()` (the last-commanded-gear tracker, which is still needed internally
+  unchanged for `Generic4TransmissionController`'s shift-start detection via `shiftingFrom`/
+  `isShifting`). It now reads `Sensor::get(SensorType::DetectedGear)` and only updates
+  `tcuCurrentGear` when that sensor is valid, otherwise retaining its last value. Zero risk of
+  the `criticalError` path being hit by this change alone, since `totalGearsCount` still
+  defaults to 0 and nothing in this pass changes that default.
+- `gauge_declarations.ini`: un-gated `desiredGearGauge`/`currentGearGauge`/`ISSGauge`/
+  `tcRatioGauge` (dropped `@@if_show_tcu_gauges`), matching the fix already applied to the 5
+  gauges added earlier today and the majority-ungated convention in that category.
+
+Validation: `unit_tests/test.sh` - 1316/1317 pass, same pre-existing unrelated
+`ClosedLoopFuel.StateBasedRegionMapping` failure, no `tcu` or `gear_detector` test regressions
+(neither test file references `tcuCurrentGear`/`getCurrentGear()` directly, so none needed
+updating). Regenerated `protorico-econoline`'s `.ini` and confirmed: Transmission Settings no
+longer duplicates the gear-count field, the pre-existing Speed Sensor dialog's 10-gear table is
+back to its full un-clamped range, and all 9 Transmission-category gauges (4 re-enabled + 5
+from earlier today) are present.
+
+Open follow-ups:
+- `tcuCurrentGear` ("Current Gear") will read invalid/stale until a user actually configures
+  "Forward gear count" and the per-gear ratio table in the Speed Sensor dialog - this is
+  unfinished setup work inherent to `GearDetector` itself, not something this pass changes.
+- Live-hardware confirmation of the original solenoid-gauge-vs-commanded-gear discrepancy is
+  still outstanding - depends on the user re-testing with today's build and the now-visible
+  Desired Gear gauge.
+- Same open items as both earlier TCU entries today (no >4-gear/WOT support in Automatic mode,
+  `ClosedLoopFuel.StateBasedRegionMapping` still open, no hardware validation this session).
+
+## 2026-08-01 - TCU follow-up 3: root-caused "Desired Gear stuck at 0" via user-supplied .msl log
+
+User captured a short log (`whygear0.msl`, protorico-econoline, engine idling, RPM ~886, VSS
+0) showing every TCU channel pinned at 0 the whole time: Desired Gear, Current Gear, both
+solenoid-on flags, EPC/TC Duty. Engine SM channels (`Engine SM: enabled`/`Engine SM: Idle` = 1)
+confirmed the rest of the ECU was running fine, isolating the problem to the TCU chain
+specifically. Parsed the .msl header (tab-separated, columns at fixed offsets after 5 header
+lines) with a small Python script to pull just the relevant columns across all 113 rows rather
+than reading the ~30k-token raw file.
+
+Root cause, established by elimination against the actual code path (not the log alone):
+`AutomaticGearController::update()` unconditionally promotes `NEUTRAL -> GEAR_1` the instant
+it's called (`if (getDesiredGear() == NEUTRAL) setDesiredGear(GEAR_1);`) - so `desiredGear`
+staying 0 across 113 rows / 1.2s only makes sense if that `update()` call never ran at all,
+which happens if either `tcuEnabled` is false or `gearControllerMode == None`
+(`engine_controller.cpp:192`'s gate). User confirmed `tcuEnabled` was on, narrowing it to
+`gearControllerMode`. `defaultsOrFixOnBurn()`'s TCU block (added earlier today) only forced
+the mode when it was still exactly `None`, specifically to avoid disturbing
+`configureTcu4R70W()`'s deliberate `Generic` selection - but that same guard meant a tune
+already sitting on `Generic` or `ButtonShift` from *before* today's UI changes (dropdown +
+range-selector dialog both removed) would never get corrected, and had no way to be fixed
+through TS anymore either (nothing left in the UI reads or writes those fields). User confirmed
+this board previously had "Generic gear controller" selected in an earlier firmware build -
+exact match.
+
+User's call on the tradeoff (asked because it also affects `configureTcu4R70W()`, a
+hypothetical real-board preset unrelated to this specific bug): don't preserve compatibility
+with anything, this is a ground-up reimplementation. Changed `defaultsOrFixOnBurn()`'s TCU
+block from "set only if still `None`" to **unconditional**: whenever `tcuEnabled`, force
+`gearControllerMode = Automatic` and `transmissionControllerMode = Generic4` on every boot,
+full stop, overriding whatever was previously persisted (including `configureTcu4R70W()`'s
+explicit `Generic` choice, and including a mode a user leaves selected while `tcuEnabled` is on
+- there is no longer any code path that can set anything else, so this simply keeps
+re-asserting the only supported state every startup/burn).
+
+Updated `test_tcu.cpp`'s `testDefaultModeDoesNotOverrideExplicitChoice` (whose whole premise -
+"a tune with Generic set must not be touched" - is now the opposite of intended behavior) to
+`testDefaultModeOverridesExplicitChoice`, asserting a `Generic`-mode tune gets forced to
+Automatic/Generic4. Along the way discovered `EngineTestHelper` construction itself already
+runs `defaultsOrFixOnBurn()` a second time post-`applyEngineType()` (simulating a real boot
+sequence past the initial "reset to defaults" pass) - so `configureTcu4R70W()`'s live `Generic`
+selection was *already* being overridden to `Automatic` by the time the test body started
+running, before its own explicit `defaultsOrFixOnBurn()` call. Rewrote the test to explicitly
+re-set `gearControllerMode = Generic` after construction (simulating a stale *persisted* value,
+which is the actual real-world scenario) rather than relying on the preset's transient
+in-memory value, which is both more realistic and avoids the ordering trap.
+
+Validation: `unit_tests/test.sh` - 1316/1317 pass, same pre-existing unrelated
+`ClosedLoopFuel.StateBasedRegionMapping` failure; the 9 `tcu` tests all pass including the
+rewritten mode-override test. No other tests reference `gearControllerMode`/
+`transmissionControllerMode` post-`defaultsOrFixOnBurn()` in a way this change could affect.
+
+Open follow-ups:
+- User has not yet re-flashed/re-tested on the actual protorico-econoline hardware to confirm
+  the fix resolves the stuck-at-NEUTRAL symptom live - this session's validation is unit-test
+  only.
+- `GenericGearController`/`ButtonShiftController` and their supporting config fields
+  (range-selector matrix, button pins) are now fully unreachable dead code paths in production
+  (no UI can select or configure them, and the one remaining C++ path that could -
+  `configureTcu4R70W()` - is itself now overridden every boot). Not removed this session; worth
+  a follow-up cleanup pass given the user's "ground-up reimplementation" framing.
+- Same other open items as the earlier TCU entries today (no >4-gear/WOT support in Automatic
+  mode, `ClosedLoopFuel.StateBasedRegionMapping` still open).
 
 ## 2026-08-01 - protorico-econoline: enable CLT-from-CHT estimation
 

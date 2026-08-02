@@ -34,7 +34,17 @@ void TransmissionControllerBase::postState() {
 	if (iss.Valid && rpm.Valid) {
 		tcRatio = rpm.Value / iss.Value;
 	}
-  tcuCurrentGear = getCurrentGear();
+
+	// "Current Gear" is the gear we're actually (believed to be) in, derived from the VSS/RPM
+	// ratio via GearDetector (same source as the "Detected Gear" gauge) -- not a mirror of
+	// what was last commanded to the solenoids (that's "Desired Gear", tcuDesiredGear).
+	// Requires "Forward gear count" and the per-gear ratios in the Speed Sensor dialog to be
+	// configured; until then SensorType::DetectedGear stays invalid and this just retains its
+	// last value.
+	auto detectedGear = Sensor::get(SensorType::DetectedGear);
+	if (detectedGear.Valid) {
+		tcuCurrentGear = static_cast<int8_t>(detectedGear.Value);
+	}
 #endif
 }
 

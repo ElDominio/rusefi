@@ -17,6 +17,12 @@ void SimpleTransmissionController::update(gear_e gear) {
 			enginePins.tcuSolenoids[i].setValue(config->tcuSolenoidTable[i][static_cast<int>(gear) + 1]);
 #endif
     }
+
+    // Only solenoids 1 & 2 are exposed in the TS "Shift Solenoids" dialog today; publish
+    // their commanded on/off state as gauges (see tcu_controller.txt).
+    tcu_solenoid1On = config->tcuSolenoidTable[0][static_cast<int>(gear) + 1] != 0;
+    tcu_solenoid2On = config->tcuSolenoidTable[1][static_cast<int>(gear) + 1] != 0;
+
     setCurrentGear(gear);
 
 #if EFI_TUNER_STUDIO
