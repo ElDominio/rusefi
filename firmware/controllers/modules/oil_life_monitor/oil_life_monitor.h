@@ -26,6 +26,12 @@ public:
 	// immediately requests a flash flush so the reset survives a power cycle right away.
 	void reset();
 
+	// Manually sets remaining oil life to an arbitrary percent (0-100), converting back to a
+	// weighted-revolution count using the current oilLifeRevsScaleMillions, and immediately
+	// requests a flash flush. For recovering a known real-world value after a settings loss --
+	// see the "set_oil_life" console command.
+	void setOilLifePercent(float percent);
+
 	// Called by the storage manager thread once the requested read/write completes.
 	void load();
 	void store();

@@ -212,3 +212,24 @@ TEST(OilLifeMonitor, Reset) {
 	olm.reset();
 	EXPECT_FLOAT_EQ(olm.getOilLifePercent(), 100.0f);
 }
+
+TEST(OilLifeMonitor, SetOilLifePercent) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	auto* cfg = getCustomPage();
+	cfg->oilLifeRevsScaleMillions = 1; // 1,000,000 weighted revs == 0%
+
+	auto& olm = getOlm();
+	olm.init();
+
+	// Manual correction, e.g. after a settings loss -- matches the "set_oil_life" console command.
+	olm.setOilLifePercent(75.0f);
+	EXPECT_FLOAT_EQ(olm.getOilLifePercent(), 75.0f);
+
+	// Out-of-range input clamps rather than wrapping/going negative.
+	olm.setOilLifePercent(150.0f);
+	EXPECT_FLOAT_EQ(olm.getOilLifePercent(), 100.0f);
+
+	olm.setOilLifePercent(-10.0f);
+	EXPECT_FLOAT_EQ(olm.getOilLifePercent(), 0.0f);
+}

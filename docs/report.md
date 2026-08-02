@@ -1062,3 +1062,23 @@ Open follow-ups:
   file with a much smaller define/include set - worth remembering to test the `-b` bundle path
   (or at least grep for what an added `#include` pulls in) whenever touching a board's
   `board_configuration.cpp` on an OpenBLT-enabled board, not just the plain firmware build.
+
+## 2026-08-01 - Oil Life Monitor: add set_oil_life console command
+
+What was done:
+- Added `OilLifeMonitor::setOilLifePercent(float percent)`: clamps to 0-100, converts back to
+  a weighted-revolution count using the current `oilLifeRevsScaleMillions`, and immediately
+  requests a flash flush (`requestFlush()`), same as `reset()`.
+- Wired it up as a console command `set_oil_life` (`addConsoleActionF`, `initOilLifeMonitor()`
+  in `oil_life_monitor.cpp`), e.g. `set_oil_life 62.5`, for manually correcting the tracked
+  value after a settings loss. Not exposed in TunerStudio - it's a one-off correction, not a
+  tune setting.
+- Added the `EFI_UNIT_TEST`-stub counterpart (`void OilLifeMonitor::setOilLifePercent(float) {
+  }`) alongside the other stubbed methods for builds with `EFI_OIL_LIFE_MONITOR` off.
+
+Validation:
+- `unit_tests/tests/test_oil_life_monitor.cpp`: new `OilLifeMonitor.SetOilLifePercent` test
+  covers the direct call (75% round-trips exactly) and clamping at both ends (150 -> 100,
+  -10 -> 0).
+
+Open follow-ups: none identified.

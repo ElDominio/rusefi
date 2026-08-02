@@ -11,6 +11,7 @@
 
 #include "storage.h"
 #include "extra_flash_pages.h"
+#include "console_io.h"
 
 // Zone thresholds are fixed in firmware; only the multipliers below (config_page_6.txt) are tunable.
 static constexpr float OIL_LIFE_ZONE_COLD_MAX = 70.0f;
@@ -107,6 +108,16 @@ void OilLifeMonitor::reset() {
 	requestFlush();
 }
 
+void OilLifeMonitor::setOilLifePercent(float percent) {
+	percent = clampF(0.0f, percent, 100.0f);
+
+	uint8_t scaleMillions = getCustomPage()->oilLifeRevsScaleMillions;
+	float maxRevs = scaleMillions * 1'000'000.0f;
+
+	m_weightedRevs = (uint32_t)(maxRevs * (1.0f - percent / 100.0f));
+	requestFlush();
+}
+
 // Called from storage manager thread when the requested read completes.
 void OilLifeMonitor::load() {
 #if EFI_PROD_CODE
@@ -176,8 +187,17 @@ float OilLifeMonitor::getZoneMultiplier(float tempC, bool isCoolant) {
 	}
 }
 
+static void setOilLifePercentCmd(float percent) {
+	efiPrintf("Oil Life Monitor: manually setting oil life to %.1f%%", percent);
+	engine->module<OilLifeMonitor>()->setOilLifePercent(percent);
+}
+
 void initOilLifeMonitor() {
 	engine->module<OilLifeMonitor>()->init();
+
+	// Manually correct oil life after a settings loss, e.g. "set_oil_life 62.5" -- not exposed
+	// in TunerStudio since it's a one-off correction, not a tune setting.
+	addConsoleActionF("set_oil_life", setOilLifePercentCmd);
 }
 
 void resetOilLifeMonitor() {
@@ -197,6 +217,7 @@ void OilLifeMonitor::onIgnitionStateChanged(bool) { }
 bool OilLifeMonitor::needsDelayedShutoff() { return false; }
 void OilLifeMonitor::requestFlush() { }
 void OilLifeMonitor::reset() { }
+void OilLifeMonitor::setOilLifePercent(float) { }
 void OilLifeMonitor::load() { }
 void OilLifeMonitor::store() { }
 float OilLifeMonitor::getOilLifePercent() const { return 100.0f; }
