@@ -11,6 +11,15 @@
 #include "hellen_meta.h"
 #include "board_overrides.h"
 
+// custom_page.h pulls in page_6_generated.h, whose curve-size macros
+// (LAUNCH_POWER_RAMP_CURVE_SIZE etc.) are normally provided by engine.h's module-header
+// includes. The bootloader build compiles this file too but never includes engine.h, so this
+// (and the getCustomPage() call below) must stay out of the EFI_BOOTLOADER translation unit --
+// it's dead code there anyway, since the bootloader never runs engine configuration.
+#ifndef EFI_BOOTLOADER
+#include "custom_page.h"
+#endif
+
 static void setInjectorPins() {
 	// Mapped to injector low-side drivers
 	// Reordered per bench test results: harness pairs cylinder N with the coil/injector
@@ -51,7 +60,10 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->camInputs[3] = Gpio::Unassigned;
 
 	// Sensor ADC Channels
-	engineConfiguration->clt.adcChannel = H144_IN_CLT; // PC2 / CLT_OUT
+	// This Ford Modular V8 has no coolant temp sensor -- the "CLT_OUT" harness signal is
+	// actually the head-mounted CHT sensor. Wire it as CHT and let the estimator (enabled
+	// below) derive CLT from it instead of reading it as a real CLT input.
+	engineConfiguration->chtSensor.adcChannel = H144_IN_CLT; // PC2 / CLT_OUT (actually CHT)
 	engineConfiguration->iat.adcChannel = H144_IN_IAT; // PC3 / IAT_OUT
 
 	// TPS (Throttle Position Sensor) Inputs
@@ -102,6 +114,14 @@ static void protorico_econoline_boardDefaultConfiguration() {
 	setIgnitionPins();
 
 	engineConfiguration->enableSoftwareKnock = true;
+
+	// No real CLT sensor on this engine -- estimate CLT from the CHT sensor wired above.
+	// Curve is a placeholder (same generic NTC curve used as the global CLT default in
+	// engine_configuration.cpp) until the actual Ford CHT sensor part is bench-calibrated.
+	engineConfiguration->chtSensor.config = {0, 23.8889, 48.8889, 9500, 2100, 1000, 1500};
+#ifndef EFI_BOOTLOADER
+	getCustomPage()->cltFromCht = true;
+#endif
 
 	// Relays and Solenoids
 	engineConfiguration->mainRelayPin = Gpio::Unassigned;

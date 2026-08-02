@@ -694,3 +694,69 @@ Open follow-ups: none identified for this specific bug. Worth a broader repo gre
 someone touches `ADC3_SLOW_CHANNEL_COUNT` to confirm whether that whole code path (also
 unreferenced by any board) should be removed outright rather than left as effectively-dead
 code that nearly caused a second maintenance-time mix-up.
+
+## 2026-08-01 - protorico-econoline: enable CLT-from-CHT estimation
+
+User asked to enable the CHT-to-CLT estimator (`cht_clt_estimator.h`/`.cpp`, page 6
+`cltFromCht`) for protorico-econoline. This board is a Ford Modular V8 (firing order
+`FO_1_3_7_2_6_5_4_8`, cylindersCount 8) - these engines ship with a head-mounted CHT sensor and
+no separate coolant sensor, so the harness signal previously wired as `clt.adcChannel` (labeled
+`CLT_OUT` on the connector, PC2 / `H144_IN_CLT`) is actually a CHT signal.
+
+Two things were required, not just the runtime toggle:
+1. `board.mk`: this board's `meta-info.env` pins `PROJECT_CPU=ARCH_STM32F4`, and
+   `stm32f4ems/efifeatures.h` defaults `EFI_CHT_CLT_ESTIMATOR` to `FALSE` (only
+   `stm32f7ems`/`stm32h7ems` default it `TRUE`) - without an explicit override the estimator
+   code compiles out entirely (`cht_clt_estimator.cpp`'s `#else` stub). Added
+   `-DEFI_CHT_CLT_ESTIMATOR=TRUE`. Caught this only after the user asked "don't we need to
+   enable this in board.mk?" - initially assumed it was already compiled in because
+   `board.mk` has F7/H7-conditional sections, without checking which `PROJECT_CPU` this board
+   actually builds as.
+2. `board_configuration.cpp`: repointed the PC2 ADC input from `engineConfiguration->clt` to
+   `engineConfiguration->chtSensor` (nothing else on this board reads `chtSensor`, so it was
+   previously wired to nothing), gave `chtSensor.config` a placeholder thermistor curve (reused
+   the same generic NTC curve `engine_configuration.cpp` uses as the global `clt` default -
+   `chtSensor` has no default curve set anywhere in the codebase, and an unconfigured
+   `{0,0,0,...}` curve trips `validateThermistorConfig`'s ascending-order check and calls
+   `firmwareError` at boot), and set `getCustomPage()->cltFromCht = true` in
+   `protorico_econoline_boardDefaultConfiguration()` (runs after `resetExtraPages()`'s
+   `customPageSetDefaults()`, which sets `cltFromCht = false`, so the override sticks; it's a
+   soft default like the other ADC channel assignments in the same function, not forced via
+   `ConfigOverrides`, so a user can still flip it back to a real CLT sensor in TS if the harness
+   changes).
+
+Validation: full firmware build via `bin/compile.sh config/boards/protorico-econoline/meta-info.env
+-j12` - succeeds, flash 75.86% (571712/736KB), ram0 100% (pre-existing headroom pattern, not a
+regression). Not flashed/tested on hardware this session.
+
+**Follow-up same day**: user reported `build_gui.py`'s bundle build (`compile.sh -b ...`, which
+additionally builds the OpenBLT bootloader region) failing with `LAUNCH_POWER_RAMP_CURVE_SIZE`/
+`BURST_KNOCK_*_SIZE`/`WOT_ENRICHMENT_SIZE was not declared in this scope` plus a static_assert
+failure, all in `page_6_generated.h`, compiling `board_configuration.o` under `-DEFI_BOOTLOADER`.
+Root cause: `#include "custom_page.h"` (added above, for `getCustomPage()`) pulls in
+`page_6_generated.h` directly; those curve-size macros are normally supplied by `engine.h`'s
+unconditional module-header includes (`launch_power_ramp.h`, `burst_knock.h`,
+`wot_enrichment.h`), but the bootloader's compile of `board_configuration.cpp` never includes
+`engine.h` at all (`pch.h` only pulls in `engine_configuration.h`, and the bootloader
+never runs engine config) - so in that one translation unit the macros were simply never
+defined. Confirmed no other OpenBLT board (`f407-discovery`, `alphax-s197-v2`,
+`alphax-gold`, `alphax-2chan`, etc.) includes `custom_page.h` from `board_configuration.cpp`,
+which is why this class of break hadn't surfaced before. Fix: wrapped the `#include
+"custom_page.h"` and the `getCustomPage()->cltFromCht = true;` call in `#ifndef
+EFI_BOOTLOADER` (mirroring the guard `engine.h` itself uses around
+`engine_modules_generated.h`) - both are dead code under `EFI_BOOTLOADER` anyway.
+Re-validated with the actual failing command, `bin/compile.sh -b
+config/boards/protorico-econoline/meta-info.env BUNDLE_SIMULATOR=false` (bootloader + firmware
++ bundle zip) - now completes successfully end to end.
+
+Open follow-ups:
+- `chtSensor.config` curve is an unvalidated placeholder (same caveat as the existing CLT and
+  EOT estimator defaults) - needs bench/real-sensor calibration against the actual Ford CHT
+  sensor part before trusting the reported temperature.
+- Not yet confirmed on hardware that PC2 is actually reading a CHT-characteristic sensor and
+  not something else; relies on user's stated wiring.
+- Only validated the plain `bin/compile.sh ... -j12` build the first time, missing that
+  `build_gui.py`/`compile.sh -b` exercises an additional bootloader compile of the same source
+  file with a much smaller define/include set - worth remembering to test the `-b` bundle path
+  (or at least grep for what an added `#include` pulls in) whenever touching a board's
+  `board_configuration.cpp` on an OpenBLT-enabled board, not just the plain firmware build.

@@ -95,5 +95,9 @@ DDEFS += -DEFI_WOT_ENRICHMENT=TRUE
 # Added by Board Configuration Editor
 DDEFS += -DEFI_ENGINE_STATE_MACHINE=TRUE
 
+# No real CLT sensor on this Ford Modular V8 -- estimate CLT from the CHT sensor.
+# F4 defaults this off (only F7/H7 default it on) -- see cht_clt_estimator.h.
+DDEFS += -DEFI_CHT_CLT_ESTIMATOR=TRUE
+
 # TCU support
 DDEFS += -DEFI_TCU=TRUE
