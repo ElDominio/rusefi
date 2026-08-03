@@ -248,6 +248,8 @@ public class DefaultTuneMigratorTest {
                 "We aren't going to restore field `boostTpsBins`: it is missed in new .ini file\r\n" +
                 "We aren't going to restore field `communityCommsLedPid`: it is missed in new .ini file\r\n" +
                 "We aren't going to restore field `crankingCycleCoef`: it is missed in new .ini file\r\n" +
+                "We aren't going to restore field `enableFan1WithAc`: it looks like its value is just renamed: `\"false\"` -> `\"no\"`\r\n" +
+                "We aren't going to restore field `enableFan2WithAc`: it looks like its value is just renamed: `\"false\"` -> `\"no\"`\r\n" +
                 "We aren't going to restore field `enableInnovateLC2`: it is missed in new .ini file\r\n" +
                 "We aren't going to restore field `enableKnockSpectrogram`: it looks like its value is just renamed: `\"false\"` -> `\"no\"`\r\n" +
                 "We aren't going to restore field `etb1configured`: it is missed in new .ini file\r\n" +
