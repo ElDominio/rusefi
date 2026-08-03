@@ -35,6 +35,9 @@ jobs:
 
       - name: Set up Cygwin
         uses: cygwin/cygwin-install-action@v6
+        with:
+          # needed by hw_layer/mass_storage/create_ini_image*.sh to build the embedded-INI ramdisk image
+          packages: dosfstools,mtools,zip,p7zip,vim
 
       - name: Print bash version
         run: bash --version
