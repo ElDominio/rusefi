@@ -88,12 +88,13 @@ TEST(ClosedLoopFuel, CellSelection) {
 TEST(ClosedLoopFuel, StateBasedRegionMapping) {
 	using S = EngineStateMachineState;
 
-	// Idle group -> idle cell
+	// Idle group -> idle cell. Coasting joined this group (rather than overrun) because it no
+	// longer necessarily implies engine-braking -- see isTransmissionEngaged().
 	EXPECT_EQ(ftRegionIdle, ShortTermFuelTrim::regionForSmState(S::Idle));
 	EXPECT_EQ(ftRegionIdle, ShortTermFuelTrim::regionForSmState(S::Afterstart));
+	EXPECT_EQ(ftRegionIdle, ShortTermFuelTrim::regionForSmState(S::Coasting));
 
 	// Overrun group -> overrun cell
-	EXPECT_EQ(ftRegionOverrun, ShortTermFuelTrim::regionForSmState(S::Coasting));
 	EXPECT_EQ(ftRegionOverrun, ShortTermFuelTrim::regionForSmState(S::Overrun));
 
 	// WOT -> power cell

@@ -1082,3 +1082,55 @@ Validation:
   -10 -> 0).
 
 Open follow-ups: none identified.
+
+## 2026-08-02 - Fix STFT gauge reading -9900% (missing master fix, plus stale test)
+
+What was reported: Short Term Fuel Trim showed -9900% with STFT disabled, and moved oddly
+once enabled, on protorico-econoline and reportedly every board on this branch
+(`first-order-rpm-master-merge`); not reproducible on master.
+
+Root cause: `stftCorrection` is a 1.0-centered fuel multiplier (1.0 = neutral,
+`ClosedLoopFuelCellBase::getAdjustment()` returns `1.0f + m_adjustment`). TunerStudio's
+scalar-channel conversion is `display = (raw + translate) * scale`. Commit `b4022c973d`
+("fuel: fix STFT correction channel scaling") changed `stftCorrection`'s `translate` from
+`-1.0` to `-100` based on the opposite (and incorrect) assumption `display = raw*scale +
+translate`. At neutral (raw=1.0): `(1.0 + -100) * 100 = -9900` -> exactly the reported
+value. Master hit and fixed the same regression same-day (`8fe687b081` introduced it,
+`8f7834e77f` "fix: decouple VE Analyze from STFT display scale" corrected it) -> this
+branch just hadn't merged that fix in yet.
+
+What was done (ported/re-applied master's `8f7834e77f` onto this branch's diverged files):
+- `firmware/controllers/algo/engine_state.txt`: reverted `stftCorrection`'s TS `translate`
+  back to `-1.0` (scale stays 100, lo/hi stay -50/50).
+- `firmware/tunerstudio/tunerstudio.template.ini`: `egoCorrectionForVeAnalyze` now reads
+  `{ Gego }` (the pre-existing 100-neutral EGO correction channel already published by
+  `status_loop.cpp`) instead of `{ 100 + stftCorrection1 }`, so VE Analyze/WUE Analyze no
+  longer depend on the user-facing STFT gauge's display scale.
+- Added `java_tools/configuration_definition/src/test/java/com/rusefi/test/VeAnalyzeCorrectionTest.java`
+  (ported from master) asserting raw 0.9/1.0/1.1 display as -10/0/+10% and that
+  `egoCorrectionForVeAnalyze` binds to `Gego`.
+- Bumped `UiVersion.CONSOLE_VERSION` to 20260802.
+
+Also found and fixed (unrelated, surfaced by running the full unit test suite to validate
+the above): `ClosedLoopFuel.StateBasedRegionMapping` in `unit_tests/tests/test_stft.cpp` was
+failing independently of this change. Commit `9bae8c75b0` ("Engine State Machine: classify
+off-throttle rolling above maxIdleVss as Coasting") deliberately moved
+`EngineStateMachineState::Coasting` from the overrun fuel-trim region to the idle region in
+`ShortTermFuelTrim::regionForSmState()`, but the test wasn't updated to match. Updated the
+test's expectation (Coasting -> `ftRegionIdle`) rather than the (intentional) production
+mapping.
+
+Validation:
+- `./gradlew :config_definition:test --tests VeAnalyzeCorrectionTest` passes.
+- `gen_config_board.sh config/boards/protorico-econoline protorico-econoline`: generated
+  `rusefi_protorico-econoline.ini` now shows `stftCorrection1 = scalar, F32, 1612, "%",
+  100.0, -1.0` and `egoCorrectionForVeAnalyze = { Gego }`.
+- `unit_tests/test.sh`: full suite 1317/1317 passing after the test-file fix (was 1316/1317
+  before, with the pre-existing unrelated Coasting-mapping failure).
+
+Open follow-ups:
+- This branch is a `first-order-rpm-master-merge` branch that is otherwise still missing
+  whatever else has landed on master since its last merge point (`27b5263d4d`) - a proper
+  `git merge origin/master` (or continued cherry-picking) is still owed, this session only
+  targeted the one regression the user hit.
+
