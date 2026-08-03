@@ -1234,3 +1234,14 @@ existing `MalfunctionIndicator` class has no test harness - out of scope to add 
 
 Open follow-ups: none identified.
 
+## 2026-08-03 - protorico-econoline: enable Oil Life Monitor by default
+
+This board has no physical oil temperature sensor, so the Oil Life Monitor's primary
+temperature source is set to the estimated CLT (itself derived from CHT, see the
+CLT-from-CHT entry above) rather than the default oil-temp-sensor source. Set
+`getCustomPage()->oilLifeMonitorEnabled = true` and
+`oilLifePrimarySource = oil_life_temp_source_e::CoolantTemp` in
+`protorico_econoline_boardDefaultConfiguration()`, alongside the existing `cltFromCht`
+default (both guarded `#ifndef EFI_BOOTLOADER` for the same reason as `cltFromCht`).
+
+Open follow-ups: none identified.

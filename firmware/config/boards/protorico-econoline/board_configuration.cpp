@@ -121,6 +121,11 @@ static void protorico_econoline_boardDefaultConfiguration() {
 	engineConfiguration->chtSensor.config = {0, 23.8889, 48.8889, 9500, 2100, 1000, 1500};
 #ifndef EFI_BOOTLOADER
 	getCustomPage()->cltFromCht = true;
+
+	// Oil Life Monitor -- enabled by default; no physical oil temp sensor on this board, so use
+	// the estimated CLT (itself derived from CHT, see cltFromCht above) as the primary source.
+	getCustomPage()->oilLifeMonitorEnabled = true;
+	getCustomPage()->oilLifePrimarySource = oil_life_temp_source_e::CoolantTemp;
 #endif
 
 	// Relays and Solenoids
