@@ -255,11 +255,6 @@ bool applyDefaultsOrFixAfterBurn(const engine_configuration_s* previousConfigura
   	engineConfiguration->alternator_iTermMax = 1000;
   	changed = true;
 	}
-	if (engineConfiguration->idleReturnTargetRampDuration <= 0.1){
-		engineConfiguration->idleReturnTargetRampDuration = 3;
-		changed = true;
-	}
-
 	if (engineConfiguration->vvtControlMinRpm < engineConfiguration->cranking.rpm) {
 		engineConfiguration->vvtControlMinRpm = engineConfiguration->cranking.rpm;
 		changed = true;

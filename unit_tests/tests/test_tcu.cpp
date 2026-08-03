@@ -119,27 +119,27 @@ TEST(tcu, testGenericGC) {
 
 // "Transmission Settings" no longer exposes the Gear Controller / Transmission Controller
 // dropdowns, so a fresh tune that leaves them at None must get a working default once TCU
-// Enabled is set, via defaultsOrFixOnBurn().
+// Enabled is set, via applyDefaultsOrFixAfterBurn().
 TEST(tcu, testDefaultModeOnEnable) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->tcuEnabled = true;
 	engineConfiguration->gearControllerMode = GearControllerMode::None;
 	engineConfiguration->transmissionControllerMode = TransmissionControllerMode::None;
 
-	defaultsOrFixOnBurn();
+	applyDefaultsOrFixAfterBurn(/*previousConfiguration*/nullptr);
 
 	ASSERT_EQ(GearControllerMode::Automatic, engineConfiguration->gearControllerMode);
 	ASSERT_EQ(TransmissionControllerMode::Generic4, engineConfiguration->transmissionControllerMode);
 }
 
-// With TCU Enabled off, defaultsOrFixOnBurn() shouldn't force a mode -- nothing to run anyway.
+// With TCU Enabled off, applyDefaultsOrFixAfterBurn() shouldn't force a mode -- nothing to run anyway.
 TEST(tcu, testModeNotForcedWhenTcuDisabled) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->tcuEnabled = false;
 	engineConfiguration->gearControllerMode = GearControllerMode::None;
 	engineConfiguration->transmissionControllerMode = TransmissionControllerMode::None;
 
-	defaultsOrFixOnBurn();
+	applyDefaultsOrFixAfterBurn(/*previousConfiguration*/nullptr);
 
 	ASSERT_EQ(GearControllerMode::None, engineConfiguration->gearControllerMode);
 	ASSERT_EQ(TransmissionControllerMode::None, engineConfiguration->transmissionControllerMode);
@@ -157,11 +157,11 @@ TEST(tcu, testDefaultModeOverridesExplicitChoice) {
 	// Simulate a tune saved with a different mode from before this UI change (or from the old
 	// configureTcu4R70W() preset) -- by the time EngineTestHelper finishes booting,
 	// gearControllerMode has already been forced to Automatic once (startup runs
-	// defaultsOrFixOnBurn() too), so set it back to Generic here to exercise the real scenario:
+	// applyDefaultsOrFixAfterBurn() too), so set it back to Generic here to exercise the real scenario:
 	// a stale persisted value being loaded at boot.
 	engineConfiguration->gearControllerMode = GearControllerMode::Generic;
 
-	defaultsOrFixOnBurn();
+	applyDefaultsOrFixAfterBurn(/*previousConfiguration*/nullptr);
 
 	ASSERT_EQ(GearControllerMode::Automatic, engineConfiguration->gearControllerMode);
 	ASSERT_EQ(TransmissionControllerMode::Generic4, engineConfiguration->transmissionControllerMode);
