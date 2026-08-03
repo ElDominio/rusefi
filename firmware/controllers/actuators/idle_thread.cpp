@@ -40,14 +40,13 @@ IIdleController::TargetInfo IdleController::getTargetRpm(float clt) {
 	// Base target from the CLT->RPM curve (cold engines idle higher)
 	targetRpmByClt = interpolate2d(clt, config->cltIdleRpmBins, config->cltIdleRpm);
 
-  // FIXME: this is running as "RPM target" not "RPM bump" [ie adding to the CLT rpm target]
-	// idle air Bump for AC
+	// idle RPM adder for AC, on top of the CLT-based target
 	// Why do we bump based on button not based on actual A/C relay state?
 	// Because AC output has a delay to allow idle bump to happen first, so that the airflow increase gets a head start on the load increase
 	// alternator duty cycle has a similar logic
-	targetRpmAc = engine->module<AcController>().unmock().acButtonState ? engineConfiguration->acIdleRpmTarget : 0;
+	targetRpmAc = engine->module<AcController>().unmock().acButtonState ? engineConfiguration->acIdleRpmAdder : 0;
 
-	float target = (targetRpmByClt < targetRpmAc) ? targetRpmAc : targetRpmByClt;
+	float target = targetRpmByClt + targetRpmAc;
 	float rpmUpperLimit = engineConfiguration->idlePidRpmUpperLimit;
  	float entryRpm = target + rpmUpperLimit;
 
@@ -230,6 +229,17 @@ float IdleController::getOffIdleAdder(Phase phase, float rpm) {
 }
 
 /**
+ * Idle open-loop % adder while A/C is active, looked up from the A/C pressure curve.
+ * Cars with no A/C pressure sensor wired use the leftmost (lowest-pressure) curve value.
+ */
+static percent_t getAcIdleAdder() {
+	auto acPressure = Sensor::get(SensorType::AcPressure);
+	return acPressure.Valid
+		? interpolate2d(acPressure.Value, config->acIdleAdderByPressureBins, config->acIdleAdderByPressure)
+		: config->acIdleAdderByPressure[0];
+}
+
+/**
  * Open-loop IAC position while cranking - purely a function of coolant temperature.
  */
 float IdleController::getCrankingOpenLoop(float clt) const {
@@ -256,7 +266,7 @@ percent_t IdleController::getRunningOpenLoop(IIdleController::Phase phase, float
 
 	// Now we bump it by the AC/fan amount if necessary
     if (engine->module<AcController>().unmock().acButtonState && (phase == Phase::Idling || phase == Phase::CrankToIdleTaper)) {
-    	running += engineConfiguration->acIdleExtraOffset;
+    	running += getAcIdleAdder();
     }
 
 	running += enginePins.fanRelay.getLogicValue() ? engineConfiguration->fan1ExtraIdle : 0;
@@ -338,7 +348,7 @@ percent_t IdleController::getOpenLoop(Phase phase, float rpm, float clt, SensorR
 
 		// Add A/C offset if the A/C is on during coasting
 		if (engine->module<AcController>().unmock().acButtonState) {
-			coastingPosition += engineConfiguration->acIdleExtraOffset;
+			coastingPosition += getAcIdleAdder();
 		}
 
 		// We return here, bypassing the final interpolation, so we should clamp the value

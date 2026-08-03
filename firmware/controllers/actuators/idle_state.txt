@@ -31,7 +31,7 @@ custom idle_state_e 4 bits, S32, @OFFSET@, [0:2], "not important"
 	uint16_t idleExitRpm;Idle: Exit threshold
 
 	int targetRpmByClt;Idle: Target RPM base
-	int targetRpmAc;Idle: Target A/C RPM
+	int targetRpmAc;Idle: A/C RPM adder
 
     percent_t iacByRpmTaper;idle: iacByRpmTaper portion
 

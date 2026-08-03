@@ -32,7 +32,7 @@ void setMazdaMiata96() {
 	engineConfiguration->idleRpmPid.maxValue = 20;
 	engineConfiguration->idlerpmpid_iTermMin = -15;
 	engineConfiguration->idlerpmpid_iTermMax = 30;
-	engineConfiguration->acIdleExtraOffset = 15;
+	setArrayValues(config->acIdleAdderByPressure, 15);
 	engineConfiguration->idlePidRpmDeadZone = 100;
 	engineConfiguration->idlePidRpmUpperLimit = 350;
 

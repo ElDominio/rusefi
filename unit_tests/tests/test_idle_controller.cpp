@@ -193,7 +193,7 @@ TEST(idle_v2, runningFanAcBump) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
-	engineConfiguration->acIdleExtraOffset = 9;
+	setArrayValues(config->acIdleAdderByPressure, 9);
 	engineConfiguration->fan1ExtraIdle = 7;
 	engineConfiguration->fan2ExtraIdle = 3;
 
@@ -232,7 +232,7 @@ TEST(idle_v2, idleAdderShouldNotAffectNonIdleAreas) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
-	engineConfiguration->acIdleExtraOffset = 9;
+	setArrayValues(config->acIdleAdderByPressure, 9);
 
 	setTable(config->cltIdleCorrTable, 50.0f);
 

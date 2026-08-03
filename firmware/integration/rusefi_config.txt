@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260718
+#define FLASH_DATA_VERSION 260802
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -174,6 +174,7 @@ struct_no_prefix engine_configuration_s
 #define CLT_TIMING_LOAD_AXIS_SIZE 5
 #define IDLE_VE_SIZE 4
 #define IDLE_VE_SIZE_RPM 4
+#define AC_PRESSURE_CURVE_SIZE 8
 #define RE_auto_update_root_url "https://rusefi.com/build_server"
 #define RE_obfuscated "false"
 
@@ -560,7 +561,9 @@ uint16_t engineSnifferRpmThreshold;Engine sniffer would be disabled above this r
 
 	output_pin_e tachOutputPin;
 	pin_output_mode_e tachOutputPinMode;
-	uint8_t acIdleExtraOffset;Additional idle % while A/C is active;"%", 1, 0, 0, 100, 0
+	! Retired field: flat A/C idle % adder. Replaced by acIdleAdderByPressure (adder curve vs A/C pressure).
+	! Renamed with the 'unused' prefix so the byte slot stays reserved (stable offsets, reusable later).
+	uint8_t unusedAcIdleExtraOffset;;"%", 1, 0, 0, 100, 0
 
 
 	uint8_t multisparkMaxSparkingAngle;This parameter sets the latest that the last multispark can occur after the main ignition event. For example, if the ignition timing is 30 degrees BTDC, and this parameter is set to 45, no multispark will ever be fired after 15 degrees ATDC.;"deg", 1, 0, 0, 60, 0
@@ -1260,7 +1263,7 @@ uint8_t rpmRateSmoothingPct;Only used by First Order RPM mode. Smoothing applied
 
 	float turboSpeedSensorMultiplier;;"mult", 1, 0, 0, 7000, 3
 
-	int16_t acIdleRpmTarget;Idle target speed when A/C is enabled. Some cars need the extra speed to keep the AC efficient while idling.;"RPM", 1, 0, 0, 2000, 0
+	int16_t acIdleRpmAdder;RPM added on top of the normal CLT-based idle target while A/C is enabled. Some cars need the extra speed to keep the AC efficient while idling.;"RPM", 1, 0, 0, 1000, 0
 
 	int16_t warningPeriod;set warningPeriod X;"seconds", 1, 0, 0, 60, 0
 
@@ -2130,6 +2133,11 @@ uint16_t[CRANKING_ADVANCE_CURVE_SIZE] crankingAdvanceBins;Optional timing advanc
 int16_t[CRANKING_ADVANCE_CURVE_SIZE] autoscale crankingAdvance;Optional timing advance table for Cranking (see useSeparateAdvanceForCranking);"deg", 0.01, 0, -20, 90, 2
 uint8_t[CLT_CURVE_SIZE] autoscale iacCoastingRpmBins;RPM-based idle position for coasting;"RPM", @@RPM_AS_BYTE_SCALE@@, 0, 0, @@RPM_AS_BYTE_LIMIT@@, 0
 uint8_t[CLT_CURVE_SIZE] autoscale iacCoasting;    RPM-based idle position for coasting;"%", 0.5, 0, 0, 100, 1
+
+! Open-loop idle % adder vs A/C (high-side) pressure, replacing the old flat A/C idle adder.
+! Requires an A/C pressure sensor to be wired - without one the leftmost (lowest-pressure) value is used.
+float[AC_PRESSURE_CURVE_SIZE] acIdleAdderByPressureBins;A/C idle adder pressure axis;{bitStringValue(pressureUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KPA_TO_PSI@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 500 : 72.5}, 0
+float[AC_PRESSURE_CURVE_SIZE] acIdleAdderByPressure;Idle open-loop % adder while A/C is active;"%", 1, 0, 0, 100, 0
 
 uint8_t[BOOST_LOAD_COUNT x BOOST_RPM_COUNT] autoscale boostTableOpenLoop;;"", {1/2}, 0, 0, 100, 1
 uint8_t[BOOST_RPM_COUNT] autoscale boostRpmBins;;"RPM", @@RPM_AS_BYTE_SCALE@@, 0, 0, @@RPM_AS_BYTE_LIMIT@@, 0

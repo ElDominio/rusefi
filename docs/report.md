@@ -1134,3 +1134,78 @@ Open follow-ups:
   `git merge origin/master` (or continued cherry-picking) is still owed, this session only
   targeted the one regression the user hit.
 
+## 2026-08-02 - A/C idle: pressure-based adder table + RPM target -> RPM adder
+
+What was requested: replace the flat "A/C Idle adder" % with a table vs A/C pressure, remove
+the flat adder field from the Air Conditioning tab, and change "A/C Idle RPM" from an
+absolute idle target into an adder on top of the normal CLT-based idle target.
+
+Note: this reverses a deliberate design change from years ago - CHANGELOG.md #5628 says
+"'acIdleRpmBump' renamed to 'acIdleRpmTarget', and changed ... from added to absolute
+target". Going back to an adder is an explicit ask this session, not an oversight.
+
+What was done:
+- `firmware/integration/rusefi_config.txt`: retired `acIdleExtraOffset` (flat % adder) to
+  `unusedAcIdleExtraOffset` (byte slot kept reserved, dropped from ini). Renamed
+  `acIdleRpmTarget` -> `acIdleRpmAdder` (same offset/type, comment + range updated: max
+  lowered from 2000 to 1000 RPM since it's now an adder, not a target). Added a new
+  `AC_PRESSURE_CURVE_SIZE` (8) curve `acIdleAdderByPressureBins`/`acIdleAdderByPressure`
+  (kPa/psi vs %) in the hot-tunable tuning-table area (`config->`, like `cltIdleRpm`), placed
+  next to `iacCoasting`. Bumped `FLASH_DATA_VERSION` 260718 -> 260802 (new fields = layout
+  change).
+- `firmware/controllers/actuators/idle_thread.cpp`: `getTargetRpm()` now does
+  `target = targetRpmByClt + targetRpmAc` instead of `max(targetRpmByClt, targetRpmAc)` -
+  this also resolves the long-standing `FIXME: this is running as "RPM target" not "RPM
+  bump"` comment on that line. Added a static `getAcIdleAdder()` helper: looks up
+  `config->acIdleAdderByPressureBins/acIdleAdderByPressure` against
+  `Sensor::get(SensorType::AcPressure)`; if the sensor is invalid (not wired), falls back to
+  the curve's leftmost value (index 0) rather than 0, per explicit request - cars without an
+  A/C pressure sensor still get a (fixed) adder instead of losing the feature entirely. Used
+  at both existing flat-adder call sites (`getRunningOpenLoop`'s A/C bump, and the coasting
+  A/C bump in `getOpenLoop`).
+- `firmware/controllers/actuators/idle_state.txt`: live-data `targetRpmAc` comment updated
+  ("Idle: Target A/C RPM" -> "Idle: A/C RPM adder"), same field/offset.
+- `firmware/controllers/algo/engine_configuration.cpp`: default `acIdleRpmAdder` changed from
+  900 (was a target) to 100 (an adder); added `setDefaultIdleSpeedTarget()` defaults for the
+  new curve (`setLinearCurve` 0-500 kPa bins, flat 15% - matches the old flat-adder default
+  magnitude) so brand-new configs aren't silently adder-less.
+- `firmware/config/engines/mazda/mazda_miata_na8.cpp`,
+  `firmware/config/engines/mazda/mazda_miata_vvt.cpp`: updated the two engine presets that
+  set the old flat field to `setArrayValues(config->acIdleAdderByPressure, 15)` instead.
+- `firmware/tunerstudio/tunerstudio.template.ini`: removed the flat "A/C Idle adder" field
+  from both the "Open Loop Idle" dialog and the "A/C Settings" (Air Conditioning tab) dialog;
+  renamed the RPM fields there to "A/C RPM adder" / "A/C Idle RPM adder" bound to
+  `acIdleRpmAdder`. Added a new `acIdleAdderCurve` curve definition (A/C pressure vs %
+  adder, dot indicator via the existing `acPressureGauge`/`AcPressure` channel).
+- `firmware/tunerstudio/top_level_menu.ini`: added `acIdleAdderCurve` as a new "A/C Idle
+  Adder vs A/C Pressure" entry under the "Idle" menu (gated on `ts_show_air_conditioning`,
+  same as the rest of the A/C UI), following the existing pattern for standalone curve tabs
+  (`cltIdleRPMCurve`, `iacCoastingCurve`) rather than embedding it as a dialog panel.
+- `unit_tests/tests/test_idle_controller.cpp`: updated the two tests that set the old flat
+  field (`runningFanAcBump`, `idleAdderShouldNotAffectNonIdleAreas`) to
+  `setArrayValues(config->acIdleAdderByPressure, 9)` instead - these tests don't mock an A/C
+  pressure sensor, so the no-sensor leftmost-value fallback exercises the same flat-9 behavior
+  as before.
+
+Validation:
+- `unit_tests/test.sh` full suite: 1317/1317 passing, including `idle_v2.runningFanAcBump`
+  and `idle_v2.idleAdderShouldNotAffectNonIdleAreas` (both updated to drive the new curve).
+- `gen_config_board.sh config/boards/protorico-econoline protorico-econoline`: codegen
+  succeeds ("Happy protorico-econoline!"); generated ini shows `unusedAcIdleExtraOffset`
+  dropped from all `field =`/tooltip entries, `acIdleRpmAdder` and the new
+  `acIdleAdderByPressureBins`/`acIdleAdderByPressure` curve present with correct
+  offsets/ranges, and the `acIdleAdderCurve` + Idle-menu `subMenu` entry both render.
+- `bin/compile.sh config/boards/protorico-econoline/meta-info.env`: full F4 cross-compile
+  and link succeeds (`idle_thread.cpp`, `ac_control.cpp`, both Mazda Miata engine presets all
+  compile clean against the regenerated headers); flash0 75.93% used, ram0/ram4 100% (normal
+  for this board per prior sessions).
+
+Open follow-ups:
+- The new curve's default shape is a flat 15% (matching the old constant) rather than a real
+  pressure-shaped curve - real tuning data would let it ramp with pressure instead of being
+  flat.
+- Did not audit `java_console` migration-test fixtures
+  (`java_console/ui/src/test/java/com/rusefi/maintenance/migration/default_migration/test_data/*.ini`,
+  `java_console/ui/src/test/resources/january.ini`) - these are frozen historical INI
+  snapshots for tune-migration tests and still reference `acIdleExtraOffset`/
+  `acIdleRpmTarget` by design (they represent old firmware versions), left untouched.
