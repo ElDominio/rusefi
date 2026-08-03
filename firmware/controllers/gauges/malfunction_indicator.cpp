@@ -31,6 +31,7 @@
 #include "malfunction_central.h"
 #include "malfunction_indicator.h"
 #include "check_engine_light.h"
+#include "custom_page.h"
 
 #include "periodic_thread_controller.h"
 
@@ -86,16 +87,8 @@ private:
 		UNUSED(nowNt);
 
 		assertStackVoid("MIL", ObdCode::STACK_USAGE_MIL, EXPECTED_REMAINING_STACK);
-#if EFI_SHAFT_POSITION_INPUT
-		if (nowNt - engine->triggerCentral.triggerState.mostRecentSyncTime < MS2NT(500)) {
-			enginePins.checkEnginePin.setValue(1);
-			chThdSleepMilliseconds(500);
-			enginePins.checkEnginePin.setValue(0);
-		}
-#endif // EFI_SHAFT_POSITION_INPUT
 
 		static error_codes_set_s localErrorCopy;
-		// todo: why do I not see this on a real vehicle? is this whole blinking logic not used?
 		getErrorCodes(&localErrorCopy);
 
 		// Check Engine Triggering escalation: once points reach celBlinkPointsThreshold (on top of
@@ -107,12 +100,17 @@ private:
 			chThdSleepMilliseconds(200);
 			enginePins.checkEnginePin.setValue(0);
 			chThdSleepMilliseconds(200);
-		} else {
+		} else if (localErrorCopy.count > 0) {
 			for (int p = 0; p < localErrorCopy.count; p++) {
 				// Calculate how many digits in this integer and display error code from start to end
 				int code = (int)localErrorCopy.error_codes[p];
 				DisplayErrorCode(DigitLength(code), code);
 			}
+		} else {
+			// No active DTC and no escalation: optionally bulb-check the CEL solid while the engine
+			// is stopped (Key-On-Engine-Off), mirroring OBD-II convention, and off once it starts.
+			bool koeo = engine->rpmCalculator.isStopped();
+			enginePins.checkEnginePin.setValue(getCustomPage()->celOnKoeo && koeo);
 		}
 	}
 };

@@ -1209,3 +1209,28 @@ Open follow-ups:
   `java_console/ui/src/test/resources/january.ini`) - these are frozen historical INI
   snapshots for tune-migration tests and still reference `acIdleExtraOffset`/
   `acIdleRpmTarget` by design (they represent old firmware versions), left untouched.
+
+## 2026-08-03 - Malfunction Indicator: Key-On-Engine-Off bulb check
+
+What was done:
+- Added a page-6 `celOnKoeo` bit (`config_page_6.txt`, default off in `custom_page.cpp`):
+  when enabled, the CEL output lights solid while the engine is stopped
+  (Key-On-Engine-Off), mimicking the classic OBD-II bulb check, and goes off once the engine
+  starts - unless an active DTC or Check Engine Triggering escalation takes over the output
+  first (both existing branches in `MalfunctionIndicator`'s periodic thread run ahead of the
+  new KOEO branch, so a real fault still wins).
+- Along the way, removed a stale unconditional "flash the CEL for 500ms after trigger sync"
+  block in `malfunction_indicator.cpp` (dead code, no config gate, and marked with its own
+  `// todo: why do I not see this on a real vehicle? is this whole blinking logic not used?`
+  comment) - the new KOEO bulb check replaces it with an intentional, user-configurable
+  version of the same idea.
+- Enabled `EFI_MALFUNCTION_INDICATOR=TRUE` in `protorico-econoline/board.mk` so this board
+  can use the new field (the flag previously defaulted off there).
+- Exposed the field in `tunerstudio.template.ini`'s Malfunction Indicator dialog as "Light
+  at Key-On-Engine-Off (bulb check)".
+
+Validation: `unit_tests/test.sh` full suite passes; no dedicated unit test added (the
+existing `MalfunctionIndicator` class has no test harness - out of scope to add one here).
+
+Open follow-ups: none identified.
+

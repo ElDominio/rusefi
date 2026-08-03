@@ -456,6 +456,13 @@ struct_no_prefix page6_s
 	uint8_t autoscale celDebounceTimeSec;Check Engine Triggering: shared continuous-confirm time for every check on this page (trip and untrip both require the condition to hold for this long). Also the flip-counting window for TPS Circuit Intermittent.;"s", 0.1, 0, 0, 25, 1
 	uint8_t tpsIntermittentFlipCount;Check Engine Triggering -- TPS Circuit Intermittent: number of ok/fault flips within celDebounceTimeSec required to trip.;"flips", 1, 0, 2, 10, 0
 
+	! --- Malfunction Indicator KOEO bulb check (EFI_MALFUNCTION_INDICATOR) ---
+	! Independent of Check Engine Triggering above: when enabled, the CEL output lights solid
+	! while the engine is stopped (Key-On-Engine-Off), mimicking the classic OBD-II bulb-check.
+	! It goes off once the engine starts, unless an active DTC or Check Engine Triggering
+	! escalation takes over the output. See malfunction_indicator.cpp.
+	bit celOnKoeo,"on","off";Check Engine light: light solid at Key-On-Engine-Off as a bulb check, off once the engine starts (unless a DTC is active).
+
 	! --- Injector Small Pulse % Correction Curve (EFI_INJ_PERCENT_CURVE) ---
 	! Nonlinear injector flow correction using a user-supplied pulsewidth vs. percent-adder
 	! curve (as provided by Injector Dynamics and similar suppliers). The X axis is the

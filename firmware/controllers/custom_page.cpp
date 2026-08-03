@@ -185,6 +185,10 @@ void customPageSetDefaults() {
 	d.celDebounceTimeSec = 5.0f;    // every check's condition must hold for 5s before tripping/clearing
 	d.tpsIntermittentFlipCount = 3; // 3+ ok/fault flips within celDebounceTimeSec trips Intermittent
 
+	// Malfunction Indicator KOEO bulb check — disabled by default, independent of Check Engine
+	// Triggering above.
+	d.celOnKoeo = false;
+
 	// Injector Small Pulse % Correction Curve — evenly-spaced bins 0..2 ms, all corrections zero.
 	// User fills in vendor data (e.g. Injector Dynamics NFC) before enabling Curve (%) mode.
 	for (size_t i = 0; i < efi::size(d.injectorSmallPulseCurveBins); i++) {
