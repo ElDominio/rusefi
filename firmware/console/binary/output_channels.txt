@@ -117,6 +117,7 @@ int16_t rpmAcceleration;dRPM;"RPM acceleration/Rate of Change/ROC",1, 0, 0, 5, 2
 
 	uint16_t totalFuelConsumption;@@GAUGE_NAME_FUEL_CONSUMPTION@@;"grams",1, 0, 0, 0, 1
 	uint16_t autoscale fuelFlowRate;@@GAUGE_NAME_FUEL_FLOW@@;"gram/s",{1/@@PACK_MULT_FUEL_FLOW@@}, 0, 0, 0, 3
+	uint16_t autoscale instantFuelEconomyMpg;@@GAUGE_NAME_FUEL_ECONOMY_MPG@@\nInstantaneous fuel economy. Requires VSS - reads 0 without vehicle speed.;"mpg",{1/@@PACK_MULT_PERCENT@@}, 0, 0, 0, 1
 
 	int16_t autoscale TPS2Value;@@GAUGE_NAME_TPS2@@;"%",{1/@@PACK_MULT_PERCENT@@}, 0, 0, 0, 2
 	uint16_t tuneCrc16;@@GAUGE_NAME_TUNE_CRC16@@;"crc16", 1, 0, 0, 0, 0

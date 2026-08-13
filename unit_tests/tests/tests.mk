@@ -63,6 +63,7 @@ TESTS_SRC_CPP = \
 	tests/ignition_injection/test_eco_mode.cpp \
 	tests/ignition_injection/test_burst_knock.cpp \
 	tests/ignition_injection/test_fuel_computer.cpp \
+	tests/ignition_injection/test_fuel_economy_calculator.cpp \
 	tests/ignition_injection/test_injector_model.cpp \
 	tests/ignition_injection/test_odd_firing_engine.cpp \
 	tests/ignition_injection/test_three_cylinder.cpp \

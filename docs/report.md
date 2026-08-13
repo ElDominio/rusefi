@@ -1245,3 +1245,63 @@ CLT-from-CHT entry above) rather than the default oil-temp-sensor source. Set
 default (both guarded `#ifndef EFI_BOOTLOADER` for the same reason as `cltFromCht`).
 
 Open follow-ups: none identified.
+
+## 2026-08-06 - Instantaneous fuel economy calculator + MPG gauge
+
+What was done:
+- Added a pure, standalone calculation function `calculateInstantFuelEconomy()`
+  (`firmware/controllers/algo/fuel/fuel_economy_calculator.h`/`.cpp`, registered in
+  `algo.mk`) that takes rpm, raw injector pulse width, injector dead time, injector flow
+  (cc/min), cylinder count, and VSS, and returns fuel flow (L/hr), L/100km, and US MPG for
+  a sequentially-injected engine (one injection event per cylinder per 720 degrees). No
+  heap allocation, no firmware-specific dependencies - just arithmetic on plain types, so
+  it is directly unit-testable and reusable outside the engine module system.
+- DFCO / dead-time-not-cleared handling: effective (fuel-delivering) pulse width is
+  `pulseWidth - deadTime`; when that is not positive every result field is zero.
+- Near-zero-speed handling: below `FUEL_ECONOMY_MIN_VSS_KPH` (3 kph) the distance-based
+  figures (L/100km, MPG) are zeroed to avoid dividing by a near-zero speed, while L/hr is
+  still reported. A missing/invalid VSS sensor is funneled into the same path by having the
+  caller pass 0 kph, satisfying "no VSS -> gauge reads 0" without a separate code path.
+- Wired into the existing periodic output-channel refresh
+  (`updateFuelEconomy()`/`updateFuelInfo()` in `firmware/console/status_loop.cpp`, called
+  from `updateDevConsoleState()` alongside `updateFuelResults()`/`updateIgnition()`), rather
+  than adding a new `EngineModule`. Sources: `engine->outputChannels.actualLastInjection` for
+  raw pulse width, `engine->module<InjectorModelPrimary>()->getDeadtime()` for dead time,
+  `engineConfiguration->injector.flow` for flow (converted from g/s to cc/min via
+  `fuelDensity` when `injectorFlowAsMassFlow` is set), `engineConfiguration->cylindersCount`,
+  and `Sensor::get(SensorType::VehicleSpeed).value_or(0)` for VSS - reusing existing config
+  and engine state rather than inventing parallel fields, per user direction.
+- Added TunerStudio visibility for MPG only (the specific ask): new `instantFuelEconomyMpg`
+  autoscale output channel (`output_channels.txt`, `GAUGE_NAME_FUEL_ECONOMY_MPG` macro in
+  `rusefi_config_shared.txt`) and a `Fueling`-category gauge entry in
+  `gauge_declarations.ini`. L/hr and L/100km are computed internally but not (yet) exposed
+  as separate gauges/log fields - out of scope per the explicit ask.
+- Always compiled in (no new `EFI_` feature flag) - lightweight, no hardware dependency
+  beyond sensors/config that already exist on every board.
+
+Validation:
+- New unit test file `unit_tests/tests/ignition_injection/test_fuel_economy_calculator.cpp`
+  (9 cases: hand-calculated basic flow rate, DFCO at/below dead time, zero rpm/cylinder
+  count/injector flow, below-minimum-speed and missing-VSS zeroing of distance economy,
+  and a full cruise scenario cross-checking L/hr, L/100km, and MPG together), registered in
+  `unit_tests/tests/tests.mk`. Full suite: 1337/1337 passing (`unit_tests/test.sh`).
+- `make CC=clang` PCH step fails on this machine with `'cstdint' file not found` - a
+  pre-existing local clang/libstdc++ toolchain gap unrelated to this change (confirmed by
+  reproducing the same failure with a one-line `#include <cstdint>` probe through the same
+  clang binary); could not cross-validate against clang here as a result.
+- Full ARM cross-compile via `compile_proteus_f4.sh` succeeds; confirmed the new gauge/field
+  round-trips through codegen end-to-end in the generated
+  `firmware/tunerstudio/generated/rusefi_proteus_f4.ini` (`instantFuelEconomyMpg` scalar,
+  gauge, and LiveData `entry` all present) and
+  `firmware/live_data_generated/output_channels_generated.h` (`scaled_channel<uint16_t, 100,
+  1> instantFuelEconomyMpg`).
+- Did not attempt the `simulator/` build - it fails on this machine with a pre-existing,
+  unrelated 32-bit host toolchain gap (`bits/libc-header-start.h` missing under the SIMIA32
+  target), not something introduced by this change.
+
+Open follow-ups:
+- L/hr and L/100km are computed but not exposed as gauges/log fields; add if a future ask
+  wants them visible too.
+- The clang and 32-bit-simulator toolchain gaps on this dev machine are pre-existing
+  environment issues, not addressed here.
+

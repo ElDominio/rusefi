@@ -44,6 +44,7 @@
 #include "tunerstudio.h"
 #include "tunerstudio_calibration_channel.h"
 #include "fuel_math.h"
+#include "fuel_economy_calculator.h"
 #include "main_trigger_callback.h"
 #include "spark_logic.h"
 #include "idle_thread.h"
@@ -621,10 +622,37 @@ static void updateOilLifeMonitor() {
 #endif // EFI_OIL_LIFE_MONITOR
 }
 
-static void updateFuelInfo() {
+// requires a valid VSS reading: Sensor::get() reports Invalid (mapped to 0 kph below)
+// whenever VSS is not configured on this board, which zeroes out the distance-based
+// economy figures via the near-zero-speed handling in calculateInstantFuelEconomy().
+static void updateFuelEconomy(float rpm) {
+	float vssKph = Sensor::get(SensorType::VehicleSpeed).value_or(0);
+
+	floatms_t injectorPulseWidthMs = engine->outputChannels.actualLastInjection;
+	floatms_t injectorDeadTimeMs = engine->module<InjectorModelPrimary>()->getDeadtime();
+
+	float injectorFlowCcMin = engineConfiguration->injector.flow;
+	if (engineConfiguration->injectorFlowAsMassFlow) {
+		// stored as grams/second when injectorFlowAsMassFlow is set; convert to cc/min
+		injectorFlowCcMin = (injectorFlowCcMin / fuelDensity) * 60.f;
+	}
+
+	auto result = calculateInstantFuelEconomy(
+		(uint16_t)rpm,
+		injectorPulseWidthMs,
+		injectorDeadTimeMs,
+		(uint16_t)injectorFlowCcMin,
+		engineConfiguration->cylindersCount,
+		vssKph);
+
+	engine->outputChannels.instantFuelEconomyMpg = result.fuelEconomyMpg;
+}
+
+static void updateFuelInfo(float rpm) {
 	updateFuelCorrections();
 	updateFuelResults();
 	updateOilLifeMonitor();
+	updateFuelEconomy(rpm);
 #if EFI_ENGINE_CONTROL
 	const auto& wallFuel = engine->injectionEvents.elements[0].getWallFuel();
 	engine->outputChannels.wallFuelAmount = wallFuel.getWallFuel() * 1000;			// Convert grams to mg
@@ -712,7 +740,7 @@ void updateTunerStudioState() {
 #endif // EFI_SHAFT_POSITION_INPUT
 
 	updateSensors();
-	updateFuelInfo();
+	updateFuelInfo(rpm);
 	updateIgnition(rpm);
 	updateFlags();
 	// update calibration channel, reset to None state after timeout
