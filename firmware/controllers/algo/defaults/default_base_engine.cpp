@@ -70,6 +70,11 @@ static void setGdiDefaults() {
 
 	setLinearCurve(config->injectorFlowLinearizationFuelMassBins, 0.0, 500, 10);
 	setLinearCurve(config->injectorFlowLinearizationPressureBins, 0, 300, 25);
+
+	setLinearCurve(config->manualPressureCorrectionFuelMassBins, 0.0, 500, 10);
+	setLinearCurve(config->manualPressureCorrectionPressureBins, 0, 300, 25);
+	// Neutral (no correction) until the tuner fills in real values.
+	setTable(config->manualPressureCorrection, 1.0);
 }
 
 void setGDIFueling() {

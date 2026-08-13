@@ -119,7 +119,8 @@ expected<float> InjectorModelWithConfig::getFuelDifferentialPressure() const {
 			return getFuelReferencePressure()
 				+ baroKpa
 				- map.value_or(STD_ATMOSPHERE);
-		case ICM_SensedRailPressure: {
+		case ICM_SensedRailPressure:
+		case ICM_ManualPressureCorrection: {
 			if (!Sensor::hasSensor(SensorType::FuelPressureInjector)) {
 				warning(ObdCode::OBD_Fuel_Pressure_Sensor_Missing, "Fuel pressure compensation is set to use a pressure sensor, but none is configured.");
 				return unexpected;
@@ -157,7 +158,7 @@ expected<float> InjectorModelWithConfig::getFuelDifferentialPressure() const {
 float InjectorModelWithConfig::getInjectorFlowRatio() {
 	// Compensation disabled, use reference flow.
 	auto compensationMode = getInjectorCompensationMode();
-	if (compensationMode == ICM_None || compensationMode == ICM_HPFP_Manual_Compensation) {
+	if (compensationMode == ICM_None || compensationMode == ICM_HPFP_Manual_Compensation || compensationMode == ICM_ManualPressureCorrection) {
 		return 1.0f;
 	}
 
@@ -231,6 +232,16 @@ floatms_t InjectorModelWithConfig::getInjectionDuration(float fuelMassGram) cons
 
 	// Get the no-offset duration
 	floatms_t baseDuration = getBaseDurationImpl(fuelMassGram);
+
+	if (getInjectorCompensationMode() == ICM_ManualPressureCorrection) {
+		// Tuner-provided multiplicative correction on top of the theoretical (uncompensated) duration,
+		// eg. 1.20 = add 20% pulse width at this [pressure, mass] point.
+		float flowMultiplier = interpolate3d(config->manualPressureCorrection,
+			config->manualPressureCorrectionPressureBins, pressureCorrectionReference,// array values are on kPa
+			config->manualPressureCorrectionFuelMassBins, fuelMassGram * 1000);  // array values are on mg
+
+		return baseDuration * flowMultiplier + m_deadtime;
+	}
 
 	// default non GDI case
 	if (getInjectorCompensationMode() != ICM_HPFP_Manual_Compensation) {

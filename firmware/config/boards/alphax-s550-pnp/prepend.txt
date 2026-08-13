@@ -27,6 +27,9 @@
 
 #define VBAT_INJECTOR_CURVE_PRESSURE_SIZE 4
 
+#define MANUAL_PRESSURE_CORRECTION_MASS_SIZE 8
+#define MANUAL_PRESSURE_CORRECTION_PRESSURE_SIZE 8
+
 !                                             1                                        5
 #define canReWidebandHwIndex_enum "INVALID", "First", "INVALID", "INVALID", "INVALID", "Second", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID"
 

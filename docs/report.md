@@ -1305,3 +1305,42 @@ Open follow-ups:
 - The clang and 32-bit-simulator toolchain gaps on this dev machine are pre-existing
   environment issues, not addressed here.
 
+## 2026-08-13 - Manual Pressure Correction injector compensation mode
+
+What was done:
+- Added a new `ICM_ManualPressureCorrection` value to `injector_compensation_mode_e`
+  (`firmware/controllers/algo/rusefi_enums.h`, `firmware/integration/rusefi_config.txt`) as a
+  fourth injector-compensation option alongside None/Fixed/Sensed/HPFP-manual. It reuses the
+  same fuel-pressure-sensor reference-pressure math as `ICM_SensedRailPressure`
+  (`InjectorModelWithConfig::getFuelDifferentialPressure()` in
+  `firmware/controllers/algo/fuel/injector_model.cpp` now treats the two modes identically for
+  that purpose, and requires `SensorType::FuelPressureInjector` the same way), but skips the
+  automatic `sqrt(pressure)` flow-ratio compensation (`getInjectorFlowRatio()` returns 1.0 for
+  this mode, same as None/HPFP-manual) in favor of a tuner-filled multiplicative table.
+- New `manualPressureCorrection` table (`config_page`-generated, accessed via `config->`, not
+  `engineConfiguration->` - see the two-struct note in CLAUDE.md), 2x2 by default
+  (`MANUAL_PRESSURE_CORRECTION_MASS_SIZE`/`_PRESSURE_SIZE`, bumped to 8x8 on
+  alphax-s550-pnp via `prepend.txt`), indexed by fuel mass (mg) and rail pressure (kPa).
+  `InjectorModelWithConfig::getInjectionDuration()` applies it as
+  `baseDuration * interpolate3d(...) + deadtime` when this compensation mode is selected,
+  bypassing the normal HPFP/non-GDI duration path entirely for that mode.
+- Defaults: `setGdiDefaults()` (`default_base_engine.cpp`) seeds the axis curves
+  (0-500mg/0-300kPa, matching the existing `injectorFlowLinearization` axes) and a neutral
+  (1.0, no correction) table so an unconfigured tune behaves like no compensation until the
+  tuner enters real values.
+- TunerStudio: new `manualPressureCorrectionTable` 3D table/dialog
+  (`tunerstudio.template.ini`), shown under Injector Configuration via a new
+  `groupChildMenu` gated on `injectorCompensationMode == ICM_ManualPressureCorrection`
+  (`top_level_menu.ini`). The existing "Injector reference pressure" field's visibility
+  condition was extended to also hide for this mode, since Manual Pressure Correction reuses
+  the sensor-referenced pressure math but the correction itself is table-driven, not
+  pressure-formula-driven.
+- This adds fields to the flash-backed config layout; `FLASH_DATA_VERSION` is bumped once for
+  both this and the VVT Advanced Mode entry below (see that entry).
+
+Validation:
+- Full unit test suite: 1344/1344 passing (`unit_tests/test.sh`).
+- Full ARM cross-compile via `compile_alphax-s550.sh` succeeds (flash0 43.90%, ram0 100.00%
+  used, unchanged budget class from before this change).
+
+Open follow-ups: none identified.
