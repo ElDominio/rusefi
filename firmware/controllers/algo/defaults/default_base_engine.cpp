@@ -260,6 +260,24 @@ bool applyDefaultsOrFixAfterBurn(const engine_configuration_s* previousConfigura
   	engineConfiguration->alternator_iTermMax = 1000;
   	changed = true;
 	}
+
+	if (engineConfiguration->vvtIntake_iTermMin == 0) {
+  	engineConfiguration->vvtIntake_iTermMin = -1000;
+  	changed = true;
+	}
+	if (engineConfiguration->vvtIntake_iTermMax == 0) {
+  	engineConfiguration->vvtIntake_iTermMax = 1000;
+  	changed = true;
+	}
+	if (engineConfiguration->vvtExhaust_iTermMin == 0) {
+  	engineConfiguration->vvtExhaust_iTermMin = -1000;
+  	changed = true;
+	}
+	if (engineConfiguration->vvtExhaust_iTermMax == 0) {
+  	engineConfiguration->vvtExhaust_iTermMax = 1000;
+  	changed = true;
+	}
+
 	if (engineConfiguration->vvtControlMinRpm < engineConfiguration->cranking.rpm) {
 		engineConfiguration->vvtControlMinRpm = engineConfiguration->cranking.rpm;
 		changed = true;

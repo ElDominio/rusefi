@@ -232,6 +232,7 @@ int16_t rpmAcceleration;dRPM;"RPM acceleration/Rate of Change/ROC",1, 0, 0, 5, 2
 	int16_t autoscale gyroYaw;@@GAUGE_NAME_GYRO_YAW@@;"deg/sec",{1/1000}, 0, 0, 0, 0
 
 	int8_t[4 iterate] vvtTargets;;"deg",1, 0, 0, 0, 0
+	int16_t[4 iterate] autoscale vvtDistances;VVT Distance;"deg", 0.1, 0, -90, 90, 1
 	uint16_t turboSpeed;@@GAUGE_NAME_TURBO_SPEED@@;"hz",1, 0, 0, 0, 0
 
 	int16_t[MAX_CYLINDER_COUNT iterate] autoscale ignitionAdvanceCyl;Ign: Timing Cyl;"deg",{1/@@PACK_MULT_ANGLE@@}, 0, 0, 0, 1

@@ -15,6 +15,11 @@
 // Injector Small Pulse % Correction Curve length. Must match INJ_CURVE_SIZE in config_page_6.txt.
 #define INJ_CURVE_SIZE 12
 
+// VVT Advanced Mode curve lengths. Must match VVT_ADV_DISTANCE_SIZE/VVT_ADV_OILP_SIZE in
+// integration/config_page_6.txt and be visible before the generated struct below uses them.
+#define VVT_ADV_DISTANCE_SIZE 9
+#define VVT_ADV_OILP_SIZE 6
+
 #include "page_6_generated.h"
 
 page6_s* getCustomPage();

@@ -1344,3 +1344,44 @@ Validation:
   used, unchanged budget class from before this change).
 
 Open follow-ups: none identified.
+
+## 2026-08-13 - VVT Advanced Mode (distance/oil-pressure feedforward) + PID iTerm clamps
+
+What was done:
+- Added an opt-in `vvtAdvancedModeEnabled` bit (page 6, `config_page_6.txt`/`custom_page.cpp`,
+  `PAGE6_DATA_VERSION` 21->22) that replaces the fixed PID "offset" (relabeled "Hold Duty" in
+  the VVT PID dialogs, and hidden while Advanced Mode is on) with a per-cam-type (intake/
+  exhaust) distance-from-target duty curve, scaled by an optional oil-pressure multiplier
+  curve (neutral 1.0 when no `SensorType::OilPressure` is configured). The duty curve is
+  always the feedforward baseline at every distance - there is no PID/curve switchover.
+  `VvtController::getClosedLoop()` (`vvt.cpp`) computes a signed distance
+  (`target - observation`, sign-corrected for solenoid inversion so curve tuning doesn't
+  depend on `shouldInvertVvt()`), looks up `getVvtAdvancedBaseDuty()` x
+  `getVvtAdvancedOilPressureMult()`, and adds the classic P+I+D trim (with the offset term
+  removed) scaled by a linear fade from 0 authority at distance=0 to full authority at
+  `vvtAdvancedPidFadeDeg` (and beyond) - the fade only gates PID authority, it never changes
+  which feedforward source is used.
+- New per-cam `vvtDistance` live-data channel (`vvt.txt`) and a 4-element
+  `vvtDistances[]` output channel (`output_channels.txt`) so each cam's Advanced Mode curve
+  tracer dot (`tunerstudio.template.ini`) can track its own signed distance independent of
+  the existing single-instance `vvtDistance` mechanism.
+- Independently of Advanced Mode: added `vvtIntake_iTermMin/Max` and
+  `vvtExhaust_iTermMin/Max` (`rusefi_config.txt`, `engineConfiguration->`) anti-windup clamps,
+  applied unconditionally in `getClosedLoop()` before the Advanced Mode branch, plus new
+  "iTerm Min/Max" TS fields in the existing Intake/Exhaust PID dialogs. Defaults
+  (+-1000, `default_base_engine.cpp`) match the existing `alternator_iTermMin/Max` pattern.
+- Defaults (`customPageSetDefaults()`): Advanced Mode off; a symmetric -40..40 deg distance
+  axis (9 points, explicit zero bin for smooth interpolation through target) with all-zero
+  duty until tuned; a 0-1000 kPa oil-pressure axis with a pass-through (1.0) multiplier.
+- Bumped `FLASH_DATA_VERSION` 260802 -> 260813 (`rusefi_config.txt`) - this and the Manual
+  Pressure Correction entry above both add fields to the flash-backed config layout, bumped
+  once to cover both.
+
+Validation:
+- New/extended `unit_tests/tests/actuators/test_vvt.cpp` cases covering the Advanced Mode
+  feedforward-only path, oil-pressure scaling, and PID fade-in behavior. Full suite:
+  1344/1344 passing (`unit_tests/test.sh`).
+- Full ARM cross-compile via `compile_alphax-s550.sh` succeeds (flash0 43.90%, ram0 100.00%
+  used).
+
+Open follow-ups: none identified.

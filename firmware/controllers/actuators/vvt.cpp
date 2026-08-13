@@ -117,12 +117,82 @@ static bool shouldInvertVvt(int camIndex) {
 	return false;
 }
 
+// VVT Advanced Mode: duty vs. signed distance-from-target, per cam type (0=intake, 1=exhaust).
+// Only used beyond the PID fade distance -- see getClosedLoop.
+static float getVvtAdvancedBaseDuty(int camIndex, float distance) {
+	page6_s* cfg = getCustomPage();
+	if (camIndex == 0) {
+		return interpolate2d(distance, cfg->vvtAdvDistanceBinsIntake, cfg->vvtAdvDutyIntake);
+	} else {
+		return interpolate2d(distance, cfg->vvtAdvDistanceBinsExhaust, cfg->vvtAdvDutyExhaust);
+	}
+}
+
+// VVT Advanced Mode: oil pressure multiplier on top of the base duty above. Neutral (1.0) if no
+// oil pressure sensor is configured.
+static float getVvtAdvancedOilPressureMult(int camIndex) {
+	if (!Sensor::hasSensor(SensorType::OilPressure)) {
+		return 1.0f;
+	}
+
+	float oilPressure = Sensor::getOrZero(SensorType::OilPressure);
+	page6_s* cfg = getCustomPage();
+	if (camIndex == 0) {
+		return interpolate2d(oilPressure, cfg->vvtAdvOilPressureBinsIntake, cfg->vvtAdvOilPressureMultIntake);
+	} else {
+		return interpolate2d(oilPressure, cfg->vvtAdvOilPressureBinsExhaust, cfg->vvtAdvOilPressureMultExhaust);
+	}
+}
+
 expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observation) {
 	// User labels say "advance" and "retard"
 	// "advance" means that additional solenoid duty makes indicated VVT position more positive
 	// "retard" means that additional solenoid duty makes indicated VVT position more negative
 	bool isInverted = shouldInvertVvt(m_cam);
 	m_pid.setErrorAmplification(isInverted ? -1.0f : 1.0f);
+
+	m_pid.iTermMin = (m_cam == 0) ? engineConfiguration->vvtIntake_iTermMin : engineConfiguration->vvtExhaust_iTermMin;
+	m_pid.iTermMax = (m_cam == 0) ? engineConfiguration->vvtIntake_iTermMax : engineConfiguration->vvtExhaust_iTermMax;
+
+	if (getCustomPage()->vvtAdvancedModeEnabled) {
+		// Signed distance uses the same sign convention as the PID error above, so curve tuning
+		// doesn't depend on the solenoid inversion setting.
+		float distance = (target - observation) * (isInverted ? -1.0f : 1.0f);
+		vvtDistance = distance;
+#if EFI_TUNER_STUDIO
+		// Per-instance channel (unlike vvtDistance above, which the live-data mechanism only
+		// exposes for VvtController1) so each cam's curve tracer can track its own distance.
+		engine->outputChannels.vvtDistances[index] = distance;
+#endif // EFI_TUNER_STUDIO
+
+		// Raw P+I+D trim with the constant "Hold Duty" (offset) removed -- Hold Duty is never used
+		// in Advanced Mode, the duty curve below is the feedforward at every distance.
+		float dTime = MS2SEC(GET_PERIOD_LIMITED(&engineConfiguration->auxPid[m_cam]));
+		float rawPid = m_pid.getUnclampedOutput(target, observation, dTime) - m_pid.getOffset();
+
+		// The duty curve, scaled by oil pressure, is always the feedforward baseline.
+		float feedforward = getVvtAdvancedBaseDuty(m_cam, distance) * getVvtAdvancedOilPressureMult(m_cam);
+
+		// PID trim is never disabled: it fades in linearly from zero authority at distance=0 to
+		// full ("normal") authority at vvtAdvancedPidFadeDeg, and stays at full authority beyond
+		// that. This fade is the only thing vvtAdvancedPidFadeDeg controls -- it does not change
+		// which feedforward source is used.
+		float fadeDeg = maxF(getCustomPage()->vvtAdvancedPidFadeDeg, 0.01f);
+		float pidScale = clampF(0.0f, fabsf(distance) / fadeDeg, 1.0f);
+
+		float output = clampF(engineConfiguration->auxPid[m_cam].minValue,
+			feedforward + rawPid * pidScale,
+			engineConfiguration->auxPid[m_cam].maxValue);
+
+		// Keep the PID status telemetry reflecting the actual commanded duty.
+		m_pid.output = output;
+
+#if EFI_TUNER_STUDIO
+		m_pid.postState(engine->outputChannels.vvtStatus[index]);
+#endif /* EFI_TUNER_STUDIO */
+
+		return output;
+	}
 
 	float retVal = m_pid.getOutput(target, observation);
 

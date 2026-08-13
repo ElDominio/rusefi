@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260802
+#define FLASH_DATA_VERSION 260813
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -1515,6 +1515,12 @@ custom stepper_num_micro_steps_e 1 bits, U08,	@OFFSET@,	[0:3], @@stepper_num_mic
 
 
 	pid_s[CAMS_PER_BANK iterate] auxPid;VVT output PID\nTODO: rename to vvtPid
+
+	int16_t vvtIntake_iTermMin;VVT intake cam PID: iTerm min value;"", 1, 0, -30000, 30000, 0
+	int16_t vvtIntake_iTermMax;VVT intake cam PID: iTerm max value;"", 1, 0, -30000, 30000, 0
+	int16_t vvtExhaust_iTermMin;VVT exhaust cam PID: iTerm min value;"", 1, 0, -30000, 30000, 0
+	int16_t vvtExhaust_iTermMax;VVT exhaust cam PID: iTerm max value;"", 1, 0, -30000, 30000, 0
+
 	float[8 iterate] injectorCorrectionPolynomial;;"", 1, 0, -1000, 1000, 4
 #define PRIME_CURVE_COUNT 8
 ! Ethanol axis size for the opt-in 2D priming-pulse flex table (primeFlexTable). 4 rows keeps RAM low.

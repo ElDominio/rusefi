@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 21;
+static constexpr uint32_t PAGE6_DATA_VERSION = 22;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -296,6 +296,23 @@ void customPageSetDefaults() {
 	d.oilLifeMultCoolantOptimal  = 1.1f;
 	d.oilLifeMultCoolantHighHeat = 2.0f;
 	d.oilLifeMultCoolantExtreme  = 4.5f;
+
+	// VVT Advanced Mode — disabled by default; seed a symmetric -40..40 deg distance axis (zero at
+	// the center point, for smooth interpolation through the target) and a pass-through (1.0) oil
+	// pressure multiplier curve.
+	d.vvtAdvancedModeEnabled = false;
+	d.vvtAdvancedPidFadeDeg = 1.0f; // 0.5 deg off yields half PID authority by default
+	for (size_t i = 0; i < efi::size(d.vvtAdvDistanceBinsIntake); i++) {
+		d.vvtAdvDistanceBinsIntake[i] = -40.0f + i * 10.0f; // -40 .. 40 deg, zero at center
+		d.vvtAdvDistanceBinsExhaust[i] = -40.0f + i * 10.0f;
+	}
+	// vvtAdvDutyIntake/Exhaust left at zero (no base duty) until the user tunes it.
+	for (size_t i = 0; i < efi::size(d.vvtAdvOilPressureBinsIntake); i++) {
+		d.vvtAdvOilPressureBinsIntake[i] = i * (1000.0f / 5);  // 0 .. 1000 kPa
+		d.vvtAdvOilPressureMultIntake[i] = 1.0f;               // 1.0 = pass-through until the user tunes it
+		d.vvtAdvOilPressureBinsExhaust[i] = i * (1000.0f / 5);
+		d.vvtAdvOilPressureMultExhaust[i] = 1.0f;
+	}
 }
 
 void loadCustomPage() {
