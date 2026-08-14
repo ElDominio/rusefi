@@ -139,6 +139,15 @@ expected<percent_t> FuelPumpController::getOpenLoop(float target) {
 }
 
 expected<percent_t> FuelPumpController::getClosedLoop(float setpoint, float observation) {
+	if (getCustomPage()->fuelPumpAggressiveRelief
+	    && observation > setpoint + getCustomPage()->fuelPumpReliefDeadzone
+	    && engine->fuelComputer.running.fuel < getCustomPage()->fuelPumpReliefMinInjectedMass) {
+		// Pump has no authority to drop pressure faster than the injectors consume it down;
+		// hold at minDuty (via the unexpected fallback in setOutput()) instead of winding the
+		// PID's I-term down against an overpressure it can't actively correct.
+		return unexpected;
+	}
+
 	isFpPidActive = true;
 	m_fuelPumpPid.iTermMin = getCustomPage()->fuelPump_iTermMin;
 	m_fuelPumpPid.iTermMax = getCustomPage()->fuelPump_iTermMax;
