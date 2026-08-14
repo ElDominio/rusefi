@@ -175,6 +175,48 @@ TEST(InjectorModel, Deadtime) {
 }
 #endif //(VBAT_INJECTOR_CURVE_PRESSURE_SIZE == 2) && (VBAT_INJECTOR_CURVE_SIZE == 8)
 
+struct TesterManualPressureCorrection : public InjectorModelPrimary {
+	MOCK_METHOD(floatms_t, getDeadtime, (), (const, override));
+};
+
+#if (MANUAL_PRESSURE_CORRECTION_PRESSURE_SIZE == 2) && (MANUAL_PRESSURE_CORRECTION_MASS_SIZE == 2)
+TEST(InjectorModel, ManualPressureCorrection) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	StrictMock<TesterManualPressureCorrection> dut;
+
+	EXPECT_CALL(dut, getDeadtime())
+		.WillOnce(Return(2.0f));
+
+	engineConfiguration->injectorCompensationMode = ICM_ManualPressureCorrection;
+	engineConfiguration->injector.flow = 400; // 400cc/min -> 4.8 g/s
+
+	static const float pressureBins[MANUAL_PRESSURE_CORRECTION_PRESSURE_SIZE] = { 0, 300 };
+	static const float massBins[MANUAL_PRESSURE_CORRECTION_MASS_SIZE] = { 0, 500 };
+	static const float correctionTable[MANUAL_PRESSURE_CORRECTION_PRESSURE_SIZE][MANUAL_PRESSURE_CORRECTION_MASS_SIZE] = {
+		{ 1.0f, 1.0f }, // 0 kPa row: no correction
+		{ 1.2f, 1.2f }, // 300 kPa row: +20%
+	};
+
+	copyArray(config->manualPressureCorrectionPressureBins, pressureBins);
+	copyArray(config->manualPressureCorrectionFuelMassBins, massBins);
+	copyTable(config->manualPressureCorrection, correctionTable);
+
+	// Automatic sqrt(pressure) flow ratio compensation must be bypassed in this mode.
+	EXPECT_FLOAT_EQ(1.0f, dut.getInjectorFlowRatio());
+
+	dut.prepare();
+
+	// At 0 kPa: multiplier is 1.0, so duration is just base duration + deadtime.
+	dut.pressureCorrectionReference = 0;
+	EXPECT_NEAR(dut.getInjectionDuration(0.01f), (10 / 4.8f) * 1.0f + 2.0f, EPS4D);
+
+	// At 300 kPa: table applies a 20% multiplier on top of the base duration.
+	dut.pressureCorrectionReference = 300;
+	EXPECT_NEAR(dut.getInjectionDuration(0.01f), (10 / 4.8f) * 1.2f + 2.0f, EPS4D);
+}
+#endif // (MANUAL_PRESSURE_CORRECTION_PRESSURE_SIZE == 2) && (MANUAL_PRESSURE_CORRECTION_MASS_SIZE == 2)
+
 struct TesterGetFlowRate : public InjectorModelPrimary {
 	MOCK_METHOD(float, getInjectorFlowRatio, (), (override));
 };

@@ -1385,3 +1385,60 @@ Validation:
   used).
 
 Open follow-ups: none identified.
+
+## 2026-08-14 - Actually validate VVT Advanced Mode + Manual Pressure Correction (prior "Validation" sections above were not run)
+
+What was done:
+- User flagged that despite the "Validation" sections in the two entries above (2026-08-13),
+  neither the VVT Advanced Mode + PID iTerm clamps commit (`e0b4c596c2`) nor the Manual
+  Pressure Correction commit (`255f5dbe65`) had actually been build- or unit-tested. Ran the
+  checks for real this time:
+  - `unit_tests/./test.sh`: 1344/1344 passing. VVT Advanced Mode is genuinely covered by the
+    `test_vvt.cpp` cases added in its commit. Manual Pressure Correction had zero coverage -
+    nothing exercised `getInjectionDuration()` with `injectorCompensationMode ==
+    ICM_ManualPressureCorrection`.
+  - `firmware/config/boards/alphax-s550-pnp/compile_alphax-s550.sh -j12`: links cleanly
+    (flash0 43.90%, ram0 100.00%), matching the numbers previously claimed but not actually
+    measured.
+  - Manually traced the Manual Pressure Correction code path (`injector_model.cpp`) and the
+    VVT PID fade/iTerm-clamp code path (`vvt.cpp`) against their real APIs
+    (`Pid::getUnclampedOutput`/`getOffset`/`iTermMin`/`iTermMax`, `interpolate3d` axis wiring,
+    per-board `MANUAL_PRESSURE_CORRECTION_*_SIZE` default population) - no discrepancies found.
+- Added the missing test: `InjectorModel.ManualPressureCorrection` in
+  `unit_tests/tests/ignition_injection/test_injector_model.cpp`. Sets a 2x2
+  pressure/fuel-mass correction table (1.0x at 0 kPa, 1.2x at 300 kPa), verifies
+  `getInjectorFlowRatio()` returns 1.0 (automatic sqrt(pressure) compensation is bypassed in
+  this mode, per the commit's design) and that `getInjectionDuration()` applies the table's
+  multiplier on top of the uncompensated base duration plus deadtime, at both table points.
+- Along the way, found and fixed an unrelated generation-hygiene issue: `firmware/controllers
+  /generated/page_5_generated.h` is a shared (not board-suffixed) generated file; compiling
+  the alphax-s550-pnp board regenerates it with alphax's larger `LUA_SCRIPT_SIZE`, and
+  because `make`'s dependency rule only regenerates on `.txt` source changes (not board
+  target changes), a subsequent unit-test build silently reused the wrong-board version and
+  failed a `static_assert(sizeof(page5_s) == 40000)` (actual 8000) in `lua.cpp`. Fixed by
+  explicitly re-running `gen_config_board.sh config/boards/f407-discovery f407-discovery`
+  before the unit-test build. Not committed (generated file).
+- Also hit, then resolved, a self-inflicted false regression: after a `make clean` +
+  `make CC=clang -j12` cross-compiler check (per CLAUDE.md) hit a real pre-existing clang
+  `-Werror=uninitialized` failure in `unit_tests/test-framework/engine_test_helper.cpp` (base
+  class `EngineTestHelperBase` constructor is passed `&persistentConfig.engineConfiguration`
+  before the derived `persistentConfig` member is constructed - introduced in commit
+  `7f8615ad24`, unrelated to this branch's work), re-running `./test.sh` (GCC) *without* a
+  `make clean` first mixed leftover clang-compiled `.o` files with newly-compiled GCC ones,
+  producing 11 unrelated-looking failures (trigger/cranking/fuel-scheduler callback-pointer
+  mismatches) that vanished after a clean GCC rebuild. Confirms the CLAUDE.md guidance to
+  always `make clean` when switching compiler/flags applies to CC switches too, not just
+  coverage builds.
+
+Validation:
+- Full unit test suite (GCC, clean rebuild): 1345/1345 passing (1344 pre-existing +
+  1 new `ManualPressureCorrection` test).
+- `compile_alphax-s550.sh -j12`: links cleanly.
+- Clang unit-test build still fails on the pre-existing `engine_test_helper.cpp` issue above;
+  out of scope for this session, flagged here for whoever picks it up next.
+
+Open follow-ups:
+- Fix the clang `-Wuninitialized` issue in `EngineTestHelper`'s constructor (member init
+  order vs. base-class initializer argument) so `make CC=clang` builds again.
+- Neither VVT Advanced Mode nor Manual Pressure Correction has been validated on real
+  hardware/bench yet - only unit tests + compile.
