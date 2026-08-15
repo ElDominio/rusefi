@@ -106,3 +106,67 @@ TEST(priming, flexTableDuration) {
 	Sensor::setMockValue(SensorType::FuelEthanolPercent, 50);
 	EXPECT_EQ(28, engine->module<PrimeController>()->getPrimeDuration());
 }
+
+// With primeOnTriggerTeeth enabled, the prime pulse fires after the configured number of raw
+// primary trigger teeth since ignition-on, instead of after a fixed delay - and only once.
+TEST(priming, triggerToothScheduling) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	MockInjectorModel2 injectorModel;
+	engine->module<InjectorModelPrimary>().set(&injectorModel);
+	ON_CALL(injectorModel, getInjectionDuration(::testing::_)).WillByDefault(Return(2.0f));
+
+	for (size_t i = 0; i < efi::size(engineConfiguration->primeBins); i++) {
+		engineConfiguration->primeBins[i] = i * 10;
+	}
+	for (auto& massMg : engineConfiguration->primeValues) {
+		massMg = 50; // nonzero mass so the pulse is not skipped as zero-duration
+	}
+	Sensor::setMockValue(SensorType::Clt, 50);
+
+	engineConfiguration->primeOnTriggerTeeth = true;
+	engineConfiguration->primingTriggerTeeth = 5;
+
+	auto prime = engine->module<PrimeController>();
+
+	prime->onIgnitionStateChanged(true);
+	// Tooth-counted mode: nothing scheduled yet, no fixed-delay prime pending
+	EXPECT_EQ(0, engine->scheduler.size());
+	EXPECT_FALSE(prime->isPriming());
+
+	for (int i = 0; i < 4; i++) {
+		prime->onPrimeTriggerTooth();
+	}
+	EXPECT_FALSE(prime->isPriming()) << "should not fire before the Nth tooth";
+	EXPECT_EQ(0, engine->scheduler.size());
+
+	prime->onPrimeTriggerTooth(); // 5th tooth
+	EXPECT_TRUE(prime->isPriming());
+	EXPECT_EQ(1, engine->scheduler.size()) << "prime end event scheduled";
+
+	// Further teeth must not re-fire a second pulse (still single-shot, like fixed-delay mode)
+	prime->onPrimeTriggerTooth();
+	EXPECT_EQ(1, engine->scheduler.size()) << "no duplicate firing on further teeth";
+}
+
+// Turning the ignition off before the Nth tooth arrives must disarm the pending tooth-counted
+// prime so it doesn't carry over (and keep counting) into an unrelated future key cycle.
+TEST(priming, triggerToothDisarmedOnIgnitionOff) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->primeOnTriggerTeeth = true;
+	engineConfiguration->primingTriggerTeeth = 3;
+
+	auto prime = engine->module<PrimeController>();
+
+	prime->onIgnitionStateChanged(true);
+	prime->onPrimeTriggerTooth();
+	prime->onPrimeTriggerTooth();
+
+	prime->onIgnitionStateChanged(false);
+
+	// This would have been the 3rd tooth had priming stayed armed
+	prime->onPrimeTriggerTooth();
+	EXPECT_FALSE(prime->isPriming());
+	EXPECT_EQ(0, engine->scheduler.size());
+}

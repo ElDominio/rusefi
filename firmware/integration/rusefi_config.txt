@@ -565,9 +565,7 @@ uint16_t engineSnifferRpmThreshold;Engine sniffer would be disabled above this r
 
 	output_pin_e tachOutputPin;
 	pin_output_mode_e tachOutputPinMode;
-	! Retired field: flat A/C idle % adder. Replaced by acIdleAdderByPressure (adder curve vs A/C pressure).
-	! Renamed with the 'unused' prefix so the byte slot stays reserved (stable offsets, reusable later).
-	uint8_t unusedAcIdleExtraOffset;;"%", 1, 0, 0, 100, 0
+	uint8_t primingTriggerTeeth;Number of primary trigger teeth to see (since ignition-on) before firing the priming pulse. Counting is raw and does not require trigger sync. Only used when 'primeOnTriggerTeeth' is enabled.;"teeth", 1, 0, 1, 250, 0
 
 
 	uint8_t multisparkMaxSparkingAngle;This parameter sets the latest that the last multispark can occur after the main ignition event. For example, if the ignition timing is 30 degrees BTDC, and this parameter is set to 45, no multispark will ever be fired after 15 degrees ATDC.;"deg", 1, 0, 0, 60, 0
@@ -1912,7 +1910,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit cutEtbOnRpmLimit,"enabled","disabled";Uses Electronic Throttle Limiting (a PID) to try to hold engine RPM about 50rpm below the hard RPM limit, instead of (or in addition to) cutting fuel/spark at the limit. This is a real distinction from the hard RPM limit: the hard limit only cuts, while this tries to actively manage throttle to stay just under it.
 	bit coastingFuelCutRequiresGear,"enabled","disabled";When enabled, overrun fuel cut will not engage while the transmission is in neutral (DetectedGear sensor reads neutral).\nRequires the gear ratio table (Total Gear Count / gear ratios) to be configured: if it is not set up, the detected gear always reads neutral and fuel cut will never engage.
 	bit eotFromIatCht,"yes","no";Use CHT/IAT sensors to estimate oil temperature (EOT) via first-order thermal model. Disable if a real oil temp sensor is wired.
-	bit unusedBit_Fancy16
+	bit primeOnTriggerTeeth,"Trigger teeth","Fixed delay";When enabled, the priming pulse fires after 'primingTriggerTeeth' raw primary trigger teeth are seen since ignition-on, instead of after the fixed 'primingDelay'. Tooth counting does not require trigger sync, and (like the fixed-delay mode) the pulse still only fires once per key cycle.
 	bit unusedBit_Fancy17
 	bit unusedBit_Fancy18
 	bit unusedBit_Fancy19

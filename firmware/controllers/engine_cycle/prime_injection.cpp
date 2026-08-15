@@ -54,7 +54,9 @@ static bool isPrimeInjectionPulseSkipped() {
 
 void PrimeController::onIgnitionStateChanged(bool ignitionOn) {
 	if (!ignitionOn) {
-		// don't prime on ignition-off
+		// don't prime on ignition-off; also disarm any pending tooth-counted prime so it
+		// doesn't carry over (and keep counting) into an unrelated future key cycle
+		m_primeTriggerArmed = false;
 		return;
 	}
 
@@ -75,12 +77,19 @@ void PrimeController::onIgnitionStateChanged(bool ignitionOn) {
 
 	// start prime injection if this is a 'fresh start'
 	if (ignSwitchCounter == 0) {
-		// Give sensors long enough to wake up before priming
-		constexpr float minimumPrimeDelayMs = 100;
-		int32_t primeDelayNt = assertFloatFitsInto32BitsAndCast("primingDelay", MSF2NT(engineConfiguration->primingDelay * 1000 + minimumPrimeDelayMs));
+		if (engineConfiguration->primeOnTriggerTeeth) {
+			// Fire after the configured number of raw trigger teeth are seen, regardless of
+			// sync state. onPrimeTriggerTooth() does the actual counting/firing.
+			m_primeTriggerTeethSeen = 0;
+			m_primeTriggerArmed = true;
+		} else {
+			// Give sensors long enough to wake up before priming
+			constexpr float minimumPrimeDelayMs = 100;
+			int32_t primeDelayNt = assertFloatFitsInto32BitsAndCast("primingDelay", MSF2NT(engineConfiguration->primingDelay * 1000 + minimumPrimeDelayMs));
 
-		auto startTime = getTimeNowNt() + primeDelayNt;
-		getScheduler()->schedule("primingDelay", nullptr, startTime, action_s::make<onPrimeStartAdapter>( this ));
+			auto startTime = getTimeNowNt() + primeDelayNt;
+			getScheduler()->schedule("primingDelay", nullptr, startTime, action_s::make<onPrimeStartAdapter>( this ));
+		}
 	} else {
 		efiPrintf("Skipped priming pulse since ignSwitchCounter = %lu", ignSwitchCounter);
 	}
@@ -128,6 +137,22 @@ void PrimeController::onPrimeStart() {
 	m_isPriming = true;
 	startSimultaneousInjection();
 	getScheduler()->schedule("onPrimeStart", nullptr, endTime, action_s::make<onPrimeEndAdapter>( this ));
+}
+
+void PrimeController::onPrimeTriggerTooth() {
+	if (!m_primeTriggerArmed) {
+		return;
+	}
+
+	m_primeTriggerTeethSeen++;
+
+	// At least one tooth: a 0 here (unconfigured old tune) would otherwise never fire.
+	uint32_t teethRequired = engineConfiguration->primingTriggerTeeth == 0 ? 1 : engineConfiguration->primingTriggerTeeth;
+
+	if (m_primeTriggerTeethSeen >= teethRequired) {
+		m_primeTriggerArmed = false;
+		onPrimeStart();
+	}
 }
 
 void PrimeController::onPrimeEnd() {

@@ -20,6 +20,10 @@ public:
 	void onPrimeStart();
 	void onPrimeEnd();
 
+	// Called by TriggerCentral for every accepted primary trigger tooth. Only does
+	// anything while a tooth-counted prime is armed (see primeOnTriggerTeeth).
+	void onPrimeTriggerTooth();
+
 	bool isPriming() const {
 		return m_isPriming;
 	}
@@ -36,4 +40,8 @@ private:
 
 	uint32_t getKeyCycleCounter() const;
 	void setKeyCycleCounter(uint32_t count);
+
+	// Tooth-counted prime arming state. Not persisted: reset every ignition cycle.
+	bool m_primeTriggerArmed = false;
+	uint32_t m_primeTriggerTeethSeen = 0;
 };

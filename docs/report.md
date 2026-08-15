@@ -1794,3 +1794,56 @@ Open follow-ups:
   AirmassModes entry) still hasn't been fixed; this is now the second unrelated change blocked
   from full clang verification by it.
 
+## 2026-08-15 - Priming pulse: fire on trigger-tooth count instead of fixed delay
+
+What was done:
+- Added a second mode for the fuel priming pulse: instead of always firing
+  `primingDelay` seconds after ignition-on, it can now fire after a configurable number
+  of raw primary trigger teeth are seen since ignition-on. Counting is independent of
+  trigger sync (it hooks the same pre-sync point `hwEventCounters` already uses) and still
+  fires only once per key cycle, same as the existing delay path.
+- `firmware/controllers/engine_cycle/prime_injection.h`/`.cpp` (`PrimeController`):
+  - `onIgnitionStateChanged()` now branches on the new `primeOnTriggerTeeth` bit: true arms
+    tooth counting (`m_primeTriggerArmed = true`, `m_primeTriggerTeethSeen = 0`) instead of
+    scheduling the timer; false keeps the original `primingDelay` scheduling unchanged.
+  - New `onPrimeTriggerTooth()`: no-op unless armed; increments the tooth counter and calls
+    the existing `onPrimeStart()` once it reaches `primingTriggerTeeth` (treating a
+    configured 0 as 1, so an unset/old-tune value can't silently disable firing).
+  - Ignition-off now also disarms (`m_primeTriggerArmed = false`) so a prime that never
+    reached its tooth count doesn't keep counting into an unrelated later key cycle.
+- `firmware/controllers/trigger/trigger_central.cpp` (`TriggerCentral::handleShaftSignal`):
+  added a call to `engine->module<PrimeController>()->onPrimeTriggerTooth()` on
+  `SHAFT_PRIMARY_RISING`, placed right after the `hwEventCounters[eventIndex]++` line -
+  i.e. before trigger decode/sync, matching the "does not depend on sync" requirement.
+  Mirrors the existing `engine->module<HarleyAcr>()` direct-call pattern a few lines above.
+- Config fields, both repurposed from existing reserved slots (no struct-size change, no
+  offset shift for any other field, so no `FLASH_DATA_VERSION` bump needed - old tunes have
+  both slots at 0/false, which is exactly the old fixed-delay behavior):
+  - `bit unusedBit_Fancy16` -> `primeOnTriggerTeeth` ("Trigger teeth" (1) / "Fixed delay" (0)).
+  - `uint8_t unusedAcIdleExtraOffset` (retired flat A/C idle adder byte) ->
+    `primingTriggerTeeth` (1-250 "teeth").
+- `firmware/tunerstudio/tunerstudio.template.ini`: `primingFuelPulsePanel` dialog gained a
+  "Priming trigger mode" field plus the two mode-specific fields, each conditionally shown
+  (`primingDelay` when `primeOnTriggerTeeth == 0`, `primingTriggerTeeth` when `== 1`).
+- Tests added to `unit_tests/tests/ignition_injection/test_startOfCrankingPrimingPulse.cpp`:
+  `priming.triggerToothScheduling` (no schedule/fire before the Nth tooth, fires and schedules
+  the close event on the Nth, does not re-fire on further teeth) and
+  `priming.triggerToothDisarmedOnIgnitionOff` (ignition-off mid-count prevents a later tooth
+  from firing the pulse).
+
+Validation:
+- `unit_tests/./test.sh` (GCC, default toolchain): full suite 1353/1353 passing, including the
+  2 new tests and the pre-existing 3 `priming.*` tests (delay-mode scheduling, duration, flex
+  table) unchanged/still passing, confirming the default (bit=0) path is untouched.
+- `make clean && make CC=clang -j12`: still fails on the same pre-existing, unrelated
+  `unit_tests/test-framework/engine_test_helper.cpp:98` uninitialized-field error already
+  tracked since the 2026-08-13 AirmassModes entry - not touched here, not caused by this
+  change (file has no diff from this session).
+- Not validated on hardware/bench.
+
+Open follow-ups:
+- Same untouched clang-only `engine_test_helper.cpp:98` build blocker as prior entries; this
+  change is the third one now blocked from full clang verification by it.
+- "Tooth" currently means primary rising edges only (`SHAFT_PRIMARY_RISING`); secondary/cam
+  teeth are not counted. Not expected to matter for the crank-wheel use case described, but
+  worth knowing if someone later wants to prime off a cam signal instead.
