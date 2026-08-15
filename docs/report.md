@@ -1601,3 +1601,55 @@ Open follow-ups:
   documented-but-unenforced, consistent with how other paired threshold/hysteresis fields in
   this codebase are handled (e.g. dual fuel pump activation/hysteresis).
 
+## 2026-08-14 - Fix Predictive MAP blend-duration cap not being a hard cap
+
+What was done:
+- User raised a safety concern about Predictive MAP (`AE_MODE_PREDICTIVE_MAP`,
+  `speed_density_airmass.cpp`): while a real MAP sensor is working, the estimate should never
+  substitute for it longer than `predictiveMapBlendDuration` (RPM-indexed curve,
+  `predictiveMapBlendDurationBins/Values`) seconds.
+- Traced `getPredictiveMap()` and found the cap was not actually enforced during a sustained
+  throttle ramp. The single `m_predictionTimer` served two purposes: (a) driving the
+  blend-progress curve back toward the live sensor, and (b) the hard-cutoff check
+  (`elapsedTime >= blendDuration`). The "track rising TPS" branch (lines ~119-123, pre-fix)
+  resets this same timer every time the table's predicted MAP climbs further (i.e. throttle
+  still opening), which also silently rearmed the cutoff check - so on a continuous tip-in the
+  session could stay active indefinitely, well past the configured duration, even with a
+  perfectly valid MAP sensor the whole time.
+- Fix: added a second timer, `m_sessionTimer` (`speed_density_airmass.h`), started once when
+  prediction first latches (`getPredictiveMap()`, the initial-trigger branch) and never reset
+  by the rising-TPS retrigger path. The hard-cutoff check now reads `m_sessionTimer` instead of
+  `m_predictionTimer`, so total substitution time is capped at `blendDuration` regardless of
+  how many times the blend curve itself restarts mid-ramp. `m_predictionTimer` keeps its
+  original job (blend-factor calculation) unchanged.
+- Added `AirmassModes.PredictiveMapHardCapDespiteSustainedRamp`
+  (`unit_tests/tests/ignition_injection/test_fuel_math.cpp`): simulates TPS climbing across 3
+  steps (30/40/45%) with a rising mock table prediction (85/95/100 kPa) against a constant,
+  valid 65 kPa sensor reading, and asserts `effectiveMap` snaps back to the real sensor at
+  exactly the configured 500ms cap even though the blend-progress timer only shows 100ms
+  since its last retrigger-reset. Verified this test fails (returns 93, not 65) against the
+  pre-fix code by temporarily stashing the fix and re-running - confirms the test exercises the
+  actual bug, not a tautology.
+
+Validation:
+- `unit_tests/./test.sh AirmassModes`: 10/10 passing (9 pre-existing + 1 new), including a
+  manual pre-fix run of the same suite to confirm the new test fails without the fix (got 93
+  instead of the expected 65).
+- Full suite (`unit_tests/./test.sh`, GCC, default toolchain): 1348/1348 passing after the fix.
+- Attempted the required clang cross-compiler check (`make clean && make CC=clang -j12`) per
+  this file's Compiler Flags section; clang fails, but on a pre-existing, unrelated issue:
+  `unit_tests/test-framework/engine_test_helper.cpp:98` - "field 'persistentConfig' is
+  uninitialized when used here" (`-Werror,-Wuninitialized`), in the base-class initializer list
+  of `EngineTestHelper`'s constructor. This file was untouched by this change and is not
+  reported modified in `git status` - the failure predates this session and reproduces on an
+  unmodified checkout of the current WIP branch under clang. Not fixed here (out of scope for
+  the Predictive MAP concern); left as a known clang-build blocker for this branch.
+
+Open follow-ups:
+- The clang-only `engine_test_helper.cpp:98` uninitialized-field build failure blocks clang
+  verification for ANY change on this branch, not just this one - worth a dedicated fix before
+  relying on the "build with both GCC and clang" gate again.
+- Not validated on hardware/bench - this is a logic-only fix to an already-shipped feature;
+  should be exercised on a real MAP sensor + sustained WOT pull before being considered fully
+  verified end to end.
+

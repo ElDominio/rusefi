@@ -684,3 +684,52 @@ TEST(AirmassModes, PredictiveMapBlendTowardRisingSensor) {
 	Sensor::setMockValue(SensorType::Map, 90.0f);
 	EXPECT_FLOAT_EQ(dut.getMap(1500, false), 90.0f);
 }
+
+// A sustained throttle ramp keeps predictedMap climbing, which restarts the
+// blend-progress timer on every step (see the "adopt it and restart the blend"
+// path). That restart must never extend how long we substitute the estimate
+// for a MAP sensor that has been valid/working the whole time — the total
+// session must still be capped at predictiveMapBlendDuration.
+TEST(AirmassModes, PredictiveMapHardCapDespiteSustainedRamp) {
+	StrictMock<MockVp3d> veTable;
+	StrictMock<MockVp3d> mapFallback;
+
+	EXPECT_CALL(mapFallback, getValue(1500, 30.0f)).WillRepeatedly(Return(85.0f));
+	EXPECT_CALL(mapFallback, getValue(1500, 40.0f)).WillRepeatedly(Return(95.0f));
+	EXPECT_CALL(mapFallback, getValue(1500, 45.0f)).WillRepeatedly(Return(100.0f));
+
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->accelEnrichmentMode = AE_MODE_PREDICTIVE_MAP;
+	for (auto index = 0; index < efi::size(config->predictiveMapBlendDurationValues); index++) {
+		config->predictiveMapBlendDurationValues[index] = 0.5f; // 500ms blend
+	}
+
+	SpeedDensityAirmass dut(veTable, mapFallback);
+
+	Sensor::setMockValue(SensorType::Tps1, 30.0f);
+	// MAP sensor stays valid and at 65 kPa for the whole test.
+	Sensor::setMockValue(SensorType::Map, 65.0f);
+
+	auto& tpsAccel = *engine->module<TpsAccelEnrichment>();
+	tpsAccel.m_accelEventJustOccurred = true;
+	// Session starts now; predicted=85 > sensor=65
+	EXPECT_FLOAT_EQ(dut.getMap(1500, false), 85.0f);
+
+	// Throttle keeps opening: predicted keeps climbing, restarting the blend
+	// curve, but the overall session clock keeps running.
+	eth.moveTimeForwardMs(200);
+	Sensor::setMockValue(SensorType::Tps1, 40.0f);
+	EXPECT_FLOAT_EQ(dut.getMap(1500, false), 95.0f); // retrigger, blend restarts at 0%
+
+	eth.moveTimeForwardMs(200); // session elapsed 400ms; blend-timer elapsed 200ms
+	Sensor::setMockValue(SensorType::Tps1, 45.0f);
+	EXPECT_FLOAT_EQ(dut.getMap(1500, false), 100.0f); // retrigger again, blend restarts at 0%
+
+	// Session elapsed hits 500ms (blendDuration) even though the blend-progress
+	// timer only shows 100ms since the last retrigger and the sensor (65) still
+	// hasn't caught up to the prediction (100) -- the hard cap must still cut
+	// over to the real sensor.
+	eth.moveTimeForwardMs(100);
+	EXPECT_FLOAT_EQ(dut.getMap(1500, false), 65.0f);
+}

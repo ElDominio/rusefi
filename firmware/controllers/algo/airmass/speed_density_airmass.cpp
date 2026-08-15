@@ -78,7 +78,10 @@ float SpeedDensityAirmass::getPredictiveMap(float rpm, bool postState, float map
 
 	float elapsedTime = m_predictionTimer.getElapsedSeconds();
 
-	if (m_isMapPredictionActive && elapsedTime >= blendDuration) {
+	// Hard cap on total time we substitute the estimate for a working MAP sensor,
+	// tracked separately from m_predictionTimer so the rising-TPS retrigger below
+	// (which resets m_predictionTimer to restart the blend curve) can't extend it.
+	if (m_isMapPredictionActive && m_sessionTimer.getElapsedSeconds() >= blendDuration) {
 			m_isMapPredictionActive = false;
 			engine->outputChannels.mapPredEventOver++;
 	}
@@ -137,6 +140,7 @@ float SpeedDensityAirmass::getPredictiveMap(float rpm, bool postState, float map
 				m_isMapPredictionActive = true;
 				ae->m_timeSinceAccel.reset();
 				m_predictionTimer.reset();
+				m_sessionTimer.reset();
 				m_initialPredictedMap = predictedMap;
 				engine->outputChannels.predTimerResetCnt++;
 				effectiveMap = predictedMap;
