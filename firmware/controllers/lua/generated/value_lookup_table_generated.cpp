@@ -640,9 +640,6 @@ const ConfigParameter allParameters[] = {
 	{ 0x4621B792, // rpmHardLimit
 		[]() -> float { return engineConfiguration->rpmHardLimit; },
 		[](float value) { engineConfiguration->rpmHardLimit = value; } },
-	{ 0x4666F9EA, // canBroadcastUseChannelTwo
-		[]() -> float { return engineConfiguration->canBroadcastUseChannelTwo; },
-		[](float value) { engineConfiguration->canBroadcastUseChannelTwo = value; } },
 	{ 0x467B8467, // mc33_hvolt
 		[]() -> float { return engineConfiguration->mc33_hvolt; },
 		[](float value) { engineConfiguration->mc33_hvolt = value; } },

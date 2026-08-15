@@ -763,9 +763,6 @@ float getConfigValueByHash(const int hash) {
 // lambdaProtectionTimeout
 		case -1645106444:
 			return engineConfiguration->lambdaProtectionTimeout;
-// canBroadcastUseChannelTwo
-		case 1181153770:
-			return engineConfiguration->canBroadcastUseChannelTwo;
 // disableLaunchWithClutchUp
 		case -1277653320:
 			return engineConfiguration->disableLaunchWithClutchUp;
@@ -3638,11 +3635,6 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1645106444:
 	{
 		engineConfiguration->lambdaProtectionTimeout = (int)value;
-		return 1;
-	}
-		case 1181153770:
-	{
-		engineConfiguration->canBroadcastUseChannelTwo = (int)value;
 		return 1;
 	}
 		case -1277653320:

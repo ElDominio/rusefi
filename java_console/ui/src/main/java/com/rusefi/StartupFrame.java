@@ -1,5 +1,7 @@
 package com.rusefi;
 
+import com.rusefi.core.OsUtil;
+
 import com.devexperts.logging.Logging;
 import com.opensr5.ConfigurationImage;
 import com.opensr5.ini.IniFileModel;
@@ -300,7 +302,7 @@ public class StartupFrame {
             leftPanel.add(miscPanel);
         }
 
-        if (FileLog.isWindows()) {
+        if (OsUtil.isWindows()) {
             JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
             topButtons.add(ToolButtons.createShowDeviceManagerButton());
             if (DriverInstall.isFolderExist())
@@ -454,8 +456,6 @@ public class StartupFrame {
         firmwareTopPanel.add(selector.getControl(), BorderLayout.NORTH);
         JPanel updateButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         updateButtons.add(startupUpdateActions.getUpdateSoftwareStatus());
-        updateButtons.add(startupUpdateActions.getUpdateSoftwareButton());
-        updateButtons.add(startupUpdateActions.getUpdateFirmwareButton());
         updateButtons.add(startupUpdateActions.getRollbackFirmwareButton());
         firmwareTopPanel.add(updateButtons, BorderLayout.CENTER);
         firmwareTopPanel.add(startupUpdateActions.getMigrateSettings(), BorderLayout.SOUTH);

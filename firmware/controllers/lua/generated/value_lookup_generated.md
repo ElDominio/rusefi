@@ -757,9 +757,6 @@ Maximum time to crank starter when start/stop button is pressed
 ### lambdaProtectionTimeout
 Only respond once lambda is out of range for this period of time. Use to avoid transients triggering lambda protection when not needed
 
-### canBroadcastUseChannelTwo
-
-
 ### disableLaunchWithClutchUp
 When Launch Control is NOT activated by Clutch Up, use the Clutch Up switch to positively confirm the clutch has been released and disable launch.
 
