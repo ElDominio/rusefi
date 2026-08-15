@@ -89,6 +89,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_LUA_LIMITER` | Lua limiter | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_ADVANCED_FUEL_PUMP` | Advanced / PWM secondary fuel pump | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_VVT_COMPENSATION` | VVT timing/fuel compensation | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_VVT_ADVANCED_MODE` | VVT Advanced Mode (distance-from-target + oil-pressure duty curves replace the fixed PID Hold Duty offset, with an optional near-target PID pause) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_CHECK_ENGINE_TRIGGERING` | Check Engine Triggering (TS-configurable threshold checks with a points-gated CEL; TPS Stuck High/Low implemented, others reserved) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_CHT_CLT_ESTIMATOR` | CLT Estimator (estimates coolant temp from CHT via a competing-rate radiator model, with a lagged thermostat valve simulating the crossing/dip/recover hunting behavior) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_OIL_LIFE_MONITOR` | Weighted Engine Oil Life Monitor (temperature-weighted revolution counter, oil-life % gauge; accumulates in RAM only and flushes to flash exactly once on ignition-off; **requires `EFI_MAIN_RELAY_CONTROL`** — a build error if the flag is on without it, and consequently not enabled in the simulator, which sets `EFI_MAIN_RELAY_CONTROL FALSE`) | FALSE (f4) / TRUE (f7,h7) |
@@ -204,6 +205,7 @@ EFI_USE_OPENBLT
 EFI_USE_UART_DMA
 EFI_VEHICLE_SPEED
 EFI_VVT_COMPENSATION             ← AlphaX (VVT compensation)
+EFI_VVT_ADVANCED_MODE            ← AlphaX (VVT advanced-mode duty curves)
 EFI_VVT_PID
 EFI_WIDEBAND_FIRMWARE_UPDATE
 EFI_WIFI

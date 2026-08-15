@@ -301,7 +301,8 @@ void customPageSetDefaults() {
 	// the center point, for smooth interpolation through the target) and a pass-through (1.0) oil
 	// pressure multiplier curve.
 	d.vvtAdvancedModeEnabled = false;
-	d.vvtAdvancedPidFadeDeg = 1.0f; // 0.5 deg off yields half PID authority by default
+	d.vvtAdvancedPidPauseEnabled = true;
+	d.vvtAdvancedPidPauseDeg = 1.0f; // within 1 deg of target, duty curve alone holds position
 	for (size_t i = 0; i < efi::size(d.vvtAdvDistanceBinsIntake); i++) {
 		d.vvtAdvDistanceBinsIntake[i] = -40.0f + i * 10.0f; // -40 .. 40 deg, zero at center
 		d.vvtAdvDistanceBinsExhaust[i] = -40.0f + i * 10.0f;

@@ -641,13 +641,14 @@ struct_no_prefix page6_s
 	! always the distance-from-target duty curve, scaled by an optional oil-pressure multiplier
 	! (oil pressure only matters once you're actively flowing oil to move the cam), at every
 	! distance -- there is no switchover. The distance axis includes an explicit zero bin so the
-	! curve interpolates smoothly through the target rather than jumping across a gap. The classic
-	! P+I+D trim is never disabled either: it fades in linearly from zero authority at distance=0
-	! to full ("normal") authority at vvtAdvancedPidFadeDeg, and stays at full authority beyond
-	! that. vvtAdvancedPidFadeDeg only controls this PID fade -- it does not change which
-	! feedforward source is used.
-	bit vvtAdvancedModeEnabled,"enabled","disabled";VVT Advanced Mode: master enable. Replaces the fixed PID offset (Hold Duty) with distance-from-target and oil-pressure-based duty curves, used at every distance. PID trim is always active, fading in near target.
-	float vvtAdvancedPidFadeDeg;VVT Advanced Mode: distance from target at which the PID trim reaches full authority (linear ramp from 0 at zero error). E.g. 1.0 means being 0.5 deg off yields half PID authority.;"deg", 1, 0, 0.1, 10, 2
+	! curve interpolates smoothly through the target rather than jumping across a gap. Within
+	! vvtAdvancedPidPauseDeg of the target, the classic P+I+D trim is fully paused -- not just
+	! scaled down, but not evaluated at all, so its iTerm cannot integrate/windup in the
+	! background while the duty curve alone is expected to hold position. Outside that window (or
+	! with vvtAdvancedPidPauseEnabled off) the trim runs at full authority as usual.
+	bit vvtAdvancedModeEnabled,"enabled","disabled";VVT Advanced Mode: master enable. Replaces the fixed PID offset (Hold Duty) with distance-from-target and oil-pressure-based duty curves, used at every distance. PID trim is always active outside the pause window.
+	bit vvtAdvancedPidPauseEnabled,"enabled","disabled";VVT Advanced Mode: PID trim pause-near-target enable. When disabled, the P+I+D trim always runs at full authority and vvtAdvancedPidPauseDeg is ignored.
+	float vvtAdvancedPidPauseDeg;VVT Advanced Mode: distance from target within which the PID trim is fully paused (not evaluated, so its iTerm cannot integrate) and only the feedforward duty curve is used. Ignored when vvtAdvancedPidPauseEnabled is off.;"deg", 1, 0, 0, 10, 2
 
 	float[VVT_ADV_DISTANCE_SIZE] vvtAdvDistanceBinsIntake;VVT Advanced Mode: intake distance-from-target axis (curve X).;"deg", 1, 0, -40, 40, 0
 	float[VVT_ADV_DISTANCE_SIZE] vvtAdvDutyIntake;VVT Advanced Mode: intake base duty cycle at each distance from target (curve Y).;"%", 1, 0, -100, 100, 1

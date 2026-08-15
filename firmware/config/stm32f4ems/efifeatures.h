@@ -563,6 +563,10 @@
 #define EFI_VVT_COMPENSATION FALSE
 #endif
 
+#ifndef EFI_VVT_ADVANCED_MODE
+#define EFI_VVT_ADVANCED_MODE FALSE
+#endif
+
 // AlphaX custom subsystems (config lives in TS page 5). Default FALSE on F4 (limited flash);
 // F7/H7 override these to TRUE. A board may set -DEFI_<FEATURE>=TRUE in its board.mk to opt in.
 #ifndef EFI_EXHAUST_CUTOUT

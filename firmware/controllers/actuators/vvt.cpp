@@ -117,6 +117,7 @@ static bool shouldInvertVvt(int camIndex) {
 	return false;
 }
 
+#if EFI_VVT_ADVANCED_MODE
 // VVT Advanced Mode: duty vs. signed distance-from-target, per cam type (0=intake, 1=exhaust).
 // Only used beyond the PID fade distance -- see getClosedLoop.
 static float getVvtAdvancedBaseDuty(int camIndex, float distance) {
@@ -143,6 +144,7 @@ static float getVvtAdvancedOilPressureMult(int camIndex) {
 		return interpolate2d(oilPressure, cfg->vvtAdvOilPressureBinsExhaust, cfg->vvtAdvOilPressureMultExhaust);
 	}
 }
+#endif // EFI_VVT_ADVANCED_MODE
 
 expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observation) {
 	// User labels say "advance" and "retard"
@@ -154,35 +156,35 @@ expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observa
 	m_pid.iTermMin = (m_cam == 0) ? engineConfiguration->vvtIntake_iTermMin : engineConfiguration->vvtExhaust_iTermMin;
 	m_pid.iTermMax = (m_cam == 0) ? engineConfiguration->vvtIntake_iTermMax : engineConfiguration->vvtExhaust_iTermMax;
 
+#if EFI_VVT_ADVANCED_MODE
 	if (getCustomPage()->vvtAdvancedModeEnabled) {
 		// Signed distance uses the same sign convention as the PID error above, so curve tuning
 		// doesn't depend on the solenoid inversion setting.
 		float distance = (target - observation) * (isInverted ? -1.0f : 1.0f);
 		vvtDistance = distance;
-#if EFI_TUNER_STUDIO
-		// Per-instance channel (unlike vvtDistance above, which the live-data mechanism only
-		// exposes for VvtController1) so each cam's curve tracer can track its own distance.
-		engine->outputChannels.vvtDistances[index] = distance;
-#endif // EFI_TUNER_STUDIO
-
-		// Raw P+I+D trim with the constant "Hold Duty" (offset) removed -- Hold Duty is never used
-		// in Advanced Mode, the duty curve below is the feedforward at every distance.
-		float dTime = MS2SEC(GET_PERIOD_LIMITED(&engineConfiguration->auxPid[m_cam]));
-		float rawPid = m_pid.getUnclampedOutput(target, observation, dTime) - m_pid.getOffset();
 
 		// The duty curve, scaled by oil pressure, is always the feedforward baseline.
 		float feedforward = getVvtAdvancedBaseDuty(m_cam, distance) * getVvtAdvancedOilPressureMult(m_cam);
 
-		// PID trim is never disabled: it fades in linearly from zero authority at distance=0 to
-		// full ("normal") authority at vvtAdvancedPidFadeDeg, and stays at full authority beyond
-		// that. This fade is the only thing vvtAdvancedPidFadeDeg controls -- it does not change
-		// which feedforward source is used.
-		float fadeDeg = maxF(getCustomPage()->vvtAdvancedPidFadeDeg, 0.01f);
-		float pidScale = clampF(0.0f, fabsf(distance) / fadeDeg, 1.0f);
+		// Inside the pause window the PID is not evaluated at all -- its P/I/D state (iTerm in
+		// particular) is frozen rather than integrating quietly in the background, so there's no
+		// windup waiting to slam into the output once distance grows past the window. Outside the
+		// window (or with pausing turned off) the PID runs at full authority as usual, and its raw
+		// P+I+D trim (with the constant "Hold Duty" offset removed -- Hold Duty is never used in
+		// Advanced Mode) is added on top of the feedforward.
+		bool isPaused = getCustomPage()->vvtAdvancedPidPauseEnabled
+			&& fabsf(distance) < maxF(getCustomPage()->vvtAdvancedPidPauseDeg, 0.0f);
 
-		float output = clampF(engineConfiguration->auxPid[m_cam].minValue,
-			feedforward + rawPid * pidScale,
-			engineConfiguration->auxPid[m_cam].maxValue);
+		float output;
+		if (isPaused) {
+			output = feedforward;
+		} else {
+			float dTime = MS2SEC(GET_PERIOD_LIMITED(&engineConfiguration->auxPid[m_cam]));
+			float rawPid = m_pid.getUnclampedOutput(target, observation, dTime) - m_pid.getOffset();
+			output = feedforward + rawPid;
+		}
+
+		output = clampF(engineConfiguration->auxPid[m_cam].minValue, output, engineConfiguration->auxPid[m_cam].maxValue);
 
 		// Keep the PID status telemetry reflecting the actual commanded duty.
 		m_pid.output = output;
@@ -193,6 +195,7 @@ expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observa
 
 		return output;
 	}
+#endif // EFI_VVT_ADVANCED_MODE
 
 	float retVal = m_pid.getOutput(target, observation);
 
