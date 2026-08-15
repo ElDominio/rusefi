@@ -106,19 +106,19 @@ struct fuel_pump_control_s {
 	 * units: %
 	 * offset 4
 	 */
-	uint8_t fuelPumpDuty = (uint8_t)0;
+	scaled_channel<uint16_t, 10, 1> fuelPumpDuty = (uint16_t)0;
 	/**
 	 * FP target kPa (PWM mode)
 	 * units: kPa
-	 * offset 5
+	 * offset 6
 	 */
 	scaled_channel<uint8_t, 1, 5> fuelPressureTarget = (uint8_t)0;
 	/**
 	 * need 4 byte alignment
 	 * units: units
-	 * offset 6
+	 * offset 7
 	 */
-	uint8_t alignmentFill_at_6[2] = {};
+	uint8_t alignmentFill_at_7[1] = {};
 };
 static_assert(sizeof(fuel_pump_control_s) == 8);
 

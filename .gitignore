@@ -29,6 +29,7 @@ log.txt
 *.kicad_prl
 .*-sentinel
 *generated.patch
+temp/
 
 .gradle
 

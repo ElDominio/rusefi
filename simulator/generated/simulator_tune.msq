@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <msq xmlns="http://www.msefi.com/:msq">
     <page/>
-    <page number="0" size="15784">
+    <page number="0" size="15796">
         <constant name="accelEnrichmentMode">"MS Adder"</constant>
         <constant name="accelerometerCsPin">"NONE"</constant>
         <constant name="accelerometerCsPinMode">"default"</constant>
@@ -560,8 +560,8 @@
         <constant digits="0" name="brakeMeanEffectivePressureDifferential" units="">0</constant>
         <constant name="brakePedalPin">"NONE"</constant>
         <constant name="brakePedalPinMode">"PULLUP"</constant>
-        <constant digits="0" name="byFirmwareVersion" units="index">20260717</constant>
-        <constant digits="0" name="calibrationBirthday" units="">20260717</constant>
+        <constant digits="0" name="byFirmwareVersion" units="index">20260805</constant>
+        <constant digits="0" name="calibrationBirthday" units="">20260805</constant>
         <constant digits="0" name="camDecoder2jzPosition" units="angle">95</constant>
         <constant digits="0" name="camDecoder2jzPrecision" units="">40</constant>
         <constant name="camInputs1">"NONE"</constant>
@@ -586,6 +586,13 @@
         <constant name="canReadEnabled">"enable"</constant>
         <constant name="canRxPin">"NONE"</constant>
         <constant digits="2" name="canSleepPeriodMs" units="ms">50.0</constant>
+        <constant name="canSniffer1_handleInjected">"No"</constant>
+        <constant name="canSniffer1_listenOurs">"Yes"</constant>
+        <constant name="canSniffer1_read">"No"</constant>
+        <constant name="canSniffer2_handleInjected">"No"</constant>
+        <constant name="canSniffer2_listenOurs">"Yes"</constant>
+        <constant name="canSniffer2_read">"No"</constant>
+        <constant name="canSnifferTxBus">"None"</constant>
         <constant name="canTxPin">"NONE"</constant>
         <constant name="canVssNbcType">"BMW_e46"</constant>
         <constant digits="4" name="canVssScaling" units="ratio">1.0</constant>
@@ -3598,6 +3605,7 @@
         <constant name="sdCardCsPinMode">"default"</constant>
         <constant digits="0" name="sdCardLogFrequency" units="hz">50</constant>
         <constant name="sdCardSpiDevice">"Off"</constant>
+        <constant name="sdLoggerMode">"Off"</constant>
         <constant digits="0" name="sdLogMinMap" units="kPa">0</constant>
         <constant digits="0" name="sdLogMinTps" units="%">0</constant>
         <constant digits="0" name="sdLogMinVss" units="kph">0</constant>
@@ -3606,8 +3614,6 @@
         <constant digits="0" name="sdLogStopRpm" units="rpm">700</constant>
         <constant name="sdLogTriggerPin">"NONE"</constant>
         <constant name="sdLogTriggerPinMode">"DEFAULT"</constant>
-        <constant name="sdTriggerLog">"Full MLG"</constant>
-        <constant name="sdTriggerLogCsv">"Binary"</constant>
         <constant name="secondaryInjectorCompensationMode">"None"</constant>
         <constant digits="0" name="secondaryInjectorFuelReferencePressure" units="{bitStringValue(pressureUnitsLabels, useMetricOnInterface)}">0</constant>
         <constant name="secondSolenoidPin">"NONE"</constant>
@@ -5166,8 +5172,8 @@
 </constant>
         <constant name="yesUnderstandLocking">"no"</constant>
     </page>
-    <versionInfo firmwareInfo="20260716" nPages="1" signature="rusEFI master.2026.07.17.f407-discovery.2664846314" version="5.0"/>
-    <bibliography author="rusEFI 20260716" writeDate="date"/>
+    <versionInfo firmwareInfo="20260804" nPages="1" signature="rusEFI master.2026.08.05.f407-discovery.3282417185" version="5.0"/>
+    <bibliography author="rusEFI 20260804" writeDate="date"/>
     <settings/>
     <userComments/>
 </msq>

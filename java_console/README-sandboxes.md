@@ -14,6 +14,7 @@ sandbox class also carries a brief comment on top describing what it does.
 | --- | --- |
 | `BinaryProtocolServerSandbox` | Starts a fake device exposing the TS binary protocol over the default TCP proxy port. |
 | `SerialSandbox` | Basic binary-protocol client over a serial port. |
+| `SerialWriteTuneBurnCrcSandbox` | Real-ECU round-trip: write a tune field -> burn -> read back page CRC and assert it matches the sent tune. |
 | `TcpClientSandbox` | Connects to a (fake or real) ECU over TCP and pulls its configuration. |
 | `TcpServerSandbox` | Fully self-contained fake TCP/IP "ECU" side of the TS protocol. |
 | `Elm327Sandbox` | Talks to an ECU over an ELM327 adapter (body currently disabled). |
@@ -47,6 +48,7 @@ sandbox class also carries a brief comment on top describing what it does.
 | Sandbox | Purpose |
 | --- | --- |
 | `AutoupdateSandbox` | Downloads and unzips the autoupdate bundle. |
+| `ScanAndUpdateBoardSandbox` | Full scan-and-update cycle: auto-detects an ECU on serial, and if its board is on the board_compatibility allowlist downloads that board's bundle, reboots the ECU to OpenBLT and flashes the fresh .srec. |
 | `TsPluginInstallerSandbox` | Installs the TunerStudio plugin. |
 | `FirmwareUpdateTabSandbox` | Visual sandbox for the firmware update tab. |
 | `HwSandbox` | Runs hardware-in-the-loop tests against a real ECU. |

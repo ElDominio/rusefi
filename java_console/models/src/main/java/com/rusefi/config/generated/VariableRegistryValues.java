@@ -6,6 +6,7 @@ package com.rusefi.config.generated;
 import com.rusefi.config.*;
 
 public class VariableRegistryValues {
+	public static final int AC_PRESSURE_CURVE_SIZE = 8;
 	public static final int accel_enrichment_mode_e_AE_MODE_MS_ADDER = 0;
 	public static final int accel_enrichment_mode_e_AE_MODE_PERCENT_ADDER = 1;
 	public static final int accel_enrichment_mode_e_AE_MODE_PREDICTIVE_MAP = 2;
@@ -139,6 +140,7 @@ public class VariableRegistryValues {
 	public static final int bench_mode_e_LUA_COMMAND_7 = 39;
 	public static final int bench_mode_e_LUA_COMMAND_8 = 40;
 	public static final int bench_mode_e_LUA_COMMAND_9 = 41;
+	public static final int bench_mode_e_OIL_LIFE_RESET = 44;
 	public static final int BENCH_STARTER_DURATION = 4000;
 	public static final int BENCH_VVT_DURATION = 300;
 	public static final int BLEND_FACTOR_SIZE = 8;
@@ -181,6 +183,10 @@ public class VariableRegistryValues {
 	public static final int can_broadcast_channel_e_CAN_BUS_FIRST = 0;
 	public static final int can_broadcast_channel_e_CAN_BUS_SECOND = 1;
 	public static final int can_broadcast_channel_e_CAN_BUS_THIRD = 2;
+	public static final int can_bus_channel_e_CAN_BUS_CAN1 = 1;
+	public static final int can_bus_channel_e_CAN_BUS_CAN2 = 2;
+	public static final int can_bus_channel_e_CAN_BUS_CAN3 = 3;
+	public static final int can_bus_channel_e_CAN_BUS_NONE = 0;
 	public static final int CAN_DEFAULT_BASE = 0x200;
 	public static final int CAN_ECU_SERIAL_RX_ID = 0x710;
 	public static final int CAN_ECU_SERIAL_TX_ID = 0x720;
@@ -199,6 +205,7 @@ public class VariableRegistryValues {
 	public static final int can_nbc_e_CAN_BUS_NISSAN_VQ = 9;
 	public static final int can_nbc_e_CAN_BUS_W202_C180 = 5;
 	public static final String CAN_RX_PREFIX = "CAN_rx";
+	public static final int can_sniffer_channel_s_size = 4;
 	public static final int can_vss_nbc_e_BMW_e46 = 0;
 	public static final int can_vss_nbc_e_BMW_e90 = 2;
 	public static final int can_vss_nbc_e_HONDA_CIVIC9 = 5;
@@ -261,7 +268,7 @@ public class VariableRegistryValues {
 	public static final int CLT_CURVE_SIZE = 16;
 	public static final int CLT_FUEL_CURVE_SIZE = 16;
 	public static final int CLT_IDLE_TABLE_CLT_SIZE = 8;
-	public static final int CLT_IDLE_TABLE_RPM_SIZE = 6;
+	public static final int CLT_IDLE_TABLE_RPM_SIZE = 2;
 	public static final int CLT_LIMITER_CURVE_SIZE = 4;
 	public static final int CLT_TIMING_LOAD_AXIS_SIZE = 5;
 	public static final int CLT_TIMING_TEMP_AXIS_SIZE = 5;
@@ -452,7 +459,7 @@ public class VariableRegistryValues {
 	public static final int ego_sensor_e_ES_PLX = 4;
 	public static final String egoSettings_NAME = "CAN O2 sensors";
 	public static final int EGT_CHANNEL_COUNT = 8;
-	public static final int engine_configuration_s_size = 4508;
+	public static final int engine_configuration_s_size = 4448;
 	public static final int engine_load_mode_e_LM_ALPHA_N = 2;
 	public static final int engine_load_mode_e_LM_LUA = 3;
 	public static final int engine_load_mode_e_LM_REAL_MAF = 1;
@@ -599,7 +606,7 @@ public class VariableRegistryValues {
 	public static final int fan_ac_mode_e_Pressure = 2;
 	public static final int fan_ac_mode_e_Relay = 1;
 	public static final int FAN_PWM_CURVE_SIZE = 8;
-	public static final int FLASH_DATA_VERSION = 260718;
+	public static final int FLASH_DATA_VERSION = 260813;
 	public static final int FLEX_TRANSIENT_CLT_SIZE = 8;
 	public static final int FLEX_TRANSIENT_ETH_SIZE = 8;
 	public static final int FLOW_LINEARIZATION_MASS_SIZE = 2;
@@ -714,6 +721,7 @@ public class VariableRegistryValues {
 	public static final String GAUGE_NAME_FUEL_CONSUMPTION = "Fuel: Total consumed";
 	public static final String GAUGE_NAME_FUEL_CORRECTION_REFERENCE_PRESSURE = "Fuel: corr reference pressure";
 	public static final String GAUGE_NAME_FUEL_CRANKING = "Fuel: cranking";
+	public static final String GAUGE_NAME_FUEL_ECONOMY_MPG = "Fuel: Economy (mpg)";
 	public static final String GAUGE_NAME_FUEL_FLOW = "Fuel: Flow rate";
 	public static final String GAUGE_NAME_FUEL_IAT_CORR = "Fuel: IAT correction";
 	public static final String GAUGE_NAME_FUEL_INJ_DUTY = "Fuel: injector duty cycle";
@@ -1311,8 +1319,8 @@ public class VariableRegistryValues {
 	public static final String INDICATOR_NAME_BRAKE_DOWN = "Brake switch";
 	public static final String INDICATOR_NAME_CLUTCH_DOWN = "Clutch: down";
 	public static final String INDICATOR_NAME_CLUTCH_UP = "Clutch: up";
-	public static final int INJ_PHASE_LOAD_COUNT = 16;
-	public static final int INJ_PHASE_RPM_COUNT = 16;
+	public static final int INJ_PHASE_LOAD_COUNT = 6;
+	public static final int INJ_PHASE_RPM_COUNT = 6;
 	public static final int INJ_STAGING_COUNT = 6;
 	public static final int INJ_STAGING_RPM_SIZE = 6;
 	public static final int injection_mode_e_IM_BATCH = 2;
@@ -1326,11 +1334,12 @@ public class VariableRegistryValues {
 	public static final String INJECTOR_2_NAME = "Injector #2";
 	public static final int injector_compensation_mode_e_ICM_FixedRailPressure = 1;
 	public static final int injector_compensation_mode_e_ICM_HPFP_Manual_Compensation = 3;
+	public static final int injector_compensation_mode_e_ICM_ManualPressureCorrection = 4;
 	public static final int injector_compensation_mode_e_ICM_None = 0;
 	public static final int injector_compensation_mode_e_ICM_SensedRailPressure = 2;
 	public static final int injector_pressure_type_e_IPT_High = 1;
 	public static final int injector_pressure_type_e_IPT_Low = 0;
-	public static final int injector_s_size = 100;
+	public static final int injector_s_size = 60;
 	public static final int InjectorNonlinearMode_INJ_FordModel = 2;
 	public static final int InjectorNonlinearMode_INJ_None = 0;
 	public static final int InjectorNonlinearMode_INJ_PercentCurve = 3;
@@ -1376,13 +1385,15 @@ public class VariableRegistryValues {
 	public static final int lua_gauge_meaning_e_LUA_GAUGE_UPPER_BOUND = 1;
 	public static final int LUA_LIMITER_CURVE_SIZE = 8;
 	public static final int LUA_PWM_COUNT = 8;
-	public static final int LUA_SCRIPT_SIZE = 40000;
+	public static final int LUA_SCRIPT_SIZE = 8000;
 	public static final int MAF_DECODING_COUNT = 32;
-	public static final String MAIN_HELP_URL = "https://rusefi.com/s/8chan";
+	public static final String MAIN_HELP_URL = "http://www.rusefi.com/";
 	public static final String MAIN_PAGE_GAUGES_FILE = "tunerstudio/main_page_gauges.ini";
+	public static final int MANUAL_PRESSURE_CORRECTION_MASS_SIZE = 2;
+	public static final int MANUAL_PRESSURE_CORRECTION_PRESSURE_SIZE = 2;
 	public static final int MAP_ANGLE_SIZE = 8;
-	public static final int MAP_EST_LOAD_COUNT = 16;
-	public static final int MAP_EST_RPM_COUNT = 16;
+	public static final int MAP_EST_LOAD_COUNT = 6;
+	public static final int MAP_EST_RPM_COUNT = 6;
 	public static final int MAP_sensor_config_s_size = 140;
 	public static final int MAP_UPPER_LIMIT = 650;
 	public static final int MAP_WINDOW_SIZE = 8;
@@ -1410,6 +1421,8 @@ public class VariableRegistryValues {
 	public static final int MsIoBoxVss_VR12 = 1;
 	public static final int nitrous_arming_method_e_DIGITAL_SWITCH_INPUT = 0;
 	public static final int nitrous_arming_method_e_LUA_GAUGE = 1;
+	public static final int oil_life_temp_source_e_CoolantTemp = 1;
+	public static final int oil_life_temp_source_e_OilTemp = 0;
 	public static final int operation_mode_e_FOUR_STROKE_CAM_SENSOR = 2;
 	public static final int operation_mode_e_FOUR_STROKE_CRANK_SENSOR = 1;
 	public static final int operation_mode_e_FOUR_STROKE_FIVE_TIMES_CRANK_SENSOR = 8;
@@ -1443,13 +1456,13 @@ public class VariableRegistryValues {
 	public static final int PAGE_SIZE_2 = 256;
 	public static final int PAGE_SIZE_3 = 2048;
 	public static final int PAGE_SIZE_4 = 1268;
-	public static final int PAGE_SIZE_5 = 40000;
-	public static final int PAGE_SIZE_6 = 1380;
+	public static final int PAGE_SIZE_5 = 8000;
+	public static final int PAGE_SIZE_6 = 1684;
 	public static final int PEDAL_TO_TPS_RPM_SIZE = 8;
 	public static final int PEDAL_TO_TPS_SIZE = 8;
 	public static final String pedalSensor_NAME = "Accelerator pedal";
 	public static final String pedalToTpsTbl_NAME = "ETB pedal target";
-	public static final int persistent_config_s_size = 17900;
+	public static final int persistent_config_s_size = 16840;
 	public static final int pid_s_size = 20;
 	public static final int pin_input_mode_e_PI_DEFAULT = 0;
 	public static final int pin_input_mode_e_PI_INVERTED_DEFAULT = 4;
@@ -1513,6 +1526,11 @@ public class VariableRegistryValues {
 	public static final int sd_log_state_e_SD_LOG_UNCONDITIONAL = 3;
 	public static final int sd_log_state_e_SD_LOG_WAIT_COND = 7;
 	public static final int sd_log_state_e_SD_LOG_WAIT_RPM = 6;
+	public static final int SDLoggerMode_Dtc = 4;
+	public static final int SDLoggerMode_Mlg = 1;
+	public static final int SDLoggerMode_None = 0;
+	public static final int SDLoggerMode_ToothBin = 2;
+	public static final int SDLoggerMode_ToothCsv = 3;
 	public static final String SECOND_IGNITION_TABLE = "Second Ignition Table";
 	public static final String SECOND_VE_TABLE = "Second VE Table";
 	public static final String SECONDARY_CAN_NAME = "Secondary CAN";
@@ -1544,6 +1562,7 @@ public class VariableRegistryValues {
 	public static final int SentInput_INPUT6 = 6;
 	public static final int SentInput_INPUT7 = 7;
 	public static final int SentInput_NONE = 0;
+	public static final int SIGNATURE_HASH = 1072317412;
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME = "generated/simulator_tune_image.bin";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX = "generated/simulator_tune_image";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX = ".bin";
@@ -1601,6 +1620,7 @@ public class VariableRegistryValues {
 	public static final int TCU_RANGE_COUNT = 11;
 	public static final int TCU_SOLENOID_COUNT = 6;
 	public static final int TCU_TABLE_WIDTH = 8;
+	public static final String TERTIARY_CAN_NAME = "Third CAN";
 	public static final int thermistor_conf_s_size = 28;
 	public static final int ThermistorConf_size = 32;
 	public static final int THR_EST_SIZE = 12;
@@ -1625,7 +1645,7 @@ public class VariableRegistryValues {
 	public static final int torqueReductionActivationMode_e_TORQUE_REDUCTION_BUTTON = 0;
 	public static final int torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_DOWN_SWITCH = 2;
 	public static final int torqueReductionActivationMode_e_TORQUE_REDUCTION_CLUTCH_UP_SWITCH = 3;
-	public static final int TOTAL_CONFIG_SIZE = 17900;
+	public static final int TOTAL_CONFIG_SIZE = 16840;
 	public static final int TPS_2_BYTE_PACKING_MULT = 100;
 	public static final int TPS_PPS_TOO_HIGH_THRESHOLD = 110;
 	public static final int TPS_PPS_TOO_LOW_THRESHOLD = -10;
@@ -1881,10 +1901,10 @@ public class VariableRegistryValues {
 	public static final int TS_RESPONSE_UNRECOGNIZED_COMMAND = 0x83;
 	public static final int TS_SCATTER_OFFSETS_COUNT = 128;
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
-	public static final String TS_SIGNATURE = "rusEFI first-order-rpm-master-merge.2026.07.18.alphax-s550.2314243540";
+	public static final String TS_SIGNATURE = "rusEFI master-imports-wip-sync.2026.08.15.f407-discovery.1072317412";
 	public static final char TS_SIMULATE_CAN = '>';
 	public static final char TS_TEST_COMMAND = 't';
-	public static final int TS_TOTAL_OUTPUT_SIZE = 2396;
+	public static final int TS_TOTAL_OUTPUT_SIZE = 2424;
 	public static final String TS_TRIGGER_SCOPE_CHANNEL_1_NAME = "Channel 1";
 	public static final String TS_TRIGGER_SCOPE_CHANNEL_2_NAME = "Channel 2";
 	public static final int TS_TRIGGER_SCOPE_DISABLE = 5;
@@ -1921,7 +1941,7 @@ public class VariableRegistryValues {
 	public static final String UNITS_KPA = "kPa";
 	public static final String UNITS_MPH = "mph";
 	public static final String UNITS_PSI = "psi";
-	public static final int VBAT_INJECTOR_CURVE_PRESSURE_SIZE = 4;
+	public static final int VBAT_INJECTOR_CURVE_PRESSURE_SIZE = 2;
 	public static final int VBAT_INJECTOR_CURVE_SIZE = 8;
 	public static final String VE_BLEND1_TABLE_NAME = "VE blend 1";
 	public static final int VE_BLEND_COUNT = 4;
@@ -1953,7 +1973,8 @@ public class VariableRegistryValues {
 	public static final int vvt_mode_e_VVT_CUSTOM_25 = 25;
 	public static final int vvt_mode_e_VVT_CUSTOM_26 = 26;
 	public static final int vvt_mode_e_VVT_CUSTOM_3 = 32;
-	public static final int vvt_mode_e_VVT_CUSTOM_4 = 34;
+	public static final int vvt_mode_e_VVT_CUSTOM_4 = 33;
+	public static final int vvt_mode_e_VVT_CUSTOM_5 = 34;
 	public static final int vvt_mode_e_VVT_DEV = 23;
 	public static final int vvt_mode_e_VVT_FORD_COYOTE = 19;
 	public static final int vvt_mode_e_VVT_FORD_ST170 = 7;

@@ -1,6 +1,6 @@
 #include "global.h"
 #include "engine_types.h"
-// was generated automatically by rusEFI tool  from engine_types.h // by enum_to_string.jar tool on Tue Jun 16 02:40:10 UTC 2026
+// was generated automatically by rusEFI tool  from engine_types.h // by enum_to_string.jar tool on Sat Aug 15 04:11:30 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -95,6 +95,8 @@ const char *getBench_mode_e(bench_mode_e value) {
 			return "LUA_COMMAND_8";
 		case LUA_COMMAND_9:
 			return "LUA_COMMAND_9";
+		case OIL_LIFE_RESET:
+			return "OIL_LIFE_RESET";
 	}
 	return NULL;
 }

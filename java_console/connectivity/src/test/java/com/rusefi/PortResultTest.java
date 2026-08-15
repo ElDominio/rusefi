@@ -1,11 +1,13 @@
 package com.rusefi;
 
+import com.rusefi.core.io.UnsupportedEcuInfo;
 import com.rusefi.updater.OpenbltDetectorStrategy.OpenbltInfo;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -45,7 +47,23 @@ public class PortResultTest {
         assertFalse(new PortResult("p", SerialPortType.OpenBlt).isEcu(), "a board in the bootloader is not a running ECU");
         assertFalse(new PortResult("p", SerialPortType.Dfu).isEcu());
         assertFalse(new PortResult("p", SerialPortType.CAN).isEcu());
+        assertFalse(new PortResult("p", SerialPortType.UnsupportedEcu).isEcu());
         assertFalse(new PortResult("p", SerialPortType.Unknown).isEcu());
+        assertFalse(new PortResult("p", SerialPortType.EcuUnknown).isEcu());
+    }
+
+    @Test
+    public void unsupportedEcuCarriesDetectedIdentity() {
+        UnsupportedEcuInfo info = new UnsupportedEcuInfo("hellen121nissan", "universal");
+        PortResult unsupported = PortResult.unsupportedEcu("COM4", info);
+
+        assertEquals(SerialPortType.UnsupportedEcu, unsupported.type);
+        assertTrue(unsupported.isUnsupportedEcu());
+        assertSame(info, unsupported.getUnsupportedEcuInfo());
+        assertEquals("COM4 (Unsupported ECU: hellen121nissan)", unsupported.toString());
+        assertEquals(unsupported,
+            PortResult.unsupportedEcu("COM4", new UnsupportedEcuInfo("other", "universal")),
+            "port identity remains port and type, not the scan metadata");
     }
 
     @Test
@@ -61,4 +79,5 @@ public class PortResultTest {
         assertEquals("COM3 (OpenBLT Bootloader: rusefi.uaefi)",
             new PortResult("COM3", SerialPortType.OpenBlt, null, new OpenbltInfo(true, "rusefi.uaefi")).toString());
     }
+
 }

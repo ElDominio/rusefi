@@ -14,6 +14,9 @@
 #include "engine_state_machine.h"
 #include "fuel_math.h"
 #include "main_trigger_callback.h"
+#include "board_overrides.h"
+
+std::optional<setup_custom_bool_type> custom_board_requirePhaseSyncForFiring;
 
 #if EFI_ENGINE_CONTROL
 
@@ -154,7 +157,12 @@ void LimpManager::updateState(float rpm, efitick_t nowNt) {
 	}
 
   if (!engine->triggerCentral.triggerState.hasSynchronizedPhase()) {
-	  if (noFiringUntilVvtSync()) {
+	  // The board hook is a dynamic version of isPhaseSyncRequiredForIgnition:
+	  // it can require phase sync for a bounded cranking window (while a
+	  // board-side phase detector votes) and then release, see board_overrides.h
+	  bool boardRequiresPhaseSync = custom_board_requirePhaseSyncForFiring.has_value()
+			  && custom_board_requirePhaseSyncForFiring.value()();
+	  if (noFiringUntilVvtSync() || boardRequiresPhaseSync) {
 		// Any engine that requires cam-assistance for a full crank sync (symmetrical crank) can't schedule until we have cam sync
 		// examples:
 		// NB2, Nissan VQ/MR: symmetrical crank wheel and we need to make sure no spark happens out of sync

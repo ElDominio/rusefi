@@ -82,6 +82,32 @@ using setup_custom_board_write_error_file_type = void (*)(FIL * /*fd*/);
 extern std::optional<setup_custom_board_write_error_file_type> custom_board_onBoardWriteErrorFile;
 #endif // EFI_FILE_LOGGING
 
+// Board-specific extra columns for the .teeth CSV trigger log (see tooth_logger.cpp,
+// active while engineConfiguration->sdTriggerLogCsv is enabled). Both CSV hooks fill
+// 'buffer' with an snprintf-style CSV fragment and return the number of characters
+// written (excluding the null terminator); a negative value or one >= 'size' is treated
+// as an error and fails the row/header. The fragment must start with the ", " column
+// separator and must not contain a line terminator. The header hook runs once per file,
+// the line hook once per row - both must emit the same number of columns.
+//
+// The line hook's 'payload' points at this row's per-event board payload, sampled at
+// append time by custom_board_toothLogSample (nullptr when
+// TOOTH_LOG_BOARD_PAYLOAD_SIZE is 0 and the parallel array is compiled out - see
+// tooth_logger.h). The board casts it to its own payload struct; without a payload the
+// hook may still emit flush-time values, with the associated time-skew caveat.
+using board_tooth_log_csv_header_type = int (*)(char* /*buffer*/, size_t /*size*/);
+using board_tooth_log_csv_line_type = int (*)(char* /*buffer*/, size_t /*size*/, const void* /*payload*/);
+extern std::optional<board_tooth_log_csv_header_type> custom_board_toothLogCsvHeader;
+extern std::optional<board_tooth_log_csv_line_type> custom_board_toothLogCsvLine;
+
+// Per-event payload sampler: called by ToothLoggerBufferPool::appendI for every logged
+// tooth/coil/injector event, under the critical section, frequently from interrupt
+// context - must be fast and lock-free (plain loads/stores only). Fills exactly
+// TOOTH_LOG_BOARD_PAYLOAD_SIZE bytes at 'dst'. Only meaningful when
+// TOOTH_LOG_BOARD_PAYLOAD_SIZE > 0; unfilled rows (no hook installed) are zeroed.
+using board_tooth_log_sample_type = void (*)(void* /*dst*/);
+extern std::optional<board_tooth_log_sample_type> custom_board_toothLogSample;
+
 #if EFI_CAN_SUPPORT || EFI_UNIT_TEST
 #include "can_msg_tx.h"
 using board_can_rx_type = void (*)(const size_t, const CANRxFrame &, efitick_t);
@@ -108,6 +134,19 @@ extern std::optional<setup_custom_board_overrides_type> custom_board_InitHardwar
 // previousConfiguration = &activeConfiguration, and once at boot from initHardware() with
 // previousConfiguration = nullptr. See also the pin-release restriction below.
 extern std::optional<setup_custom_board_config_type> custom_board_OnConfigurationChange;
+
+// Dynamic hardware re-init participation (see docs/hardware-reinit-and-power-cycle.md).
+// custom_board_OnConfigurationChange fires only AFTER applyNewHardwareSettings() has finished
+// starting hardware, so it cannot release pins - a stale board claim makes the pin repository
+// reject the new owner with a criticalError. Boards that claim user-configurable pins must
+// instead use this pair, which follows the all-stops-before-any-starts invariant:
+// - custom_board_StopHardware: called during the stop phase of applyNewHardwareSettings(),
+//   while activeConfiguration still describes the previously claimed pins - release them here.
+// - custom_board_StartHardware: called from startHardware() on BOTH ECU start and configuration
+//   change - claim pins here from engineConfiguration.
+// Boards claiming only fixed pins (not user-configurable) can keep using custom_board_InitHardware.
+extern std::optional<setup_custom_board_overrides_type> custom_board_StopHardware;
+extern std::optional<setup_custom_board_overrides_type> custom_board_StartHardware;
 
 extern std::optional<setup_custom_board_overrides_type> custom_board_TriggerResetState;
 
@@ -153,6 +192,21 @@ extern std::optional<setup_custom_bool_type> custom_board_isBoardWithPowerManage
 extern std::optional<setup_custom_bool_type> custom_board_boardAllowTriggerActions;
 
 extern std::optional<setup_custom_bool_type> custom_board_getAcrState;
+// Additive ACR hold: when set and returning true, the Harley ACR valve is kept
+// energized regardless of the acrRevolutions countdown (the engineMovedRecently
+// power-save guard still wins). Unlike custom_board_getAcrState this does NOT
+// replace the default strategy - it only extends the open window, e.g. while a
+// board-side cranking-phase detector is holding fuel/spark off and needs the
+// compression signature to stay stationary. Defined in harley_acr.cpp.
+extern std::optional<setup_custom_bool_type> custom_board_holdAcr;
+// Dynamic variant of engineConfiguration->isPhaseSyncRequiredForIgnition:
+// while set and returning true, fuel and spark stay cut (ClearReason::
+// EnginePhase) until the trigger central reports hasSynchronizedPhase().
+// Lets a board require phase sync only for a bounded window (e.g. the first
+// few cranking cycles while a phase detector votes) and then release to
+// wasted-spark/batch operation instead of blocking the start indefinitely.
+// Defined in limp_manager.cpp.
+extern std::optional<setup_custom_bool_type> custom_board_requirePhaseSyncForFiring;
 extern std::optional<setup_custom_bool_type> custom_board_allowFlashNow;
 
 /**

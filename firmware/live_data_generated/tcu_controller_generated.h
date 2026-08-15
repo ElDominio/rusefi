@@ -54,100 +54,115 @@ struct tcu_controller_s {
 	offset 12 bit 0 */
 	bool isShifting : 1 {};
 	/**
+	 * TCU: Solenoid 1 On
 	offset 12 bit 1 */
-	bool unusedBit_9_1 : 1 {};
+	bool tcu_solenoid1On : 1 {};
 	/**
+	 * TCU: Solenoid 2 On
 	offset 12 bit 2 */
-	bool unusedBit_9_2 : 1 {};
+	bool tcu_solenoid2On : 1 {};
 	/**
+	 * TCU: Idle Shift to 1st
 	offset 12 bit 3 */
-	bool unusedBit_9_3 : 1 {};
+	bool tcu_idleShiftToFirst : 1 {};
 	/**
 	offset 12 bit 4 */
-	bool unusedBit_9_4 : 1 {};
+	bool unusedBit_12_4 : 1 {};
 	/**
 	offset 12 bit 5 */
-	bool unusedBit_9_5 : 1 {};
+	bool unusedBit_12_5 : 1 {};
 	/**
 	offset 12 bit 6 */
-	bool unusedBit_9_6 : 1 {};
+	bool unusedBit_12_6 : 1 {};
 	/**
 	offset 12 bit 7 */
-	bool unusedBit_9_7 : 1 {};
+	bool unusedBit_12_7 : 1 {};
 	/**
 	offset 12 bit 8 */
-	bool unusedBit_9_8 : 1 {};
+	bool unusedBit_12_8 : 1 {};
 	/**
 	offset 12 bit 9 */
-	bool unusedBit_9_9 : 1 {};
+	bool unusedBit_12_9 : 1 {};
 	/**
 	offset 12 bit 10 */
-	bool unusedBit_9_10 : 1 {};
+	bool unusedBit_12_10 : 1 {};
 	/**
 	offset 12 bit 11 */
-	bool unusedBit_9_11 : 1 {};
+	bool unusedBit_12_11 : 1 {};
 	/**
 	offset 12 bit 12 */
-	bool unusedBit_9_12 : 1 {};
+	bool unusedBit_12_12 : 1 {};
 	/**
 	offset 12 bit 13 */
-	bool unusedBit_9_13 : 1 {};
+	bool unusedBit_12_13 : 1 {};
 	/**
 	offset 12 bit 14 */
-	bool unusedBit_9_14 : 1 {};
+	bool unusedBit_12_14 : 1 {};
 	/**
 	offset 12 bit 15 */
-	bool unusedBit_9_15 : 1 {};
+	bool unusedBit_12_15 : 1 {};
 	/**
 	offset 12 bit 16 */
-	bool unusedBit_9_16 : 1 {};
+	bool unusedBit_12_16 : 1 {};
 	/**
 	offset 12 bit 17 */
-	bool unusedBit_9_17 : 1 {};
+	bool unusedBit_12_17 : 1 {};
 	/**
 	offset 12 bit 18 */
-	bool unusedBit_9_18 : 1 {};
+	bool unusedBit_12_18 : 1 {};
 	/**
 	offset 12 bit 19 */
-	bool unusedBit_9_19 : 1 {};
+	bool unusedBit_12_19 : 1 {};
 	/**
 	offset 12 bit 20 */
-	bool unusedBit_9_20 : 1 {};
+	bool unusedBit_12_20 : 1 {};
 	/**
 	offset 12 bit 21 */
-	bool unusedBit_9_21 : 1 {};
+	bool unusedBit_12_21 : 1 {};
 	/**
 	offset 12 bit 22 */
-	bool unusedBit_9_22 : 1 {};
+	bool unusedBit_12_22 : 1 {};
 	/**
 	offset 12 bit 23 */
-	bool unusedBit_9_23 : 1 {};
+	bool unusedBit_12_23 : 1 {};
 	/**
 	offset 12 bit 24 */
-	bool unusedBit_9_24 : 1 {};
+	bool unusedBit_12_24 : 1 {};
 	/**
 	offset 12 bit 25 */
-	bool unusedBit_9_25 : 1 {};
+	bool unusedBit_12_25 : 1 {};
 	/**
 	offset 12 bit 26 */
-	bool unusedBit_9_26 : 1 {};
+	bool unusedBit_12_26 : 1 {};
 	/**
 	offset 12 bit 27 */
-	bool unusedBit_9_27 : 1 {};
+	bool unusedBit_12_27 : 1 {};
 	/**
 	offset 12 bit 28 */
-	bool unusedBit_9_28 : 1 {};
+	bool unusedBit_12_28 : 1 {};
 	/**
 	offset 12 bit 29 */
-	bool unusedBit_9_29 : 1 {};
+	bool unusedBit_12_29 : 1 {};
 	/**
 	offset 12 bit 30 */
-	bool unusedBit_9_30 : 1 {};
+	bool unusedBit_12_30 : 1 {};
 	/**
 	offset 12 bit 31 */
-	bool unusedBit_9_31 : 1 {};
+	bool unusedBit_12_31 : 1 {};
+	/**
+	 * TCU: Upshift Margin
+	 * Vehicle speed remaining before the next upshift, in the same units as the Automatic Shift Points table (VSS display units).
+	 * offset 16
+	 */
+	scaled_channel<int16_t, 10, 1> tcu_upshiftMargin = (int16_t)0;
+	/**
+	 * TCU: Downshift Margin
+	 * Vehicle speed remaining before the next downshift, in the same units as the Automatic Shift Points table (VSS display units).
+	 * offset 18
+	 */
+	scaled_channel<int16_t, 10, 1> tcu_downshiftMargin = (int16_t)0;
 };
-static_assert(sizeof(tcu_controller_s) == 16);
+static_assert(sizeof(tcu_controller_s) == 20);
 
 // end
 // this section was generated automatically by rusEFI tool config_definition_base-all.jar based on (unknown script) controllers/tcu/tcu_controller.txt

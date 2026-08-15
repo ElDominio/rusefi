@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -110,6 +111,33 @@ public class FindFileHelperTargetSelectionTest {
         writeInputFile(srecName(TARGET, "eeee"), 1_000_000_000_000L);
 
         assertEquals(bin.getAbsolutePath(), FindFileHelper.findFirmwareFileForTarget(TARGET));
+    }
+
+    @Test
+    public void archiveFirmwareFilesMovesBinsToOlderFw() throws IOException {
+        String name = "rusefi_release_2026-07-01_" + TARGET + "_1234567890_archive.bin";
+        File bin = writeInputFile(name, 1_000_000_000_000L);
+        File archived = new File(OLDER_FW_DIR, name);
+        archived.delete();
+        createdInOlderFw.add(archived);
+
+        FindFileHelper.archiveFirmwareFiles();
+
+        assertFalse(bin.exists());
+        assertTrue(archived.exists());
+    }
+
+    @Test
+    public void bootloaderVariantUsesExactTargetSelection() throws IOException {
+        Path deviceDir = Files.createDirectories(inputDir.resolve("bin/device"));
+        File related = deviceDir.resolve("openblt_release_2026-07-01_" + TARGET + "_pro_1234567890_aaaa.bin").toFile();
+        Files.write(related.toPath(), new byte[]{1});
+        File exact = deviceDir.resolve("openblt_release_2026-07-01_" + TARGET + "_1234567890_bbbb.bin").toFile();
+        Files.write(exact.toPath(), new byte[]{1});
+        ConnectedEcuTarget connected = new ConnectedEcuTarget();
+        connected.setConnectedTargetForUnitTest(TARGET);
+
+        assertEquals(exact.getAbsolutePath(), FindFileHelper.findBootloaderFileForConnectedBoard(connected));
     }
 
     @Test

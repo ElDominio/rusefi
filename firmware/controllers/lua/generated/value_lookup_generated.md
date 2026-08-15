@@ -76,8 +76,8 @@ Fuel enrichment adder percentage.
 ### etbJamTimeout
 Time after which the throttle is considered jammed.
 
-### acIdleExtraOffset
-Additional idle % while A/C is active
+### primingTriggerTeeth
+Number of primary trigger teeth to see (since ignition-on) before firing the priming pulse. Counting is raw and does not require trigger sync. Only used when 'primeOnTriggerTeeth' is enabled.
 
 ### multisparkMaxSparkingAngle
 This parameter sets the latest that the last multispark can occur after the main ignition event. For example, if the ignition timing is 30 degrees BTDC, and this parameter is set to 45, no multispark will ever be fired after 15 degrees ATDC.
@@ -569,7 +569,7 @@ Useful for individual intakes
 
 
 ### isFasterEngineSpinUpEnabled
-If enabled, try to fire the engine before a full engine cycle has been completed using RPM estimated from the last 90 degrees of engine rotation. As soon as the trigger syncs plus 90 degrees rotation, fuel and ignition events will occur. If disabled, worst case may require up to 4 full crank rotations before any events are scheduled.
+If enabled, RPM is estimated from ~90 degrees of rotation using tooth timestamps collected even before trigger sync, and fuel/ignition scheduling starts as soon as the trigger syncs (sequential ignition temporarily runs as wasted spark until full phase sync). As soon as the trigger syncs plus 90 degrees rotation, fuel and ignition events will occur. If disabled, worst case may require up to 4 full crank rotations before any events are scheduled.
 
 ### coastingFuelCutEnabled
 This setting disables fuel injection while the engine is in overrun, this is useful as a fuel saving measure and to prevent back firing.
@@ -1027,16 +1027,10 @@ If increased VVT duty cycle increases the indicated VVT angle, set this to 'adva
 ### useBiQuadOnAuxSpeedSensors
 
 
-### sdTriggerLog
-'Trigger' mode will write a high speed log of trigger events (warning: uses lots of space!). 'Full MLG' mode will write a standard MLG of sensors, engine function, etc. similar to the one captured in TunerStudio.
-
 ### stepper_dc_use_two_wires
 
 
 ### watchOutForLinearTime
-
-
-### sdTriggerLogCsv
 
 
 ### sdCardConditionalLogging
@@ -1072,8 +1066,8 @@ Only used by First Order RPM mode. Smoothing applied to the RPM rate of change (
 ### turboSpeedSensorMultiplier
 
 
-### acIdleRpmTarget
-Idle target speed when A/C is enabled. Some cars need the extra speed to keep the AC efficient while idling.
+### acIdleRpmAdder
+RPM added on top of the normal CLT-based idle target while A/C is enabled. Some cars need the extra speed to keep the AC efficient while idling.
 
 ### warningPeriod
 set warningPeriod X
@@ -1258,8 +1252,8 @@ AEM X-Series EGT gauge kit or rusEFI EGT sensor from Wideband controller
 ### devBit01
 
 
-### devBit0
-
+### tcuInputSpeedSensorSharedWithVss
+Input speed sensor is the same physical sensor as the main VSS
 
 ### devBit1
 
@@ -1304,7 +1298,7 @@ Above this speed, allow DFCO. Use this to prevent jerkiness from fuel enable/dis
 Maximum change delta of TPS percentage over the 'length'. Actual TPS change has to be above this value in order for TPS/TPS acceleration to kick in.
 
 ### totalGearsCount
-
+Number of forward gears, shared by GearDetector (any count) and the TCU's Automatic mode (currently hardcoded to a 4-gear GEAR_1..GEAR_4 state machine, 5-10 gear support planned for a future release). Configured together with the per-gear ratios in the Speed Sensor dialog.
 
 ### fan1ExtraIdle
 Additional idle % when fan #1 is active
@@ -1491,6 +1485,18 @@ Use to limit the max.current through the stepper motor (100% = no limit)
 
 ### vvtControlMinClt
 Minimum coolant temperature to activate VVT
+
+### vvtIntake_iTermMin
+VVT intake cam PID: iTerm min value
+
+### vvtIntake_iTermMax
+VVT intake cam PID: iTerm max value
+
+### vvtExhaust_iTermMin
+VVT exhaust cam PID: iTerm min value
+
+### vvtExhaust_iTermMax
+VVT exhaust cam PID: iTerm max value
 
 ### oilPressure.v1
 
@@ -2122,6 +2128,9 @@ When enabled, overrun fuel cut will not engage while the transmission is in neut
 ### eotFromIatCht
 Use CHT/IAT sensors to estimate oil temperature (EOT) via first-order thermal model. Disable if a real oil temp sensor is wired.
 
+### primeOnTriggerTeeth
+When enabled, the priming pulse fires after 'primingTriggerTeeth' raw primary trigger teeth are seen since ignition-on, instead of after the fixed 'primingDelay'. Tooth counting does not require trigger sync, and (like the fixed-delay mode) the pulse still only fires once per key cycle.
+
 ### nitrousLuaGaugeArmingValue
 
 
@@ -2238,6 +2247,12 @@ Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce
 
 ### tcu_shiftTime
 
+
+### tcuIdleShiftToFirstEnabled
+
+
+### tcuIdleShiftToFirstMaxVss
+Idle-shift VSS threshold. A value of 0 disables the speed check entirely, so only the idle RPM/TPS condition is required.
 
 ### cel_battery_min_v
 "Minimum Battery Voltage"

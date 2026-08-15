@@ -82,9 +82,9 @@ float getConfigValueByHash(const int hash) {
 // etbJamTimeout
 		case 1057701663:
 			return engineConfiguration->etbJamTimeout;
-// acIdleExtraOffset
-		case 1933500210:
-			return engineConfiguration->acIdleExtraOffset;
+// primingTriggerTeeth
+		case -73453975:
+			return engineConfiguration->primingTriggerTeeth;
 // multisparkMaxSparkingAngle
 		case 402092253:
 			return engineConfiguration->multisparkMaxSparkingAngle;
@@ -1033,18 +1033,12 @@ float getConfigValueByHash(const int hash) {
 // useBiQuadOnAuxSpeedSensors
 		case 1486014321:
 			return engineConfiguration->useBiQuadOnAuxSpeedSensors;
-// sdTriggerLog
-		case -105464622:
-			return engineConfiguration->sdTriggerLog;
 // stepper_dc_use_two_wires
 		case 2136379132:
 			return engineConfiguration->stepper_dc_use_two_wires;
 // watchOutForLinearTime
 		case -1896516795:
 			return engineConfiguration->watchOutForLinearTime;
-// sdTriggerLogCsv
-		case -1920854018:
-			return engineConfiguration->sdTriggerLogCsv;
 // sdCardConditionalLogging
 		case -1861088559:
 			return engineConfiguration->sdCardConditionalLogging;
@@ -1078,9 +1072,9 @@ float getConfigValueByHash(const int hash) {
 // turboSpeedSensorMultiplier
 		case -1056007485:
 			return engineConfiguration->turboSpeedSensorMultiplier;
-// acIdleRpmTarget
-		case 30701245:
-			return engineConfiguration->acIdleRpmTarget;
+// acIdleRpmAdder
+		case -281810698:
+			return engineConfiguration->acIdleRpmAdder;
 // warningPeriod
 		case 1322924702:
 			return engineConfiguration->warningPeriod;
@@ -1264,9 +1258,9 @@ float getConfigValueByHash(const int hash) {
 // devBit01
 		case 1049496900:
 			return engineConfiguration->devBit01;
-// devBit0
-		case 161953459:
-			return engineConfiguration->devBit0;
+// tcuInputSpeedSensorSharedWithVss
+		case -1053883525:
+			return engineConfiguration->tcuInputSpeedSensorSharedWithVss;
 // devBit1
 		case 161953460:
 			return engineConfiguration->devBit1;
@@ -1498,6 +1492,18 @@ float getConfigValueByHash(const int hash) {
 // vvtControlMinClt
 		case 1470830477:
 			return engineConfiguration->vvtControlMinClt;
+// vvtIntake_iTermMin
+		case -1830011739:
+			return engineConfiguration->vvtIntake_iTermMin;
+// vvtIntake_iTermMax
+		case -1830011993:
+			return engineConfiguration->vvtIntake_iTermMax;
+// vvtExhaust_iTermMin
+		case -1814511221:
+			return engineConfiguration->vvtExhaust_iTermMin;
+// vvtExhaust_iTermMax
+		case -1814511475:
+			return engineConfiguration->vvtExhaust_iTermMax;
 // oilPressure.v1
 		case -613392361:
 			return engineConfiguration->oilPressure.v1;
@@ -2128,6 +2134,9 @@ float getConfigValueByHash(const int hash) {
 // eotFromIatCht
 		case 331564734:
 			return engineConfiguration->eotFromIatCht;
+// primeOnTriggerTeeth
+		case -715459699:
+			return engineConfiguration->primeOnTriggerTeeth;
 // nitrousLuaGaugeArmingValue
 		case -1760115393:
 			return engineConfiguration->nitrousLuaGaugeArmingValue;
@@ -2245,6 +2254,12 @@ float getConfigValueByHash(const int hash) {
 // tcu_shiftTime
 		case -1658957891:
 			return config->tcu_shiftTime;
+// tcuIdleShiftToFirstEnabled
+		case -1132994109:
+			return config->tcuIdleShiftToFirstEnabled;
+// tcuIdleShiftToFirstMaxVss
+		case 1175235258:
+			return config->tcuIdleShiftToFirstMaxVss;
 // cel_battery_min_v
 		case -1794416277:
 			return config->cel_battery_min_v;
@@ -2484,9 +2499,9 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->etbJamTimeout = (int)value;
 		return 1;
 	}
-		case 1933500210:
+		case -73453975:
 	{
-		engineConfiguration->acIdleExtraOffset = (int)value;
+		engineConfiguration->primingTriggerTeeth = (int)value;
 		return 1;
 	}
 		case 402092253:
@@ -4069,11 +4084,6 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->useBiQuadOnAuxSpeedSensors = (int)value;
 		return 1;
 	}
-		case -105464622:
-	{
-		engineConfiguration->sdTriggerLog = (int)value;
-		return 1;
-	}
 		case 2136379132:
 	{
 		engineConfiguration->stepper_dc_use_two_wires = (int)value;
@@ -4082,11 +4092,6 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1896516795:
 	{
 		engineConfiguration->watchOutForLinearTime = (int)value;
-		return 1;
-	}
-		case -1920854018:
-	{
-		engineConfiguration->sdTriggerLogCsv = (int)value;
 		return 1;
 	}
 		case -1861088559:
@@ -4144,9 +4149,9 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->turboSpeedSensorMultiplier = value;
 		return 1;
 	}
-		case 30701245:
+		case -281810698:
 	{
-		engineConfiguration->acIdleRpmTarget = (int)value;
+		engineConfiguration->acIdleRpmAdder = (int)value;
 		return 1;
 	}
 		case 1322924702:
@@ -4454,9 +4459,9 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->devBit01 = (int)value;
 		return 1;
 	}
-		case 161953459:
+		case -1053883525:
 	{
-		engineConfiguration->devBit0 = (int)value;
+		engineConfiguration->tcuInputSpeedSensorSharedWithVss = (int)value;
 		return 1;
 	}
 		case 161953460:
@@ -4842,6 +4847,26 @@ bool setConfigValueByName(const char *name, float value) {
 		case 1470830477:
 	{
 		engineConfiguration->vvtControlMinClt = (int)value;
+		return 1;
+	}
+		case -1830011739:
+	{
+		engineConfiguration->vvtIntake_iTermMin = (int)value;
+		return 1;
+	}
+		case -1830011993:
+	{
+		engineConfiguration->vvtIntake_iTermMax = (int)value;
+		return 1;
+	}
+		case -1814511221:
+	{
+		engineConfiguration->vvtExhaust_iTermMin = (int)value;
+		return 1;
+	}
+		case -1814511475:
+	{
+		engineConfiguration->vvtExhaust_iTermMax = (int)value;
 		return 1;
 	}
 		case -613392361:
@@ -5894,6 +5919,11 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->eotFromIatCht = (int)value;
 		return 1;
 	}
+		case -715459699:
+	{
+		engineConfiguration->primeOnTriggerTeeth = (int)value;
+		return 1;
+	}
 		case -1760115393:
 	{
 		engineConfiguration->nitrousLuaGaugeArmingValue = value;
@@ -6087,6 +6117,16 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1658957891:
 	{
 		config->tcu_shiftTime = value;
+		return 1;
+	}
+		case -1132994109:
+	{
+		config->tcuIdleShiftToFirstEnabled = (int)value;
+		return 1;
+	}
+		case 1175235258:
+	{
+		config->tcuIdleShiftToFirstMaxVss = (int)value;
 		return 1;
 	}
 		case -1794416277:

@@ -82,6 +82,7 @@ static LOG_FIELD_CONSTNESS_SPECIFIER_STORAGE MLG::Entries::Field fields[] = {
 	{engine->outputChannels.fuelTankLevel, "Fuel level", "%", 0},
 	{engine->outputChannels.totalFuelConsumption, "Fuel: Total consumed", "grams", 1},
 	{engine->outputChannels.fuelFlowRate, "Fuel: Flow rate", "gram/s", 3},
+	{engine->outputChannels.instantFuelEconomyMpg, "Fuel: Economy (mpg)", "mpg", 1},
 	{engine->outputChannels.TPS2Value, "TPS2", "%", 2},
 	{engine->outputChannels.tuneCrc16, "Tune CRC16", "crc16", 0},
 	{engine->outputChannels.veValue, "Fuel: VE", "ratio", 1},
@@ -384,6 +385,9 @@ static LOG_FIELD_CONSTNESS_SPECIFIER_STORAGE MLG::Entries::Field fields[] = {
 	{engine->outputChannels.Gego, "Gego", "%", 2},
 	{engine->outputChannels.testBenchIter, "testBenchIter", "count", 0},
 	{engine->outputChannels.oilTemp, "oilTemp", "deg C", 1},
+	{engine->outputChannels.oilLifePercent, "Oil Life %", "%", 1},
+	{engine->outputChannels.oilLifeTempSource, "Oil Life Temp Src", "", 0},
+	{engine->outputChannels.oilRevsUsedDrive, "Oil Revs Used", "revs", 0},
 	{engine->outputChannels.eotEstDeltaTActual, "EOT estimator dT actual", "deg C", 1},
 	{engine->outputChannels.eotEstDeltaTTarget, "EOT estimator dT target", "deg C", 1},
 	{engine->outputChannels.fuelTemp, "fuelTemp", "deg C", 1},
@@ -483,6 +487,7 @@ static LOG_FIELD_CONSTNESS_SPECIFIER_STORAGE MLG::Entries::Field fields[] = {
 	{engine->outputChannels.iatResistance, "IAT: measured resistance", "Ohm", 0},
 	{engine->outputChannels.auxTemp1Resistance, "Aux temp 1: measured resistance", "Ohm", 0},
 	{engine->outputChannels.auxTemp2Resistance, "Aux temp 2: measured resistance", "Ohm", 0},
+	{engine->outputChannels.instantRpmRange, "sync: instant RPM range", "rpm", 0},
 	{engine->ignitionState.baseDwell, "Ignition: base dwell", "ms", 1, "Timing"},
 	{engine->ignitionState.sparkDwell, "Ignition: coil charge time", "ms", 1, "Timing"},
 	{engine->ignitionState.dwellDurationAngle, "Ignition: dwell duration", "deg", 1, "Timing"},
@@ -799,7 +804,7 @@ static LOG_FIELD_CONSTNESS_SPECIFIER_STORAGE MLG::Entries::Field fields[] = {
 	{engine->module<IdleController>().unmock().idleEntryRpm, "Idle: Entry threshold", "", 0},
 	{engine->module<IdleController>().unmock().idleExitRpm, "Idle: Exit threshold", "", 0},
 	{engine->module<IdleController>().unmock().targetRpmByClt, "Idle: Target RPM base", "", 0},
-	{engine->module<IdleController>().unmock().targetRpmAc, "Idle: Target A/C RPM", "", 0},
+	{engine->module<IdleController>().unmock().targetRpmAc, "Idle: A/C RPM adder", "", 0},
 	{engine->module<IdleController>().unmock().iacByRpmTaper, "idle: iacByRpmTaper portion", "", 0},
 	{engine->module<IdleController>().unmock().luaAdd, "idle: Lua Adder", "", 0},
 	{engine->module<IdleController>().unmock().m_lastTargetRpm, "m_lastTargetRpm", "", 0},
@@ -898,5 +903,6 @@ static LOG_FIELD_CONSTNESS_SPECIFIER_STORAGE MLG::Entries::Field fields[] = {
 #if EFI_VVT_PID
 	{engine->module<VvtController1>()->vvtTarget, "vvtTarget", "deg", 1},
 	{engine->module<VvtController1>()->vvtOutput, "vvtOutput", "%", 0},
+	{engine->module<VvtController1>()->vvtDistance, "vvtDistance", "deg", 1},
 #endif
 };

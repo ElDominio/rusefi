@@ -235,6 +235,9 @@ float getOutputValueByHash(const int hash) {
 // fuelFlowRate
 		case 822501973:
 			return engine->outputChannels.fuelFlowRate;
+// instantFuelEconomyMpg
+		case 854827312:
+			return engine->outputChannels.instantFuelEconomyMpg;
 // TPS2Value
 		case 686191307:
 			return engine->outputChannels.TPS2Value;
@@ -793,6 +796,15 @@ float getOutputValueByHash(const int hash) {
 // oilTemp
 		case 1628523935:
 			return engine->outputChannels.oilTemp;
+// oilLifePercent
+		case 507497914:
+			return engine->outputChannels.oilLifePercent;
+// oilLifeTempSource
+		case -687755984:
+			return engine->outputChannels.oilLifeTempSource;
+// oilRevsUsedDrive
+		case -1613885036:
+			return engine->outputChannels.oilRevsUsedDrive;
 // eotEstDeltaTActual
 		case 190875569:
 			return engine->outputChannels.eotEstDeltaTActual;
@@ -982,6 +994,9 @@ float getOutputValueByHash(const int hash) {
 // auxTemp2Resistance
 		case -1795800404:
 			return engine->outputChannels.auxTemp2Resistance;
+// instantRpmRange
+		case -748456478:
+			return engine->outputChannels.instantRpmRange;
 // baseDwell
 		case -1777838088:
 			return engine->ignitionState.baseDwell;
@@ -2288,6 +2303,9 @@ float getOutputValueByHash(const int hash) {
 // vvtOutput
 		case 1990697206:
 			return engine->module<VvtController1>()->vvtOutput;
+// vvtDistance
+		case -93524688:
+			return engine->module<VvtController1>()->vvtDistance;
 #endif
 #if EFI_WOT_ENRICHMENT
 // isWotEnrichmentActive

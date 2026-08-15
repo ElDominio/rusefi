@@ -74,21 +74,14 @@ public class FindFileHelper {
 
     @Nullable
     public static String findSrecFile(boolean keepOneFile) {
-        String fileAtFirstLocation = findFile(INPUT_FILES_PATH, PREFIX, SUFFIX, new AdditionalFileHandler() {
-            @Override
-            public void onAdditionalFile(String fileDirectory, String fileName) {
-                moveFile(fileDirectory, fileName);
-            }
-        }, keepOneFile);
+        // method references instead of anonymous classes: an anonymous class here is a separate
+        // FindFileHelper$N jar entry loaded lazily on first use, which crashes with
+        // NoClassDefFoundError when the updater has already replaced the running jar on disk
+        String fileAtFirstLocation = findFile(INPUT_FILES_PATH, PREFIX, SUFFIX, FindFileHelper::moveFile, keepOneFile);
         if (fileAtFirstLocation == null) {
             // todo: what is this second location about?!
             log.info("Second choice: current folder");
-            return findFile(".", PREFIX, SUFFIX, new AdditionalFileHandler() {
-                @Override
-                public void onAdditionalFile(String fileDirectory, String fileName) {
-                    moveFile(fileDirectory, fileName);
-                }
-            }, keepOneFile);
+            return findFile(".", PREFIX, SUFFIX, FindFileHelper::moveFile, keepOneFile);
         }
 
         return fileAtFirstLocation;
@@ -125,6 +118,24 @@ public class FindFileHelper {
         String globbed = findFile(INPUT_FILES_PATH, "rusefi_", ".bin", (fileDirectory, fileName) -> {
         }, true);
         return globbed != null ? globbed : FIRMWARE_BIN_FILE;
+    }
+
+    public static void archiveFirmwareFiles() {
+        findFile(INPUT_FILES_PATH, "rusefi_", ".bin", FindFileHelper::moveFile, false);
+    }
+
+    /** Find a uniquely named bundled OpenBLT image, with the old development name as fallback. */
+    public static String findBootloaderFile() {
+        String bootloaderFilesPath = getBootloaderFilesPath();
+        String globbed = new File(bootloaderFilesPath).isDirectory()
+            ? findFile(bootloaderFilesPath, "openblt_", ".bin", (fileDirectory, fileName) -> {
+            }, true)
+            : null;
+        return globbed != null ? globbed : bootloaderFilesPath + File.separator + "openblt.bin";
+    }
+
+    private static String getBootloaderFilesPath() {
+        return INPUT_FILES_PATH + File.separator + "bin" + File.separator + "device";
     }
 
     public static boolean isObfuscated() {
@@ -180,12 +191,17 @@ public class FindFileHelper {
      * prevents grabbing another board's leftover image from a shared bundle dir. [tag:better_ux_for_flashing]
      */
     public static String findSrecFileForConnectedBoard(com.rusefi.core.io.ConnectedEcuTarget connectedEcuTarget) {
-        return findForConnectedBoard(connectedEcuTarget.effectiveTarget(), ".srec", findSrecFile());
+        return findForConnectedBoard(connectedEcuTarget.effectiveTarget(), ".srec", findSrecFile(), "rusefi", INPUT_FILES_PATH);
     }
 
     /** @see #findSrecFileForConnectedBoard — same, for the {@code .bin} DFU image. */
     public static String findFirmwareFileForConnectedBoard(com.rusefi.core.io.ConnectedEcuTarget connectedEcuTarget) {
-        return findForConnectedBoard(connectedEcuTarget.effectiveTarget(), ".bin", findFirmwareFile());
+        return findForConnectedBoard(connectedEcuTarget.effectiveTarget(), ".bin", findFirmwareFile(), "rusefi", INPUT_FILES_PATH);
+    }
+
+    /** @see #findSrecFileForConnectedBoard — same, for the OpenBLT bootloader image. */
+    public static String findBootloaderFileForConnectedBoard(com.rusefi.core.io.ConnectedEcuTarget connectedEcuTarget) {
+        return findForConnectedBoard(connectedEcuTarget.effectiveTarget(), ".bin", findBootloaderFile(), "openblt", getBootloaderFilesPath());
     }
 
     /**
@@ -201,15 +217,15 @@ public class FindFileHelper {
      * </ol>
      * [tag:better_ux_for_flashing]
      */
-    private static String findForConnectedBoard(String target, String suffix, String sibling) {
-        final String localMatch = newestMatchingTarget(INPUT_FILES_PATH, target, suffix);
+    private static String findForConnectedBoard(String target, String suffix, String sibling, String prefix, String localDirectory) {
+        final String localMatch = newestMatchingTarget(localDirectory, target, suffix, prefix);
         if (localMatch != null) {
             return localMatch;
         }
         if (isSafeLocalSibling(sibling, target)) {
             return sibling;
         }
-        final String archived = newestMatchingTarget(RUSEFI_SETTINGS_FOLDER + "older-fw", target, suffix);
+        final String archived = newestMatchingTarget(RUSEFI_SETTINGS_FOLDER + "older-fw", target, suffix, prefix);
         if (archived != null) {
             return archived;
         }
@@ -247,7 +263,7 @@ public class FindFileHelper {
             return null;
         }
         for (String dir : new String[]{INPUT_FILES_PATH, RUSEFI_SETTINGS_FOLDER + "older-fw"}) {
-            final String match = newestMatchingTarget(dir, target, suffix);
+            final String match = newestMatchingTarget(dir, target, suffix, "rusefi");
             if (match != null) {
                 return match;
             }
@@ -255,8 +271,8 @@ public class FindFileHelper {
         return null;
     }
 
-    private static String newestMatchingTarget(String dir, String target, String suffix) {
-        final File[] files = new File(dir).listFiles((d, name) -> name.startsWith("rusefi") && name.endsWith(suffix));
+    private static String newestMatchingTarget(String dir, String target, String suffix, String prefix) {
+        final File[] files = new File(dir).listFiles((d, name) -> name.startsWith(prefix) && name.endsWith(suffix));
         if (files == null) {
             return null;
         }

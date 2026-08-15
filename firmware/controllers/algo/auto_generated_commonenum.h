@@ -1,4 +1,4 @@
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat Jul 18 15:31:32 AST 2026
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat Aug 15 04:11:30 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -23,6 +23,9 @@ const char *getMsIoBoxVss(MsIoBoxVss value);
 #endif //__cplusplus
 #if __cplusplus
 const char *getRotationalCutMode(RotationalCutMode value);
+#endif //__cplusplus
+#if __cplusplus
+const char *getSDLoggerMode(SDLoggerMode value);
 #endif //__cplusplus
 #if __cplusplus
 const char *getSelectedGear(SelectedGear value);
@@ -55,6 +58,7 @@ const char *getBoostType_e(boostType_e value);
 const char *getBrain_pin_diag_e(brain_pin_diag_e value);
 const char *getCan_baudrate_e(can_baudrate_e value);
 const char *getCan_broadcast_channel_e(can_broadcast_channel_e value);
+const char *getCan_bus_channel_e(can_bus_channel_e value);
 const char *getCan_nbc_e(can_nbc_e value);
 const char *getCan_vss_nbc_e(can_vss_nbc_e value);
 const char *getCan_wbo_aem_id_e(can_wbo_aem_id_e value);
@@ -104,6 +108,9 @@ const char *getLua_gauge_e(lua_gauge_e value);
 const char *getLua_gauge_meaning_e(lua_gauge_meaning_e value);
 const char *getMc33810maxDwellTimer_e(mc33810maxDwellTimer_e value);
 const char *getNitrous_arming_method_e(nitrous_arming_method_e value);
+#if __cplusplus
+const char *getOil_life_temp_source_e(oil_life_temp_source_e value);
+#endif //__cplusplus
 const char *getOperation_mode_e(operation_mode_e value);
 const char *getPin_input_mode_e(pin_input_mode_e value);
 const char *getPin_output_mode_e(pin_output_mode_e value);

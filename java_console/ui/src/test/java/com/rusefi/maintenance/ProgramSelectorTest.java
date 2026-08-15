@@ -11,8 +11,10 @@ import static com.rusefi.maintenance.ProgramSelector.mainButtonModeFor;
 import static com.rusefi.maintenance.ProgramSelector.resolveFlashPort;
 import static com.rusefi.maintenance.UpdateMode.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for the Update-Firmware main-button decision logic that maps a detected/selected port and
@@ -95,6 +97,14 @@ public class ProgramSelectorTest {
         assertNull(resolveFlashPort(null, false, NO_PORTS, NO_PORTS));
     }
 
+    @Test
+    public void unsupportedEcuCannotBeSelectedForFlashing() {
+        PortResult unsupported = port(SerialPortType.UnsupportedEcu);
+        assertNull(resolveFlashPort(unsupported, false, NO_PORTS, NO_PORTS));
+        assertNull(resolveFlashPort(unsupported, true, NO_PORTS, NO_PORTS));
+        assertNull(resolveFlashPort(port(SerialPortType.EcuUnknown), true, NO_PORTS, NO_PORTS));
+    }
+
     // ---- combined: resolved port feeds the button mode ----
 
     @Test
@@ -137,5 +147,27 @@ public class ProgramSelectorTest {
         PortResult resolved = resolveFlashPort(blt, true, NO_PORTS, NO_PORTS);
         assertSame(blt, resolved);
         assertEquals(OPENBLT_MANUAL, mainButtonModeFor(resolved, true));
+    }
+
+    @Test
+    public void firmwareControlsStayVisibleWhileJobRunsWithoutDetectedHardware() {
+        assertTrue(ProgramSelector.shouldShowFirmwareControls(true, true, false));
+        assertTrue(ProgramSelector.shouldShowFirmwareControls(true, false, true));
+    }
+
+    @Test
+    public void syntheticDfuTargetIsNotTreatedAsSerialPort() {
+        assertFalse(ProgramSelector.hasRealSerialPort(Collections.singletonList(port(SerialPortType.Dfu))));
+        assertFalse(ProgramSelector.hasRealSerialPort(Collections.singletonList(port(SerialPortType.UnsupportedEcu))));
+        assertFalse(ProgramSelector.hasRealSerialPort(Collections.singletonList(port(SerialPortType.EcuUnknown))));
+        assertTrue(ProgramSelector.hasRealSerialPort(Collections.singletonList(port(SerialPortType.Ecu))));
+    }
+
+    @Test
+    public void mainDfuActionRequiresPlatformSupportButOpenBltDoesNot() {
+        assertTrue(ProgramSelector.shouldEnableMainButton(false, true, false, DFU_MANUAL, true));
+        assertFalse(ProgramSelector.shouldEnableMainButton(false, true, false, DFU_MANUAL, false));
+        assertTrue(ProgramSelector.shouldEnableMainButton(true, false, false, OPENBLT_MANUAL, false));
+        assertFalse(ProgramSelector.shouldEnableMainButton(true, false, true, OPENBLT_MANUAL, true));
     }
 }

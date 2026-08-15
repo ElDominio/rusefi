@@ -170,6 +170,9 @@ jobs:
       run: echo "BUNDLE_DATE=$(date +'%Y-%m-%d')">> $GITHUB_ENV
 
     - name: Set run condition variables 2
+      env:
+        # ref names may contain shell metacharacters - never interpolate them into scripts with ${{ }}
+        GH_REF: ${{ github.ref }}
       run: |
         if [ "${{github.event_name}}" = "schedule" ] && [ "${{github.repository}}" = "rusefi/rusefi" ]; then
           echo "Creating nightly build"
@@ -177,7 +180,7 @@ jobs:
           echo "upload=release" >> $GITHUB_ENV
           echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
         elif [ "${{github.event_name}}" = "push" ]\
-        && [ "${{github.ref}}" = "refs/heads/master" ]\
+        && [ "$GH_REF" = "refs/heads/master" ]\
         || [ "${{toJSON(inputs.lts)}}" = "true" ]; then
           echo "Server upload mode"
           echo "full=true" >> $GITHUB_ENV
@@ -201,10 +204,14 @@ jobs:
         sudo bash misc/actions/ubuntu-install-tools.sh
 
     - name: Set Build Env Variables
+      env:
+        # ref names may contain shell metacharacters - never interpolate them into scripts with ${{ }}
+        REF_NAME: ${{ github.ref_name }}
+        META_INFO: ${{ matrix.meta-info }}
       run: |
         echo AUTOMATION_LTS=${{toJSON(inputs.lts)}} >> $GITHUB_ENV
-        echo AUTOMATION_REF=${{github.ref_name}} >> $GITHUB_ENV
-        echo BOARD_META_PATH=${{matrix.meta-info}} >> $GITHUB_ENV
+        echo "AUTOMATION_REF=$REF_NAME" >> $GITHUB_ENV
+        echo "BOARD_META_PATH=$META_INFO" >> $GITHUB_ENV
         echo "WHITE_LABEL=rusefi" >> $GITHUB_ENV
 
     - name: Git Status
@@ -367,3 +374,43 @@ jobs:
         archive: false
         name: rusefi_bundle_${{matrix.build-target}}_autoupdate.zip
         path: ./artifacts/rusefi_bundle_${{matrix.build-target}}_autoupdate.zip
+
+  build-universal-bundle:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Checkout bundle submodules
+      run: git submodule update --init --depth=1 firmware/ext/rusefi-gha java_console/luaformatter java_console/peak-can-basic
+
+    - uses: ./.github/actions/setup-java
+
+    - name: Build console jar
+      run: ./gradlew :ui:shadowJar :ts_plugin_launcher:shadowJar
+
+    - name: Assemble universal bundle
+      run: |
+        mkdir -p artifacts
+        WHITE_LABEL=rusefi bash firmware/bin/assemble_universal_bundle.sh ./artifacts universal
+
+    - name: Upload universal bundle artifact
+      uses: actions/upload-artifact@v7
+      with:
+        archive: false
+        name: rusefi_bundle_universal.zip
+        path: ./artifacts/rusefi_bundle_universal.zip
+
+    - name: Upload universal autoupdate artifact
+      uses: actions/upload-artifact@v7
+      with:
+        archive: false
+        name: rusefi_bundle_universal_autoupdate.zip
+        path: ./artifacts/rusefi_bundle_universal_autoupdate.zip
+
+    - name: Upload universal bundle to rusEFI server
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'rusefi/rusefi' }}
+      working-directory: ./artifacts
+      env:
+        WHITE_LABEL: rusefi
+      run: |
+        bash ../firmware/bin/upload_bundle.sh "${{ secrets.RUSEFI_SSH_USER }}" "${{ secrets.RUSEFI_SSH_PASS }}" "${{ secrets.RUSEFI_SSH_SERVER }}" universal

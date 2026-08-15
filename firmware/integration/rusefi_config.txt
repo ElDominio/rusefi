@@ -220,6 +220,8 @@ struct_no_prefix engine_configuration_s
 #define VVT_OFFSET_1_1_NAME "VVT offset bank 1 intake"
 #define GEAR_DETECTION_DIALOG_NAME "Gear Detection"
 #define ts_show_final_ratio true
+#define ts_show_bench_test true
+#define ts_show_ltft_sd_card_message true
 #define ts_show_vehicle_name true
 #define ts_show_cranking_rpm true
 #define ts_show_map_averaging_enabled true
@@ -387,6 +389,9 @@ custom MsIoBoxId 1 bits, U08, @OFFSET@, [0:1], @@MsIoBoxId_enum@@
 
 #define MsIoBoxVss_enum "Off", "VR speed in (1, 2)", "Hall speed in (3, 4)", "All (1, 2, 3, 4)"
 custom MsIoBoxVss 1 bits, U08, @OFFSET@, [0:1], @@MsIoBoxVss_enum@@
+
+#define SDLoggerMode_enum "Off", "Full MLG", "Trigger bin", "Trigger CSV", "DTC Freeze Frame"
+custom SDLoggerMode 1 bits, U08, @OFFSET@, [0:2], @@SDLoggerMode_enum@@
 
 struct MsIoBox_config_s
 	MsIoBoxId id
@@ -697,8 +702,8 @@ uint32_t cylindersCount;Number of cylinder the engine has.;"", 1, 0, 1, @@MAX_CY
 #define ts_show_oil_sensors true
 #define ts_show_analog_o2 true
 
-!                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  35
-#define firing_order_e_enum "One Cylinder", "1-3-4-2", "1-2-4-3", "1-3-2-4", "1-5-3-6-2-4", "1-8-4-3-6-5-7-2", "1-2-4-5-3", "1-4-2-5-3-6", "1-2", "1-2-3-4-5-6", "1-2-3", "1-8-7-2-6-5-4-3", "1-5-4-2-6-3-7-8 Mustang", "1-6-3-2-5-4", "1-10-9-4-3-6-5-8-7_2", "1-7-5-11-3-9-6-12-2-8-4-10", "1-7-4-10-2-8-6-12-3-9-5-11", "1-4-3-2", "1-12-5-8-3-10-6-7-2-11-4-9", "1-2-7-8-4-5-6-3", "1-3-7-2-6-5-4-8 HO", "1-2-3-4-5-6-7-8-9", "INVALID", "1-2-3-4-5-6-7-8-9-10-11-12", "1-3-2", "1-2-3-4-5-6-7-8", "1-5-4-8-6-3-7-2", "1-4-3-6-2-5", "1-8-7-3-6-5-4-2", "1-6-2-4-3-5", "1-6-5-4-3-2", "1-4-5-2-3-6", "1-5-4-8-3-7-2-6 Voodoo", "1-6-5-10-2-7-3-8-4-9", "1-8-6-2-7-3-4-5 F136", "1-2-3-4"
+!                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  35         36
+#define firing_order_e_enum "One Cylinder", "1-3-4-2", "1-2-4-3", "1-3-2-4", "1-5-3-6-2-4", "1-8-4-3-6-5-7-2", "1-2-4-5-3", "1-4-2-5-3-6", "1-2", "1-2-3-4-5-6", "1-2-3", "1-8-7-2-6-5-4-3", "1-5-4-2-6-3-7-8 Mustang", "1-6-3-2-5-4", "1-10-9-4-3-6-5-8-7_2", "1-7-5-11-3-9-6-12-2-8-4-10", "1-7-4-10-2-8-6-12-3-9-5-11", "1-4-3-2", "1-12-5-8-3-10-6-7-2-11-4-9", "1-2-7-8-4-5-6-3", "1-3-7-2-6-5-4-8 HO", "1-2-3-4-5-6-7-8-9", "INVALID", "1-2-3-4-5-6-7-8-9-10-11-12", "1-3-2", "1-2-3-4-5-6-7-8", "1-5-4-8-6-3-7-2", "1-4-3-6-2-5", "1-8-7-3-6-5-4-2", "1-6-2-4-3-5", "1-6-5-4-3-2", "1-4-5-2-3-6", "1-5-4-8-3-7-2-6 Voodoo", "1-6-5-10-2-7-3-8-4-9", "1-8-6-2-7-3-4-5 F136", "1-2-3-4", "1-6-2-5-3-4"
 
 custom firing_order_e 1 bits, U08, @OFFSET@, [0:6], @@firing_order_e_enum@@
 firing_order_e firingOrder;
@@ -941,7 +946,7 @@ spi_device_e digitalPotentiometerSpiDevice;Digital Potentiometer is used by stoc
 
 	! bit 13
 	bit stepperForceParkingEveryRestart,"yes","no"
-	bit isFasterEngineSpinUpEnabled,"enabled","disabled";If enabled, try to fire the engine before a full engine cycle has been completed using RPM estimated from the last 90 degrees of engine rotation. As soon as the trigger syncs plus 90 degrees rotation, fuel and ignition events will occur. If disabled, worst case may require up to 4 full crank rotations before any events are scheduled.
+	bit isFasterEngineSpinUpEnabled,"enabled","disabled";If enabled, RPM is estimated from ~90 degrees of rotation using tooth timestamps collected even before trigger sync, and fuel/ignition scheduling starts as soon as the trigger syncs (sequential ignition temporarily runs as wasted spark until full phase sync). As soon as the trigger syncs plus 90 degrees rotation, fuel and ignition events will occur. If disabled, worst case may require up to 4 full crank rotations before any events are scheduled.
 	bit coastingFuelCutEnabled,"enabled","disabled";This setting disables fuel injection while the engine is in overrun, this is useful as a fuel saving measure and to prevent back firing.
 	bit useIacTableForCoasting,"enabled","disabled";Override the IAC position during overrun conditions to help reduce engine breaking, this can be helpful for large engines in light weight cars or engines that have trouble returning to idle.
 	bit useNoiselessTriggerDecoder,"yes","no"
@@ -1242,10 +1247,8 @@ bit invertVvtControlIntake,"retard","advance";If increased VVT duty cycle increa
 bit invertVvtControlExhaust,"retard","advance";If increased VVT duty cycle increases the indicated VVT angle, set this to 'advance'. If it decreases, set this to 'retard'. Most intake cams use 'advance', and most exhaust cams use 'retard'.
 
 bit useBiQuadOnAuxSpeedSensors,"yes","no"
-bit sdTriggerLog,"Trigger","Full MLG";'Trigger' mode will write a high speed log of trigger events (warning: uses lots of space!). 'Full MLG' mode will write a standard MLG of sensors, engine function, etc. similar to the one captured in TunerStudio.
 bit stepper_dc_use_two_wires,"yes","no"
 bit watchOutForLinearTime,"yes","no"
-bit sdTriggerLogCsv,"CSV","Binary"
 bit sdCardConditionalLogging,"enabled","disabled";Only write the SD log while trigger conditions are met (start/stop). Off = always log, the current behavior.
 bit useCompensatedMap,"enabled","disabled";Compensated MAP: in Speed Density mode, normalize MAP by barometric pressure before it is used as a table load axis.\nMAP_ref = MAP / (baro / 101.325 kPa) feeds the VE lookup and the fuel/spark load axes, so the same table cells are hit regardless of altitude (WOT reads ~100 kPa at any elevation).\nThe physical air mass calculation still uses actual MAP. Requires a barometric pressure sensor; without a valid baro reading no compensation is applied.\nWorks together with the Barometric pressure correction table, which serves a different goal: this setting keeps table lookups stable across altitude, while the baro table multiplies fueling for exhaust-side scavenging effects. Either or both can be used.
 uint16_t sdLogStartRpm;Start logging at/above this RPM;"rpm", 1, 0, 0, 30000, 0
@@ -2073,6 +2076,8 @@ end_struct
 	i2c_config_s[I2C_BUS_TOTAL_COUNT iterate] i2c;
 
 	include_file controllers/can/can_sniffer.txt
+
+	SDLoggerMode sdLoggerMode;'Trigger' mode will write a high speed log of trigger events (warning: uses lots of space!). 'Full MLG' mode will write a standard MLG of sensors, engine function, etc. similar to the one captured in TunerStudio. 'DTC Freeze Frame' will write one frame MLG log and short CSV trigger log on every DTC
 ! end of engine_configuration_s
 end_struct
 
@@ -2875,6 +2880,7 @@ end_struct
 #define ts_show_vehicle_speed_sensor true
 #define ts_show_output_diag false
 #define ts_show_top_level_can_menu true
+#define ts_show_canbus_sniffer false
 #define ts_show_tle8888 false
 #define ts_show_l9779 false
 #define ts_show_mc33810 false

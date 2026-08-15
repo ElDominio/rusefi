@@ -239,6 +239,7 @@ static angle_t adjustCrankPhase(int camIndex) {
 	case VVT_CUSTOM_2:
 	case VVT_CUSTOM_3:
 	case VVT_CUSTOM_4:
+	case VVT_CUSTOM_5:
 	case VVT_INACTIVE:
 		// do nothing
 		return 0;
@@ -261,6 +262,7 @@ static angle_t wrapVvt(angle_t vvtPosition, int period) {
 }
 
 static void logVvtFront(bool useOnlyRise, bool isImportantFront, TriggerValue front, efitick_t nowNt, int index) {
+	UNUSED(nowNt);
 	if (!useOnlyRise || engineConfiguration->displayLogicLevelsInEngineSniffer) {
 		// If we care about both edges OR displayLogicLevel is set, log every front exactly as it is
 		addEngineSnifferVvtEvent(index, front == TriggerValue::RISE ? FrontDirection::UP : FrontDirection::DOWN);

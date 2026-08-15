@@ -31,11 +31,21 @@
 #include "board_overrides.h"
 #include "tooth_logger.h"
 
+// Defined outside the EFI_HD_ACR guard: boards install this hook from shared
+// (test-visible) code, so the symbol must exist even in builds that compile
+// the ACR strategy itself out.
+std::optional<setup_custom_bool_type> custom_board_holdAcr;
+
 #if EFI_HD_ACR
 
 static bool getAcrState() {
     bool engineMovedRecently = getTriggerCentral()->engineMovedRecently();
     engine->engineState.acrEngineMovedRecently = engineMovedRecently;
+
+	if (custom_board_holdAcr.has_value() && custom_board_holdAcr.value()()) {
+		return true;
+	}
+
 	auto currentPhase = getTriggerCentral()->getCurrentEnginePhase(getTimeNowNt());
 	if (!currentPhase) {
 		return engineMovedRecently;

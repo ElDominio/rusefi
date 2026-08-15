@@ -142,7 +142,9 @@ typedef enum  __attribute__ ((__packed__)) {
 
   VVT_CUSTOM_3 = 32,
 
-  VVT_CUSTOM_4 = 34,
+  VVT_CUSTOM_4 = 33,
+
+  VVT_CUSTOM_5 = 34,
 
 } vvt_mode_e;
 
@@ -1054,6 +1056,14 @@ enum class dfco_fuel_cut_mode_e : uint8_t {
 	Overrun = 0,
 	Decel   = 1,
 	Both    = 2,
+};
+
+enum class SDLoggerMode : uint8_t {
+	None = 0,
+	Mlg = 1,
+	ToothBin = 2,
+	ToothCsv = 3,
+	Dtc = 4,
 };
 
 #endif // __cplusplus

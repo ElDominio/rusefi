@@ -10,12 +10,15 @@ import java.util.ArrayList;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 public class SingleAsyncJobExecutor implements com.rusefi.DeviceSessionManager.JobExecutor {
     private final Function<AsyncJob, UpdateOperationCallbacks> callbacksProvider;
+    private final Predicate<AsyncJob> recordResult;
 
     private final java.util.List<Runnable> onJobInProgressFinished = new ArrayList<>();
     private final java.util.List<Runnable> onJobAboutToStart = new ArrayList<>();
+    private final java.util.List<Runnable> onJobWorkerAboutToStart = new ArrayList<>();
 
     private volatile Optional<AsyncJob> jobInProgress = Optional.empty();
 
@@ -29,11 +32,17 @@ public class SingleAsyncJobExecutor implements com.rusefi.DeviceSessionManager.J
     public SingleAsyncJobExecutor(
         final UpdateOperationCallbacks updateOperationCallbacks
     ) {
-        this(job -> updateOperationCallbacks);
+        this(job -> updateOperationCallbacks, job -> true);
     }
 
     public SingleAsyncJobExecutor(Function<AsyncJob, UpdateOperationCallbacks> callbacksProvider) {
+        this(callbacksProvider, job -> true);
+    }
+
+    public SingleAsyncJobExecutor(Function<AsyncJob, UpdateOperationCallbacks> callbacksProvider,
+                                  Predicate<AsyncJob> recordResult) {
         this.callbacksProvider = callbacksProvider;
+        this.recordResult = recordResult;
     }
 
     /** Delegating callbacks that record the terminal outcome before forwarding to the selected UI. */
@@ -95,34 +104,61 @@ public class SingleAsyncJobExecutor implements com.rusefi.DeviceSessionManager.J
     }
 
     /**
-     * Runs before a new job is handed off to the executor. Use this to release resources the job
-     * will need exclusive access to (e.g. close a live serial connection so the firmware updater
-     * can open the same port).
+     * Runs before a new job is handed off to the executor. Use this for quick caller-thread state
+     * updates; blocking preparation belongs in {@link #addOnJobWorkerAboutToStartListener(Runnable)}.
      */
     public void addOnJobAboutToStartListener(Runnable listener) {
         onJobAboutToStart.add(listener);
     }
 
-    public void startJob(final AsyncJob job, final Component parent) {
-        startJob(job, parent, message -> JOptionPane.showMessageDialog(
+    /** Runs on the job worker immediately before the job, so blocking preparation cannot freeze Swing. */
+    @Override
+    public void addOnJobWorkerAboutToStartListener(Runnable listener) {
+        onJobWorkerAboutToStart.add(listener);
+    }
+
+    public boolean startJob(final AsyncJob job, final Component parent) {
+        return startJob(job, parent, message -> JOptionPane.showMessageDialog(
             parent,
             message,
             "Error",
             JOptionPane.ERROR_MESSAGE
-        ));
+        ), () -> {});
     }
 
-    public void startJob(final AsyncJob job, final Component parent, Consumer<String> errorHandler) {
+    public boolean startJob(final AsyncJob job, final Component parent, Consumer<String> errorHandler) {
+        return startJob(job, parent, errorHandler, () -> {});
+    }
+
+    public boolean startJob(final AsyncJob job, final Component parent, final Runnable onAccepted) {
+        return startJob(job, parent, message -> JOptionPane.showMessageDialog(
+            parent,
+            message,
+            "Error",
+            JOptionPane.ERROR_MESSAGE
+        ), onAccepted);
+    }
+
+    private boolean startJob(final AsyncJob job, final Component parent, Consumer<String> errorHandler,
+                             final Runnable onAccepted) {
         final Optional<AsyncJob> prevJobInProgress = setJobInProgressIfEmpty(job);
         if (!prevJobInProgress.isPresent()) {
+            onAccepted.run();
             for (Runnable listener : onJobAboutToStart) {
                 listener.run();
             }
-            UpdateOperationCallbacks callbacks = recordingCallbacks(callbacksProvider.apply(job));
-            callbacks.clear(); // resets lastResult to NONE and clears the selected status panel
-            AsyncJobExecutor.INSTANCE.executeJob(job, callbacks, this::handleJobInProgressFinished);
+            UpdateOperationCallbacks delegate = callbacksProvider.apply(job);
+            UpdateOperationCallbacks callbacks = recordResult.test(job) ? recordingCallbacks(delegate) : delegate;
+            callbacks.clear(); // clears the selected status panel; recorded jobs also reset lastResult
+            AsyncJobExecutor.INSTANCE.executeJob(job, callbacks, () -> {
+                for (Runnable listener : onJobWorkerAboutToStart) {
+                    listener.run();
+                }
+            }, this::handleJobInProgressFinished);
+            return true;
         } else {
             errorHandler.accept(String.format("Job `%s` is already in progress!", prevJobInProgress.get().getName()));
+            return false;
         }
     }
 
