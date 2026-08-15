@@ -47,6 +47,7 @@ private:
 #if EFI_ADVANCED_FUEL_PUMP
 	Pid   m_fuelPumpPid;
 	bool  m_secondaryPumpOn = false;
+	bool  m_reliefActive = false;
 
 	void updateDualRelay();
 #endif

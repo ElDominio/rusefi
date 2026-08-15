@@ -328,14 +328,19 @@ struct_no_prefix page6_s
 	! demand drops, excess pressure can only bleed off as the injectors consume it down, and
 	! at low injected mass that happens too slowly for the PID's I-term to usefully chase
 	! (it just winds down against a pump that already has no authority to help, then overshoots
-	! low once pressure finally catches up). While this is enabled and both conditions hold -
-	! pressure above target by more than the deadzone, AND injected fuel mass below the
-	! threshold below - the pump duty is held at fuelPumpMinDuty (bypassing PID output, PID
-	! reset) so pressure drains via consumption alone. Normal PID control resumes the moment
-	! pressure is back within the deadzone of target.
+	! low once pressure finally catches up). While this is enabled and injected fuel mass is
+	! below fuelPumpReliefMaxInjectedMass, relief engages once pressure rises more than
+	! fuelPumpReliefEngageOverpressure above target - pump duty is held at fuelPumpMinDuty
+	! (bypassing PID output, PID reset) so pressure drains via consumption alone. Once engaged,
+	! relief stays latched (hysteresis) until pressure falls back to within
+	! fuelPumpReliefRecoverOverpressure of target, at which point normal PID control resumes.
+	! fuelPumpReliefRecoverOverpressure should be set lower than fuelPumpReliefEngageOverpressure
+	! (0 = resume only once pressure is back at or below target) to avoid chattering in/out of
+	! relief right at the engage point.
 	bit fuelPumpAggressiveRelief,"enabled","disabled";Aggressive Pressure Relief: master enable (PWM mode, intended for returnless fuel systems - see comment above).
-	uint16_t fuelPumpReliefDeadzone;Aggressive Pressure Relief: pressure must exceed target by more than this to engage relief, PID resumes once back inside this window.;"kPa", 1, 0, 0, 500, 0
-	uint16_t fuelPumpReliefMinInjectedMass;Aggressive Pressure Relief: only engages while injected fuel mass per cycle is below this (low consumption = pressure won't drop fast regardless of pump duty).;"mg", 1, 0, 0, 2000, 0
+	uint16_t fuelPumpReliefMaxInjectedMass;Aggressive Pressure Relief: only engages while injected fuel mass per cycle is below this (low consumption = pressure won't drop fast regardless of pump duty).;"mg", 1, 0, 0, 2000, 0
+	uint16_t fuelPumpReliefEngageOverpressure;Aggressive Pressure Relief: pressure must exceed target by more than this to engage relief.;"kPa", 1, 0, 0, 500, 0
+	uint16_t fuelPumpReliefRecoverOverpressure;Aggressive Pressure Relief: once engaged, relief stays on until pressure is back within this much of target (should be less than the engage value above).;"kPa", 1, 0, 0, 500, 0
 
 	! --- Launch Power Ramp (Advanced) ---
 	! After launch control releases at WOT (car leaves the line), retard ignition timing per the

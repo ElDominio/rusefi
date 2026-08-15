@@ -1442,3 +1442,162 @@ Open follow-ups:
   order vs. base-class initializer argument) so `make CC=clang` builds again.
 - Neither VVT Advanced Mode nor Manual Pressure Correction has been validated on real
   hardware/bench yet - only unit tests + compile.
+
+## 2026-08-14 - Aggressive Pressure Relief: drop the deadband, add returnless-scenario unit test, FP duty gauge decimal precision
+
+What was done:
+- User feedback on the Aggressive Pressure Relief feature (commit `8b03c29b74`, added earlier
+  this session): the pressure-overshoot deadband was unwanted design complexity. Removed
+  `fuelPumpReliefDeadzone` entirely - `FuelPumpController::getClosedLoop()` now engages relief
+  on a plain `observation > setpoint` (no margin) AND-ed with the existing injected-mass
+  threshold, and resumes normal PID the moment pressure is back at or below target. Updated
+  `config_page_6.txt` (field removed, comment reworded) to match. `fuelPumpAggressiveRelief`
+  (enable bit) and `fuelPumpReliefMinInjectedMass` (the demand-gate threshold) are unchanged.
+- Added the unit test coverage the feature was shipped without (see prior entries in this file
+  criticizing exactly this pattern):
+  - `FuelPumpPwm.AggressiveReliefHoldsThroughSlowPressureBleedOnReturnlessSystem` - models the
+    returnless-system constraint (pump can only add pressure, injectors are the only bleed
+    path) with a low injected-mass value below threshold, then walks pressure down from 340kPa
+    to a 300kPa target in a `pressure -= 2.0f` loop (multi-step decay, not a step function) per
+    the user's explicit ask. Asserts relief holds `fuelPumpMinDuty`/PID-inactive at every step,
+    then - using a nonzero `iFactor` and real `iTermMin`/`iTermMax` bounds - asserts the
+    resumed closed-loop output is ~0 at zero error, proving the PID's integrator was actually
+    held/reset through the bleed-down rather than winding down against pressure it had no
+    authority to correct (the exact failure mode the feature exists to prevent).
+  - `FuelPumpPwm.AggressiveReliefDoesNotEngageWhenInjectedMassAboveThreshold` - same
+    overpressure condition but high injected mass; confirms relief is demand-gated, not just
+    pressure-gated.
+- Separately, user asked for the FP duty gauge to show one decimal place in TunerStudio and
+  the datalogger. The underlying value was being truncated before display
+  (`fuelPumpDuty = static_cast<uint8_t>(duty)` in `fuel_pump.cpp`, and the LiveData field was
+  plain `uint8_t fuelPumpDuty;...;"%", 1, 0, 0, 100, 0` in `fuel_pump_control.txt`), so simply
+  changing display digits would have shown a padded ".0" with no real resolution. Fixed at the
+  root: field is now `uint16_t autoscale fuelPumpDuty;...;"%", 0.1, 0, 0, 100, 1` (generates
+  `scaled_channel<uint16_t, 10, 1>`, real 0.1% resolution), and `fuel_pump.cpp` now assigns the
+  float `duty` directly instead of truncating. Also bumped `fuelPumpDutyGauge`'s `vd,ld` from
+  `0, 0` to `1, 1` in `firmware/tunerstudio/gauge_declarations.ini` so the TS quick-gauge
+  preset actually renders the decimal.
+- Hit and worked around a new instance of the "stale shared generated file" class of build
+  gotcha already documented in CLAUDE.md, but for a different pipeline: editing
+  `fuel_pump_control.txt` (a per-module LiveData `.txt` file) did not regenerate
+  `firmware/live_data_generated/fuel_pump_control_generated.h`, because that file is not
+  listed in `docs_enums.mk`'s `DOCS_ENUMS_INPUTS` (which has a long-standing
+  `# TODO: are we missing a ton of .txt file references from LiveData.yaml?!` comment at the
+  top - confirmed true). Similarly, editing `firmware/tunerstudio/gauge_declarations.ini`
+  (read by the config-definition tool and inlined into the generated per-board `.ini`) did not
+  invalidate the generated `.ini`, because `gauge_declarations.ini` is absent from
+  `rusefi_config.mk`'s `CONFIG_INPUTS` list even though its content ends up embedded under
+  `[GaugeConfigurations]`. Worked around both by touching a file that *is* a tracked
+  dependency (`integration/LiveData.yaml` for the first, `tunerstudio/tunerstudio.template.ini`
+  for the second) to force `make` to rerun the generators, then rebuilt. Documented this in
+  CLAUDE.md so it isn't rediscovered from scratch next time either of these files changes
+  without a full clean build in between.
+
+Validation:
+- `unit_tests/./test.sh FuelPumpPwm`: 13/13 passing (11 pre-existing + 2 new), rebuilt after
+  each of the deadband-removal, new-test, and gauge-precision edits.
+- Confirmed via generated output inspection (not just test pass/fail) that the LiveData header
+  actually regenerated to `scaled_channel<uint16_t, 10, 1> fuelPumpDuty` and that the generated
+  per-board `.ini`'s `fuelPumpDutyGauge` line actually picked up `vd,ld = 1, 1`, since a stale
+  generated artifact would otherwise pass the same tests while silently not reflecting the
+  source change (this is exactly the gotcha described above).
+- Not validated on hardware/bench.
+
+Open follow-ups:
+- Consider fixing `DOCS_ENUMS_INPUTS`/`CONFIG_INPUTS` properly (add the missing per-module
+  LiveData `.txt` files and `gauge_declarations.ini`) so this class of staleness stops
+  recurring for every contributor who edits one of these files without doing a full clean
+  build first. Not attempted this session - out of scope for a fuel-pump feature tweak, and
+  the missing-inputs list in `DOCS_ENUMS_INPUTS` looked large enough to warrant its own
+  focused pass.
+- Aggressive Pressure Relief still has no coverage from the `#EFI_ADVANCED_FUEL_PUMP`-gated
+  `onFastCallback()`/`update()` full pipeline (existing tests, old and new, all call
+  `getClosedLoop()`/`setOutput()` directly) and no hardware/bench validation.
+
+## 2026-08-14 - Wire Aggressive Pressure Relief into TunerStudio (it had zero dialog exposure)
+
+What was done:
+- User asked where to configure return vs. returnless fuel system in TunerStudio. Answer
+  surfaced a real gap: `fuelPumpAggressiveRelief` and `fuelPumpReliefMinInjectedMass` (added
+  earlier this session in `config_page_6.txt`) were never added to any `dialog =` block in
+  `firmware/tunerstudio/tunerstudio.template.ini` - the fields existed in the struct/`.ini`
+  field catalog but were not placed on any panel, so there was no way to actually see or set
+  them from TunerStudio. (rusEFI also has no literal "Return vs Returnless" selector anywhere;
+  the closest existing thing is the unrelated "Injector flow compensation mode" field under
+  Injector Settings, where "Fixed rail pressure" is documented as the typically-returnless
+  choice.)
+- Added both fields to the existing `fuelPumpPwmConfig` ("PWM Pump Settings") dialog, right
+  after the PID section: a `#Aggressive Pressure Relief (returnless fuel systems - see field
+  help)` section header, the `fuelPumpAggressiveRelief` checkbox, and the
+  `fuelPumpReliefMinInjectedMass` field gated to only show/enable when the checkbox is
+  checked (`{ fuelPumpAggressiveRelief }`). This dialog is already only shown when
+  `fuelPumpMode == 2` (PWM mode), which is the only mode the feature applies to, so no
+  additional visibility condition was needed. Tooltips come for free from each field's
+  existing `config_page_6.txt` comment.
+
+Validation:
+- `unit_tests/./test.sh FuelPumpPwm`: 13/13 passing (no C++ changed, ini-only).
+- Confirmed in the actual generated `firmware/tunerstudio/generated/rusefi_f407-discovery.ini`
+  (not just build success) that both `field =` lines appear inside `fuelPumpPwmConfig`.
+- Not validated by actually opening the dialog in TunerStudio (no TS instance in this
+  environment) - only confirmed via generated `.ini` inspection.
+
+Open follow-ups:
+- Open the generated project in real TunerStudio (or the simulator) at least once to confirm
+  the checkbox/field render and gate as expected - text-level `.ini` inspection can't catch
+  a TS-side rendering quirk.
+
+## 2026-08-14 - Fix misleading field name; add real hysteresis to Aggressive Pressure Relief
+
+What was done:
+- User bench-tested the just-wired-up `fuelPumpReliefMinInjectedMass` field: set it to 90,
+  observed relief engaging while `fuel: base cycle mass` read ~14mg and `running_baseFuel`
+  read ~20mg (both well below 90), and setting it to 0 "fixed" it. Traced this to the field
+  name being backwards relative to its actual, intentional behavior: the code engages relief
+  when injected mass is *below* the threshold (a ceiling on low demand), but the label "Min
+  injected mass to engage relief" reads like a floor ("need at least this much to trigger").
+  0 "fixed" it only because `fuel < 0` is never true, silently disabling the feature rather
+  than tuning it. Renamed the field to `fuelPumpReliefMaxInjectedMass` (config_page_6.txt,
+  fuel_pump.cpp, tunerstudio.template.ini label) so the name matches the semantics.
+- Separately, user asked for a proper two-threshold hysteresis instead of the single
+  pressure-vs-target comparison: engage relief once pressure exceeds target by more than X
+  (`fuelPumpReliefEngageOverpressure`), then stay latched until pressure falls back to within
+  Y of target (`fuelPumpReliefRecoverOverpressure`), with X and Y independently tunable
+  (Y intended < X to avoid chattering right at the engage point). This requires state that
+  survives across calls (you can't derive "currently latched" from a single instantaneous
+  pressure reading once engage/recover differ), so added `bool m_reliefActive` to
+  `FuelPumpController` (`fuel_pump.h`). `getClosedLoop()` (`fuel_pump.cpp`) now: resets
+  `m_reliefActive` to false whenever the master switch is off or demand has risen back above
+  the mass threshold; latches it on crossing above `setpoint + engageOverpressure`; releases it
+  at or below `setpoint + recoverOverpressure`; and holds its current state anywhere in
+  between (the hysteresis band). Added the two new fields to `config_page_6.txt` (kPa, 0-500,
+  same range as the deadzone field removed earlier this session) and wired both into the
+  `fuelPumpPwmConfig` TS dialog alongside the renamed mass field.
+- Updated the two existing Aggressive Relief unit tests for the renamed field (set
+  engage/recover overpressure to 0 each, reproducing the prior single-threshold behavior
+  exactly) and added `AggressiveReliefHysteresisEngageAndRecoverThresholdsDiffer`: with
+  engage=10kPa/recover=2kPa, verifies (a) PID stays active at +5kPa (below engage), (b) relief
+  latches at +15kPa (above engage), (c) relief *stays* latched when pressure falls back to
+  +5kPa (inside the hysteresis band - this is the behavior a single-threshold implementation
+  cannot express), and (d) relief releases at +1kPa (at/below recover).
+
+Validation:
+- `unit_tests/./test.sh FuelPumpPwm`: 14/14 passing (13 pre-existing/renamed + 1 new
+  hysteresis test).
+- Confirmed via generated output (not just test pass/fail, per the staleness gotcha documented
+  earlier this session) that `firmware/tunerstudio/generated/rusefi_f407-discovery.ini` and
+  `engine_configuration_generated_structures_f407-discovery.h`-adjacent LiveData/config
+  headers actually carry the renamed/new field names at their new byte offsets (412/414/416).
+- Not validated on hardware/bench - this iterates the same feature added and bench-tested
+  earlier today, so a re-burn in TunerStudio is needed before the user's next bench session
+  (byte layout of `page6_s` shifted: two new `uint16_t` fields inserted, so anything after this
+  block in the struct also moved - full re-burn from TS, not just re-flash, is required).
+
+Open follow-ups:
+- Still not opened in real TunerStudio to confirm rendering (carried over from prior entry).
+- No enforcement (validation or UI hint beyond the field-help text) that
+  `fuelPumpReliefRecoverOverpressure < fuelPumpReliefEngageOverpressure`; a tuner could set
+  recover >= engage and get immediate chatter right at the engage threshold. Left as
+  documented-but-unenforced, consistent with how other paired threshold/hysteresis fields in
+  this codebase are handled (e.g. dual fuel pump activation/hysteresis).
+

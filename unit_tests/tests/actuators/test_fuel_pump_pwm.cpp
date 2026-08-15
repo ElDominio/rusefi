@@ -264,6 +264,120 @@ TEST(FuelPumpPwm, PwmDutyClampedToMinMax) {
 	EXPECT_EQ(60, dut.fuelPumpDuty);
 }
 
+TEST(FuelPumpPwm, AggressiveReliefHoldsThroughSlowPressureBleedOnReturnlessSystem) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	FuelPumpController dut;
+
+	getCustomPage()->fuelPumpMode    = FP_MODE_PWM;
+	getCustomPage()->fuelPumpMinDuty = 20;
+	getCustomPage()->fuelPumpMaxDuty = 90;
+
+	engineConfiguration->fuelPumpControl.pFactor  = 1.0f;
+	engineConfiguration->fuelPumpControl.iFactor  = 0.5f;
+	engineConfiguration->fuelPumpControl.dFactor  = 0;
+	engineConfiguration->fuelPumpControl.offset   = 0;
+	engineConfiguration->fuelPumpControl.minValue = -100;
+	engineConfiguration->fuelPumpControl.maxValue = 100;
+	getCustomPage()->fuelPump_iTermMin = -100;
+	getCustomPage()->fuelPump_iTermMax = 100;
+
+	// Returnless fuel system: the pump can only add pressure to the rail, never bleed it off, so
+	// once demand drops the only way pressure comes back down is via the injectors consuming it —
+	// a slow multi-step decay, never an instant step to target.
+	getCustomPage()->fuelPumpAggressiveRelief = true;
+	getCustomPage()->fuelPumpReliefMaxInjectedMass = 5.0f;      // mg/cycle
+	getCustomPage()->fuelPumpReliefEngageOverpressure = 0;      // engage as soon as above target
+	getCustomPage()->fuelPumpReliefRecoverOverpressure = 0;     // resume once back at/below target
+	engine->fuelComputer.running.fuel = 2.0f;                   // mg/cycle, low demand (below threshold)
+
+	const float setpoint = 300.0f;
+	float pressure = 340.0f;  // rail overpressured after demand dropped
+
+	// Step pressure down a little at a time (never jump straight to target) to model consumption-
+	// driven bleed-down. Relief must hold the pump at minDuty (PID bypassed and reset) at every
+	// step while pressure remains above target.
+	while (pressure > setpoint) {
+		auto cl = dut.getClosedLoop(setpoint, pressure);
+		EXPECT_FALSE(cl.Valid) << "relief should hold at pressure=" << pressure;
+		dut.setOutput(cl);
+		EXPECT_EQ(getCustomPage()->fuelPumpMinDuty, dut.fuelPumpDuty);
+		EXPECT_FALSE(dut.isFpPidActive);
+
+		pressure -= 2.0f;
+	}
+
+	// Pressure has bled back down to target: relief must release control back to the PID
+	// immediately. Since the PID was held/reset throughout the bleed-down instead of winding its
+	// I-term down against pressure it had no authority to correct, the output at zero error is
+	// ~0 rather than a residual negative pull from a wound-down integrator.
+	auto cl = dut.getClosedLoop(setpoint, pressure);
+	ASSERT_TRUE(cl.Valid);
+	dut.setOutput(cl);
+	EXPECT_TRUE(dut.isFpPidActive);
+	EXPECT_NEAR(0.0f, cl.Value, 1.0f);
+}
+
+TEST(FuelPumpPwm, AggressiveReliefDoesNotEngageWhenInjectedMassAboveThreshold) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	FuelPumpController dut;
+
+	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
+	engineConfiguration->fuelPumpControl.pFactor  = 1.0f;
+	engineConfiguration->fuelPumpControl.iFactor  = 0;
+	engineConfiguration->fuelPumpControl.dFactor  = 0;
+	engineConfiguration->fuelPumpControl.offset   = 0;
+	engineConfiguration->fuelPumpControl.minValue = -100;
+	engineConfiguration->fuelPumpControl.maxValue = 100;
+
+	getCustomPage()->fuelPumpAggressiveRelief = true;
+	getCustomPage()->fuelPumpReliefMaxInjectedMass = 5.0f;   // mg/cycle
+	engine->fuelComputer.running.fuel = 50.0f;                // mg/cycle, well above threshold
+
+	// Pressure is above target, but the engine is actually consuming plenty of fuel (not the
+	// low-demand returnless scenario relief targets) — PID must stay in control.
+	auto cl = dut.getClosedLoop(300.0f, 340.0f);
+	ASSERT_TRUE(cl.Valid);
+	EXPECT_TRUE(dut.isFpPidActive);
+}
+
+TEST(FuelPumpPwm, AggressiveReliefHysteresisEngageAndRecoverThresholdsDiffer) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	FuelPumpController dut;
+
+	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
+	engineConfiguration->fuelPumpControl.pFactor  = 1.0f;
+	engineConfiguration->fuelPumpControl.iFactor  = 0;
+	engineConfiguration->fuelPumpControl.dFactor  = 0;
+	engineConfiguration->fuelPumpControl.offset   = 0;
+	engineConfiguration->fuelPumpControl.minValue = -100;
+	engineConfiguration->fuelPumpControl.maxValue = 100;
+
+	getCustomPage()->fuelPumpAggressiveRelief = true;
+	getCustomPage()->fuelPumpReliefMaxInjectedMass = 5.0f;       // mg/cycle
+	getCustomPage()->fuelPumpReliefEngageOverpressure = 10;      // must be >10kPa over target to engage
+	getCustomPage()->fuelPumpReliefRecoverOverpressure = 2;      // stays latched until back within 2kPa
+	engine->fuelComputer.running.fuel = 2.0f;                    // low demand throughout
+
+	const float setpoint = 300.0f;
+
+	// Below the engage threshold (target+10): PID stays in control, relief never latches.
+	auto cl = dut.getClosedLoop(setpoint, setpoint + 5.0f);
+	EXPECT_TRUE(cl.Valid);
+
+	// Cross above the engage threshold: relief latches on.
+	cl = dut.getClosedLoop(setpoint, setpoint + 15.0f);
+	EXPECT_FALSE(cl.Valid);
+
+	// Pressure falls back into the hysteresis band (between recover and engage thresholds) —
+	// relief must stay latched rather than immediately releasing back to PID.
+	cl = dut.getClosedLoop(setpoint, setpoint + 5.0f);
+	EXPECT_FALSE(cl.Valid) << "relief should still be latched inside the hysteresis band";
+
+	// Pressure falls to/below the recover threshold (target+2): relief releases, PID resumes.
+	cl = dut.getClosedLoop(setpoint, setpoint + 1.0f);
+	EXPECT_TRUE(cl.Valid);
+}
+
 TEST(FuelPumpPwm, PwmPrimeForcesMaxDuty) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	FuelPumpController dut;

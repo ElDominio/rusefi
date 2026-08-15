@@ -139,9 +139,20 @@ expected<percent_t> FuelPumpController::getOpenLoop(float target) {
 }
 
 expected<percent_t> FuelPumpController::getClosedLoop(float setpoint, float observation) {
-	if (getCustomPage()->fuelPumpAggressiveRelief
-	    && observation > setpoint + getCustomPage()->fuelPumpReliefDeadzone
-	    && engine->fuelComputer.running.fuel < getCustomPage()->fuelPumpReliefMinInjectedMass) {
+	bool reliefEligible = getCustomPage()->fuelPumpAggressiveRelief
+	    && engine->fuelComputer.running.fuel < getCustomPage()->fuelPumpReliefMaxInjectedMass;
+
+	if (!reliefEligible) {
+		// Master switch off, or demand has picked back up — PID stays (or resumes) in control.
+		m_reliefActive = false;
+	} else if (observation > setpoint + getCustomPage()->fuelPumpReliefEngageOverpressure) {
+		m_reliefActive = true;
+	} else if (observation <= setpoint + getCustomPage()->fuelPumpReliefRecoverOverpressure) {
+		m_reliefActive = false;
+	}
+	// else: between the recover and engage thresholds — hold whatever state we were already in.
+
+	if (m_reliefActive) {
 		// Pump has no authority to drop pressure faster than the injectors consume it down;
 		// hold at minDuty (via the unexpected fallback in setOutput()) instead of winding the
 		// PID's I-term down against an overpressure it can't actively correct.
@@ -170,7 +181,7 @@ void FuelPumpController::setOutput(expected<percent_t> output) {
 		m_fuelPumpPid.reset();
 	}
 
-	fuelPumpDuty = static_cast<uint8_t>(duty);
+	fuelPumpDuty = duty;
 
 #if EFI_PROD_CODE || EFI_SIMULATOR
 	fuelPumpPwm.setSimplePwmDutyCycle(PERCENT_TO_DUTY(duty));
