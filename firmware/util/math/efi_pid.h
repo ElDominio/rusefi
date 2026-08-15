@@ -48,6 +48,10 @@ public:
 	virtual float getOutput(float target, float input, float dTime);
 	// doesn't limit the result (used in incremental CIC PID, see below)
 	float getUnclampedOutput(float target, float input, float dTime);
+	// Same as above, but the P term uses pFactorOverride instead of parameters->pFactor -- I, D and
+	// offset still come from parameters. Lets a caller gain-schedule P externally (e.g. vs. distance
+	// from target) while keeping this class's iTerm/dTerm state management. See VVT Advanced Mode.
+	float getUnclampedOutputWithPFactor(float target, float input, float dTime, float pFactorOverride);
 	void updateFactors(float pFactor, float iFactor, float dFactor);
 	virtual void reset();
 	float getP() const;

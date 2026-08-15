@@ -294,8 +294,8 @@ void customPageSetDefaults() {
 	d.oilLifeMultCoolantExtreme  = 4.5f;
 
 	// VVT Advanced Mode — disabled by default; seed a symmetric -40..40 deg distance axis (zero at
-	// the center point, for smooth interpolation through the target) and a pass-through (1.0) oil
-	// pressure multiplier curve.
+	// the center point, for smooth interpolation through the target) for the P factor curve, and a
+	// 0..1000 kPa axis for the base duty curve.
 	d.vvtAdvancedModeEnabled = false;
 	d.vvtAdvancedPidPauseEnabled = true;
 	d.vvtAdvancedPidPauseDeg = 1.0f; // within 1 deg of target, duty curve alone holds position
@@ -303,12 +303,11 @@ void customPageSetDefaults() {
 		d.vvtAdvDistanceBinsIntake[i] = -40.0f + i * 10.0f; // -40 .. 40 deg, zero at center
 		d.vvtAdvDistanceBinsExhaust[i] = -40.0f + i * 10.0f;
 	}
-	// vvtAdvDutyIntake/Exhaust left at zero (no base duty) until the user tunes it.
+	// vvtAdvPFactorIntake/Exhaust and vvtAdvDutyIntake/Exhaust left at zero (no P trim gain, no
+	// base duty) until the user tunes them.
 	for (size_t i = 0; i < efi::size(d.vvtAdvOilPressureBinsIntake); i++) {
 		d.vvtAdvOilPressureBinsIntake[i] = i * (1000.0f / 5);  // 0 .. 1000 kPa
-		d.vvtAdvOilPressureMultIntake[i] = 1.0f;               // 1.0 = pass-through until the user tunes it
 		d.vvtAdvOilPressureBinsExhaust[i] = i * (1000.0f / 5);
-		d.vvtAdvOilPressureMultExhaust[i] = 1.0f;
 	}
 }
 

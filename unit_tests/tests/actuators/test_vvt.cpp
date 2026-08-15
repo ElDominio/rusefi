@@ -185,11 +185,12 @@ TEST(Vvt, ClosedLoopInverted) {
 	EXPECT_EQ(dut.getClosedLoop(-30, -20).value_or(0), 15);
 }
 
-// VVT Advanced Mode: the feedforward baseline is always the distance-from-target duty curve
-// (scaled by an optional oil-pressure multiplier), at every distance -- the fixed "Hold Duty"
-// (pid_s.offset) is never used while Advanced Mode is enabled. Within vvtAdvancedPidPauseDeg of
-// the target, the classic P+I+D trim is fully paused (not evaluated at all, so its iTerm cannot
-// integrate in the background) and only the duty curve is used; outside that window (or with
+// VVT Advanced Mode: the feedforward baseline is always the duty-vs-oil-pressure curve (the fixed
+// "Hold Duty" / pid_s.offset is never used while Advanced Mode is enabled). On top of that, the
+// P+I+D trim's P factor comes from a distance-vs-P-factor curve instead of the fixed pid_s.pFactor
+// -- I and D still use the fixed auxPid iFactor/dFactor. Within vvtAdvancedPidPauseDeg of the
+// target, the trim is fully paused (not evaluated at all, so its iTerm cannot integrate in the
+// background) and only the duty curve is used; outside that window (or with
 // vvtAdvancedPidPauseEnabled off) the trim runs at full authority.
 
 static void setupAdvancedIntakePid(int camIndex) {
@@ -202,11 +203,17 @@ static void setupAdvancedIntakePid(int camIndex) {
 	engineConfiguration->auxPid[camIndex].maxValue = 1000;
 }
 
-// Symmetric -40..40 deg distance axis (9 points, zero at the center -- matches the real bins)
-// with all-zero duty by default. Bin index 5 sits at +10 deg.
-static void setupAdvancedIntakeDistanceCurve(page6_s* d) {
+// Flat (all-zero) curves matching the real bin counts/ranges: a symmetric -40..40 deg distance
+// axis (9 points, zero at the center, bin index 5 at +10 deg) driving P factor, and a 0..500 kPa
+// oil pressure axis (6 points, bin index 3 at 300 kPa) driving base duty. Individual tests
+// override specific bins as needed.
+static void setupAdvancedIntakeCurvesFlat(page6_s* d) {
 	for (size_t i = 0; i < efi::size(d->vvtAdvDistanceBinsIntake); i++) {
 		d->vvtAdvDistanceBinsIntake[i] = -40.0f + i * 10.0f;
+		d->vvtAdvPFactorIntake[i] = 0;
+	}
+	for (size_t i = 0; i < efi::size(d->vvtAdvOilPressureBinsIntake); i++) {
+		d->vvtAdvOilPressureBinsIntake[i] = i * 100.0f;
 		d->vvtAdvDutyIntake[i] = 0;
 	}
 }
@@ -229,7 +236,7 @@ TEST(Vvt, AdvancedModeDisabledMatchesLegacyBehavior) {
 	EXPECT_EQ(dut.getClosedLoop(30, 20).value_or(0), 15);
 }
 
-TEST(Vvt, AdvancedModeHoldDutyNeverUsed) {
+TEST(Vvt, AdvancedModeFeedforwardTracksOilPressureNotHoldDuty) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	VvtController dut(0);
@@ -240,14 +247,19 @@ TEST(Vvt, AdvancedModeHoldDutyNeverUsed) {
 
 	auto* d = getCustomPage();
 	d->vvtAdvancedModeEnabled = true;
-	setupAdvancedIntakeDistanceCurve(d);
-	d->vvtAdvDutyIntake[4] = 5.0f;  // center point (distance = 0)
-	d->vvtAdvDutyIntake[5] = 30.0f; // bin index 5 = +10 deg
+	d->vvtAdvancedPidPauseEnabled = true;
+	d->vvtAdvancedPidPauseDeg = 1000.0f; // covers any distance used below -> isolates feedforward
+	setupAdvancedIntakeCurvesFlat(d);
+	d->vvtAdvDutyIntake[0] = 7.0f;  // 0 kPa
+	d->vvtAdvDutyIntake[3] = 42.0f; // 300 kPa
 
-	// distance = 0 -> feedforward is the curve's center value.
-	EXPECT_NEAR(dut.getClosedLoop(20, 20).value_or(0), 5.0f, 0.01f);
-	// distance = 10 -> same curve, different point.
-	EXPECT_NEAR(dut.getClosedLoop(30, 20).value_or(0), 30.0f, 0.01f);
+	// distance = 0 kPa (no sensor mocked yet) -> feedforward is the curve's leftmost value.
+	Sensor::resetMockValue(SensorType::OilPressure);
+	EXPECT_NEAR(dut.getClosedLoop(20, 20).value_or(0), 7.0f, 0.01f);
+
+	// 300 kPa -> same curve, different point.
+	Sensor::setMockValue(SensorType::OilPressure, 300);
+	EXPECT_NEAR(dut.getClosedLoop(20, 20).value_or(0), 42.0f, 0.01f);
 }
 
 TEST(Vvt, AdvancedModePidPausedWithinWindow) {
@@ -257,38 +269,39 @@ TEST(Vvt, AdvancedModePidPausedWithinWindow) {
 	int camIndex = 0;
 	dut.init(nullptr, nullptr);
 	setupAdvancedIntakePid(camIndex);
-	engineConfiguration->auxPid[camIndex].pFactor = 1.0f;
 	engineConfiguration->auxPid[camIndex].offset = 999.0f; // Hold Duty -- must never leak in
 
 	auto* d = getCustomPage();
 	d->vvtAdvancedModeEnabled = true;
 	d->vvtAdvancedPidPauseEnabled = true;
 	d->vvtAdvancedPidPauseDeg = 1.0f;
-	setupAdvancedIntakeDistanceCurve(d); // zero duty curve everywhere
+	setupAdvancedIntakeCurvesFlat(d); // zero P-factor and zero duty curves everywhere
 
 	// distance = 0.5 deg, inside the 1.0 deg pause window -> PID is not evaluated at all, output
-	// is the (zero) feedforward alone -- a naive "PID always on" calc would give 0.5 here (P=1.0).
+	// is the (zero) feedforward alone -- a naive "PID always on" calc with P=1.0 would give 0.5.
 	EXPECT_NEAR(dut.getClosedLoop(0.5, 0).value_or(0), 0.0f, 0.001f);
 }
 
-TEST(Vvt, AdvancedModePidActiveOutsidePauseWindow) {
+TEST(Vvt, AdvancedModePidActiveOutsidePauseWindowUsesCurvePFactor) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	VvtController dut(0);
 	int camIndex = 0;
 	dut.init(nullptr, nullptr);
 	setupAdvancedIntakePid(camIndex);
-	engineConfiguration->auxPid[camIndex].pFactor = 1.0f;
-	engineConfiguration->auxPid[camIndex].offset = 999.0f; // Hold Duty -- must never leak in
+	engineConfiguration->auxPid[camIndex].pFactor = 999.0f; // fixed P factor -- must never leak in
+	engineConfiguration->auxPid[camIndex].offset = 999.0f;  // Hold Duty -- must never leak in
 
 	auto* d = getCustomPage();
 	d->vvtAdvancedModeEnabled = true;
 	d->vvtAdvancedPidPauseEnabled = true;
 	d->vvtAdvancedPidPauseDeg = 1.0f;
-	setupAdvancedIntakeDistanceCurve(d); // zero duty curve everywhere
+	setupAdvancedIntakeCurvesFlat(d); // zero P-factor and zero duty curves everywhere
+	d->vvtAdvPFactorIntake[5] = 1.0f; // bin index 5 = +10 deg -> P factor 1.0 there
 
-	// distance = 10 deg, well outside the 1.0 deg pause window -> PID runs at full authority,
-	// feedforward is still the (zero) duty curve.
+	// distance = 10 deg, well outside the 1.0 deg pause window -> PID runs at full authority using
+	// the curve's P factor (1.0) at that distance, not the fixed (sentinel) pFactor; feedforward is
+	// still the (zero) duty curve.
 	EXPECT_NEAR(dut.getClosedLoop(30, 20).value_or(0), 10.0f, 0.01f);
 }
 
@@ -299,14 +312,16 @@ TEST(Vvt, AdvancedModePauseDisabledKeepsPidActiveNearTarget) {
 	int camIndex = 0;
 	dut.init(nullptr, nullptr);
 	setupAdvancedIntakePid(camIndex);
-	engineConfiguration->auxPid[camIndex].pFactor = 1.0f;
 	engineConfiguration->auxPid[camIndex].offset = 999.0f; // Hold Duty -- must never leak in
 
 	auto* d = getCustomPage();
 	d->vvtAdvancedModeEnabled = true;
 	d->vvtAdvancedPidPauseEnabled = false; // pausing turned off entirely
 	d->vvtAdvancedPidPauseDeg = 1.0f;      // would normally cover this distance -- ignored
-	setupAdvancedIntakeDistanceCurve(d); // zero duty curve everywhere
+	setupAdvancedIntakeCurvesFlat(d); // zero duty curve everywhere
+	for (size_t i = 0; i < efi::size(d->vvtAdvPFactorIntake); i++) {
+		d->vvtAdvPFactorIntake[i] = 1.0f; // flat P factor of 1.0 everywhere
+	}
 
 	// distance = 0.5 deg, but pausing is disabled -> PID still runs at full authority.
 	EXPECT_NEAR(dut.getClosedLoop(0.5, 0).value_or(0), 0.5f, 0.001f);
@@ -325,7 +340,7 @@ TEST(Vvt, AdvancedModePauseFreezesIntegrator) {
 	d->vvtAdvancedModeEnabled = true;
 	d->vvtAdvancedPidPauseEnabled = true;
 	d->vvtAdvancedPidPauseDeg = 1.0f;
-	setupAdvancedIntakeDistanceCurve(d); // zero duty curve everywhere
+	setupAdvancedIntakeCurvesFlat(d); // zero P-factor and zero duty curves everywhere
 
 	// While paused, the PID is never evaluated, so iTerm cannot quietly accumulate: many cycles
 	// inside the window all read back as the flat (zero) feedforward.
@@ -335,55 +350,11 @@ TEST(Vvt, AdvancedModePauseFreezesIntegrator) {
 
 	// Leaving the window now integrates for a single fresh cycle (dTime * iFactor * error), not
 	// 50 cycles' worth of background windup -- if iTerm had kept integrating while paused, this
-	// would be far larger than one cycle's contribution.
+	// would be far larger than one cycle's contribution. P factor is 0 everywhere on this curve, so
+	// it doesn't contribute.
 	float dTime = MS2SEC(engineConfiguration->auxPid[camIndex].periodMs);
 	float expectedFreshITerm = engineConfiguration->auxPid[camIndex].iFactor * dTime * 1.5f; // error = 1.5 at distance=1.5
 	EXPECT_NEAR(dut.getClosedLoop(1.5, 0).value_or(0), expectedFreshITerm, 0.0005f);
-}
-
-TEST(Vvt, AdvancedModeOilPressureSensorAbsentIsNeutral) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-
-	VvtController dut(0);
-	int camIndex = 0;
-	dut.init(nullptr, nullptr);
-	setupAdvancedIntakePid(camIndex);
-
-	auto* d = getCustomPage();
-	d->vvtAdvancedModeEnabled = true;
-	setupAdvancedIntakeDistanceCurve(d);
-	d->vvtAdvDutyIntake[5] = 10.0f; // bin index 5 = +10 deg
-	// Oil pressure multiplier curve is non-neutral, but no sensor is mocked -> must be ignored.
-	for (size_t i = 0; i < efi::size(d->vvtAdvOilPressureBinsIntake); i++) {
-		d->vvtAdvOilPressureBinsIntake[i] = i * 100.0f;
-		d->vvtAdvOilPressureMultIntake[i] = 5.0f;
-	}
-	Sensor::resetMockValue(SensorType::OilPressure);
-
-	EXPECT_NEAR(dut.getClosedLoop(30, 20).value_or(0), 10.0f, 0.01f);
-}
-
-TEST(Vvt, AdvancedModeOilPressureMultiplierApplied) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-
-	VvtController dut(0);
-	int camIndex = 0;
-	dut.init(nullptr, nullptr);
-	setupAdvancedIntakePid(camIndex);
-
-	auto* d = getCustomPage();
-	d->vvtAdvancedModeEnabled = true;
-	setupAdvancedIntakeDistanceCurve(d);
-	d->vvtAdvDutyIntake[5] = 10.0f; // bin index 5 = +10 deg, flat duty
-	for (size_t i = 0; i < efi::size(d->vvtAdvOilPressureBinsIntake); i++) {
-		d->vvtAdvOilPressureBinsIntake[i] = i * 100.0f; // 0..500 kPa (6 points)
-		d->vvtAdvOilPressureMultIntake[i] = 1.0f;
-	}
-	d->vvtAdvOilPressureMultIntake[3] = 2.0f; // 300 kPa -> 2x multiplier
-
-	Sensor::setMockValue(SensorType::OilPressure, 300);
-
-	EXPECT_NEAR(dut.getClosedLoop(30, 20).value_or(0), 20.0f, 0.01f);
 }
 
 TEST(Vvt, DistanceLiveDataOnlyTrackedInAdvancedMode) {
@@ -404,7 +375,7 @@ TEST(Vvt, DistanceLiveDataOnlyTrackedInAdvancedMode) {
 
 	// Advanced mode: distance tracker reflects target - observation.
 	d->vvtAdvancedModeEnabled = true;
-	setupAdvancedIntakeDistanceCurve(d);
+	setupAdvancedIntakeCurvesFlat(d);
 	dut.getClosedLoop(30, 20);
 	EXPECT_NEAR(dut.vvtDistance, 10.0f, 0.5f); // vvtDistance is a scaled int16 (0.1 deg resolution)
 }

@@ -135,30 +135,29 @@ expected<percent_t> VvtController::getOpenLoop(angle_t target) {
 }
 
 #if EFI_VVT_ADVANCED_MODE
-// VVT Advanced Mode: duty vs. signed distance-from-target, per cam type (0=intake, 1=exhaust).
-// Only used beyond the PID fade distance -- see getClosedLoop.
-static float getVvtAdvancedBaseDuty(int camIndex, float distance) {
-	page6_s* cfg = getCustomPage();
-	if (camIndex == 0) {
-		return interpolate2d(distance, cfg->vvtAdvDistanceBinsIntake, cfg->vvtAdvDutyIntake);
-	} else {
-		return interpolate2d(distance, cfg->vvtAdvDistanceBinsExhaust, cfg->vvtAdvDutyExhaust);
-	}
-}
-
-// VVT Advanced Mode: oil pressure multiplier on top of the base duty above. Neutral (1.0) if no
-// oil pressure sensor is configured.
-static float getVvtAdvancedOilPressureMult(int camIndex) {
-	if (!Sensor::hasSensor(SensorType::OilPressure)) {
-		return 1.0f;
-	}
-
+// VVT Advanced Mode: base duty vs. oil pressure, per cam type (0=intake, 1=exhaust). This is the
+// feedforward baseline -- oil pressure is what actually moves the cam, so duty tracks it directly
+// rather than being layered under a separate multiplier. With no oil pressure sensor configured,
+// Sensor::getOrZero reads 0 and the curve is evaluated at its leftmost (0 kPa) bin.
+static float getVvtAdvancedBaseDuty(int camIndex) {
 	float oilPressure = Sensor::getOrZero(SensorType::OilPressure);
 	page6_s* cfg = getCustomPage();
 	if (camIndex == 0) {
-		return interpolate2d(oilPressure, cfg->vvtAdvOilPressureBinsIntake, cfg->vvtAdvOilPressureMultIntake);
+		return interpolate2d(oilPressure, cfg->vvtAdvOilPressureBinsIntake, cfg->vvtAdvDutyIntake);
 	} else {
-		return interpolate2d(oilPressure, cfg->vvtAdvOilPressureBinsExhaust, cfg->vvtAdvOilPressureMultExhaust);
+		return interpolate2d(oilPressure, cfg->vvtAdvOilPressureBinsExhaust, cfg->vvtAdvDutyExhaust);
+	}
+}
+
+// VVT Advanced Mode: PID P factor vs. signed distance-from-target, per cam type. Replaces the
+// fixed pid_s.pFactor (auxPid[cam].pFactor, never used while Advanced Mode is enabled) so
+// correction strength can be shaped by how far off target the cam currently is.
+static float getVvtAdvancedPFactor(int camIndex, float distance) {
+	page6_s* cfg = getCustomPage();
+	if (camIndex == 0) {
+		return interpolate2d(distance, cfg->vvtAdvDistanceBinsIntake, cfg->vvtAdvPFactorIntake);
+	} else {
+		return interpolate2d(distance, cfg->vvtAdvDistanceBinsExhaust, cfg->vvtAdvPFactorExhaust);
 	}
 }
 #endif // EFI_VVT_ADVANCED_MODE
@@ -180,8 +179,11 @@ expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observa
 		float distance = (target - observation) * (isInverted ? -1.0f : 1.0f);
 		vvtDistance = distance;
 
-		// The duty curve, scaled by oil pressure, is always the feedforward baseline.
-		float feedforward = getVvtAdvancedBaseDuty(m_cam, distance) * getVvtAdvancedOilPressureMult(m_cam);
+		// The oil-pressure duty curve is always the feedforward baseline.
+		float feedforward = getVvtAdvancedBaseDuty(m_cam);
+
+		// Gain-scheduled P factor for the trim below -- replaces the fixed auxPid[cam].pFactor.
+		float pFactor = getVvtAdvancedPFactor(m_cam, distance);
 
 		// Inside the pause window the PID is not evaluated at all -- its P/I/D state (iTerm in
 		// particular) is frozen rather than integrating quietly in the background, so there's no
@@ -197,7 +199,7 @@ expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observa
 			output = feedforward;
 		} else {
 			float dTime = MS2SEC(GET_PERIOD_LIMITED(&engineConfiguration->auxPid[m_cam]));
-			float rawPid = m_pid.getUnclampedOutput(target, observation, dTime) - m_pid.getOffset();
+			float rawPid = m_pid.getUnclampedOutputWithPFactor(target, observation, dTime, pFactor) - m_pid.getOffset();
 			output = feedforward + rawPid;
 		}
 
@@ -208,6 +210,10 @@ expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observa
 
 #if EFI_TUNER_STUDIO
 		m_pid.postState(engine->outputChannels.vvtStatus[index]);
+		// postState() reports pTerm via the fixed (unused in Advanced Mode) auxPid[cam].pFactor --
+		// override with the actual gain-scheduled P term applied above (zero while paused, since
+		// the trim isn't evaluated at all in that case).
+		engine->outputChannels.vvtStatus[index].pTerm = isPaused ? 0 : pFactor * m_pid.getPrevError();
 #endif /* EFI_TUNER_STUDIO */
 
 		return output;

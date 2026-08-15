@@ -1943,3 +1943,74 @@ Validation:
   green, 7 new tests among them.
 - Not exercised by launching an installed bundle from a spaced path - verified
   at the unit level and by the side-by-side reproduction only.
+
+## 2026-08-15 - VVT Advanced Mode: base duty now vs. oil pressure, P factor now gain-scheduled vs. distance
+
+What: Revamped the VVT Advanced Mode feedforward/trim split (`firmware/controllers/actuators/vvt.cpp`,
+`getClosedLoop`). Previously: base duty was a curve vs. distance-from-target, scaled by a separate
+duty-vs-oil-pressure multiplier curve (neutral 1.0 with no sensor); the P+I+D trim used the fixed
+`pid_s.pFactor`. Now: base duty is a single curve vs. oil pressure only (no multiplier layer; with
+no oil pressure sensor configured, `Sensor::getOrZero` reads 0 and the curve is evaluated at its
+leftmost/0 kPa bin); the trim's P factor is looked up from a curve vs. signed distance-from-target
+every cycle, replacing the fixed `pid_s.pFactor` (which, like `pid_s.offset`/"Hold Duty", is now
+unused while Advanced Mode is enabled). I and D still use the fixed `auxPid[cam]` iFactor/dFactor.
+
+Key decisions and why:
+- User-requested redesign: "base duty should vary with oil pressure, not with error" (oil pressure
+  is what actually moves the cam) and "P term factor should be the one varying with distance" --
+  an intentional departure from textbook PID (gain-scheduling P by error magnitude, a pattern seen
+  on other ECUs), explicitly opted into for VVT Advanced Mode only; the fixed-gain PID path
+  (Advanced Mode disabled) is untouched.
+- No-sensor fallback for the new duty curve: evaluate at oil pressure = 0 (the curve's leftmost
+  bin), the user's explicit choice over "feedforward = 0" or a separate fallback-duty field.
+- `Pid::getUnclampedOutputWithPFactor(target, input, dTime, pFactorOverride)` added to the shared
+  `Pid` class (`firmware/util/math/efi_pid.{h,cpp}`) rather than duplicating iTerm/dTerm state
+  management in vvt.cpp: `getUnclampedOutput` now just delegates to it with `parameters->pFactor`,
+  so every other `Pid` consumer is unaffected; only the P term's gain source changes for the new
+  overload's caller.
+- `pid_status_s.pTerm` telemetry (the VVT PID status gauges) is computed by the shared
+  `Pid::postState()` from the now-unused fixed `pFactor`, which would mislead in Advanced Mode;
+  overridden immediately after `postState()` in vvt.cpp with `pFactor * m_pid.getPrevError()` (0
+  while paused, since the trim isn't evaluated at all then) -- kept local to VVT rather than
+  changing shared telemetry semantics for every Pid consumer.
+- Config fields repurposed in place rather than added alongside (`config_page_6.txt`,
+  `page6_s`): `vvtAdvDutyIntake/Exhaust` now hold P-factor-vs-distance values were renamed to
+  `vvtAdvPFactorIntake/Exhaust`; `vvtAdvOilPressureMultIntake/Exhaust` (the old multiplier) are now
+  `vvtAdvDutyIntake/Exhaust` (base duty vs. oil pressure). Array sizes/axis bins unchanged, so
+  `page6_s` layout size is unchanged. Safe to repurpose without a compat shim: `git log`/`git
+  branch --contains` confirm VVT Advanced Mode only ever existed on this branch's own WIP history
+  (`e0b4c596c2`), never merged to master, so no released tune could hold old-meaning data in these
+  slots.
+- `firmware/controllers/custom_page.cpp`'s `initCustomPage()` defaults updated to match (P-factor
+  and duty curves left at 0 until tuned; the old "pass-through 1.0 multiplier" default is gone).
+- `tunerstudio.template.ini`: curve panels renamed/relabeled to match (P-factor-vs-distance,
+  duty-vs-oil-pressure); the duty curve panel's `{ oilPressure_hwChannel != 0 }` gate was removed
+  since duty is now the mandatory feedforward (not an optional bonus multiplier) and still applies
+  (pinned to 0 kPa) without a sensor; the fixed "P factor" field in the Intake/Exhaust PID dialogs
+  is now gated `!vvtAdvancedModeEnabled`, matching the existing "Hold Duty" gating.
+
+| File | Change |
+|-------------------------------------------------------|--------------------------------------------------|
+| firmware/controllers/actuators/vvt.cpp | `getVvtAdvancedBaseDuty` now oil-pressure-only; new `getVvtAdvancedPFactor`; `getClosedLoop` uses `getUnclampedOutputWithPFactor` and overrides `pTerm` telemetry |
+| firmware/util/math/efi_pid.{h,cpp} | New `Pid::getUnclampedOutputWithPFactor`; `getUnclampedOutput` now delegates to it |
+| firmware/integration/config_page_6.txt | Renamed/repurposed the four `vvtAdv*` curve Y-axis fields and their doc comments |
+| firmware/controllers/custom_page.cpp | Updated `initCustomPage()` VVT Advanced Mode defaults for the renamed fields |
+| firmware/tunerstudio/tunerstudio.template.ini | Renamed curve panels, removed oil-pressure-sensor gate on the duty panel, gated fixed "P factor" field |
+| unit_tests/tests/actuators/test_vvt.cpp | Rewrote Advanced Mode tests: new flat-curve helper, feedforward/no-sensor/gain-scheduled-P coverage |
+
+Validation:
+- `unit_tests/./test.sh`: 1414/1415 pass. The 1 failure (`LuaBasic.configLookup`) is pre-existing
+  and unrelated -- it references a `devBit0` config field that was renamed to `devBit01` by the
+  `65dcb4eaf9` master-merge commit (that commit's own message already documents this exact failure
+  as pre-existing/known). `Vvt.*` filtered run: 11/11 pass on its own.
+- `compile_alphax-s550.sh -j12`: links clean (`build/rusefi.elf` produced, flash0 42.44% used);
+  spot-checked the generated `rusefi_alphax-s550.ini` and confirmed the renamed fields, curve
+  panels, and gating all came through codegen as expected.
+- Not run per user's standing preference: `make CC=clang` (skipped, see CLAUDE.md/memory).
+- Not validated on hardware/bench -- this is a design/logic change only, unbench-tested like the
+  original Advanced Mode feature.
+
+Open follow-ups:
+- No test yet exercises the pTerm telemetry override in vvt.cpp directly (only indirectly, via the
+  `getClosedLoop` return value tests) -- consider a dedicated assertion on
+  `outputChannels.vvtStatus[index].pTerm` if telemetry correctness becomes a concern.

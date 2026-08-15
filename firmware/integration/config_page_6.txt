@@ -639,28 +639,32 @@ struct_no_prefix page6_s
 	float oilLifeMultCoolantExtreme;Oil Life Monitor: coolant-fallback multiplier, above 125C.;"x", 1, 0, 0.1, 10, 2
 
 	! --- VVT Advanced Mode ---
-	! Opt-in replacement for the fixed PID "offset" (relabeled "Hold Duty" in the VVT PID dialogs,
-	! but that field is never used while Advanced Mode is enabled). The feedforward baseline is
-	! always the distance-from-target duty curve, scaled by an optional oil-pressure multiplier
-	! (oil pressure only matters once you're actively flowing oil to move the cam), at every
-	! distance -- there is no switchover. The distance axis includes an explicit zero bin so the
-	! curve interpolates smoothly through the target rather than jumping across a gap. Within
-	! vvtAdvancedPidPauseDeg of the target, the classic P+I+D trim is fully paused -- not just
-	! scaled down, but not evaluated at all, so its iTerm cannot integrate/windup in the
-	! background while the duty curve alone is expected to hold position. Outside that window (or
-	! with vvtAdvancedPidPauseEnabled off) the trim runs at full authority as usual.
-	bit vvtAdvancedModeEnabled,"enabled","disabled";VVT Advanced Mode: master enable. Replaces the fixed PID offset (Hold Duty) with distance-from-target and oil-pressure-based duty curves, used at every distance. PID trim is always active outside the pause window.
+	! Opt-in replacement for both the fixed PID "offset" (relabeled "Hold Duty" in the VVT PID
+	! dialogs, never used while Advanced Mode is enabled) AND the fixed PID "P factor" (also never
+	! used while Advanced Mode is enabled). The feedforward baseline is a base duty vs. oil pressure
+	! curve -- oil pressure is what actually moves the cam, so duty should track it directly rather
+	! than being scaled by a separate multiplier. With no oil pressure sensor configured, the curve
+	! is evaluated at 0 kPa (its leftmost bin). On top of the feedforward, the P+I+D trim runs with
+	! a gain-scheduled P factor -- looked up from a distance-from-target curve every cycle, instead
+	! of the fixed pid_s.pFactor -- so correction strength can be shaped by how far off target the
+	! cam currently is; I and D still use the fixed auxPid iFactor/dFactor. The distance axis
+	! includes an explicit zero bin so both curves interpolate smoothly through the target rather
+	! than jumping across a gap. Within vvtAdvancedPidPauseDeg of the target, the P+I+D trim is
+	! fully paused -- not just scaled down, but not evaluated at all, so its iTerm cannot
+	! integrate/windup in the background while the duty curve alone is expected to hold position.
+	! Outside that window (or with vvtAdvancedPidPauseEnabled off) the trim runs at full authority.
+	bit vvtAdvancedModeEnabled,"enabled","disabled";VVT Advanced Mode: master enable. Replaces the fixed PID offset (Hold Duty) with an oil-pressure-based base duty curve, and the fixed PID P factor with a distance-from-target P factor curve. PID trim is always active outside the pause window.
 	bit vvtAdvancedPidPauseEnabled,"enabled","disabled";VVT Advanced Mode: PID trim pause-near-target enable. When disabled, the P+I+D trim always runs at full authority and vvtAdvancedPidPauseDeg is ignored.
 	float vvtAdvancedPidPauseDeg;VVT Advanced Mode: distance from target within which the PID trim is fully paused (not evaluated, so its iTerm cannot integrate) and only the feedforward duty curve is used. Ignored when vvtAdvancedPidPauseEnabled is off.;"deg", 1, 0, 0, 10, 2
 
-	float[VVT_ADV_DISTANCE_SIZE] vvtAdvDistanceBinsIntake;VVT Advanced Mode: intake distance-from-target axis (curve X).;"deg", 1, 0, -40, 40, 0
-	float[VVT_ADV_DISTANCE_SIZE] vvtAdvDutyIntake;VVT Advanced Mode: intake base duty cycle at each distance from target (curve Y).;"%", 1, 0, -100, 100, 1
-	float[VVT_ADV_OILP_SIZE] vvtAdvOilPressureBinsIntake;VVT Advanced Mode: intake oil pressure axis (curve X). Requires an oil pressure sensor.;"kPa", 1, 0, 0, 1000, 0
-	float[VVT_ADV_OILP_SIZE] vvtAdvOilPressureMultIntake;VVT Advanced Mode: intake base duty multiplier at each oil pressure (curve Y).;"mult", 1, 0, 0, 5, 2
+	float[VVT_ADV_DISTANCE_SIZE] vvtAdvDistanceBinsIntake;VVT Advanced Mode: intake distance-from-target axis (curve X), shared by the P factor curve below.;"deg", 1, 0, -40, 40, 0
+	float[VVT_ADV_DISTANCE_SIZE] vvtAdvPFactorIntake;VVT Advanced Mode: intake PID P factor at each distance from target (curve Y). Replaces the fixed Intake PID "P factor" field. Entered/displayed x100 for friendlier decimal precision (e.g. 100 = 1.000 actual P factor, 0.1 = 0.001 actual).;"x100", 100, 0, -1000, 1000, 1
+	float[VVT_ADV_OILP_SIZE] vvtAdvOilPressureBinsIntake;VVT Advanced Mode: intake oil pressure axis (curve X), shared by the base duty curve below.;"kPa", 1, 0, 0, 1000, 0
+	float[VVT_ADV_OILP_SIZE] vvtAdvDutyIntake;VVT Advanced Mode: intake base duty cycle at each oil pressure (curve Y). Evaluated at 0 kPa if no oil pressure sensor is configured.;"%", 1, 0, -100, 100, 1
 
-	float[VVT_ADV_DISTANCE_SIZE] vvtAdvDistanceBinsExhaust;VVT Advanced Mode: exhaust distance-from-target axis (curve X).;"deg", 1, 0, -40, 40, 0
-	float[VVT_ADV_DISTANCE_SIZE] vvtAdvDutyExhaust;VVT Advanced Mode: exhaust base duty cycle at each distance from target (curve Y).;"%", 1, 0, -100, 100, 1
-	float[VVT_ADV_OILP_SIZE] vvtAdvOilPressureBinsExhaust;VVT Advanced Mode: exhaust oil pressure axis (curve X). Requires an oil pressure sensor.;"kPa", 1, 0, 0, 1000, 0
-	float[VVT_ADV_OILP_SIZE] vvtAdvOilPressureMultExhaust;VVT Advanced Mode: exhaust base duty multiplier at each oil pressure (curve Y).;"mult", 1, 0, 0, 5, 2
+	float[VVT_ADV_DISTANCE_SIZE] vvtAdvDistanceBinsExhaust;VVT Advanced Mode: exhaust distance-from-target axis (curve X), shared by the P factor curve below.;"deg", 1, 0, -40, 40, 0
+	float[VVT_ADV_DISTANCE_SIZE] vvtAdvPFactorExhaust;VVT Advanced Mode: exhaust PID P factor at each distance from target (curve Y). Replaces the fixed Exhaust PID "P factor" field. Entered/displayed x100 for friendlier decimal precision (e.g. 100 = 1.000 actual P factor, 0.1 = 0.001 actual).;"x100", 100, 0, -1000, 1000, 1
+	float[VVT_ADV_OILP_SIZE] vvtAdvOilPressureBinsExhaust;VVT Advanced Mode: exhaust oil pressure axis (curve X), shared by the base duty curve below.;"kPa", 1, 0, 0, 1000, 0
+	float[VVT_ADV_OILP_SIZE] vvtAdvDutyExhaust;VVT Advanced Mode: exhaust base duty cycle at each oil pressure (curve Y). Evaluated at 0 kPa if no oil pressure sensor is configured.;"%", 1, 0, -100, 100, 1
 
 end_struct
