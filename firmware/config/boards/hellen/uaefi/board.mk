@@ -11,6 +11,11 @@ ifeq ($(PROJECT_CPU),ARCH_STM32F7)
 	DDEFS += -DEFI_EMBED_INI_MSD=TRUE
 endif
 
+# 1mb is not enough for everything we have
+DDEFS += -DEFI_LOGIC_ANALYZER=FALSE
+DDEFS += -DEFI_HPFP=FALSE
+MODULE_MIL = no
+
 #no mux on mm100
 
 # Add them all together

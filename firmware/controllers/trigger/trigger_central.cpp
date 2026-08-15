@@ -149,9 +149,9 @@ angle_t TriggerCentral::syncEnginePhaseAndReport(int divider, int remainder) {
 
 		// Adjust phase-dependent variables
 		if (expectedNextPhase) {
-			expectedNextPhase.Value = fmod(expectedNextPhase.Value - totalShift + engineCycle, engineCycle);
+			expectedNextPhase.Value = wrapAngleMethod(expectedNextPhase.Value - totalShift, "syncEnginePhase", ObdCode::CUSTOM_ERR_6555);
 		}
-		m_lastToothPhaseFromSyncPoint = fmod(m_lastToothPhaseFromSyncPoint - totalShift + engineCycle, engineCycle);
+		m_lastToothPhaseFromSyncPoint = wrapAngleMethod(m_lastToothPhaseFromSyncPoint - totalShift, "syncEnginePhase", ObdCode::CUSTOM_ERR_6555);
 		triggerToothAngleError = 0;
 
 #if EFI_ENGINE_CONTROL
@@ -205,7 +205,7 @@ static angle_t adjustCrankPhase(int camIndex) {
 	case VVT_SINGLE_TOOTH:
 	case VVT_NISSAN_VQ:
 	case VVT_BOSCH_QUICK_START:
-	case VVT_BMW_N63TU:
+	case VVT_BMW_VANOS_RELUCTOR:
 	case VVT_MIATA_NB:
 	case VVT_TOYOTA_3TOOTH_UZ:
 	case VVT_TOYOTA_3_TOOTH:
@@ -509,6 +509,47 @@ void hwHandleShaftSignal(int signalIndex, bool isRising, efitick_t timestamp) {
 	handleShaftSignal(signalIndex, isRising, timestamp);
 }
 
+#if EFI_ENGINE_CONTROL
+static scheduling_s kickStartScheduling;
+
+static void kickStartFire() {
+	// Fire both coils!
+	enginePins.coils[0].setLow();
+	enginePins.coils[1].setLow();
+}
+
+/**
+ * Kick-start cranking mode for Ural bikes #4569: while the engine spins too slowly for normal
+ * angle-based spark scheduling, charge both coils right at the trigger mark and fire them
+ * a dwell-time later. LimpManager suppresses normal spark output (ClearReason::KickStart)
+ * while this mode is active.
+ *
+ * "I see the trigger mark, after 3ms I plan to ignite in both cylinders"
+ */
+static void handleKickStart(trigger_event_e signal, efitick_t timestamp) {
+	if (!engineConfiguration->kickStartCranking || !engineConfiguration->isIgnitionEnabled) {
+		return;
+	}
+	if (signal != SHAFT_PRIMARY_RISING) {
+		return;
+	}
+	if (Sensor::getOrZero(SensorType::Rpm) >= KICK_START_MODE_MAX_RPM) {
+		return;
+	}
+	floatms_t dwellMs = engine->ignitionState.getDwell();
+	if (std::isnan(dwellMs) || dwellMs <= 0) {
+		// refuse to charge a coil we would not know when to release
+		return;
+	}
+	// charge both coils now...
+	enginePins.coils[0].setHigh();
+	enginePins.coils[1].setHigh();
+	// ...and fire them once the dwell period is over
+	// if the previous fire event is still pending the scheduler ignores this reschedule
+	engine->scheduler.schedule("kickstart", &kickStartScheduling, sumTickAndFloat(timestamp, MSF2NT(dwellMs)), action_s::make<kickStartFire>());
+}
+#endif // EFI_ENGINE_CONTROL
+
 // Handle all shaft signals - hardware or emulated both
 void handleShaftSignal(int signalIndex, bool isRising, efitick_t timestamp) {
 	bool isPrimary = signalIndex == 0;
@@ -538,6 +579,8 @@ void handleShaftSignal(int signalIndex, bool isRising, efitick_t timestamp) {
 	if (!getLimpManager()->allowTriggerInput()) {
 		return;
 	}
+
+	handleKickStart(signal, timestamp);
 #endif // EFI_ENGINE_CONTROL
 
 #if EFI_TOOTH_LOGGER

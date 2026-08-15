@@ -25,7 +25,7 @@ pins:
     meta: MM100_IN_TPS_ANALOG
     class: analog_inputs
     ts_name: ___ TPS1
-    function: TPS 1 sensor input
+    function: Universal analog input. Suggested TPS 1 sensor input
     type: av
     color: green
 
@@ -33,13 +33,14 @@ pins:
     class: analog_inputs
     meta: MM100_IN_O2S2_ANALOG
     ts_name: ___ AIN 2
-    function: AUX2 analog input
+    function: Auxiliary analog input 2 PullDown 500K
+    type: av
 
   - pin: 7A
     class: analog_inputs
     meta: MM100_IN_AUX2_ANALOG
     ts_name: ___ PPS2
-    function: PPS input 2
+    function: Universal analog input. Suggested PPS input 2
     type: av
     color: orange/brown
 
@@ -67,7 +68,7 @@ pins:
     class: analog_inputs
     meta: MM100_IN_CLT_ANALOG
     ts_name: ___ CLT Coolant
-    function: CLT input
+    function: ECT CLT Coolant Sensor Input
     type: at
     color: grey
 
@@ -75,7 +76,7 @@ pins:
     class: analog_inputs
     meta: MM100_IN_IAT_ANALOG
     ts_name: ___ IAT
-    function: IAT input
+    function: IAT Sensor Input
     type: at
     color: blue
 
@@ -83,7 +84,7 @@ pins:
     class: analog_inputs
     meta: MM100_IN_PPS_ANALOG
     ts_name: ___ PPS1
-    function: PPS input 1
+    function: Universal analog input. Suggested PPS input 1
     type: av
     color: white
 
@@ -91,13 +92,14 @@ pins:
     class: analog_inputs
     meta: MM100_IN_O2S_ANALOG
     ts_name: ___ AIN 1
-    function: AUX1 analog input
+    function: Auxiliary analog input 1 PullDown 500K
+    type: av
 
   - pin: 15A
     class: analog_inputs
     meta: MM100_IN_AUX1_ANALOG
     ts_name: ___ TPS2
-    function: TPS 2 sensor input
+    function: Universal analog input. Suggested TPS 2 sensor input
     type: av
     color: blue
 
@@ -147,62 +149,62 @@ pins:
 
   - pin: 23A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 24A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 25A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 26A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 27A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 28A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 29A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 30A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 31A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 32A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 33A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 34A
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
 #  - pin: 1B
@@ -215,7 +217,7 @@ pins:
     class: outputs
     meta: MM100_IGN1
     ts_name: Coil 1
-    function: Coil 1 (5v)
+    function: Smart Ignition Coil 1
     type: ign
     color: green
 
@@ -223,7 +225,7 @@ pins:
     class: outputs
     meta: MM100_IGN2
     ts_name: Coil 2
-    function: Coil 2
+    function: Smart Ignition Coil 2
     type: ign
     color: white
 
@@ -231,7 +233,7 @@ pins:
     class: outputs
     meta: MM100_IGN3
     ts_name: Coil 3
-    function: Coil 3
+    function: Smart Ignition Coil 3
     type: ign
     color: blue
 
@@ -239,7 +241,7 @@ pins:
     class: outputs
     meta: MM100_IGN4
     ts_name: Coil 4
-    function: Coil 4
+    function: Smart Ignition Coil 4
     type: ign
     color: orange
 
@@ -247,7 +249,7 @@ pins:
     class: outputs
     meta: MM100_IGN5
     ts_name: Coil 5
-    function: Coil 5
+    function: Smart Ignition Coil 5
     color: brown
     type: ign
 
@@ -255,7 +257,7 @@ pins:
     class: outputs
     meta: MM100_IGN6
     ts_name: Coil 6
-    function: Coil 6
+    function: Smart Ignition Coil 6
     color: yellow
     type: ign
 
@@ -315,7 +317,7 @@ pins:
 
   - pin: 15B
     function: Power/Chassis GND ground
-    type: GND
+    type: gnd
 #   color: red / black
 
   - pin: 16B
@@ -370,17 +372,18 @@ pins:
   - pin: 23B
     function: GNDA Analog/Sensor Ground
 
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 24B
     function: GNDA Analog/Sensor Ground
 
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 25B
-    function: FLEX
+    function: Digital Input / Flex fuel sensor
+    type: din
     class: event_inputs
     meta: MM100_IN_VSS
     ts_name: FLEX

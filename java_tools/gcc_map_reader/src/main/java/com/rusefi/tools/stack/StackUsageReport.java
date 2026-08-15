@@ -88,8 +88,32 @@ public class StackUsageReport {
         for (Graph graph : graphs) {
             demangleSymbols(graph.nodes, options.cxxfilt);
         }
-        applyProfile(graphs, loadProfile(options.profile));
+        applyProfile(graphs, loadProfile(options.profile, options.profileFile));
+        if (options.checkReviewed) {
+            checkReviewedBudgets(graphs);
+        }
         return render(options.profile, graphs);
+    }
+
+    static void checkReviewedBudgets(List<Graph> graphs) {
+        List<String> failures = new ArrayList<>();
+        for (Graph graph : graphs) {
+            for (Root root : graph.roots) {
+                if (root.reviewed == null) {
+                    continue;
+                }
+                BigInteger budget = budgetFor(root, graph.stackSizes);
+                BigInteger retained = BigInteger.valueOf(root.reviewed.retained);
+                if (retained.compareTo(budget) > 0) {
+                    failures.add(graph.image + ":" + root.name + " uses " + retained
+                        + " bytes in '" + root.reviewed.scenario + "' but has " + budget);
+                }
+            }
+        }
+        if (!failures.isEmpty()) {
+            throw new IllegalArgumentException("reviewed stack budget exceeded:\n"
+                + String.join("\n", failures));
+        }
     }
 
     static Map<String, Node> parseCallgraphs(List<Path> paths) throws IOException {
@@ -363,7 +387,10 @@ public class StackUsageReport {
         throw new IllegalArgumentException("stack root entry is not an address: '" + value + "'");
     }
 
-    private static List<ProfileRoot> loadProfile(String profile) throws IOException {
+    static List<ProfileRoot> loadProfile(String profile, Path profileFile) throws IOException {
+        if (profileFile != null) {
+            return parseProfile(read(profileFile));
+        }
         String resource = "/stack_usage/" + profile + ".md";
         InputStream stream = StackUsageReport.class.getResourceAsStream(resource);
         if (stream == null) {
@@ -514,6 +541,16 @@ public class StackUsageReport {
         return matches.get(0);
     }
 
+    private static boolean hasSymbol(Map<String, Node> nodes, String function) {
+        for (Node node : nodes.values()) {
+            if (function.equals(node.function)
+                || (!function.contains("(") && node.function.startsWith(function + "("))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static List<Set<String>> findComponents(Map<String, Node> nodes) {
         Tarjan tarjan = new Tarjan(nodes);
         List<String> symbols = new ArrayList<>(nodes.keySet());
@@ -579,6 +616,11 @@ public class StackUsageReport {
                 BigInteger budget = budgetFor(root, graph.stackSizes);
                 if (root.function == null) {
                     rows.add("| " + graph.image + " | " + root.name + " | " + budget + " | - | - | - | - | NOT REVIEWED |");
+                    continue;
+                }
+                if (!hasSymbol(graph.nodes, root.function)) {
+                    rows.add("| " + graph.image + " | " + root.name + " | " + budget
+                        + " | - | - | - | - | NOT ANALYZED: entry absent from post-LTO callgraph |");
                     continue;
                 }
 
@@ -1138,16 +1180,18 @@ public class StackUsageReport {
     }
 
     private static class Options {
-        static final String USAGE = "Usage: StackUsageReport --profile <name> "
-            + "[--firmware-dir <path>] [--bootloader-dir <path>] [--cxxfilt <command>] "
-            + "[--readelf <command>] [--output <path>]";
+        static final String USAGE = "Usage: StackUsageReport --profile <name> [--profile-file <path>] "
+            + "[--check-reviewed] [--firmware-dir <path>] [--bootloader-dir <path>] "
+            + "[--cxxfilt <command>] [--readelf <command>] [--output <path>]";
         String profile;
+        Path profileFile;
         Path firmwareDir = Paths.get("build");
         Path bootloaderDir = Paths.get("bootloader/blbuild");
         String cxxfilt = "arm-none-eabi-c++filt";
         String readelf = "arm-none-eabi-readelf";
         Path output;
         boolean help;
+        boolean checkReviewed;
 
         static Options parse(String[] args) {
             Options options = new Options();
@@ -1155,6 +1199,10 @@ public class StackUsageReport {
                 String option = args[i];
                 if ("--help".equals(option) || "-h".equals(option)) {
                     options.help = true;
+                    continue;
+                }
+                if ("--check-reviewed".equals(option)) {
+                    options.checkReviewed = true;
                     continue;
                 }
                 String value;
@@ -1171,6 +1219,9 @@ public class StackUsageReport {
                 switch (option) {
                     case "--profile":
                         options.profile = value;
+                        break;
+                    case "--profile-file":
+                        options.profileFile = Paths.get(value);
                         break;
                     case "--firmware-dir":
                         options.firmwareDir = Paths.get(value);

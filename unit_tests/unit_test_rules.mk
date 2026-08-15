@@ -10,7 +10,6 @@ INCDIR += 	$(UNIT_TESTS_DIR)/googletest/googlemock/include \
 
 PCH_DIR = ../firmware/pch
 PCHSRC = $(PCH_DIR)/pch.h
-PCHSUB = unit_tests
 
 # Detect clang before including rusefi_rules.mk so its USE_CLANG conditionals
 # (GCC-only vs clang-only warning flags) pick the right branch.
@@ -58,6 +57,23 @@ else
 endif
 else
   TRGT =
+endif
+
+ifneq ($(OS),Windows_NT)
+ifeq ($(IS_MAC),no)
+ifeq ($(IS_CLANG),0)
+# Get the major version (e.g., "9" or "11")
+GCC_MAJOR_VERSION := $(shell g++ -dumpversion | cut -d. -f1)
+MIN_GCC_VERSION := 10
+
+# Compare versions using the shell 'expr' command
+IS_OLD_GCC := $(shell [ $(GCC_MAJOR_VERSION) -lt $(MIN_GCC_VERSION) ] && echo yes || echo no)
+
+ifeq ($(IS_OLD_GCC), yes)
+  $(error ERROR: GCC version $(GCC_MAJOR_VERSION) is too old. This project requires GCC $(MIN_GCC_VERSION)+ for C++20.)
+endif
+endif
+endif
 endif
 
 ifeq ($(IS_CLANG),1)

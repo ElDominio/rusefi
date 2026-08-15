@@ -25,11 +25,12 @@ static flashaddr_t getExtraPageFlashAddr(StorageItemId id) {
 	}
 
 #if defined(STM32F7XX) && !defined(EFI_FLASH_USE_1500_OF_2MB)
-	// STM32F7 DualBank-2MB (without the extended-flash layout) places the primary
-	// settings at sector 12 — a region of 16 KB sectors.  Extra pages at 72+ KB
-	// would land outside the sectors erased by the main-config write, AND inside
-	// the region overwritten by the backup copy.
-	// These boards carry an SD card; extra pages are persisted there instead.
+#if (EFI_STORAGE_MFS != TRUE) && (EFI_STORAGE_SD != TRUE)
+#error "STM32F7 requires the 2 MB flash layout (include 2mb_flash.mk) or MFS/SD storage for persistent extra pages"
+#endif
+
+	// The usual unflagged F7 layout cannot safely piggyback extra pages. MFS or
+	// SD stores them instead.
 	(void)offset;
 	return 0;
 #else

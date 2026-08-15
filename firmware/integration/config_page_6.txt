@@ -190,10 +190,9 @@ struct_no_prefix page6_s
 	! --- Limp Mode (Engine State Machine sub-feature) ---
 	! These limits are enforced only while the state machine has latched the Limp state.
 	! Limp mode is triggered by an ETB jam (see limp_manager.cpp reportEtbJammed ->
-	! EngineStateMachine::reportLimpCondition) or by cumulative DTC severity reaching
-	! limpSeverityThreshold. Per-fault severity weights are fixed in firmware
-	! (obdCodeSeverity); a latched misfire is worth 5 points.
-	uint8_t limpSeverityThreshold;Limp Mode: total fault-severity points from active diagnostic codes required to latch limp mode. A latched misfire is worth 5 points. 0 = never latch limp from fault codes.;"points", 1, 0, 0, 100, 0
+	! EngineStateMachine::reportLimpCondition) or by the CEL escalating to flashing
+	! (isCelBlinkingActive(), see check_engine_light.cpp) -- the same points-gated
+	! celBlinkPointsThreshold the CEL itself uses, not a separate DTC-severity threshold.
 	uint8_t limpModeEtbLimit;Limp Mode: maximum electronic throttle opening % allowed while limp mode is active.;"%", 1, 0, 0, 100, 0
 	uint8_t limpModeTimingReduction;Limp Mode: ignition timing pulled (retarded) while limp mode is active.;"deg", 1, 0, 0, 30, 0
 	uint8_t limpModeAfrEnrichment;Limp Mode: target mixture enrichment (richer) while limp mode is active. 0 = no enrichment.;"%", 1, 0, 0, 30, 0
@@ -434,11 +433,16 @@ struct_no_prefix page6_s
 	! feature was ported onto master -- see ignition_state.cpp. No longer duplicated here.
 	uint8_t[4] dwellDutyPad_unused;unused
 
-	! --- Check Engine Triggering (EFI_CHECK_ENGINE_TRIGGERING) ---
-	! Each check below has its own enable bit and is worth a flat 1 point -- this page is only for
-	! checks that don't already have a severity of their own elsewhere (e.g. Misfire Detection
-	! keeps its own latch/severity path; it does not feed celPointsTotal). Every slow-callback tick
-	! the points of all currently-tripped, enabled checks here are summed. Reaching
+	! --- Check Engine Triggering (MODULE_CHECK_ENGINE_LIGHT) ---
+	! celPointsTotal sums a point for every currently-active check across the whole CheckEngineLight
+	! module, not just the ones below: the TPS Circuit checks below (each worth a flat 1 point,
+	! individually enabled here), Misfire Detection (misfire_detection.cpp keeps its own latch/DTC
+	! path but also contributes a point here while latched), and CheckEngineLight's own
+	! battery/MAP/IAT/TPS voltage-range checks (check_engine_light.cpp) -- those raise/clear their
+	! DTCs immediately and unconditionally via addError()/removeError(), unrelated to
+	! celPointsThreshold, but each also contributes a point here while its DTC is active. Every
+	! slow-callback tick this combined total is summed and compared against the two thresholds
+	! below. Reaching
 	! celPointsThreshold (the lower of the two) raises the matching OBD code(s) via addError() and
 	! lights the CEL solid -- the standard, less-urgent fault path. Reaching celBlinkPointsThreshold
 	! (must be set higher) escalates that already-active DTC to a flashing CEL instead of the
@@ -450,32 +454,37 @@ struct_no_prefix page6_s
 	! hold continuously for this long before it trips, and be continuously clear for this long
 	! before it untrips. TPS Circuit Intermittent also uses it as its flip-counting window.
 	!
-	! TPS Circuit Low/High (P0122/P0123) is implemented -- reuses the same TPS1 signal-out-of-range
-	! detection as the existing sensor_checker.cpp warning, just debounced through celDebounceTimeSec
-	! and wired into addError()/celPointsTotal instead of only the transient warning log.
+	! TPS Circuit Low/High (OBD_TPS1_Range_Performance) is implemented -- reuses the same TPS1
+	! signal-out-of-range detection as the existing sensor_checker.cpp warning, just debounced
+	! through celDebounceTimeSec and wired into addError()/celPointsTotal instead of only the
+	! transient warning log. Deliberately a different OBD code than CheckEngineLight's own
+	! OBD_TPS1_Primary_Low/High (raw-voltage range check on the Tps1Primary ADC channel) so the two
+	! checks don't fight over the same DTC.
 	! TPS Circuit Intermittent (P0124) is implemented -- trips when the TPS1 signal flips between
 	! ok/fault at least tpsIntermittentFlipCount times within celDebounceTimeSec.
 	!
-	! Oil Pressure Low, Coolant Temp High, AFR/Lambda Lean-or-Rich, and System Voltage Low-or-High
-	! are reserved here (enable bit only) but not yet evaluated -- their check-specific threshold
-	! fields will be added when each is implemented.
-	bit tpsCircuitCelEnable,"enabled","disabled";Check Engine Triggering: TPS Circuit Low/High (P0122/P0123). Detects the TPS1 signal stuck out of its expected electrical range.
+	! Oil Pressure Low, Coolant Temp High, and AFR/Lambda Lean-or-Rich are reserved here (enable
+	! bit only) but not yet evaluated -- their check-specific threshold fields will be added when
+	! each is implemented. System Voltage Low/High is already implemented, but as one of
+	! CheckEngineLight's always-on voltage-range checks above, not through voltageCelEnable below --
+	! that bit remains reserved for a possible future check-specific variant.
+	bit tpsCircuitCelEnable,"enabled","disabled";Check Engine Triggering: TPS Circuit Low/High. Detects the TPS1 signal stuck out of its expected electrical range.
 	bit tpsIntermittentCelEnable,"enabled","disabled";Check Engine Triggering: TPS Circuit Intermittent (P0124). Detects the TPS1 signal repeatedly flipping in/out of range.
 	bit oilPressureLowCelEnable,"enabled","disabled";Check Engine Triggering: Oil Pressure Low. Not yet implemented -- reserved.
 	bit cltHighCelEnable,"enabled","disabled";Check Engine Triggering: Coolant Temp High. Not yet implemented -- reserved.
 	bit afrCelEnable,"enabled","disabled";Check Engine Triggering: AFR/Lambda Lean or Rich. Not yet implemented -- reserved.
-	bit voltageCelEnable,"enabled","disabled";Check Engine Triggering: System Voltage Low or High. Not yet implemented -- reserved.
+	bit voltageCelEnable,"enabled","disabled";Check Engine Triggering: reserved for a possible future check-specific System Voltage variant. CheckEngineLight's own always-on battery voltage-range check (Settings dialog) already covers this independently.
 
 	uint8_t celPointsThreshold;Check Engine Triggering: total tripped-check points required to raise the OBD code(s) and light the CEL solid (the standard, less-urgent fault path). 0 = never trigger from points.;"points", 1, 0, 0, 100, 0
 	uint8_t celBlinkPointsThreshold;Check Engine Triggering: total tripped-check points required to escalate an already-active DTC to a flashing CEL -- more critical than solid. Should be set higher than celPointsThreshold. 0 = never escalate to blink.;"points", 1, 0, 0, 100, 0
 	uint8_t autoscale celDebounceTimeSec;Check Engine Triggering: shared continuous-confirm time for every check on this page (trip and untrip both require the condition to hold for this long). Also the flip-counting window for TPS Circuit Intermittent.;"s", 0.1, 0, 0, 25, 1
 	uint8_t tpsIntermittentFlipCount;Check Engine Triggering -- TPS Circuit Intermittent: number of ok/fault flips within celDebounceTimeSec required to trip.;"flips", 1, 0, 2, 10, 0
 
-	! --- Malfunction Indicator KOEO bulb check (EFI_MALFUNCTION_INDICATOR) ---
+	! --- Malfunction Indicator KOEO bulb check (MODULE_MIL) ---
 	! Independent of Check Engine Triggering above: when enabled, the CEL output lights solid
 	! while the engine is stopped (Key-On-Engine-Off), mimicking the classic OBD-II bulb-check.
 	! It goes off once the engine starts, unless an active DTC or Check Engine Triggering
-	! escalation takes over the output. See malfunction_indicator.cpp.
+	! escalation takes over the output. See modules/malfunction_indicator/malfunction_indicator.cpp.
 	bit celOnKoeo,"on","off";Check Engine light: light solid at Key-On-Engine-Off as a bulb check, off once the engine starts (unless a DTC is active).
 
 	! --- Injector Small Pulse % Correction Curve (EFI_INJ_PERCENT_CURVE) ---

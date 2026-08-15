@@ -1,6 +1,6 @@
 #include "global.h"
 #include "engine_types.h"
-// was generated automatically by rusEFI tool  from engine_types.h // by enum_to_string.jar tool on Sat Aug 15 04:11:30 AST 2026
+// was generated automatically by rusEFI tool  from engine_types.h // by enum_to_string.jar tool on Sat Aug 15 05:03:40 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -254,6 +254,8 @@ const char *getTrigger_type_e(trigger_type_e value) {
 			return "TT_ARCTIC_CAT";
 		case trigger_type_e::TT_BENELLI_TRE:
 			return "TT_BENELLI_TRE";
+		case trigger_type_e::TT_BMW_VANOS_RELUCTOR:
+			return "TT_BMW_VANOS_RELUCTOR";
 		case trigger_type_e::TT_CHRYSLER_NGC_36_2_2:
 			return "TT_CHRYSLER_NGC_36_2_2";
 		case trigger_type_e::TT_CHRYSLER_PHASER:
@@ -396,8 +398,6 @@ const char *getTrigger_type_e(trigger_type_e value) {
 			return "TT_TRI_TACH";
 		case trigger_type_e::TT_UNUSED:
 			return "TT_UNUSED";
-		case trigger_type_e::TT_UNUSED_98:
-			return "TT_UNUSED_98";
 		case trigger_type_e::TT_VIPER_V10_CRANK:
 			return "TT_VIPER_V10_CRANK";
 		case trigger_type_e::TT_VVT_BARRA_3_PLUS_1:
@@ -441,6 +441,8 @@ const char *getTs_14_command(ts_14_command value) {
 			return "COMMAND_X14_UNUSED_15";
 		case COMMAND_X14_UNUSED_2:
 			return "COMMAND_X14_UNUSED_2";
+		case TS_DTC_MANAGER_SHOT:
+			return "TS_DTC_MANAGER_SHOT";
 		case TS_ESTIMATE_TORQUE_TABLE:
 			return "TS_ESTIMATE_TORQUE_TABLE";
 		case TS_ETB_AUTOCAL_0:

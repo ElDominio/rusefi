@@ -4,6 +4,16 @@ MODULES_INC += $(PROJECT_DIR)/controllers/modules/generated
 # board module stubs - shared between prod firmware, simulator and unit_tests
 MODULES_INC += $(PROJECT_DIR)/controllers/modules/stubs
 
+MODULE_CHECK_ENGINE_LIGHT ?= yes
+MODULE_MIL ?= yes
+MODULE_DTC_MANAGER ?= yes
+
+ifeq ($(MODULE_MIL),yes)
+ifneq ($(MODULE_CHECK_ENGINE_LIGHT),yes)
+$(error MODULE_MIL requires MODULE_CHECK_ENGINE_LIGHT=yes)
+endif
+endif
+
 # user defined modules
 include $(PROJECT_DIR)/controllers/modules/tachometer/tachometer.mk
 include $(PROJECT_DIR)/controllers/modules/fuel_pump/fuel_pump.mk
@@ -21,5 +31,7 @@ include $(PROJECT_DIR)/controllers/modules/burst_knock/burst_knock.mk
 include $(PROJECT_DIR)/controllers/modules/wot_enrichment/wot_enrichment.mk
 include $(PROJECT_DIR)/controllers/modules/oil_life_monitor/oil_life_monitor.mk
 include $(PROJECT_DIR)/controllers/modules/check_engine_light/check_engine_light.mk
+include $(PROJECT_DIR)/controllers/modules/malfunction_indicator/malfunction_indicator.mk
 include $(PROJECT_DIR)/controllers/modules/sd_log_trigger/sd_log_trigger.mk
 include $(PROJECT_DIR)/controllers/modules/configuration_wizard/configuration_wizard.mk
+include $(PROJECT_DIR)/controllers/modules/dtc_manager/dtc_manager.mk

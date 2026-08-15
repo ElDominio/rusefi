@@ -1,6 +1,6 @@
 #include "global.h"
 #include "rusefi_enums.h"
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat Aug 15 04:11:30 AST 2026
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat Aug 15 05:03:40 AST 2026
 // see also gen_config_and_enums.bat
 
 
@@ -1326,8 +1326,8 @@ const char *getVvt_mode_e(vvt_mode_e value) {
 	switch (value) {
 		case VVT_BARRA_3_PLUS_1:
 			return "VVT_BARRA_3_PLUS_1";
-		case VVT_BMW_N63TU:
-			return "VVT_BMW_N63TU";
+		case VVT_BMW_VANOS_RELUCTOR:
+			return "VVT_BMW_VANOS_RELUCTOR";
 		case VVT_BOSCH_QUICK_START:
 			return "VVT_BOSCH_QUICK_START";
 		case VVT_CHRYSLER_PHASER:

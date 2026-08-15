@@ -403,8 +403,8 @@ const wot_enrichment_state_s* getLiveData(size_t) {
 
 template<>
 const check_engine_light_state_s* getLiveData(size_t) {
-#if EFI_CHECK_ENGINE_TRIGGERING
-	return &engine->module<CheckEngineTriggering>().unmock();
+#ifdef MODULE_CHECK_ENGINE_LIGHT
+	return &engine->module<CheckEngineLight>().unmock();
 #else
 	return nullptr;
 #endif

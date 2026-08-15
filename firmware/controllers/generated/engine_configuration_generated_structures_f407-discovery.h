@@ -1853,6 +1853,7 @@ struct engine_configuration_s {
 	offset 196 bit 11 */
 	bool useTLE8888_cranking_hack : 1 {};
 	/**
+	 * Kick-start cranking mode: below 800 RPM both coils are charged right at the trigger mark and fired a dwell-time later, normal spark scheduling is suppressed.
 	offset 196 bit 12 */
 	bool kickStartCranking : 1 {};
 	/**
@@ -2759,7 +2760,7 @@ struct engine_configuration_s {
 	 */
 	uint8_t alignmentFill_at_817[1] = {};
 	/**
-	 * Check engine light, also malfunction indicator light. Always blinks once on boot.
+	 * Check engine light, also malfunction indicator light. Solid while ignition is on and the engine is stopped, blinks active error codes.
 	 * offset 818
 	 */
 	output_pin_e malfunctionIndicatorPin;
@@ -8727,13 +8728,13 @@ struct persistent_config_s {
 	float iatBoostAdder[BOOST_CURVE_SIZE] = {};
 	/**
 	 * "Minimum Battery Voltage"
-	 * units: #
+	 * units: V
 	 * offset 15768
 	 */
 	scaled_channel<uint8_t, 10, 1> cel_battery_min_v;
 	/**
 	 * "Maximum Battery Voltage"
-	 * units: #
+	 * units: V
 	 * offset 15769
 	 */
 	scaled_channel<uint8_t, 10, 1> cel_battery_max_v;

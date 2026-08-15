@@ -2,6 +2,8 @@
 #include "custom_page.h"
 #include "misfire_detection.h"
 #include "engine_state_machine.h"
+#include "idle_thread.h"
+#include "malfunction_central.h"
 
 // Drives synthetic primary-trigger teeth into MisfireController::onEnginePhase, optionally
 // inflating the expansion-stroke segment of one cylinder to simulate a misfire.
@@ -144,6 +146,16 @@ TEST(MisfireDetection, repeatedMisfireThrowsDtc) {
 
 	EXPECT_GE(getMc().misfireTotalCount, getCustomPage()->misfireCountThreshold);
 	EXPECT_TRUE(getMc().misfireLatched);
+
+	getMc().onSlowCallback();
+	error_codes_set_s errors;
+	getErrorCodes(&errors);
+	ASSERT_EQ(1, errors.count);
+	EXPECT_EQ(ObdCode::OBD_Random_Misfire, errors.error_codes[0]);
+
+	clearWarnings();
+	getMc().onSlowCallback();
+	EXPECT_TRUE(hasErrorCodes());
 }
 
 // ---- threshold == 0: monitor-only, never latches ----

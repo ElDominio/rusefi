@@ -103,6 +103,31 @@ public class StackUsageReportTest {
     }
 
     @Test
+    void reviewedStackBudgetIsEnforced() {
+        StackUsageReport.Root root = new StackUsageReport.Root("firmware", "test", "root", 100,
+            new StackUsageReport.ReviewedBaseline(101, 0, "test scenario"));
+        StackUsageReport.Graph graph = new StackUsageReport.Graph("firmware",
+            Collections.<String, StackUsageReport.Node>emptyMap(), Collections.singletonList(root),
+            Collections.<String, Integer>emptyMap());
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+            () -> StackUsageReport.checkReviewedBudgets(Collections.singletonList(graph)));
+        assertTrue(error.getMessage().contains("firmware:test uses 101 bytes"));
+    }
+
+    @Test
+    void rootAbsentFromCallgraphIsReported() {
+        StackUsageReport.Root root = new StackUsageReport.Root("firmware", "inactive", "missing", 100, null);
+        StackUsageReport.Graph graph = new StackUsageReport.Graph("firmware",
+            Collections.<String, StackUsageReport.Node>emptyMap(), Collections.singletonList(root),
+            Collections.<String, Integer>emptyMap());
+
+        String report = StackUsageReport.render("test", Collections.singletonList(graph));
+
+        assertTrue(report.contains("NOT ANALYZED: entry absent from post-LTO callgraph"));
+    }
+
+    @Test
     void linkedStackRootMetadataAndExternalProfile() throws Exception {
         Path map = write("roots.map",
             "Discarded input sections\n"
@@ -165,6 +190,19 @@ public class StackUsageReportTest {
             () -> StackUsageReport.applyProfile(Collections.singletonList(graph),
                 profile.subList(0, profile.size() - 1)));
         assertTrue(profileError.getMessage().contains("missing=[firmware:MMCmonThread(void*)]"));
+    }
+
+    @Test
+    void profileFileOverridesClasspathProfile() throws Exception {
+        Path profile = write("private-stack-usage.md",
+            "| Image | Entry | Name | Retained | Proxy | Scenario |\n"
+                + "|---|---|---|---:|---:|---|\n"
+                + "| firmware | main | private main | - | - | - |\n");
+
+        List<StackUsageReport.ProfileRoot> roots = StackUsageReport.loadProfile("missing", profile);
+
+        assertEquals(1, roots.size());
+        assertEquals("private main", roots.get(0).name);
     }
 
     @Test

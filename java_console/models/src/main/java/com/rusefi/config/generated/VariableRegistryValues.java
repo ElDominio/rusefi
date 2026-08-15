@@ -1562,7 +1562,6 @@ public class VariableRegistryValues {
 	public static final int SentInput_INPUT6 = 6;
 	public static final int SentInput_INPUT7 = 7;
 	public static final int SentInput_NONE = 0;
-	public static final int SIGNATURE_HASH = 1046856005;
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME = "generated/simulator_tune_image.bin";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_PREFIX = "generated/simulator_tune_image";
 	public static final String SIMULATOR_TUNE_BIN_FILE_NAME_SUFFIX = ".bin";
@@ -1687,6 +1686,7 @@ public class VariableRegistryValues {
 	public static final int trigger_type_e_TT_6_TOOTH_CRANK = 80;
 	public static final int trigger_type_e_TT_ARCTIC_CAT = 85;
 	public static final int trigger_type_e_TT_BENELLI_TRE = 21;
+	public static final int trigger_type_e_TT_BMW_VANOS_RELUCTOR = 98;
 	public static final int trigger_type_e_TT_CHRYSLER_NGC_36_2_2 = 30;
 	public static final int trigger_type_e_TT_CHRYSLER_PHASER = 90;
 	public static final int trigger_type_e_TT_CUSTOM_1 = 88;
@@ -1758,7 +1758,6 @@ public class VariableRegistryValues {
 	public static final int trigger_type_e_TT_TOYOTA_3_TOOTH_UZ = 91;
 	public static final int trigger_type_e_TT_TRI_TACH = 53;
 	public static final int trigger_type_e_TT_UNUSED = 99;
-	public static final int trigger_type_e_TT_UNUSED_98 = 98;
 	public static final int trigger_type_e_TT_VIPER_V10_CRANK = 96;
 	public static final int trigger_type_e_TT_VVT_BARRA_3_PLUS_1 = 56;
 	public static final int trigger_type_e_TT_VVT_BOSCH_QUICK_START = 47;
@@ -1784,6 +1783,7 @@ public class VariableRegistryValues {
 	public static final int ts_14_command_COMMAND_X14_UNUSED_1 = 0x01;
 	public static final int ts_14_command_COMMAND_X14_UNUSED_15 = 0x15;
 	public static final int ts_14_command_COMMAND_X14_UNUSED_2 = 0x02;
+	public static final int ts_14_command_TS_DTC_MANAGER_SHOT = 0x26;
 	public static final int ts_14_command_TS_ESTIMATE_TORQUE_TABLE = 0x23;
 	public static final int ts_14_command_TS_ETB_AUTOCAL_0 = 0x0E;
 	public static final int ts_14_command_TS_ETB_AUTOCAL_0_FAST = 0x1C;
@@ -1901,7 +1901,7 @@ public class VariableRegistryValues {
 	public static final int TS_RESPONSE_UNRECOGNIZED_COMMAND = 0x83;
 	public static final int TS_SCATTER_OFFSETS_COUNT = 128;
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
-	public static final String TS_SIGNATURE = "rusEFI master-imports-wip-sync.2026.08.15.f407-discovery.1046856005";
+	public static final String TS_SIGNATURE = "rusEFI master-imports-wip-sync.2026.08.15.f407-discovery.4249657771";
 	public static final char TS_SIMULATE_CAN = '>';
 	public static final char TS_TEST_COMMAND = 't';
 	public static final int TS_TOTAL_OUTPUT_SIZE = 2424;
@@ -1965,7 +1965,7 @@ public class VariableRegistryValues {
 	public static final String VVT_25_NAME = "INVALID";
 	public static final String VVT_26_NAME = "INVALID";
 	public static final int vvt_mode_e_VVT_BARRA_3_PLUS_1 = 8;
-	public static final int vvt_mode_e_VVT_BMW_N63TU = 17;
+	public static final int vvt_mode_e_VVT_BMW_VANOS_RELUCTOR = 17;
 	public static final int vvt_mode_e_VVT_BOSCH_QUICK_START = 5;
 	public static final int vvt_mode_e_VVT_CHRYSLER_PHASER = 14;
 	public static final int vvt_mode_e_VVT_CUSTOM_1 = 29;

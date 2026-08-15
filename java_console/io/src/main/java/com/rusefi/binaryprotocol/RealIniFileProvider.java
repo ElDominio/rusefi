@@ -9,6 +9,7 @@ import com.rusefi.ini.reader.IniFileReaderUtil;
 import com.rusefi.ini.reader.IniParsingException;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -58,19 +59,15 @@ public class RealIniFileProvider implements IniFileProvider {
     @Override
     @NotNull
     public IniFileModel provide(String signature) throws IniNotFoundException {
-        /**
-         * first we look at {@link SignatureHelper#LOCAL_INI_CACHE_FOLDER}
-         * second we attempt downloading
-         * third we look via {@link SignatureHelper#EXTRA_INI_SOURCE} environment variable
-         */
-        String localIniFile = SignatureHelper.downloadIfNotAvailable(SignatureHelper.getUrl(signature));
+        // 1. Bundled .ini (one level up, or env override) (#10031)
+        String localIniFile = IniLocator.findIniFile(IniFileReader.INI_FILE_PATH, signature);
         if (localIniFile == null) {
-            // 4th option: current folder
+            // 2. Current folder
             localIniFile = IniLocator.findIniFile(".", signature);
         }
         if (localIniFile == null) {
-            // 5th option: one level up or environment variable direction
-            localIniFile = IniLocator.findIniFile(IniFileReader.INI_FILE_PATH, signature);
+            // 3. Cache or download from server
+            localIniFile = SignatureHelper.downloadIfNotAvailable(SignatureHelper.getUrl(signature));
         }
         ManualIniPicker picker = manualPicker;
         if (localIniFile == null) {
@@ -91,6 +88,7 @@ public class RealIniFileProvider implements IniFileProvider {
         try {
                 iniFileModel = IniFileReaderUtil.readIniFileChecked(localIniFile);
         } catch (IniParsingException e) {
+            new File(localIniFile).delete();
             throw new IniNotFoundException("Parsing error: " + e, e);
         } catch (FileNotFoundException e) {
             throw new IniNotFoundException(e.toString());

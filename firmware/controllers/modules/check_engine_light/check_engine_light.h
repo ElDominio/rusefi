@@ -1,7 +1,9 @@
 #pragma once
 
 #include "check_engine_light_state_generated.h"
-#include <rusefi/timer.h>
+#include "engine_module.h"
+#include "obd_error_codes.h"
+#include "rusefi/timer.h"
 
 // Shared debounce primitive used by every Check Engine Triggering check: the raw trip condition
 // must hold continuously for `timeoutSec` before update() reports tripped, and be continuously
@@ -32,17 +34,36 @@ private:
 	bool m_tripped = false;
 };
 
-// "Check Engine Triggering": TS-configurable threshold checks, each with its own enable bit and
-// worth a flat 1 point, that feed a points-gated CEL independent of the standard addError() path.
-// See check_engine_light.md for the full design.
-class CheckEngineTriggering : public check_engine_light_state_s, public EngineModule {
+// Check Engine Light: direct voltage-range fault detection for battery/MAP/IAT/TPS (each
+// independently debounced and raised via addError()) plus the points-gated "Check Engine
+// Triggering" checks (TPS circuit stuck/intermittent, Misfire Detection) that additionally
+// escalate the CEL to flashing once enough points accumulate. See check_engine_light.md for
+// the full design.
+class CheckEngineLight : public check_engine_light_state_s, public EngineModule {
 public:
-	using interface_t = CheckEngineTriggering;
+	using interface_t = CheckEngineLight;
 
+	void setDefaultConfiguration() override;
 	void initNoConfiguration() override;
 	void onSlowCallback() override;
 
 private:
+	struct RangeState {
+		ObdCode activeCode = ObdCode::None;
+		ObdCode pendingCode = ObdCode::None;
+		Timer pendingTimer;
+	};
+
+	void updateRange(RangeState& state, bool available, float value, float minimum, float maximum,
+		ObdCode lowCode, ObdCode highCode);
+	void clearCurrentFaults();
+	void updateCheckEngineTriggering();
+
+	RangeState m_battery;
+	RangeState m_map;
+	RangeState m_iat;
+	RangeState m_tps;
+
 	static constexpr int TPS_FLIP_HISTORY_SIZE = 10;
 
 	DebouncedGate m_tpsCircuitLowGate;

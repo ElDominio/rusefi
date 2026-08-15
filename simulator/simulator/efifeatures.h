@@ -17,7 +17,14 @@
 
 #define EFI_ENABLE_ASSERTS TRUE
 #define EFI_LAUNCH_CONTROL TRUE
-#define EFI_LTFT_CONTROL TRUE
+/* Long Term Fuel Trims */
+/* [tag:disable_engine_module] CAVEAT: EFI_LTFT_CONTROL gates TS page TS_PAGE_LTFT_TRIMS
+ * so a board must NOT flip it here or via board.mk DDEFS - declare `#define EFI_LTFT_CONTROL FALSE` in the
+ * board's prepend.txt instead.
+ * <p>
+ * Note the simulator and unit_tests keep their own efifeatures.h copies that bypass all of this.
+*/
+#define EFI_LTFT_CONTROL LTFT_PAGE_ENABLED
 #define EFI_AUX_VALVES FALSE
 
 #define EFI_TS_TUNNEL_CAN TRUE
@@ -100,6 +107,7 @@
 
 #if !defined(EFI_TOOTH_LOGGER) && EFI_SHAFT_POSITION_INPUT
 #define EFI_TOOTH_LOGGER TRUE
+#define EFI_TOOTH_LOGGER_STATICBUFFER_COUNT 4
 #endif
 
 #define EFI_USE_UART_DMA FALSE
@@ -170,7 +178,6 @@
 #define EFI_STORAGE_MFS FALSE
 #define EFI_STORAGE_SD FALSE
 #define EFI_RTC FALSE
-#define EFI_MALFUNCTION_INDICATOR FALSE
 #define EFI_LOGIC_ANALYZER FALSE
 #define TRIGGER_EXTREME_LOGGING FALSE
 #define SPARK_EXTREME_LOGGING FALSE
@@ -215,7 +222,6 @@
 #define EFI_OFF_IDLE_RPM_ADDER TRUE
 #define EFI_LUA_LIMITER TRUE
 #define EFI_AC_PRESSURE_FAN TRUE
-#define EFI_CHECK_ENGINE_TRIGGERING TRUE
 #define EFI_CHT_CLT_ESTIMATOR TRUE
 #define EFI_OIL_LIFE_MONITOR TRUE
 #define EFI_GHOST_CAM TRUE

@@ -80,8 +80,9 @@
 #define EFI_BOR_LEVEL TRUE
 #endif
 
+// 'pow' usage costs couple of K of flash
 #ifndef EFI_DYNO_VIEW
-#define EFI_DYNO_VIEW TRUE
+#define EFI_DYNO_VIEW FALSE
 #endif
 
 #ifndef EFI_CDM_INTEGRATION
@@ -90,6 +91,15 @@
 
 #ifndef EFI_TOOTH_LOGGER
 #define EFI_TOOTH_LOGGER TRUE
+#endif
+
+// We need static buffers only for DTC manager
+#ifndef EFI_TOOTH_LOGGER_STATICBUFFER_COUNT
+	#if MODULE_DTC_MANAGER
+	#define EFI_TOOTH_LOGGER_STATICBUFFER_COUNT 4
+	#else
+	#define EFI_TOOTH_LOGGER_STATICBUFFER_COUNT 0
+	#endif
 #endif
 
 #ifndef EFI_TEXT_LOGGING
@@ -441,13 +451,6 @@
 #define EFI_ELECTRONIC_THROTTLE_BODY TRUE
 #endif
 
-/**
- * Do we need Malfunction Indicator blinking logic?
- */
-#ifndef EFI_MALFUNCTION_INDICATOR
-#define EFI_MALFUNCTION_INDICATOR FALSE
-#endif
-
 #ifndef CONSOLE_MAX_ACTIONS
 #define CONSOLE_MAX_ACTIONS 180
 #endif
@@ -644,10 +647,6 @@
 #define EFI_AC_PRESSURE_FAN FALSE
 #endif
 
-// Check Engine Triggering (TS-configurable threshold checks with a points-gated CEL)
-#ifndef EFI_CHECK_ENGINE_TRIGGERING
-#define EFI_CHECK_ENGINE_TRIGGERING FALSE
-#endif
 
 // Intake Manifold Runner Control (solenoid or H-Bridge driven runner actuator)
 #ifndef EFI_IMRC

@@ -1096,6 +1096,10 @@ enum class ObdCode : uint16_t {
 	OBD_TPS1_Correlation = 2135,
 	OBD_TPS2_Correlation = 2136,
 	OBD_PPS_Correlation = 2137,
+	// Check Engine Triggering's points-gated TPS Circuit check (composite TPS1 signal reported
+	// out of range by the sensor layer) -- distinct from OBD_TPS1_Primary_Low/High above, which
+	// are CheckEngineLight's own raw-voltage range check on the Tps1Primary ADC channel.
+	OBD_TPS1_Range_Performance = 2138,
 	//P2135 Throttle/Pedal Pos Sensor/Switch A / B Voltage Correlation
 	//P2136 Throttle/Pedal Pos Sensor/Switch A / C Voltage Correlation
 	//P2137 Throttle/Pedal Pos Sensor/Switch B / C Voltage Correlation

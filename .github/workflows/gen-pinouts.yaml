@@ -63,8 +63,7 @@ jobs:
           "inj":"maroon",
           "ls":"lightgreen",
           "mr":"firebrick",
-          "pgnd":"coral",
-          "sgnd":"olive",
+          "agnd":"olive",
           "usb":"lightseagreen",
           "vr":"sienna"
           }

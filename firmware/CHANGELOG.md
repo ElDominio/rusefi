@@ -29,6 +29,8 @@ Release template (copy/paste this for new release):
 
 ## Unreleased
 
+## August 2026 "Day 1631"
+
 ### Added
  - Cranking Air Amount / Idle RPM Flare: add hold duration curve to lock the initial value before the Crank-to-Run taper begins
  - ETB bench test button: open throttle 300ms without sensors (#9171)

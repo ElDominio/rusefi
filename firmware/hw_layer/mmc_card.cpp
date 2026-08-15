@@ -40,6 +40,10 @@
 #include "binary_mlg_logging.h"
 #include "sd_log_trigger.h"
 
+#if MODULE_DTC_MANAGER
+#include "dtc_manager.h"
+#endif
+
 // Divide logs into 32Mb chunks.
 // When defined, every log file is pre-allocated to this size with f_expand() on create
 // and shrunk back to the actually-written size with f_truncate() on close - see
@@ -392,6 +396,7 @@ static void sdStatistics() {
 #if HAL_USE_USB_MSD
 	printMsdDiagnostics();
 #endif
+	efiPrintf("SD users %d", MMC_FS_protected.get_user_count());
 }
 
 static void sdSetMode(const char *mode) {
@@ -898,14 +903,30 @@ static int sdLoggerMlg(FIL *fd) {
 
 static void sdLoggerStop()
 {
-	logBuffer.stop();
-	sdLoggerCloseFile(&resources.fd);
-#if EFI_TOOTH_LOGGER
-	if (toothLoggerStarted) {
-		DisableToothLogger();
-		toothLoggerStarted = false;
+	switch (sdLoggerMode) {
+		case SDLoggerMode::Mlg:
+	#if EFI_TOOTH_LOGGER
+		case SDLoggerMode::ToothBin:
+		case SDLoggerMode::ToothCsv:
+	#endif
+			logBuffer.stop();
+			sdLoggerCloseFile(&resources.fd);
+		#if EFI_TOOTH_LOGGER
+			if (toothLoggerStarted) {
+				DisableToothLogger();
+				toothLoggerStarted = false;
+			}
+		#endif
+			break;
+	#if MODULE_DTC_MANAGER
+		case SDLoggerMode::Dtc:
+			DtcManagerStop();
+			break;
+	#endif
+		default:
+			break;
 	}
-#endif
+
 	sdLoggerMode = SDLoggerMode::None;
 }
 
@@ -913,21 +934,37 @@ static void sdLoggerStart()
 {
 	// mode has changed?
 	if (sdLoggerMode != engineConfiguration->sdLoggerMode) {
-		if (sdLoggerMode != SDLoggerMode::None) {
-			sdLoggerStop();
-		}
+		// Stop current logger
+		sdLoggerStop();
 
 		sdLoggerInitDone = false;
 		sdLoggerFailed = false;
 
 		// cache
 		sdLoggerMode = engineConfiguration->sdLoggerMode;
-	#if EFI_TOOTH_LOGGER
-		if ((sdLoggerMode == SDLoggerMode::ToothBin) ||
-			(sdLoggerMode == SDLoggerMode::ToothCsv)) {
-			toothLoggerStarted = EnableToothLogger();
+
+		// start new logger
+		switch (sdLoggerMode) {
+			case SDLoggerMode::Mlg:
+				//none
+				break;
+		#if EFI_TOOTH_LOGGER
+			case SDLoggerMode::ToothBin:
+			case SDLoggerMode::ToothCsv:
+				toothLoggerStarted = EnableToothLogger();
+				break;
+		#endif
+		#if MODULE_DTC_MANAGER
+			case SDLoggerMode::Dtc:
+				{
+					int ret = DtcManagerStart(&resources.fd, &logBuffer);
+					efiPrintf("DtcManagerStart %d", ret);
+				}
+				break;
+		#endif
+			default:
+				break;
 		}
-	#endif
 	}
 }
 
@@ -1150,12 +1187,13 @@ static int sdModeExecuter(SD_MODE mode)
 		switch (sdLoggerMode) {
 		case SDLoggerMode::Mlg:
 			return sdLoggerMlg(&resources.fd);
+#if EFI_TOOTH_LOGGER
 		case SDLoggerMode::ToothBin:
 		case SDLoggerMode::ToothCsv:
-#if EFI_TOOTH_LOGGER
 			return sdLoggerTooth(&resources.fd);
 #endif
 		case SDLoggerMode::None:
+		case SDLoggerMode::Dtc:
 		default:
 			// Do nothing, sleep
 			return 0;
@@ -1185,7 +1223,7 @@ PUBLIC_API_WEAK bool boardSdCardDisable() {
 	return true;
 }
 
-static constexpr int mmcThreadStackSize = 3 * UTILITY_THREAD_STACK_SIZE;
+static constexpr int mmcThreadStackSize = 4 * UTILITY_THREAD_STACK_SIZE;
 static THD_WORKING_AREA(mmcThreadStack, mmcThreadStackSize);		// MMC monitor thread
 
 /**
@@ -1358,6 +1396,15 @@ void initEarlyMmcCard() {
 	// sdmode auto
 	addConsoleActionS("sdmode", sdSetMode);
 	addConsoleAction("delreports", sdCardRemoveReportFiles);
+
+#if MODULE_DTC_MANAGER
+	addConsoleActionS("dtc_test", [](const char *tag) {
+		int ret = DtcTriggerEvent(tag);
+		if (ret < 0) {
+			efiPrintf("DTC test failed with %d", ret);
+		}
+	});
+#endif
 	//incLogFileName() use same shared FDLogFile, calling it while FDLogFile is used by log writer will cause damage
 	//addConsoleAction("incfilename", incLogFileName);
 #endif // EFI_PROD_CODE

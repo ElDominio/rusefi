@@ -65,7 +65,6 @@ void customPageSetDefaults() {
 	d.smSportModeLuaGaugeThreshold = 0.0f;
 
 	// Limp Mode (Engine State Machine sub-feature) — conservative "get-home" defaults.
-	d.limpSeverityThreshold  = 5;    // one latched misfire (5 severity pts) latches limp
 	d.limpModeEtbLimit       = 30;   // cap throttle at 30%
 	d.limpModeTimingReduction = 5;   // pull 5 deg of timing
 	d.limpModeAfrEnrichment  = 5;    // 5% richer than target
@@ -181,9 +180,10 @@ void customPageSetDefaults() {
 	d.celDebounceTimeSec = 5.0f;    // every check's condition must hold for 5s before tripping/clearing
 	d.tpsIntermittentFlipCount = 3; // 3+ ok/fault flips within celDebounceTimeSec trips Intermittent
 
-	// Malfunction Indicator KOEO bulb check — disabled by default, independent of Check Engine
-	// Triggering above.
-	d.celOnKoeo = false;
+	// Malfunction Indicator KOEO bulb check — enabled by default (matches the classic OBD-II
+	// bulb-check convention MILController assumes unconditionally), independent of Check Engine
+	// Triggering above. Users can opt out via TS.
+	d.celOnKoeo = true;
 
 	// Injector Small Pulse % Correction Curve — evenly-spaced bins 0..2 ms, all corrections zero.
 	// User fills in vendor data (e.g. Injector Dynamics NFC) before enabling Curve (%) mode.

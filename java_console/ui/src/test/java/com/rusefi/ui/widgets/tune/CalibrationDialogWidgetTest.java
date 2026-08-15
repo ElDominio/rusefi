@@ -446,7 +446,14 @@ public class CalibrationDialogWidgetTest {
         }
         assertNotNull(combo);
         assertEquals(CalibrationFieldFactory.MAX_COMBO_WIDTH, combo.getPreferredSize().width);
+        assertEquals(0, combo.getMinimumSize().width);
         assertEquals(longOption, combo.getToolTipText());
+    }
+
+    @Test
+    public void testCopiedFieldTextUsesDisplayedLabelAndValue() {
+        assertEquals("SD card logging: enabled",
+            CalibrationFieldFactory.copiedFieldText("SD card logging", "enabled"));
     }
 
     @Test

@@ -23,6 +23,7 @@ TESTS_SRC_CPP = \
 	tests/trigger/test_real_cranking_miata_na6.cpp \
 	tests/trigger/test_real_cranking_nissan_vq40.cpp \
 	tests/trigger/test_real_nissan_maxima.cpp \
+	tests/trigger/test_real_bmw_e90_cam.cpp \
 	tests/trigger/test_real_cas_24_plus_1.cpp \
 	tests/trigger/test_real_4b11.cpp \
 	tests/trigger/test_real_4g93.cpp \
@@ -55,6 +56,7 @@ TESTS_SRC_CPP = \
 	tests/ignition_injection/injection_mode_transition.cpp \
 	tests/ignition_injection/test_startOfCrankingPrimingPulse.cpp \
 	tests/ignition_injection/test_multispark.cpp \
+	tests/ignition_injection/test_kickstart.cpp \
 	tests/ignition_injection/test_hd_cranking.cpp \
 	tests/ignition_injection/test_hd_cranking2.cpp \
 	tests/ignition_injection/test_ignition_scheduling.cpp \
@@ -161,6 +163,7 @@ TESTS_SRC_CPP = \
 	tests/test_pwm_generator.cpp \
 	tests/test_log_buffer.cpp \
 	tests/test_event_queue.cpp \
+	tests/test_scheduling_pool.cpp \
 	tests/test_cpp_memory_layout.cpp \
 	tests/test_pid.cpp \
 	tests/test_accel_enrichment.cpp \
@@ -169,6 +172,8 @@ TESTS_SRC_CPP = \
 	tests/test_deadband.cpp \
 	tests/test_sticky_pps.cpp \
 	tests/test_knock.cpp \
+	tests/test_config_error_refresh.cpp \
+	tests/test_check_engine_light.cpp \
 	tests/test_lambda_monitor.cpp \
 	tests/test_flex_sensor.cpp \
 	tests/sensor/basic_sensor.cpp \
@@ -208,6 +213,7 @@ TESTS_SRC_CPP = \
 	tests/actuators/test_aux_valves.cpp \
 	tests/actuators/test_antilag.cpp \
 	tests/actuators/test_boost.cpp \
+	tests/actuators/test_dc_hardware_pool.cpp \
 	tests/actuators/test_dc_motor.cpp \
 	tests/actuators/test_etb.cpp \
 	tests/actuators/test_etb_integrated.cpp \
@@ -215,6 +221,7 @@ TESTS_SRC_CPP = \
 	tests/actuators/test_fuel_pump.cpp \
 	tests/actuators/test_fuel_pump_pwm.cpp \
 	tests/actuators/test_gppwm.cpp \
+	tests/actuators/test_idle_hardware.cpp \
 	tests/actuators/test_main_relay.cpp \
 	tests/actuators/test_stepper.cpp \
 	tests/actuators/test_tacho.cpp \

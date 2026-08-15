@@ -197,9 +197,6 @@ public:
 #if EFI_OIL_LIFE_MONITOR
         OilLifeMonitor,
 #endif // EFI_OIL_LIFE_MONITOR
-#if EFI_CHECK_ENGINE_TRIGGERING
-        CheckEngineTriggering,
-#endif // EFI_CHECK_ENGINE_TRIGGERING
         Mockable<IgnitionController>,
         Mockable<AcController>,
         PrimeController,

@@ -12,7 +12,7 @@ pins:
     color: yellow
 
   - pin: 3D
-    function: WBO1 Heater Negative (pin 3)
+    function: WBO1 Heater Negative (pin 3) (and heater +12 could use 18C)
     color: white
     type: wbo
 
@@ -86,21 +86,21 @@ pins:
 
   - pin: 16D
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 17D
     function: Power/Chassis GND ground
-    type: GND
+    type: gnd
 #   color: red / black
 
   - pin: 18D
-    function: CAN bus low
+    function: CAN bus Low
     color: blue
     type: can
 
   - pin: 19D
-    function: CAN bus high
+    function: CAN bus High
     color: green
     type: can
 
@@ -120,7 +120,7 @@ pins:
 
   - pin: 23D
     function: GNDA Analog/Sensor Ground
-    type: gnd
+    type: agnd
     color: black
 
   - pin: 24D
