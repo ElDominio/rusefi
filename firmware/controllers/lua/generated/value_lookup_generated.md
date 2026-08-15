@@ -2245,6 +2245,12 @@ Launch RPM Threshold: when above 0, launch only engages if the activation switch
 ### popsAndBangsEnabled
 Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce turbocharger life.
 
+### dwellDutyModeEnabled
+Dwell Duty Mode: when enabled, ignores the RPM/voltage dwell tables and computes dwell as a fixed percentage of the time between consecutive ignition pulses. Required for Ford TFI modules that expect a 50% duty cycle square wave.
+
+### dwellDutyPercent
+Dwell Duty Mode: percentage of the inter-spark interval used as coil dwell time. 50 = half the interval between pulses (standard TFI target).
+
 ### tcu_shiftTime
 
 

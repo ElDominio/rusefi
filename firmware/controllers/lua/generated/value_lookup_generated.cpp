@@ -2251,6 +2251,12 @@ float getConfigValueByHash(const int hash) {
 // popsAndBangsEnabled
 		case 1183876976:
 			return engineConfiguration->popsAndBangsEnabled;
+// dwellDutyModeEnabled
+		case 1075058835:
+			return engineConfiguration->dwellDutyModeEnabled;
+// dwellDutyPercent
+		case -238882060:
+			return engineConfiguration->dwellDutyPercent;
 // tcu_shiftTime
 		case -1658957891:
 			return config->tcu_shiftTime;
@@ -6112,6 +6118,16 @@ bool setConfigValueByName(const char *name, float value) {
 		case 1183876976:
 	{
 		engineConfiguration->popsAndBangsEnabled = (int)value;
+		return 1;
+	}
+		case 1075058835:
+	{
+		engineConfiguration->dwellDutyModeEnabled = (int)value;
+		return 1;
+	}
+		case -238882060:
+	{
+		engineConfiguration->dwellDutyPercent = (int)value;
 		return 1;
 	}
 		case -1658957891:
