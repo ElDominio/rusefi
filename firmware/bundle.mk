@@ -209,6 +209,7 @@ $(FIRMWARE_OUTPUTS): $(FOLDER)/%: $(BUILDDIR)/% | $(FOLDER)
 	cp $< $@
 
 $(BOOTLOADER_BIN_OUT): $(BOOTLOADER_BIN) | $(DEVICE_BIN_FOLDER)
+	@mkdir -p $(dir $@)
 	ln -rfs $< $@
 
 $(FIRMWARE_BIN_OUT) $(FOLDER)/$(PROJECT).dfu: $(FOLDER)/%: $(DELIVER)/% | $(FOLDER)
