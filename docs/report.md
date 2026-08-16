@@ -2175,3 +2175,38 @@ change (confirmed same 131056B ram0 both before and after removing the stale inc
 
 Open follow-ups: none for this specific change. `build_gui.py` needs no changes -- it already
 scans all `meta-info*.env` files per board directory.
+
+## 2026-08-16 - Upshift RPM Hold: add high-RPM lockout (over-rev safety)
+
+User request: "upshift RPM hold needs a high RPM lockout." The Downshift Blipper already has
+`downshiftBlipperMaxRpm`, which blocks a blip when the *computed target* RPM is too high. Upshift
+RPM Hold had no equivalent -- confirmed via grep that `upshiftRpmHoldMaxRpm` did not exist anywhere
+in the codebase, despite a prior planning-session memory note recording the decision to add it as
+an *entry* gate (not a target gate, since an upshift target is always lower than the latched RPM,
+so gating on target would be a no-op). That decision was apparently never carried into the actual
+implementation.
+
+Changes:
+- `firmware/integration/config_page_6.txt`: new `uint16_t upshiftRpmHoldMaxRpm` field next to
+  `upshiftRpmHoldMinRpm`.
+- `firmware/controllers/actuators/upshift_rpm_hold.cpp`: `passesEntryGate()` now also blocks when
+  `rpm > cfg->upshiftRpmHoldMaxRpm` -- i.e. don't start a hold if the engine is already too high at
+  the shift (missed/late shift near the limiter), mirroring the downshift blipper's over-rev intent
+  but gating shift RPM instead of target RPM.
+- `firmware/controllers/custom_page.cpp`: bumped `PAGE6_DATA_VERSION` 22 -> 23 (page-6 struct layout
+  changed; the `ExtraPageContainer` version/CRC check will reset page 6 to defaults on mismatch
+  instead of misreading old flash data). No explicit default value was added for the new field --
+  every other numeric field in this feature is also left at zero-init in `customPageSetDefaults()`,
+  and `upshiftRpmHoldEnabled` defaults false, so the feature is inert either way until a user tunes
+  the whole block.
+- `firmware/tunerstudio/tunerstudio.template.ini`: added the field description and a "Max engine
+  RPM (over-rev block)" entry in the `upshiftRpmHoldEntry` dialog, next to "Min engine RPM".
+- `unit_tests/tests/actuators/test_upshift_rpm_hold.cpp`: `setupHold()` now sets
+  `upshiftRpmHoldMaxRpm = 6500` (existing tests use 2700 RPM shifts and would otherwise be blocked
+  by the new zero-default gate); added `abortsWhenAboveMaxRpm` test (shift at 6600 RPM does not
+  activate the hold).
+
+Validation: `unit_tests/test.sh UpshiftRpmHold` -- all 7 tests pass (6 pre-existing + 1 new).
+
+Open follow-ups: none. This closes the gap between the original design intent (recorded in prior
+session memory) and the shipped code.

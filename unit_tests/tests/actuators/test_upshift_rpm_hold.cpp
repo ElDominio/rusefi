@@ -29,6 +29,7 @@ void setupHold() {
 	cfg->upshiftRpmHoldEnabled = true;
 	cfg->upshiftRpmHoldMinVss = 10;
 	cfg->upshiftRpmHoldMinRpm = 1500;
+	cfg->upshiftRpmHoldMaxRpm = 6500;
 	cfg->upshiftRpmHoldDriverTpsThreshold = 15;
 	cfg->upshiftRpmHoldMaxTpsLimit = 40;
 	cfg->upshiftRpmHoldMaxTimeMs = 250;
@@ -158,6 +159,20 @@ TEST(UpshiftRpmHold, abortsFromTopGear) {
 
 	setSensors(2700, 80, 0);
 	latchGear(eth, 5); // cannot upshift above top gear
+
+	setUpshifting(true);
+	dut().onFastCallback();
+	EXPECT_FALSE(dut().isActive());
+}
+
+TEST(UpshiftRpmHold, abortsWhenAboveMaxRpm) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupHold();
+
+	// Shift RPM above the configured over-rev lockout (6500) -> hold must not start,
+	// even though the computed target (2000-equivalent scaling) would be a valid downward shift.
+	setSensors(6600, 80, 0);
+	latchGear(eth, 3);
 
 	setUpshifting(true);
 	dut().onFastCallback();

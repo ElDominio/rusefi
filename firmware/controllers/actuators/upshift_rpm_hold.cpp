@@ -95,6 +95,13 @@ bool UpshiftRpmHold::passesEntryGate(float rpm, float vss, float driverTps) cons
 	if (rpm < cfg->upshiftRpmHoldMinRpm) {
 		return false;
 	}
+	// Over-rev safety: don't start a hold if the engine is already too high at the shift
+	// (e.g. a missed/late shift near the limiter) -- unlike downshift's MaxRpm, which gates
+	// the computed *target*, upshift's target is always lower than the latched RPM, so the
+	// gate has to be on the shift RPM itself.
+	if (rpm > cfg->upshiftRpmHoldMaxRpm) {
+		return false;
+	}
 	if (driverTps > cfg->upshiftRpmHoldDriverTpsThreshold) {
 		return false;
 	}

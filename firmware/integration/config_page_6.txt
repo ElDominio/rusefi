@@ -112,6 +112,7 @@ struct_no_prefix page6_s
 	uint16_t upshiftRpmHoldMaxTimeMs;Upshift RPM Hold: maximum duration of an active hold before it is force-terminated (safety timeout).;"ms", 1, 0, 0, 2000, 0
 	uint16_t upshiftRpmHoldLockoutTimeMs;Upshift RPM Hold: lockout after a hold during which another hold cannot start (anti-chatter).;"ms", 1, 0, 0, 5000, 0
 	uint16_t upshiftRpmHoldMinRpm;Upshift RPM Hold: minimum engine RPM required to start a hold.;"rpm", 1, 0, 0, 15000, 0
+	uint16_t upshiftRpmHoldMaxRpm;Upshift RPM Hold: a hold is blocked from starting if engine RPM at the shift exceeds this (over-rev safety, e.g. a missed/late shift near the limiter).;"rpm", 1, 0, 0, 15000, 0
 	uint16_t upshiftRpmHoldRampDownMs;Upshift RPM Hold: time to ramp the ETB to the first PID value at hold start.;"ms", 1, 0, 0, 500, 0
 	uint16_t upshiftRpmHoldRampUpMs;Upshift RPM Hold: time to ramp the ETB back to the pedal target after the hold ends.;"ms", 1, 0, 0, 500, 0
 	uint16_t upshiftRpmHoldMinVss;Upshift RPM Hold: minimum vehicle speed to allow a hold.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
