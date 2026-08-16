@@ -2,9 +2,11 @@
 # List of all the board related files.
 BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 
-
-# defines SHORT_BOARD_NAME
-include $(BOARD_DIR)/meta-info.env
+# SHORT_BOARD_NAME/PROJECT_CPU/USE_OPENBLT/IS_STM32F429 come from whichever meta-info*.env
+# file was actually used to invoke the build (see common_script_read_meta_env.inc) - do NOT
+# `include $(BOARD_DIR)/meta-info.env` here, that would hardcode the F407 variant's values
+# (SHORT_BOARD_NAME=paralela) onto every variant, clobbering e.g. the F427 variant's
+# meta-info-paralela-f427.env-provided SHORT_BOARD_NAME/IS_STM32F429.
 
 # one day when we are grown ups and can coordinate a real life test we shall revisit https://github.com/rusefi/rusefi/issues/6008
 DDEFS += -DDISABLE_PIN_STATE_VALIDATION=TRUE

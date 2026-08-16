@@ -2128,3 +2128,50 @@ Open follow-ups:
 - `fw-custom-paralela-master` F407/F427 split into two `meta-info*.env` variants (one board dir,
   `IS_STM32F429=yes` only on the F427 one) was discussed and agreed but not implemented this
   session -- separate follow-up.
+
+## 2026-08-15 - fw-custom-paralela-master: split into F407/F427 meta-info variants
+
+Same branch as above (`alphax-engine-ccm-split`). `fw-custom-paralela-master` is one physical
+board design populated with either an STM32F407VGT6 or an STM32F427VIT6 depending on the build
+(both are the same 100-pin LQFP package, so pinout/connectors are identical, just the chip's
+flash/SRAM3 capacity differs), but had only one `meta-info.env`, silently building as plain F407
+(no SRAM3) regardless of which chip was actually populated. Matches the same real-world pattern
+as `alphax-8chan`'s F4/F7 split: one board dir, one `meta-info*.env` per variant (confirmed by
+reading `alphax-8chan`'s actual files -- initially assumed, per a user recollection, that this was
+two separate board *directories*; it isn't, it's two meta-info files in the same directory, each
+with its own `SHORT_BOARD_NAME`).
+
+- Fixed existing `meta-info.env`: `BOARD_CPU=ARCH_STM32F4` -> `PROJECT_CPU=ARCH_STM32F4`. This key
+  was vestigial -- `board.mk` never referenced `BOARD_CPU`, and `PROJECT_CPU` was silently
+  defaulting to `ARCH_STM32F4` anyway (`rusefi.mk`'s `ifeq ($(PROJECT_CPU),)` fallback) -- so this
+  is a zero-behavior-change correctness fix, done for self-consistency with the new second file.
+- Added `meta-info-paralela-f427.env` (`SHORT_BOARD_NAME=paralela-f427`, `IS_STM32F429=yes`).
+  `IS_STM32F429` is set directly in the meta-info file (not via a `board.mk` conditional) since
+  `common_script_read_meta_env.inc` already exports every meta-info key as an environment variable
+  that `make` inherits -- the exact same mechanism `PROJECT_CPU`/`SHORT_BOARD_NAME`/`USE_OPENBLT`
+  already use, so no board.mk logic was needed for this part.
+- Found and fixed a real bug while wiring this up: `board.mk` had `include $(BOARD_DIR)/meta-info.env`
+  (comment: "defines SHORT_BOARD_NAME") -- a literal, hardcoded include of the F407 file's name,
+  regardless of which meta-info variant was actually used to invoke the build. Since plain
+  variable assignments in an included makefile fragment take precedence over environment-inherited
+  values, this silently clobbered `SHORT_BOARD_NAME` (and would have clobbered `PROJECT_CPU`/
+  `USE_OPENBLT` too) back to the F407 file's values on *every* build, including the new F427
+  variant -- confirmed via a first build attempt where the linked `.elf` embedded
+  `SHORT_BOARD_NAME=paralela` instead of `paralela-f427` despite `meta-info-paralela-f427.env`
+  being the one read. No other multi-variant board (`alphax-8chan`, `alphax-s550-pnp`) has this
+  line; removed it (with a comment explaining why, to stop it from being re-added).
+
+| File | Change |
+|---|---|
+| `firmware/config/boards/fw-custom-paralela-master/meta-info.env` | `BOARD_CPU` -> `PROJECT_CPU` |
+| `firmware/config/boards/fw-custom-paralela-master/meta-info-paralela-f427.env` | New: F427 variant, `IS_STM32F429=yes` |
+| `firmware/config/boards/fw-custom-paralela-master/board.mk` | Removed the hardcoded `include .../meta-info.env` that clobbered per-variant values |
+
+Validation: built both variants end-to-end (`bin/compile.sh -b`, exit 0 each) and confirmed via
+`strings` on the linked `.elf` and the artifact zip names that they're genuinely distinct --
+`paralela` (ram0 131056B/128KB, no SRAM3) vs `paralela-f427` (ram0 196592B/192KB, SRAM3 present) --
+not just two names sharing one build. The F407 variant's numbers are unchanged from before this
+change (confirmed same 131056B ram0 both before and after removing the stale include).
+
+Open follow-ups: none for this specific change. `build_gui.py` needs no changes -- it already
+scans all `meta-info*.env` files per board directory.
