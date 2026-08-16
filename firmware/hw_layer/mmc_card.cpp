@@ -918,7 +918,7 @@ static void sdLoggerStop()
 			}
 		#endif
 			break;
-	#if MODULE_DTC_MANAGER
+	#if MODULE_DTC_MANAGER && EFI_TOOTH_LOGGER
 		case SDLoggerMode::Dtc:
 			DtcManagerStop();
 			break;
@@ -954,7 +954,7 @@ static void sdLoggerStart()
 				toothLoggerStarted = EnableToothLogger();
 				break;
 		#endif
-		#if MODULE_DTC_MANAGER
+		#if MODULE_DTC_MANAGER && EFI_TOOTH_LOGGER
 			case SDLoggerMode::Dtc:
 				{
 					int ret = DtcManagerStart(&resources.fd, &logBuffer);

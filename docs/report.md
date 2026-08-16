@@ -2210,3 +2210,30 @@ Validation: `unit_tests/test.sh UpshiftRpmHold` -- all 7 tests pass (6 pre-exist
 
 Open follow-ups: none. This closes the gap between the original design intent (recorded in prior
 session memory) and the shipped code.
+
+## 2026-08-16 - DTC manager: gate compilation on EFI_TOOTH_LOGGER
+
+`MODULE_DTC_MANAGER` (`firmware/controllers/modules/modules.mk`) defaults to `yes` fleet-wide, but
+several boards independently set `EFI_TOOTH_LOGGER=FALSE` (alphax-s197-v2, alphax-gold,
+alphax-8chan, hellen154hyundai, small-can-board, protorico-econoline, f469-discovery,
+fw-custom-paralela-master). `dtc_manager.cpp`'s guard was `EFI_PROD_CODE && MODULE_DTC_MANAGER &&
+EFI_FILE_LOGGING` -- it did not check `EFI_TOOTH_LOGGER` even though the module's implementation
+depends on tooth-logger buffer types (it already has a build-time `#error` in `dtc_manager.h` for
+the related `EFI_TOOTH_LOGGER_STATICBUFFER_COUNT == 0` case, which was clearly meant to be belt-
+and-suspenders with an actual gate, not the only check).
+
+Changes:
+- `firmware/controllers/modules/dtc_manager/dtc_manager.cpp`: guard now also requires
+  `EFI_TOOTH_LOGGER`.
+- `firmware/controllers/modules/dtc_manager/dtc_manager.h`: the stub `DtcManagerModule` fallback
+  condition inverted to match (`... || !EFI_TOOTH_LOGGER`).
+- `firmware/hw_layer/mmc_card.cpp`: both `SDLoggerMode::Dtc` switch cases (`sdLoggerStop`/
+  `sdLoggerStart`) now additionally require `EFI_TOOTH_LOGGER`, matching the module's own guard.
+
+Validation: full unit test suite (`unit_tests/test.sh`, no filter) -- 1412/1413 pass. The one
+failure, `LuaBasic.configLookup`, is pre-existing and unrelated: it looks up config bit `devBit0`,
+which commit f15bda602228 (2026-07-31) repurposed to `tcuInputSpeedSensorSharedWithVss` without
+updating the test.
+
+Open follow-ups: fix or delete the stale `LuaBasic.configLookup` `devBit0` reference (pre-existing,
+not touched by this change).

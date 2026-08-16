@@ -11,7 +11,7 @@
 #include "tooth_logger_buffer.h"
 #include "thread_controller.h"
 
-#if EFI_UNIT_TEST || EFI_SIMULATOR || !EFI_FILE_LOGGING
+#if EFI_UNIT_TEST || EFI_SIMULATOR || !EFI_FILE_LOGGING || !EFI_TOOTH_LOGGER
 
 class DtcManagerModule : public EngineModule {
 };
