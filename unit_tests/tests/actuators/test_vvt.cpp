@@ -188,10 +188,8 @@ TEST(Vvt, ClosedLoopInverted) {
 // VVT Advanced Mode: the feedforward baseline is always the duty-vs-oil-pressure curve (the fixed
 // "Hold Duty" / pid_s.offset is never used while Advanced Mode is enabled). On top of that, the
 // P+I+D trim's P factor comes from a distance-vs-P-factor curve instead of the fixed pid_s.pFactor
-// -- I and D still use the fixed auxPid iFactor/dFactor. Within vvtAdvancedPidPauseDeg of the
-// target, the trim is fully paused (not evaluated at all, so its iTerm cannot integrate in the
-// background) and only the duty curve is used; outside that window (or with
-// vvtAdvancedPidPauseEnabled off) the trim runs at full authority.
+// -- I and D still use the fixed auxPid iFactor/dFactor. The trim always runs on top of the
+// feedforward; if I trim isn't wanted, set the fixed auxPid iFactor to 0.
 
 static void setupAdvancedIntakePid(int camIndex) {
 	engineConfiguration->auxPid[camIndex].pFactor = 0;
@@ -247,8 +245,6 @@ TEST(Vvt, AdvancedModeFeedforwardTracksOilPressureNotHoldDuty) {
 
 	auto* d = getCustomPage();
 	d->vvtAdvancedModeEnabled = true;
-	d->vvtAdvancedPidPauseEnabled = true;
-	d->vvtAdvancedPidPauseDeg = 1000.0f; // covers any distance used below -> isolates feedforward
 	setupAdvancedIntakeCurvesFlat(d);
 	d->vvtAdvDutyIntake[0] = 7.0f;  // 0 kPa
 	d->vvtAdvDutyIntake[3] = 42.0f; // 300 kPa
@@ -262,27 +258,7 @@ TEST(Vvt, AdvancedModeFeedforwardTracksOilPressureNotHoldDuty) {
 	EXPECT_NEAR(dut.getClosedLoop(20, 20).value_or(0), 42.0f, 0.01f);
 }
 
-TEST(Vvt, AdvancedModePidPausedWithinWindow) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-
-	VvtController dut(0);
-	int camIndex = 0;
-	dut.init(nullptr, nullptr);
-	setupAdvancedIntakePid(camIndex);
-	engineConfiguration->auxPid[camIndex].offset = 999.0f; // Hold Duty -- must never leak in
-
-	auto* d = getCustomPage();
-	d->vvtAdvancedModeEnabled = true;
-	d->vvtAdvancedPidPauseEnabled = true;
-	d->vvtAdvancedPidPauseDeg = 1.0f;
-	setupAdvancedIntakeCurvesFlat(d); // zero P-factor and zero duty curves everywhere
-
-	// distance = 0.5 deg, inside the 1.0 deg pause window -> PID is not evaluated at all, output
-	// is the (zero) feedforward alone -- a naive "PID always on" calc with P=1.0 would give 0.5.
-	EXPECT_NEAR(dut.getClosedLoop(0.5, 0).value_or(0), 0.0f, 0.001f);
-}
-
-TEST(Vvt, AdvancedModePidActiveOutsidePauseWindowUsesCurvePFactor) {
+TEST(Vvt, AdvancedModeUsesCurvePFactor) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	VvtController dut(0);
@@ -294,67 +270,12 @@ TEST(Vvt, AdvancedModePidActiveOutsidePauseWindowUsesCurvePFactor) {
 
 	auto* d = getCustomPage();
 	d->vvtAdvancedModeEnabled = true;
-	d->vvtAdvancedPidPauseEnabled = true;
-	d->vvtAdvancedPidPauseDeg = 1.0f;
 	setupAdvancedIntakeCurvesFlat(d); // zero P-factor and zero duty curves everywhere
 	d->vvtAdvPFactorIntake[5] = 1.0f; // bin index 5 = +10 deg -> P factor 1.0 there
 
-	// distance = 10 deg, well outside the 1.0 deg pause window -> PID runs at full authority using
-	// the curve's P factor (1.0) at that distance, not the fixed (sentinel) pFactor; feedforward is
-	// still the (zero) duty curve.
+	// distance = 10 deg -> PID runs using the curve's P factor (1.0) at that distance, not the
+	// fixed (sentinel) pFactor; feedforward is still the (zero) duty curve.
 	EXPECT_NEAR(dut.getClosedLoop(30, 20).value_or(0), 10.0f, 0.01f);
-}
-
-TEST(Vvt, AdvancedModePauseDisabledKeepsPidActiveNearTarget) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-
-	VvtController dut(0);
-	int camIndex = 0;
-	dut.init(nullptr, nullptr);
-	setupAdvancedIntakePid(camIndex);
-	engineConfiguration->auxPid[camIndex].offset = 999.0f; // Hold Duty -- must never leak in
-
-	auto* d = getCustomPage();
-	d->vvtAdvancedModeEnabled = true;
-	d->vvtAdvancedPidPauseEnabled = false; // pausing turned off entirely
-	d->vvtAdvancedPidPauseDeg = 1.0f;      // would normally cover this distance -- ignored
-	setupAdvancedIntakeCurvesFlat(d); // zero duty curve everywhere
-	for (size_t i = 0; i < efi::size(d->vvtAdvPFactorIntake); i++) {
-		d->vvtAdvPFactorIntake[i] = 1.0f; // flat P factor of 1.0 everywhere
-	}
-
-	// distance = 0.5 deg, but pausing is disabled -> PID still runs at full authority.
-	EXPECT_NEAR(dut.getClosedLoop(0.5, 0).value_or(0), 0.5f, 0.001f);
-}
-
-TEST(Vvt, AdvancedModePauseFreezesIntegrator) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-
-	VvtController dut(0);
-	int camIndex = 0;
-	dut.init(nullptr, nullptr);
-	setupAdvancedIntakePid(camIndex);
-	engineConfiguration->auxPid[camIndex].iFactor = 1.0f;
-
-	auto* d = getCustomPage();
-	d->vvtAdvancedModeEnabled = true;
-	d->vvtAdvancedPidPauseEnabled = true;
-	d->vvtAdvancedPidPauseDeg = 1.0f;
-	setupAdvancedIntakeCurvesFlat(d); // zero P-factor and zero duty curves everywhere
-
-	// While paused, the PID is never evaluated, so iTerm cannot quietly accumulate: many cycles
-	// inside the window all read back as the flat (zero) feedforward.
-	for (int i = 0; i < 50; i++) {
-		EXPECT_NEAR(dut.getClosedLoop(0.5, 0).value_or(0), 0.0f, 0.001f);
-	}
-
-	// Leaving the window now integrates for a single fresh cycle (dTime * iFactor * error), not
-	// 50 cycles' worth of background windup -- if iTerm had kept integrating while paused, this
-	// would be far larger than one cycle's contribution. P factor is 0 everywhere on this curve, so
-	// it doesn't contribute.
-	float dTime = MS2SEC(engineConfiguration->auxPid[camIndex].periodMs);
-	float expectedFreshITerm = engineConfiguration->auxPid[camIndex].iFactor * dTime * 1.5f; // error = 1.5 at distance=1.5
-	EXPECT_NEAR(dut.getClosedLoop(1.5, 0).value_or(0), expectedFreshITerm, 0.0005f);
 }
 
 TEST(Vvt, DistanceLiveDataOnlyTrackedInAdvancedMode) {

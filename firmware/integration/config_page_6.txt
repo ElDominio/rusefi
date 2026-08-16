@@ -649,13 +649,9 @@ struct_no_prefix page6_s
 	! of the fixed pid_s.pFactor -- so correction strength can be shaped by how far off target the
 	! cam currently is; I and D still use the fixed auxPid iFactor/dFactor. The distance axis
 	! includes an explicit zero bin so both curves interpolate smoothly through the target rather
-	! than jumping across a gap. Within vvtAdvancedPidPauseDeg of the target, the P+I+D trim is
-	! fully paused -- not just scaled down, but not evaluated at all, so its iTerm cannot
-	! integrate/windup in the background while the duty curve alone is expected to hold position.
-	! Outside that window (or with vvtAdvancedPidPauseEnabled off) the trim runs at full authority.
-	bit vvtAdvancedModeEnabled,"enabled","disabled";VVT Advanced Mode: master enable. Replaces the fixed PID offset (Hold Duty) with an oil-pressure-based base duty curve, and the fixed PID P factor with a distance-from-target P factor curve. PID trim is always active outside the pause window.
-	bit vvtAdvancedPidPauseEnabled,"enabled","disabled";VVT Advanced Mode: PID trim pause-near-target enable. When disabled, the P+I+D trim always runs at full authority and vvtAdvancedPidPauseDeg is ignored.
-	float vvtAdvancedPidPauseDeg;VVT Advanced Mode: distance from target within which the PID trim is fully paused (not evaluated, so its iTerm cannot integrate) and only the feedforward duty curve is used. Ignored when vvtAdvancedPidPauseEnabled is off.;"deg", 1, 0, 0, 10, 2
+	! than jumping across a gap. The P+I+D trim always runs on top of the feedforward -- if I trim
+	! isn't wanted, set the fixed auxPid iFactor to 0.
+	bit vvtAdvancedModeEnabled,"enabled","disabled";VVT Advanced Mode: master enable. Replaces the fixed PID offset (Hold Duty) with an oil-pressure-based base duty curve, and the fixed PID P factor with a distance-from-target P factor curve.
 
 	float[VVT_ADV_DISTANCE_SIZE] vvtAdvDistanceBinsIntake;VVT Advanced Mode: intake distance-from-target axis (curve X), shared by the P factor curve below.;"deg", 1, 0, -40, 40, 0
 	float[VVT_ADV_DISTANCE_SIZE] vvtAdvPFactorIntake;VVT Advanced Mode: intake PID P factor at each distance from target (curve Y). Replaces the fixed Intake PID "P factor" field. Entered/displayed x100 for friendlier decimal precision (e.g. 100 = 1.000 actual P factor, 0.1 = 0.001 actual).;"x100", 100, 0, -1000, 1000, 1

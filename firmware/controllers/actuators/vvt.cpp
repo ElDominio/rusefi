@@ -185,23 +185,13 @@ expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observa
 		// Gain-scheduled P factor for the trim below -- replaces the fixed auxPid[cam].pFactor.
 		float pFactor = getVvtAdvancedPFactor(m_cam, distance);
 
-		// Inside the pause window the PID is not evaluated at all -- its P/I/D state (iTerm in
-		// particular) is frozen rather than integrating quietly in the background, so there's no
-		// windup waiting to slam into the output once distance grows past the window. Outside the
-		// window (or with pausing turned off) the PID runs at full authority as usual, and its raw
-		// P+I+D trim (with the constant "Hold Duty" offset removed -- Hold Duty is never used in
-		// Advanced Mode) is added on top of the feedforward.
-		bool isPaused = getCustomPage()->vvtAdvancedPidPauseEnabled
-			&& fabsf(distance) < maxF(getCustomPage()->vvtAdvancedPidPauseDeg, 0.0f);
-
-		float output;
-		if (isPaused) {
-			output = feedforward;
-		} else {
-			float dTime = MS2SEC(GET_PERIOD_LIMITED(&engineConfiguration->auxPid[m_cam]));
-			float rawPid = m_pid.getUnclampedOutputWithPFactor(target, observation, dTime, pFactor) - m_pid.getOffset();
-			output = feedforward + rawPid;
-		}
+		// The PID always runs on top of the feedforward. Its raw P+I+D trim (with the constant
+		// "Hold Duty" offset removed -- Hold Duty is never used in Advanced Mode) is added to the
+		// oil-pressure duty curve. If I trim isn't wanted (the feedforward curve alone should hold
+		// position once on target), set the fixed auxPid iFactor to 0.
+		float dTime = MS2SEC(GET_PERIOD_LIMITED(&engineConfiguration->auxPid[m_cam]));
+		float rawPid = m_pid.getUnclampedOutputWithPFactor(target, observation, dTime, pFactor) - m_pid.getOffset();
+		float output = feedforward + rawPid;
 
 		output = clampF(engineConfiguration->auxPid[m_cam].minValue, output, engineConfiguration->auxPid[m_cam].maxValue);
 
@@ -211,9 +201,8 @@ expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observa
 #if EFI_TUNER_STUDIO
 		m_pid.postState(engine->outputChannels.vvtStatus[index]);
 		// postState() reports pTerm via the fixed (unused in Advanced Mode) auxPid[cam].pFactor --
-		// override with the actual gain-scheduled P term applied above (zero while paused, since
-		// the trim isn't evaluated at all in that case).
-		engine->outputChannels.vvtStatus[index].pTerm = isPaused ? 0 : pFactor * m_pid.getPrevError();
+		// override with the actual gain-scheduled P term applied above.
+		engine->outputChannels.vvtStatus[index].pTerm = pFactor * m_pid.getPrevError();
 #endif /* EFI_TUNER_STUDIO */
 
 		return output;
