@@ -48,7 +48,7 @@ TEST(LongTermIdleTrim, isValidConditionsForLearning){
     constexpr int mocked_rpm = 920;
 
     StrictMock<MockIdleLTIT> idler;
-    engine->engineModules.get<IdleController>().set(&idler);
+    engine->module<IdleController>().set(&idler);
 	idler.m_lastPhase = ICP::Idling;
 
     // LTIT not initialized
@@ -196,7 +196,7 @@ TEST(LongTermIdleTrim, update_idle) {
 	constexpr int mocked_rpm = 920;
 
 	StrictMock<MockIdleLTIT> idler;
-    engine->engineModules.get<IdleController>().set(&idler);
+    engine->module<IdleController>().set(&idler);
 
 	engine->m_ltit.loadLtitFromConfig();
 	engine->m_ltit.onIgnitionStateChanged(true);
@@ -253,7 +253,7 @@ TEST(LongTermIdleTrim, update) {
 	constexpr auto mocked_temp = 45.5;
 
     StrictMock<MockIdleLTIT> idler;
-    engine->engineModules.get<IdleController>().set(&idler);
+    engine->module<IdleController>().set(&idler);
 	idler.m_lastPhase = ICP::Idling;
 	idler.useClosedLoop = true;
 
@@ -263,7 +263,7 @@ TEST(LongTermIdleTrim, update) {
     engine->m_ltit.onIgnitionStateChanged(true);
 
     // idle controller isIdleClosedLoop
-	engine->engineModules.get<IdleController>()->isIdleClosedLoop = true;
+	engine->module<IdleController>()->isIdleClosedLoop = true;
 
     advanceTimeUs(MS2US(2500));
    	engine->m_ltit.update(mocked_rpm, mocked_temp, false, false, false, 4.5);

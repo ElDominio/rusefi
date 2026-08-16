@@ -181,7 +181,7 @@ void Engine::periodicSlowCallback() {
 
 	updateGppwm();
 
-	engine->engineModules.apply_all([](auto & m) { m.onSlowCallback(); });
+	engine->forEachModule([](auto & m) { m.onSlowCallback(); });
 
 #if (BOARD_TLE8888_COUNT > 0)
 	tle8888startup();
@@ -609,11 +609,11 @@ void Engine::periodicFastCallback() {
 
 	speedoUpdate();
 
-	engineModules.apply_all([](auto & m) { m.onFastCallback(); });
+	forEachModule([](auto & m) { m.onFastCallback(); });
 }
 
 void Engine::onEngineStopped() {
-	engineModules.apply_all([](auto& m) { m.onEngineStop(); });
+	forEachModule([](auto& m) { m.onEngineStop(); });
 
   // todo: proper way is to use modules!
 	call_board_override(custom_board_onEngineStopped);

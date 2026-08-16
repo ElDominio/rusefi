@@ -84,7 +84,7 @@ TEST(EngineStateMachine, afterStartState) {
 	setupSmConfig();
 
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 
 	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
 	// Seed stable state; Tps1 not mocked so AE stays quiet
@@ -179,7 +179,7 @@ TEST(EngineStateMachine, idleState) {
 	setupSmConfig();
 
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Idling));
 
 	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
@@ -195,7 +195,7 @@ TEST(EngineStateMachine, coastingState) {
 	engineConfiguration->coastingFuelCutRpmHigh = 4000;
 
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Coasting));
 
 	engine->rpmCalculator.setRpmValue(2000.0f);
@@ -216,7 +216,7 @@ TEST(EngineStateMachine, overrunWhenDfcoConditionsMet) {
 	engineConfiguration->coastingFuelCutMap = 0;        // MAP check disabled (no MAP sensor)
 
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Coasting));
 
 	// Throttle closed, RPM high → isOverrun() true → Overrun state
@@ -242,7 +242,7 @@ TEST(EngineStateMachine, cruisingDefault) {
 	setupSmConfig();
 
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
 
 	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
@@ -647,7 +647,7 @@ TEST(EngineStateMachine, accumulatorSnapsToZeroAfterSustainedOverrun) {
 	engineConfiguration->coastingFuelCutVssLow  = 0;
 	engineConfiguration->coastingFuelCutMap     = 0;
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Coasting));
 
 	// Build a strongly positive accumulator via a sustained Accelerating ramp -- same setup as
@@ -929,7 +929,7 @@ TEST(EngineStateMachine, overrunBreaksAcceleratingHoldImmediately) {
 	getCustomPage()->smAccelHoldMs = 200; // long hold relative to the steps below
 
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
 
 	engine->rpmCalculator.setRpmValue(2000.0f);
@@ -977,7 +977,7 @@ TEST(EngineStateMachine, ecoEngageSuppressesFalseAcceleratingDuringSettleHoldoff
 	getCustomPage()->ecoModeSwitchMode   = eco_mode_switch_mode_e::Off;
 
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
 
 	enterRunning(2000.0f, 50.0f);
@@ -1027,7 +1027,7 @@ TEST(EngineStateMachine, genuineAccelerationDropsEcoWithoutArmingHoldoff) {
 	getCustomPage()->ecoModeSwitchMode   = eco_mode_switch_mode_e::Off;
 
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
 
 	enterRunning(2000.0f, 50.0f);
@@ -1633,7 +1633,7 @@ TEST(EngineStateMachine, ghostCamActivatesViaSportMode) {
 	setupSmConfig();
 
 	MockIdleController mockIdle;
-	engine->engineModules.get<IdleController>().set(&mockIdle);
+	engine->module<IdleController>().set(&mockIdle);
 	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Idling));
 	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);

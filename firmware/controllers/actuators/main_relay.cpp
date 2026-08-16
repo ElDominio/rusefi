@@ -15,7 +15,7 @@ void MainRelayController::onSlowCallback() {
 		delayedShutoffRequested = false;
 	} else {
 		// Query whether any engine modules want to keep the lights on
-		delayedShutoffRequested = engine->engineModules.aggregate([](auto& m, bool prev) { return m.needsDelayedShutoff() | prev; }, false);
+		delayedShutoffRequested = engine->aggregateModules([](auto& m, bool prev) { return m.needsDelayedShutoff() | prev; }, false);
 	}
 	// TODO: delayed shutoff timeout?
 

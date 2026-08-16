@@ -55,7 +55,7 @@ TEST(ignition_state, getRunningAdvanceIdleTable) {
   setArrayValues(config->idleAdvance, 5);
 
   MockIdle idler;
-  engine->engineModules.get<IdleController>().set(&idler);
+  engine->module<IdleController>().set(&idler);
 
   Sensor::setMockValue(SensorType::DriverThrottleIntent, 0);
 
@@ -168,7 +168,7 @@ TEST(ignition_state, tsAdvanceIndicators) {
   setArrayValues(config->idleAdvance, 5);
 
   MockIdle idler;
-  engine->engineModules.get<IdleController>().set(&idler);
+  engine->module<IdleController>().set(&idler);
 
   Sensor::setMockValue(SensorType::DriverThrottleIntent, 0);
 

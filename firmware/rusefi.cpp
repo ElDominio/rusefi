@@ -222,7 +222,7 @@ void runRusEfi() {
 	// constants. It does need initPinRepository() and detectBoardType() above.
 	startStatusThreads();
 
-	engine->engineModules.apply_all([](auto & m) {
+	engine->forEachModule([](auto & m) {
 		m.initNoConfiguration();
 	});
 

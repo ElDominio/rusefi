@@ -3,6 +3,16 @@
 # Target ECU board design
 BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 
+# This board uses an STM32F427 (F42x/43x line), which has an extra 64k SRAM3 bank
+# on top of the base 128k SRAM1+SRAM2. IS_STM32F429=yes is the codebase's existing
+# flag for that whole silicon family (see hw_layer/ports/stm32/stm32f4/hw_ports.mk
+# and config/boards/proteus/board.mk, also an F427 board using this same flag) --
+# without it, F427 boards are treated as plain F407 (128k RAM only) and lose the
+# SRAM3 bank, which is needed headroom for this board's larger AlphaX feature set.
+ifeq ($(PROJECT_CPU),ARCH_STM32F4)
+  IS_STM32F429 = yes
+endif
+
 ifeq ($(PROJECT_CPU),ARCH_STM32F7)
 	DDEFS += -DLUA_RX_MAX_FILTER_COUNT=96
 endif
@@ -71,6 +81,9 @@ DDEFS += -DEFI_ENGINE_STATE_MACHINE=TRUE
 DDEFS += -DEFI_CLUTCH_DELAY_VALVE=TRUE
 DDEFS += -DEFI_OFF_IDLE_RPM_ADDER=TRUE
 DDEFS += -DEFI_LUA_LIMITER=TRUE
+DDEFS += -DEFI_BURST_KNOCK=TRUE
+DDEFS += -DEFI_SPORT_PEDAL=TRUE
+DDEFS += -DEFI_AC_PRESSURE_FAN=TRUE
 
 # Override USART2 pins to match hardware: PD5 is TX, PD6 is RX
 PRIMARY_COMMUNICATION_PORT_USART2 = -DTS_PRIMARY_UxART_PORT=SD2 -DEFI_TS_PRIMARY_IS_SERIAL=TRUE -DSTM32_SERIAL_USE_USART2=TRUE

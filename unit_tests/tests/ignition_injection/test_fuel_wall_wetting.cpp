@@ -71,7 +71,7 @@ TEST(fuel, testWallWettingEnrichmentMath) {
 	EXPECT_CALL(wallController, getBeta()).WillRepeatedly(Return(0.25f));
 
 	// install our mock in to the engine
-	engine->engineModules.get<WallFuelController>().set(&wallController);
+	engine->module<WallFuelController>().set(&wallController);
 
 	WallFuel wallFuel;
 

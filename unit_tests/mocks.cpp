@@ -12,9 +12,9 @@
 *
 * ex:
 *    HpfpController hpfp;
-*    engine->engineModules.get<HpfpController>().set(&hpfp);
+*    engine->module<HpfpController>().set(&hpfp);
 *    LimpManager dut;
-*    engine->engineModules.get<LimpManager>().set(&dut);
+*    engine->module<LimpManager>().set(&dut);
 */
 
 MockEtb::MockEtb() { }

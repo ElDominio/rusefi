@@ -85,7 +85,7 @@ namespace {
     }
 
     expected<float> AlternatorVoltageTargetSetPointTest::getSetpoint() {
-        return engine->engineModules.get<AlternatorController>()->getSetpoint();
+        return engine->module<AlternatorController>()->getSetpoint();
     }
 
     TEST_F(AlternatorVoltageTargetSetPointTest, HomogeneousAlternatorVoltageTargetTable) {

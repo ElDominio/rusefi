@@ -160,7 +160,7 @@ void incrementGlobalConfigurationVersion(const char * msg) {
 	onConfigurationChangeRpmEmulatorCallback(&activeConfiguration);
 #endif /* EFI_EMULATE_POSITION_SENSORS */
 
-	engine->engineModules.apply_all([](auto & m) {
+	engine->forEachModule([](auto & m) {
 			m.onConfigurationChange(&activeConfiguration);
 		});
 	rememberCurrentConfiguration();

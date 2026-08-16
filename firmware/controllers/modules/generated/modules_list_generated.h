@@ -28,5 +28,5 @@ MILController,
 DtcManagerModule,
 #endif
 
-// Board-specific extra module types appended to Engine::engineModules
+// Board-specific extra module types appended to Engine::coreModules
 #include "board_modules_list.h"

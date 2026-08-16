@@ -69,31 +69,31 @@ namespace {
 
             checkPersistentIndicators();
             EXPECT_EQ(
-                engine->engineModules.get<AcController>()->acPressureTooLow,
+                engine->module<AcController>()->acPressureTooLow,
                 testDataItem.expectedAcPressureTooLow
             ) << testDataItem.context;
             EXPECT_EQ(
-                engine->engineModules.get<AcController>()->acPressureTooHigh,
+                engine->module<AcController>()->acPressureTooHigh,
                 testDataItem.expectedAcPressureTooHigh
             ) << testDataItem.context;
             const bool shouldAcBeEnabled = !testDataItem.expectedAcPressureTooLow
                 && !testDataItem.expectedAcPressureTooHigh;
-            EXPECT_EQ(engine->engineModules.get<AcController>()->isAcEnabled(), shouldAcBeEnabled)
+            EXPECT_EQ(engine->module<AcController>()->isAcEnabled(), shouldAcBeEnabled)
                 << testDataItem.context;
-            EXPECT_EQ(engine->engineModules.get<AcController>()->acCompressorState, shouldAcBeEnabled)
+            EXPECT_EQ(engine->module<AcController>()->acCompressorState, shouldAcBeEnabled)
                 << testDataItem.context;
             EXPECT_EQ(enginePins.acRelay.getLogicValue(), shouldAcBeEnabled) << testDataItem.context;
         }
     }
 
     void AcPressureTest::checkPersistentIndicators() {
-        EXPECT_TRUE(engine->engineModules.get<AcController>()->acButtonState);
-        EXPECT_FALSE(engine->engineModules.get<AcController>()->engineTooSlow);
-        EXPECT_FALSE(engine->engineModules.get<AcController>()->engineTooFast);
-        EXPECT_FALSE(engine->engineModules.get<AcController>()->noClt);
-        EXPECT_FALSE(engine->engineModules.get<AcController>()->engineTooHot);
-        EXPECT_FALSE(engine->engineModules.get<AcController>()->tpsTooHigh);
-        EXPECT_FALSE(engine->engineModules.get<AcController>()->isDisabledByLua);
+        EXPECT_TRUE(engine->module<AcController>()->acButtonState);
+        EXPECT_FALSE(engine->module<AcController>()->engineTooSlow);
+        EXPECT_FALSE(engine->module<AcController>()->engineTooFast);
+        EXPECT_FALSE(engine->module<AcController>()->noClt);
+        EXPECT_FALSE(engine->module<AcController>()->engineTooHot);
+        EXPECT_FALSE(engine->module<AcController>()->tpsTooHigh);
+        EXPECT_FALSE(engine->module<AcController>()->isDisabledByLua);
     }
 
     TEST_F(AcPressureTest, pressureTooLow) {

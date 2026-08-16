@@ -118,6 +118,65 @@ struct AirmassModelBase;
 
 class IEtbController;
 
+/**
+ * AlphaX custom-feature engine modules (see FEATURE_FLAGS.md "AlphaX custom subsystems").
+ * Split out of Engine::coreModules purely for memory placement: on STM32F4 targets Engine
+ * lives in a fixed 64KB CCM RAM region (see CCM_OPTIONAL / ___engine in
+ * engine_controller.cpp) that core modules must fit in; AlphaX modules must not compete
+ * for that space. See [tag:disable_engine_module] in engine_module.h.
+ *
+ * - EFI_UNIT_TEST: embedded as a plain Engine member (Engine::alphaXModules) so every
+ *   EngineTestHelper's freshly-constructed Engine gets a fresh, isolated copy too - same
+ *   per-test isolation as today's single list.
+ * - !EFI_UNIT_TEST (prod boards AND the simulator, same gating as ___engine itself): lives
+ *   in its own top-level global, ___alphaXEngineModules, deliberately NOT CCM_OPTIONAL so
+ *   it lands in regular RAM, not the 64KB ram4 region. Harmless for the simulator (single
+ *   instance, CCM_OPTIONAL is already a no-op there).
+ *
+ * Always go through Engine::module<T>() / Engine::forEachModule() / Engine::aggregateModules() -
+ * never reach into coreModules or this list by name.
+ *
+ * ExhaustCutoutController, CdvController and EngineStateMachine below carry no #if EFI_<NAME>
+ * guard here (matching their pre-split presence) even though each is an AlphaX subsystem with
+ * its own flag: unconditional consumers exist (live_data.cpp, lua_hooks.cpp, the generated
+ * output_lookup_generated.cpp, and - for EngineStateMachine alone - 14 core .cpp files with
+ * 30+ call sites) that would all need auditing/guarding first. Their own .cpp stubs no-op when
+ * the flag is off; only their memory placement changed here, not their compile-time presence.
+ * Do not add a guard to their entry without first guarding every one of those consumers.
+ */
+using AlphaXModuleList = type_list<
+    ExhaustCutoutController,
+    CdvController,
+    EngineStateMachine,
+#if EFI_ELECTRONIC_THROTTLE_BODY
+    DownshiftBlipper,
+    UpshiftRpmHold,
+#endif // EFI_ELECTRONIC_THROTTLE_BODY
+#if EFI_LAUNCH_POWER_RAMP
+    LaunchPowerRamp,
+#endif // EFI_LAUNCH_POWER_RAMP
+#if EFI_ROLLING_LAUNCH
+    RollingLaunchControl,
+#endif // EFI_ROLLING_LAUNCH
+#if EFI_BURST_KNOCK
+    BurstKnock,
+#endif // EFI_BURST_KNOCK
+#if EFI_WOT_ENRICHMENT
+    WotEnrichment,
+#endif // EFI_WOT_ENRICHMENT
+#if EFI_OIL_LIFE_MONITOR
+    OilLifeMonitor,
+#endif // EFI_OIL_LIFE_MONITOR
+#if EFI_MISFIRE_DETECTION
+    MisfireController,
+#endif // EFI_MISFIRE_DETECTION
+    EngineModule // dummy placeholder so the previous entries can all have commas
+>;
+
+#if !EFI_UNIT_TEST
+extern AlphaXModuleList ___alphaXEngineModules;
+#endif // !EFI_UNIT_TEST
+
 class Engine final : public TriggerStateListener {
 public:
     Engine();
@@ -157,10 +216,12 @@ public:
     FuelComputer fuelComputer{};
 #endif // EFI_ENGINE_CONTROL
 
-    // [tag:disable_engine_module] Entries wrapped in #if EFI_<NAME> are compile-time optional
-    // modules. Before adding or disabling one, read the how-to in engine_module.h - especially
-    // the TS-page rules: a module that owns a TunerStudio page (like LongTermFuelTrim below)
-    // must have its flag declared in the board prepend.txt, not in board.mk or efifeatures.h.
+    // [tag:disable_engine_module] Core (non-AlphaX) engine modules. Entries wrapped in
+    // #if EFI_<NAME> are compile-time optional. Before adding or disabling one, read the
+    // how-to in engine_module.h - especially the TS-page rules: a module that owns a
+    // TunerStudio page (like LongTermFuelTrim below) must have its flag declared in the
+    // board prepend.txt, not in board.mk or efifeatures.h. AlphaX custom subsystems
+    // (see FEATURE_FLAGS.md) belong in AlphaXModuleList above instead, not here.
     type_list<
         Mockable<InjectorModelPrimary>,
         Mockable<InjectorModelSecondary>,
@@ -179,24 +240,7 @@ public:
         AlternatorController,
 #endif /* EFI_ALTERNATOR_CONTROL */
         MainRelayController,
-        ExhaustCutoutController,
         ImrcController,
-        CdvController,
-#if EFI_LAUNCH_POWER_RAMP
-        LaunchPowerRamp,
-#endif // EFI_LAUNCH_POWER_RAMP
-#if EFI_ROLLING_LAUNCH
-        RollingLaunchControl,
-#endif // EFI_ROLLING_LAUNCH
-#if EFI_BURST_KNOCK
-        BurstKnock,
-#endif // EFI_BURST_KNOCK
-#if EFI_WOT_ENRICHMENT
-        WotEnrichment,
-#endif // EFI_WOT_ENRICHMENT
-#if EFI_OIL_LIFE_MONITOR
-        OilLifeMonitor,
-#endif // EFI_OIL_LIFE_MONITOR
         Mockable<IgnitionController>,
         Mockable<AcController>,
         PrimeController,
@@ -223,14 +267,6 @@ public:
 #if EFI_LAUNCH_CONTROL
         NitrousController,
 #endif // EFI_LAUNCH_CONTROL
-        EngineStateMachine,
-#if EFI_MISFIRE_DETECTION
-        MisfireController,
-#endif // EFI_MISFIRE_DETECTION
-#if EFI_ELECTRONIC_THROTTLE_BODY
-        DownshiftBlipper,
-        UpshiftRpmHold,
-#endif // EFI_ELECTRONIC_THROTTLE_BODY
 #if EFI_LTFT_CONTROL
         LongTermFuelTrim,
 #endif
@@ -241,19 +277,67 @@ public:
 #include "modules_list_generated.h"
 
         EngineModule // dummy placeholder so the previous entries can all have commas
-    > engineModules{};
+    > coreModules{};
+
+#if EFI_UNIT_TEST
+    // Per-test-fresh AlphaX module storage - see AlphaXModuleList doc comment above.
+    AlphaXModuleList alphaXModules{};
+#endif // EFI_UNIT_TEST
 
     /**
      * Slightly shorter helper function to keep the code looking clean.
+     *
+     * Checks coreModules first, then whichever AlphaX module storage applies for this
+     * build (see AlphaXModuleList doc comment above) - resolves entirely at compile time.
      */
     template<typename get_t>
     constexpr auto & module() {
-        return engineModules.get<get_t>();
+        if constexpr (decltype(coreModules)::template has<get_t>()) {
+            return coreModules.get<get_t>();
+        } else {
+#if EFI_UNIT_TEST
+            return alphaXModules.get<get_t>();
+#else
+            return ___alphaXEngineModules.get<get_t>();
+#endif
+        }
     }
 
     template<typename get_t>
     constexpr auto const & module() const {
-        return engineModules.get<get_t>();
+        if constexpr (decltype(coreModules)::template has<get_t>()) {
+            return coreModules.get<get_t>();
+        } else {
+#if EFI_UNIT_TEST
+            return alphaXModules.get<get_t>();
+#else
+            return ___alphaXEngineModules.get<get_t>();
+#endif
+        }
+    }
+
+    // Applies f to every module across both the core and AlphaX lists. Centralizes the
+    // two-list detail so callers don't need to know there are two lists - see
+    // [tag:disable_engine_module] in engine_module.h.
+    template<typename func_t>
+    constexpr void forEachModule(func_t const & f) {
+        coreModules.apply_all(f);
+#if EFI_UNIT_TEST
+        alphaXModules.apply_all(f);
+#else
+        ___alphaXEngineModules.apply_all(f);
+#endif
+    }
+
+    // Folds accumulator across every module in both lists, core first then AlphaX.
+    template<typename return_t, typename func_t>
+    constexpr return_t aggregateModules(func_t const & accumulator, return_t seed) {
+        return_t afterCore = coreModules.aggregate(accumulator, seed);
+#if EFI_UNIT_TEST
+        return alphaXModules.aggregate(accumulator, afterCore);
+#else
+        return ___alphaXEngineModules.aggregate(accumulator, afterCore);
+#endif
     }
 
 #if EFI_TCU
@@ -263,7 +347,7 @@ public:
     // todo: boolean sensors should leverage sensor framework #6342
     SwitchedState clutchUpSwitchedState{&engineState.clutchUpState};
     SwitchedState brakePedalSwitchedState{&engineState.brakePedalState};
-    SwitchedState acButtonSwitchedState{&engineModules.get<AcController>().unmock().acButtonState};
+    SwitchedState acButtonSwitchedState{&coreModules.get<AcController>().unmock().acButtonState};
     SimpleSwitchedState luaDigitalInputState[LUA_DIGITAL_INPUT_COUNT]{};
 
 #if EFI_LAUNCH_CONTROL

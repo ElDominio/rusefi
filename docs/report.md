@@ -2014,3 +2014,117 @@ Open follow-ups:
 - No test yet exercises the pTerm telemetry override in vvt.cpp directly (only indirectly, via the
   `getClosedLoop` return value tests) -- consider a dedicated assertion on
   `outputChannels.vvtStatus[index].pTerm` if telemetry correctness becomes a concern.
+
+## 2026-08-15 - Fix bundle.mk race + split Engine's module list off the fixed 64k F4 CCM pool
+
+Two independent fixes, both on new branch `alphax-engine-ccm-split` (off `master-imports-wip-sync`).
+
+### 1. bundle.mk: racy bin/device dir creation
+
+`build_gui.py` intermittently failed the bundle step on alphax-s550 with `ln: failed to create
+symbolic link ...: No such file or directory`. Root cause: `$(BIN_FOLDER)` is unconditionally
+rebuilt every `make` invocation (`.FORCE`, `rm -rf $@; mkdir -p $@; ...`), and `$(DEVICE_BIN_FOLDER)`
+(a subdirectory of it) is only order-only-dependent on it, so a parallel-make race could leave the
+`bin/device` dir missing when `$(BOOTLOADER_BIN_OUT)`'s `ln -rfs` ran. Fix: made that recipe create
+its own destination directory (`firmware/bundle.mk`, `$(BOOTLOADER_BIN_OUT)` rule) instead of relying
+solely on the order-only chain. Verified with a full `bin/compile.sh -b` bundle build for
+alphax-s550-pnp (exit 0, `bin/device/openblt_..._local.bin` correctly symlinked). Committed directly
+to `master-imports-wip-sync` (3531cc1a2d) since it predates and is unrelated to the branch below.
+
+### 2. alphax-s197-v2 CCM overflow -> Engine module-list split (generalized fix, all F4 boards)
+
+`alphax-s197-v2` failed to link: `ld: cannot move location counter backwards` in `STM32F4.ld:163`.
+Cause: CCM RAM (`ram4`) is a **fixed 64KB on every STM32F4 chip** (F407/F427/F429 alike -- SRAM3 on
+F42x/43x chips adds headroom to a *different* region, `ram0`, never to `ram4`). `___engine`, the
+single global `Engine` instance, was tagged `CCM_OPTIONAL` and placed entirely in that 64KB;
+`Engine` embeds every `EngineModule` (core rusEFI logic and AlphaX custom features alike) as one
+`type_list<...>` member, so every AlphaX module added grows the object stuck in that fixed pool.
+`hellen154hyundai` (more AlphaX features than s197) was already sitting at exactly 64KB/64KB before
+this change -- not an s197-only bug, a shared budget every AlphaX feature chips away at on every F4
+board using this pattern.
+
+Fix, in two layers:
+- Split `Engine::engineModules` into `Engine::coreModules` (stays embedded in `Engine`, stays CCM)
+  and a new top-level `AlphaXModuleList` (11 modules: `ExhaustCutoutController`, `CdvController`,
+  `EngineStateMachine`, `DownshiftBlipper`, `UpshiftRpmHold`, `LaunchPowerRamp`,
+  `RollingLaunchControl`, `BurstKnock`, `WotEnrichment`, `OilLifeMonitor`, `MisfireController`) that
+  is NOT CCM-tagged. Storage location for the AlphaX list is `#if EFI_UNIT_TEST`-branched: embedded
+  as an `Engine` member (`Engine::alphaXModules`) under unit tests so `EngineTestHelper`'s per-test
+  fresh `Engine` still isolates it; a standalone global (`___alphaXEngineModules`) under prod/
+  simulator, matching `___engine`'s own `!EFI_UNIT_TEST` gating. `engine->module<T>()` (~589 call
+  sites, unchanged) now checks both lists via `if constexpr`; added `Engine::forEachModule()` /
+  `aggregateModules()` to centralize the 9 dispatch call sites (8 `apply_all` + 1 `aggregate`) that
+  used to touch `engineModules` directly.
+  - Scope note: 5 of the 11 (`ExhaustCutoutController`, `CdvController`, `EngineStateMachine`,
+    `DownshiftBlipper`, `UpshiftRpmHold`) are documented AlphaX subsystems but were never actually
+    guarded by their `#if EFI_<NAME>` in the type_list (unconditional consumers exist in
+    `live_data.cpp`, `lua_hooks.cpp`, generated `output_lookup_generated.cpp`, and -- for
+    `EngineStateMachine` alone -- 14 core `.cpp` files/30+ call sites). Deliberately did **not**
+    add those guards here (would need auditing every consumer, plus TS-page-guard-flag
+    registration for the ETB pair) -- moved all 11 with their exact current compile-time-presence
+    rules unchanged. This alone took `hellen154hyundai` from flush-at-the-wall to ~35KB of real
+    `ram0` headroom / ~27KB real `ram4` headroom, and `protorico-econoline` similarly -- but
+    `alphax-s197-v2` still overflowed CCM by 920 bytes (its `coreModules`+`Engine`-own-state content
+    is board-specific, apparently bigger than hellen154hyundai's/protorico's despite s197's much
+    simpler connector layout; did not fully isolate why -- LTO's "slim" objects hide real per-symbol
+    sizes from normal `size`/`nm` inspection, would need a non-LTO build to pin down further).
+  - Second layer, to close that remaining gap: `Engine ___engine` itself is now **not** `CCM_OPTIONAL`
+    on any STM32F4 target at all (new `EFI_IS_STM32F4` macro, unconditionally defined for every F4
+    board in `hw_layer/ports/stm32/stm32f4/hw_ports.mk`, gating `engine_controller.cpp`). Initially
+    scoped this to `EFI_IS_F42x`-only (SRAM3 boards, which have obvious extra `ram0` room), but real
+    `__heap_base__` numbers showed non-SRAM3 boards (hellen154hyundai ~35KB real `ram0` headroom
+    before the move, protorico-econoline ~51KB) already had plenty of spare `ram0` capacity too, so
+    widened it to every F4 board per explicit user decision after discussing the tradeoff (see
+    below). F7/H7 keep `Engine` `CCM_OPTIONAL` as before -- their CCM-equivalent (DTCM) is 128KB, not
+    under the same pressure.
+
+Known, explicitly-accepted risk: CCM's only real property beyond capacity is that DMA cannot reach
+it, so a CPU access to CCM can never stall on DMA bus arbitration the way an access to regular
+SRAM occasionally can (both are equal-latency to the CPU otherwise -- confirmed via the codebase's
+own comment in `global_port.h`: "no magic about which RAM is faster etc... CCM/TCM could be faster
+as there will be less bus contention with DMA"). Moving `Engine` off CCM is architecturally sound
+(stalls are single-digit-cycle/nanosecond-scale, engine scheduling works in microseconds via
+hardware timer capture, and anything DMA actually writes into -- ADC/CAN buffers -- was never in
+CCM to begin with since DMA can't reach it) but is **untested on real hardware** as of this entry --
+applies fleet-wide to every F4 board now, not just the 5 F42x ones. Flagged to the user before
+widening scope; recommend bench/dyno verification before trusting in a running vehicle.
+
+| File | Change |
+|---|---|
+| `firmware/controllers/algo/engine.h` | New `AlphaXModuleList` type + `extern ___alphaXEngineModules`; `engineModules` renamed `coreModules` (11 entries removed); new `#if EFI_UNIT_TEST` `alphaXModules` member; `module<T>()` checks both lists; new `forEachModule()`/`aggregateModules()`; `acButtonSwitchedState` init updated |
+| `firmware/controllers/engine_controller.cpp` | `Engine ___engine` no longer `CCM_OPTIONAL` under `EFI_IS_STM32F4`; new `___alphaXEngineModules` definition |
+| `firmware/hw_layer/ports/stm32/stm32f4/hw_ports.mk` | New unconditional `-DEFI_IS_STM32F4` for every F4 target |
+| `firmware/config/boards/alphax-s197-v2/board.mk` | `IS_STM32F429 = yes` (opts into the F42x/43x SRAM3 bank, +64KB `ram0`) |
+| 9 dispatch call sites (`rusefi.cpp`, `ignition_controller.cpp`, `engine.cpp`x2, `default_base_engine.cpp`, `engine_configuration.cpp`, `main_trigger_callback.cpp`, `main_relay.cpp`) | Redirected from `engineModules.apply_all/aggregate(...)` to `forEachModule(...)`/`aggregateModules(...)` |
+| `firmware/controllers/core/engine_module.h`, `modules_list_generated.h` comment | Doc updated for the two-list convention |
+| ~15 files under `unit_tests/` + `closed_loop_idle.cpp` | Mechanical `engineModules.get<T>()` -> `module<T>()` rename (all core-only types, unaffected by the split itself) |
+
+Validation:
+- `unit_tests/test.sh`: 1414/1415 pass, both before and after the split (verified by temporarily
+  reverting just the 20 files this change touched via a saved patch, rebuilding, and confirming the
+  1 failure -- `LuaBasic.configLookup`, a `devBit0` bitfield garbage-read, unrelated to Engine
+  modules -- reproduces identically either way; pre-existing, not caused by this change).
+- Rebuilt and confirmed real memory margins via `__heap_base__`/`__heap_ccm_base__` symbols (nm on
+  the built `.elf` -- `--print-memory-usage`'s 100% readings for both `ram0` and `ram4` are a known
+  artifact of ChibiOS's/this codebase's "claim all remaining region space as heap" NOLOAD sections
+  and do not reflect real usage):
+
+  | Board | ram0 real free | ram4 real free |
+  |---|---|---|
+  | alphax-s197-v2 (SRAM3) | ~60KB | ~26KB |
+  | hellen154hyundai | ~13KB | ~27KB |
+  | protorico-econoline | ~28KB | ~30KB |
+
+- Not validated on real hardware/bench (see risk note above).
+
+Open follow-ups:
+- Bench/dyno-verify the Engine-off-CCM change on real F4 hardware before shipping to a vehicle.
+- The 5 unguarded-in-type_list AlphaX modules (see scope note) are a latent inefficiency
+  (always-compiled regardless of their flag) and, separately, a documentation/convention gap
+  worth fixing later -- would need a consumer audit, not attempted here.
+- Did not fully isolate why alphax-s197-v2's core CCM footprint is larger than hellen154hyundai's/
+  protorico's despite a simpler connector layout -- would need a non-LTO build for real per-symbol
+  `size`/`nm` attribution.
+- `fw-custom-paralela-master` F407/F427 split into two `meta-info*.env` variants (one board dir,
+  `IS_STM32F429=yes` only on the F427 one) was discussed and agreed but not implemented this
+  session -- separate follow-up.

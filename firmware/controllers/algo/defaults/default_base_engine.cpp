@@ -598,7 +598,7 @@ void setDefaultBaseEngine() {
 	setRpmTableBin(config->minimumOilPressureBins);
 	setRpmTableBin(config->maximumOilPressureBins);
 
-	engine->engineModules.apply_all([](auto & m) { m.setDefaultConfiguration(); });
+	engine->forEachModule([](auto & m) { m.setDefaultConfiguration(); });
 
 	engineConfiguration->useMetricOnInterface = true;
 

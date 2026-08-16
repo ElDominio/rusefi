@@ -121,7 +121,7 @@ void LongTermIdleTrim::update(float rpm, float clt, bool acActive, bool fan1Acti
         return;
     }
 
-    auto& idleController = engine->engineModules.get<IdleController>();
+    auto& idleController = engine->module<IdleController>();
     auto currentPhase = idleController->getCurrentPhase();
 
     // LTIT should only learn during Phase::Idling

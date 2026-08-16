@@ -295,7 +295,7 @@ void mainTriggerCallback(uint32_t trgEventIndex, efitick_t edgeTimestamp, angle_
 		}
 	}
 
-	engine->engineModules.apply_all([=](auto & m) {
+	engine->forEachModule([=](auto & m) {
 		m.onEnginePhase(rpm, edgeTimestamp, currentPhase, nextPhase);
 	});
 

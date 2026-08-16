@@ -86,7 +86,23 @@
 /**
  * Would love to pass reference to configuration object into constructor but C++ does allow attributes after parenthesized initializer
  */
+#ifdef EFI_IS_STM32F4
+// Every STM32F4 target (F407 and F42x/43x alike) has plenty of real headroom in the
+// regular RAM pool - confirmed via __heap_base__ on hellen154hyundai (~35KB free) and
+// protorico-econoline (~51KB free) even without the F42x/43x family's extra SRAM3 bank -
+// while CCM is a hard fixed 64k that AlphaXModuleList's relocation alone doesn't always
+// clear on every board (e.g. alphax-s197-v2 still overflowed by 920 bytes after that
+// split alone). Keep the rest of Engine (coreModules plus Engine's own state) out of
+// that tight, easily-overflowed CCM pool entirely rather than trimming board-by-board.
+// F7/H7 keep Engine CCM_OPTIONAL as before - their CCM-equivalent (DTCM) is 128k, not
+// under the same pressure.
+Engine ___engine;
+#else
 Engine ___engine CCM_OPTIONAL;
+#endif
+// NOT CCM_OPTIONAL - lives in regular RAM, not the fixed 64KB ram4 CCM region. See
+// AlphaXModuleList's doc comment in engine.h.
+AlphaXModuleList ___alphaXEngineModules;
 
 #else // EFI_UNIT_TEST
 

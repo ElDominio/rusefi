@@ -3,17 +3,27 @@
  *
  * Engine modules are the building blocks of engine-asynchronous control logic. A module
  * derives from EngineModule, overrides the lifecycle hooks it needs, and is registered in
- * the type_list<...> engineModules in engine.h; the framework then invokes each hook on
- * every registered module (see [tag:disable_engine_module] in engine.h for the list itself).
+ * either Engine::coreModules or the top-level AlphaXModuleList, both in engine.h; the
+ * framework then invokes each hook on every registered module across both lists via
+ * Engine::forEachModule()/aggregateModules() (see [tag:disable_engine_module] below).
  *
  * [tag:disable_engine_module] Making a module compile-time optional:
  *
+ * 0. Decide CORE vs AlphaX: if the module is an "AlphaX custom subsystem" per
+ *    FEATURE_FLAGS.md, its entry goes in AlphaXModuleList (non-CCM storage); otherwise it
+ *    goes in Engine::coreModules (stays in the fixed-size CCM region on STM32F4 targets -
+ *    keep this list lean). Either way, the module is reached the same way everywhere else:
+ *    engine->module<T>() - never reach into either list by name directly.
  * 1. Pick an EFI_<NAME> feature flag and give it an #ifndef-guarded default in
  *    firmware/config/stm32f4ems/efifeatures.h (the master feature list - other ports and
  *    the simulator/unit_tests keep their own copies, see the caveat there).
- * 2. Wrap the module's entry in the engine.h type_list and the body of its .cpp in
+ * 2. Wrap the module's entry in its list (engine.h) and the body of its .cpp in
  *    #if EFI_<NAME>. Keep the .h compilable either way so callers can be guarded locally.
- * 3. Guard call sites (status_loop, live_data, bench_test, storage, ...) with the same flag.
+ * 3. Guard call sites (status_loop, live_data, bench_test, storage, ...) with the same flag,
+ *    consistently, everywhere the module is referenced - retrofitting a guard after the
+ *    fact means auditing every consumer, which can be expensive (some existing AlphaX
+ *    modules were left unconditionally-present specifically because of this cost - see the
+ *    scope note on AlphaXModuleList in engine.h).
  *
  * EXTRA RULES when the module owns a TunerStudio page or any other .ini surface
  * (tooltips, table editors, gauges) - see [tag:ts_page_table]:

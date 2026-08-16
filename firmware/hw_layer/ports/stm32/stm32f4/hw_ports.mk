@@ -17,6 +17,11 @@ ifeq ($(CONFDIR),)
 	CONFDIR = $(PROJECT_DIR)/hw_layer/ports/stm32/stm32f4/cfg
 endif
 
+# Set on every STM32F4-family target (F407 and F42x alike) - see engine_controller.cpp,
+# which keeps Engine out of the fixed 64k CCM pool on any F4 chip in favor of the much
+# roomier regular RAM pool.
+DDEFS += -DEFI_IS_STM32F4
+
 # STM32F42x has extra memory, so change some flags so we can use it.
 ifeq ($(IS_STM32F429),yes)
 	USE_OPT += -Wl,--defsym=STM32F4_HAS_SRAM3=1

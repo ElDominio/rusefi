@@ -342,7 +342,7 @@ TEST(FuelMath, IdleVeTable) {
 
 	// Install mock idle controller
 	MockIdle idler;
-	engine->engineModules.get<IdleController>().set(&idler);
+	engine->module<IdleController>().set(&idler);
 
 	// Main VE table returns 50
 	EXPECT_CALL(dut.veTable, getValue(_, _)).WillRepeatedly(Return(50));
