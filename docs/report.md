@@ -2816,4 +2816,24 @@ Validation:
 - Rebuilt `f407-discovery` (`compile_f407-discovery.sh -j12`) to confirm the `MisfireController`
   fix above actually resolves the build break, using a separate `git worktree` checked out at the
   pre-cleanup HEAD (`82134fad19`) to compare against, per [[feedback_no_stash_for_verification]]
-  (never stash/checkout the working tree itself for a "clean" comparison).
+  (never stash/checkout the working tree itself for a "clean" comparison). Confirmed: the worktree
+  build (pre-fix) fails with exactly the expected `MisfireController`/`type_list` compile error;
+  the post-fix build in the main tree compiles clean all the way through and reaches the link step.
+
+New finding (not yet fixed): the post-fix `f407-discovery` build fails at **link** time --
+`ld: rules_memory.ld:314 cannot move location counter backwards (from 20023040 to 20020000)`, a
+~3 KB RAM region overflow. This confirms, on a concrete board, the open follow-up from the
+"legacy pin/CAN VSS deleted entirely; fleet-wide flag flip" entry above ("no per-board flash
+budget audit was done... other F4 boards haven't been checked... would surface as a build failure
+that's straightforward to diagnose") -- except it's a RAM overflow, not flash, most likely from
+`EFI_WHEEL_SPEED_SENSORS`'s new config/state now being default-TRUE on every F4 board including
+this one. Not fixed in this session (would need either an `f407-discovery`-specific
+`-DEFI_WHEEL_SPEED_SENSORS=FALSE` opt-out in its `board.mk`, mirroring `small-can-board`'s
+`EFI_TOOTH_LOGGER` precedent, or a RAM audit/trim elsewhere) -- flagged to the user rather than
+guessed at.
+
+Open follow-ups:
+- `f407-discovery` firmware does not currently link (RAM overflow, see above) -- needs either an
+  opt-out flag or a RAM trim before this board can build again.
+- Still no audit of every *other* F4 board for the same RAM/flash budget risk from
+  `EFI_WHEEL_SPEED_SENSORS` defaulting TRUE.
