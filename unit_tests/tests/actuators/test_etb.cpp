@@ -962,7 +962,8 @@ TEST(etb, openLoopNonThrottle) {
 TEST(etb, tractionControlEtbDrop) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	setTable(engineConfiguration->tractionControlEtbDrop, -10);
+	// Table stores a positive drop magnitude (0-100%); it can only remove throttle, never add it.
+	setTable(engineConfiguration->tractionControlEtbDrop, 10);
 	setLinearCurve(engineConfiguration->tractionControlSlipBins, /*from*/0.9, /*to*/1.2, 0.05);
 	setLinearCurve(engineConfiguration->tractionControlSpeedBins, /*from*/10, /*to*/120, 5);
 
@@ -989,16 +990,17 @@ TEST(etb, tractionControlEtbDrop) {
 	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0);
 	Sensor::setMockValue(SensorType::WheelSlipRatio, 0.9);
 
-	engineConfiguration->tractionControlEtbDrop[0][0] = -15;
-	engineConfiguration->tractionControlEtbDrop[0][1] = -15;
+	engineConfiguration->tractionControlEtbDrop[0][0] = 15;
+	engineConfiguration->tractionControlEtbDrop[0][1] = 15;
 
 	size_t lastYIndex = TRACTION_CONTROL_ETB_DROP_SLIP_SIZE - 1;
 	size_t lastXIndex = TRACTION_CONTROL_ETB_DROP_SPEED_SIZE - 1;
 
-	engineConfiguration->tractionControlEtbDrop[lastYIndex - 1][lastXIndex - 1] = 15;
-	engineConfiguration->tractionControlEtbDrop[lastYIndex][lastXIndex] = 15;
+	engineConfiguration->tractionControlEtbDrop[lastYIndex - 1][lastXIndex - 1] = 25;
+	engineConfiguration->tractionControlEtbDrop[lastYIndex][lastXIndex] = 25;
 
-	// we expect here that the first values are 37, and the last on the rigth side of the table are 62
+	// [0][0]/[0][1] aren't the cells sampled at this point, so the setpoint is unaffected: still 37.
+	// The corner cells (25) are only reached at the extreme coordinates probed below: 47 - 25 = 22.
 
 	engine->tractionController.update();
 	EXPECT_EQ(37, etb.getSetpoint().value_or(-1));
@@ -1007,7 +1009,36 @@ TEST(etb, tractionControlEtbDrop) {
 	Sensor::setMockValue(SensorType::WheelSlipRatio, 1.2);
 
 	engine->tractionController.update();
-	EXPECT_EQ(62, etb.getSetpoint().value_or(-1));
+	EXPECT_EQ(22, etb.getSetpoint().value_or(-1));
+}
+
+TEST(etb, tractionControlEtbDropNeverAddsThrottle) {
+	// Regression test: even an out-of-range negative raw table value (e.g. leftover from an old
+	// tune, or flash corruption) must never result in throttle being added by traction control.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	setTable(engineConfiguration->tractionControlEtbDrop, -15);
+	setLinearCurve(engineConfiguration->tractionControlSlipBins, /*from*/0.9, /*to*/1.2, 0.05);
+	setLinearCurve(engineConfiguration->tractionControlSpeedBins, /*from*/10, /*to*/120, 5);
+
+	StrictMock<MockVp3d> pedalMap;
+	EXPECT_CALL(pedalMap, getValue(_, _))
+		.WillRepeatedly([](float xRpm, float y) {
+			return y;
+		});
+
+	Sensor::setMockValue(SensorType::Tps1Primary, 0);
+	Sensor::setMockValue(SensorType::Tps1, 0.0f, true);
+	Sensor::setMockValue(SensorType::AcceleratorPedal, 47, true);
+
+	EtbController1 etb;
+	etb.init(DC_Throttle1, nullptr, nullptr, &pedalMap);
+
+	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0);
+	Sensor::setMockValue(SensorType::WheelSlipRatio, 0.9);
+	engine->tractionController.update();
+
+	EXPECT_EQ(47, etb.getSetpoint().value_or(-1));
 }
 
 TEST(etb, tractionControlHoldAndDecay) {
@@ -1021,11 +1052,11 @@ TEST(etb, tractionControlHoldAndDecay) {
 	setLinearCurve(engineConfiguration->tractionControlSlipBins, /*from*/0.0, /*to*/1.0, 0.2);
 	setLinearCurve(engineConfiguration->tractionControlSpeedBins, /*from*/10, /*to*/120, 5);
 
-	// Set drop to 0% for slip bin 0 (slip = 0.0) and -10% for slip bins 1-5
+	// Set drop to 0% for slip bin 0 (slip = 0.0) and 10% (positive table value) for slip bins 1-5
 	for (int i = 0; i < TRACTION_CONTROL_ETB_DROP_SPEED_SIZE; i++) {
 		engineConfiguration->tractionControlEtbDrop[i][0] = 0;
 		for (int j = 1; j < TRACTION_CONTROL_ETB_DROP_SLIP_SIZE; j++) {
-			engineConfiguration->tractionControlEtbDrop[i][j] = -10;
+			engineConfiguration->tractionControlEtbDrop[i][j] = 10;
 		}
 	}
 

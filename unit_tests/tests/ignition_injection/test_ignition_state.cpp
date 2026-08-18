@@ -95,19 +95,20 @@ TEST(ignition_state, getRunningAdvanceTractionDrop) {
   engine->tractionController.init();
 
   Sensor::setMockValue(SensorType::Clt, 35);
+  // Table stores a positive retard magnitude (0-100 deg); it can only pull timing back, never add it.
   setTable(engineConfiguration->tractionControlTimingDrop, 0);
-  engineConfiguration->tractionControlTimingDrop[0][0] = -15;
-  engineConfiguration->tractionControlTimingDrop[0][1] = -15;
+  engineConfiguration->tractionControlTimingDrop[0][0] = 15;
+  engineConfiguration->tractionControlTimingDrop[0][1] = 15;
 
   size_t lastYIndex = TRACTION_CONTROL_ETB_DROP_SLIP_SIZE - 1;
   size_t lastXIndex = TRACTION_CONTROL_ETB_DROP_SPEED_SIZE - 1;
 
-  engineConfiguration->tractionControlTimingDrop[lastYIndex - 1][lastXIndex - 1] = 15;
-  engineConfiguration->tractionControlTimingDrop[lastYIndex][lastXIndex] = 15;
+  engineConfiguration->tractionControlTimingDrop[lastYIndex - 1][lastXIndex - 1] = 25;
+  engineConfiguration->tractionControlTimingDrop[lastYIndex][lastXIndex] = 25;
 
   // test correct X/Y on table
-  // we expect here that the first values are -5 (10° base - 15° from traction table),
-  // and the last on the rigth side of the table are 25 (10° base + 15° from traction table)
+  // we expect here that the first values are -5 (10° base - 15° retard from traction table),
+  // and the last on the rigth side of the table are -15 (10° base - 25° retard from traction table)
 
   Sensor::setMockValue(SensorType::VehicleSpeed, 10.0);
   Sensor::setMockValue(SensorType::WheelSlipRatio, 0);
@@ -117,7 +118,7 @@ TEST(ignition_state, getRunningAdvanceTractionDrop) {
   Sensor::setMockValue(SensorType::VehicleSpeed, 120.0);
   Sensor::setMockValue(SensorType::WheelSlipRatio, 1.2);
   engine->tractionController.update();
-  EXPECT_NEAR(25, getRunningAdvance(rpm, load), EPS2D);
+  EXPECT_NEAR(-15, getRunningAdvance(rpm, load), EPS2D);
 }
 
 TEST(ignition_state, getRunningAdvanceTractionSparkSkip) {
@@ -157,7 +158,8 @@ TEST(ignition_state, getRunningAdvanceTractionSparkSkip) {
   Sensor::setMockValue(SensorType::WheelSlipRatio, 1.2);
   engine->tractionController.update();
   getRunningAdvance(rpm, load);
-  EXPECT_NEAR(50, engine->engineState.tractionControlSparkSkip, EPS2D);
+  // Table stores a "%" (0-100); applied ratio is that value / 100.
+  EXPECT_NEAR(0.5, engine->engineState.tractionControlSparkSkip, EPS2D);
 }
 
 TEST(ignition_state, tsAdvanceIndicators) {

@@ -26,10 +26,10 @@ void TractionControlController::update() {
 	}
 	engine->engineState.tractionControlYAxisValue = yAxisValue;
 
-	// Get raw table values
+	// Tables store positive magnitudes (% throttle removed, degrees retarded, % sparks skipped).
 	float rawEtbDrop = tcEtbDropTable.getValue(yAxisValue, vehicleSpeed);
 	float rawTimingDrop = tcTimingDropTable.getValue(yAxisValue, vehicleSpeed);
-	float rawSparkSkip = tcSparkSkipTable.getValue(yAxisValue, vehicleSpeed);
+	float rawSparkSkip = tcSparkSkipTable.getValue(yAxisValue, vehicleSpeed) / 100.0f;
 
 	float multiplier = 1.0f;
 	if (engineConfiguration->tractionControlUseLuaGauge) {
@@ -41,6 +41,12 @@ void TractionControlController::update() {
 	rawEtbDrop *= multiplier;
 	rawTimingDrop *= multiplier;
 	rawSparkSkip *= multiplier;
+
+	// ETB and timing corrections only ever remove throttle/advance, never add them: convert the
+	// positive table magnitude to a subtractive correction here, and clamp so a negative multiplier
+	// (or any other upstream sign mistake) can never flip these positive and add throttle/timing.
+	rawEtbDrop = minF(-rawEtbDrop, 0.0f);
+	rawTimingDrop = minF(-rawTimingDrop, 0.0f);
 
 	bool isTractionActive = (rawEtbDrop != 0.0f) || (rawTimingDrop != 0.0f) || (rawSparkSkip != 0.0f);
 

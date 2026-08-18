@@ -7,7 +7,10 @@
 #include "util/test_base.h"
 
 namespace {
+    // Raw table value is a "%" (0-100); TractionControlController divides by 100 before it's used
+    // as a skip ratio.
     constexpr float TEST_TRACTION_CONTROL_IGNITION_SKIP = 17.0f;
+    constexpr float TEST_TRACTION_CONTROL_IGNITION_SKIP_RATIO = TEST_TRACTION_CONTROL_IGNITION_SKIP / 100.0f;
     constexpr float TEST_LUA_SOFT_SPARK_SKIP = 239.0f;
     constexpr float TEST_LUA_HARD_SPARK_SKIP = 174.0f;
 
@@ -31,7 +34,7 @@ namespace {
         EXPECT_FALSE(engineConfiguration->useHardSkipInTraction);
 
         periodicFastCallback();
-        EXPECT_EQ(engine->softSparkLimiter.getTargetSkipRatio(), TEST_LUA_SOFT_SPARK_SKIP + TEST_TRACTION_CONTROL_IGNITION_SKIP);
+        EXPECT_EQ(engine->softSparkLimiter.getTargetSkipRatio(), TEST_LUA_SOFT_SPARK_SKIP + TEST_TRACTION_CONTROL_IGNITION_SKIP_RATIO);
         EXPECT_EQ(engine->hardSparkLimiter.getTargetSkipRatio(), TEST_LUA_HARD_SPARK_SKIP);
     }
 
@@ -40,6 +43,6 @@ namespace {
 
         periodicFastCallback();
         EXPECT_EQ(engine->softSparkLimiter.getTargetSkipRatio(), TEST_LUA_SOFT_SPARK_SKIP);
-        EXPECT_EQ(engine->hardSparkLimiter.getTargetSkipRatio(), TEST_LUA_HARD_SPARK_SKIP + TEST_TRACTION_CONTROL_IGNITION_SKIP);
+        EXPECT_EQ(engine->hardSparkLimiter.getTargetSkipRatio(), TEST_LUA_HARD_SPARK_SKIP + TEST_TRACTION_CONTROL_IGNITION_SKIP_RATIO);
     }
 }

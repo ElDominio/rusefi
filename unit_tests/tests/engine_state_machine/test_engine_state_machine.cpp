@@ -304,11 +304,11 @@ TEST(EngineStateMachine, tractionControlSetsTorqueReduction) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
 
-	// Configure a non-zero ETB drop across the whole traction-control table, then reload
-	// the controller's Map3D tables from the freshly-written config.
+	// Configure a non-zero ETB drop (positive table value = throttle % removed) across the whole
+	// traction-control table, then reload the controller's Map3D tables from the freshly-written config.
 	for (size_t s = 0; s < efi::size(engineConfiguration->tractionControlEtbDrop); s++) {
 		for (size_t v = 0; v < efi::size(engineConfiguration->tractionControlEtbDrop[0]); v++) {
-			engineConfiguration->tractionControlEtbDrop[s][v] = -10;
+			engineConfiguration->tractionControlEtbDrop[s][v] = 10;
 		}
 	}
 	engineConfiguration->tractionControlYAxisSource = TC_Y_AXIS_WHEEL_SLIP;
