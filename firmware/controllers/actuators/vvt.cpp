@@ -112,12 +112,21 @@ expected<angle_t> VvtController::getSetpoint() {
 	// - Avoid integrator windup from trying to jam the cam against the stop
 	// - Many VVT implementations don't like being controlled near the stop,
 	//       as this can cause problems with the lock pin jamming.
-	bool allowCamControl;
-	if (shouldInvertVvt(m_cam)) {
-		allowCamControl = m_targetHysteresis.test(target < -3, target > -1);
-	} else {
-		allowCamControl = m_targetHysteresis.test(target > 3, target < 1);
+	// Advanced Mode's duty comes purely from the oil-pressure feedforward + gain-scheduled PID
+	// math (see getClosedLoop), so there's no fixed near-zero duty to guard against -- let the
+	// math run for every target value, including 0.
+	bool allowCamControl = true;
+#if EFI_VVT_ADVANCED_MODE
+	if (!getCustomPage()->vvtAdvancedModeEnabled) {
+#endif // EFI_VVT_ADVANCED_MODE
+		if (shouldInvertVvt(m_cam)) {
+			allowCamControl = m_targetHysteresis.test(target < -3, target > -1);
+		} else {
+			allowCamControl = m_targetHysteresis.test(target > 3, target < 1);
+		}
+#if EFI_VVT_ADVANCED_MODE
 	}
+#endif // EFI_VVT_ADVANCED_MODE
 
 	if (!allowCamControl) {
 		return unexpected;

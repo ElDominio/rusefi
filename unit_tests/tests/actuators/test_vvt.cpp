@@ -132,6 +132,41 @@ TEST(VVT, SetpointHysteresisRetardingCam) {
 	EXPECT_EQ(-1000, dut.getSetpoint().value_or(-1000));
 }
 
+TEST(VVT, SetpointHysteresisSkippedInAdvancedMode) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	Sensor::setMockValue(SensorType::Clt, 70); // m_isCltWarmEnough
+	// m_isRpmHighEnough
+	engine->rpmCalculator.setRpmValue(1500);
+	engineConfiguration->vvtControlMinRpm = 500;
+	// m_engineRunningLongEnough
+	advanceTimeUs(0.8e6);
+	engineConfiguration->vvtActivationDelayMs = 5;
+	engineConfiguration->invertVvtControlIntake = false;
+	engineConfiguration->invertVvtControlExhaust = false;
+
+	getCustomPage()->vvtAdvancedModeEnabled = true;
+
+	FakeMap targetMap;
+	MockPwm pwm;
+
+	VvtController dut(0);
+	dut.init(&targetMap, &pwm);
+
+	// update m_engineRunningLongEnough / m_isRpmHighEnough flags
+	dut.onFastCallback();
+
+	// In Advanced Mode, even a 0 (or near-0) target flows through to the feedforward+PID math
+	// instead of being disabled by the near-rest hysteresis gate.
+	targetMap.setpoint = 0;
+	EXPECT_EQ(0, dut.getSetpoint().value_or(-1000));
+
+	targetMap.setpoint = 0.5;
+	EXPECT_EQ(0.5, dut.getSetpoint().value_or(-1000));
+
+	targetMap.setpoint = -0.5;
+	EXPECT_EQ(-0.5, dut.getSetpoint().value_or(-1000));
+}
+
 TEST(VVT, ObservePlant) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
@@ -299,4 +334,42 @@ TEST(Vvt, DistanceLiveDataOnlyTrackedInAdvancedMode) {
 	setupAdvancedIntakeCurvesFlat(d);
 	dut.getClosedLoop(30, 20);
 	EXPECT_NEAR(dut.vvtDistance, 10.0f, 0.5f); // vvtDistance is a scaled int16 (0.1 deg resolution)
+}
+
+TEST(VVT, DisabledBelowMinRpmEvenInAdvancedMode) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	Sensor::setMockValue(SensorType::Clt, 70); // m_isCltWarmEnough
+	engineConfiguration->vvtControlMinRpm = 500;
+	engineConfiguration->vvtActivationDelayMs = 5;
+	engineConfiguration->invertVvtControlIntake = false;
+	engineConfiguration->invertVvtControlExhaust = false;
+
+	getCustomPage()->vvtAdvancedModeEnabled = true;
+
+	FakeMap targetMap;
+	MockPwm pwm;
+
+	VvtController dut(0);
+	dut.init(&targetMap, &pwm);
+	targetMap.setpoint = 20; // well above the near-rest hysteresis band
+
+	// Bring the engine into RUNNING state once (RPM above the default cranking.rpm) and let
+	// m_engineRunningLongEnough settle. RpmCalculator::setRpmValue() only resets its "engine
+	// started" timer on a transition *into* RUNNING -- once RUNNING, later RPM changes (even below
+	// cranking.rpm) don't revert the state or reset the timer, so this isolates the vvtControlMinRpm
+	// check below from that unrelated state machine.
+	engine->rpmCalculator.setRpmValue(1500);
+	advanceTimeUs(0.8e6); // m_engineRunningLongEnough
+
+	// Below vvtControlMinRpm: still fully disabled (getSetpoint() -> unexpected), same as legacy
+	// PID mode -- Advanced Mode's base-duty feedforward is not a substitute for cranking, per user
+	// preference (2026-08-16): no held duty while cranking.
+	engine->rpmCalculator.setRpmValue(400);
+	dut.onFastCallback();
+	EXPECT_EQ(-1000, dut.getSetpoint().value_or(-1000));
+
+	// Above it, control resumes as normal.
+	engine->rpmCalculator.setRpmValue(1500);
+	dut.onFastCallback();
+	EXPECT_EQ(20, dut.getSetpoint().value_or(-1000));
 }

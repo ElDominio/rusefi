@@ -278,11 +278,6 @@ bool applyDefaultsOrFixAfterBurn(const engine_configuration_s* previousConfigura
   	changed = true;
 	}
 
-	if (engineConfiguration->vvtControlMinRpm < engineConfiguration->cranking.rpm) {
-		engineConfiguration->vvtControlMinRpm = engineConfiguration->cranking.rpm;
-		changed = true;
-	}
-
 	if (engineConfiguration->rpmSoftLimitRange == 0) {
 		// preserve pre-existing behavior for old tunes: soft limit window used to be rpmHardLimitHyst-wide
 		engineConfiguration->rpmSoftLimitRange = engineConfiguration->rpmHardLimitHyst;
