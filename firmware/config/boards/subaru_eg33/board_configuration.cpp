@@ -157,7 +157,6 @@ static void subaru_eg33_boardDefaultConfiguration() {
 	engineConfiguration->digitalPotentiometerChipSelect[1] = Gpio::Unassigned;
 	engineConfiguration->digitalPotentiometerChipSelect[2] = Gpio::Unassigned;
 	engineConfiguration->digitalPotentiometerChipSelect[3] = Gpio::Unassigned;
-	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::Unassigned;
 
 	/* SPIs */
 	/* SPI4, 5 are always enabled and its configuration is set in setBoardConfigOverrides() */

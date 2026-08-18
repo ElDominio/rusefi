@@ -242,11 +242,6 @@ static void setIndividualPin(const char *pinName, brain_pin_e *targetPin, const 
 	incrementGlobalConfigurationVersion();
 }
 
-// set vss_pin
-static void setVssPin(const char *pinName) {
-	setIndividualPin(pinName, &engineConfiguration->vehicleSpeedSensorInputPin, "VSS");
-}
-
 // set_idle_pin none
 static void setIdlePin(const char *pinName) {
 	setIndividualPin(pinName, &engineConfiguration->idle.solenoidPin, "idle");
@@ -553,7 +548,6 @@ const command_i_s commandsI[] = {
 #endif // EFI_BOR_LEVEL
 #if EFI_CAN_SUPPORT
 		{"can_mode", setCanType},
-		{"can_vss", setCanVss},
 #endif // EFI_CAN_SUPPORT
 #if EFI_IDLE_CONTROL
 		{"idle_position", setManualIdleValvePosition},
@@ -622,10 +616,6 @@ static void setValue(const char *paramStr, const char *valueStr) {
 		engineConfiguration->benchTestCount = valueI;
 	} else if (strEqualCaseInsensitive(paramStr, "cranking_dwell")) {
 		engineConfiguration->ignitionDwellForCrankingMs = valueF;
-#if EFI_PROD_CODE
-	} else if (strEqualCaseInsensitive(paramStr, CMD_VSS_PIN)) {
-		setVssPin(valueStr);
-#endif // EFI_PROD_CODE
 	} else if (strEqualCaseInsensitive(paramStr, "targetvbatt")) {
 		setTable(config->alternatorVoltageTargetTable, valueF);
 	} else if (strEqualCaseInsensitive(paramStr, CMD_DATE)) {

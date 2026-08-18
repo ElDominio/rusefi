@@ -89,7 +89,6 @@ static void hellen_MiataNB2_boardDefaultConfiguration() {
 	engineConfiguration->acSwitch = Gpio::B0;
 	engineConfiguration->acSwitchMode = PI_PULLUP;
 
-	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::H144_IN_VSS;
 	engineConfiguration->clutchDownPin = Gpio::H144_IN_RES3;
 	engineConfiguration->clutchDownPinMode = PI_INVERTED_DEFAULT;
 

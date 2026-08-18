@@ -20,7 +20,6 @@
 #include "can_rx.h"
 #include "obd2.h"
 #include "can_sensor.h"
-#include "can_vss.h"
 #include "rusefi_wideband.h"
 #include "board_overrides.h"
 /**
@@ -242,10 +241,6 @@ void processCanRxMessage(const size_t busIndex, const CANRxFrame &frame, efitick
 
     // see AemXSeriesWideband as an example of CanSensorBase/CanListener
 	serviceCanSubscribers(busIndex, frame, nowNt);
-
-	// todo: convert to CanListener or not?
-	//Vss is configurable, should we handle it here:
-	processCanRxVss(frame, nowNt);
 
 	if (!engineConfiguration->useSpiImu) {
 		// todo: convert to CanListener or not?

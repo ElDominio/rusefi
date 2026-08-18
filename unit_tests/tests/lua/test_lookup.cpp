@@ -32,7 +32,7 @@ TEST(LuaBasic, configLookup) {
 	}
 
 	{
-		const char * bit0Name = "devBit0";
+		const char * bit0Name = "devBit01";
 		const char * bit1Name = "devBit1";
 		setConfigValueByName(bit0Name, 1);
 		setConfigValueByName(bit1Name, 0);
@@ -54,11 +54,11 @@ TEST(LuaBasic, configLookup) {
 	}
 
 	{
-		//scaled_channel<uint16_t, 1000, 1> vssGearRatio;
-		const char * name = "vssGearRatio";
-		setConfigValueByName(name, 1.999);
-		ASSERT_EQ(engineConfiguration->vssGearRatio, getConfigValueByName(name));
-		ASSERT_NEAR(1.999, engineConfiguration->vssGearRatio, EPS3D);
+		//scaled_channel<uint16_t, 100, 1> finalGearRatio;
+		const char * name = "finalGearRatio";
+		setConfigValueByName(name, 3.70);
+		ASSERT_EQ(engineConfiguration->finalGearRatio, getConfigValueByName(name));
+		ASSERT_NEAR(3.70, engineConfiguration->finalGearRatio, EPS3D);
 	}
 }
 
@@ -92,13 +92,13 @@ TEST(LuaBasic, configLookupScaledChannelRegression) {
 	}
 
 	{
-		// vssGearRatio is scaled_channel<uint16_t, 1000, 1>
-		const char * name = "vssGearRatio";
+		// finalGearRatio is scaled_channel<uint16_t, 100, 1>
+		const char * name = "finalGearRatio";
 
-		engineConfiguration->vssGearRatio = 2.5f;
+		engineConfiguration->finalGearRatio = 2.5f;
 		EXPECT_FLOAT_EQ(2.5f, getConfigValueByName(name));
 		setConfigValueByName(name, 3.5f);
-		EXPECT_NEAR(3.5f, engineConfiguration->vssGearRatio, EPS4D);
+		EXPECT_NEAR(3.5f, engineConfiguration->finalGearRatio, EPS4D);
 		EXPECT_FLOAT_EQ(3.5f, getConfigValueByName(name));
 	}
 }

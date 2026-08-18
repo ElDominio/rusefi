@@ -25,8 +25,6 @@ void setMercedesM111EngineConfiguration() {
 	engineConfiguration->cylinderBore = 89.9;
 	config->dynoCarCarMassKg = 1250;
 	engineConfiguration->injector.flow = 196;
-	engineConfiguration->enableCanVss = true;
-	engineConfiguration->canVssNbcType = W202;
 	engineConfiguration->canNbcType = CAN_BUS_W202_C180;
 
 #if HW_HELLEN

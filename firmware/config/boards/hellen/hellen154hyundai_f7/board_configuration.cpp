@@ -33,8 +33,6 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
 	engineConfiguration->vvtMode[1] = VVT_SINGLE_TOOTH;
 
-    engineConfiguration->vehicleSpeedSensorInputPin = Gpio::H144_IN_D_4;
-
 	setTPS1Inputs(H144_IN_TPS, H144_IN_TPS2);
 	setPPSInputs(H144_IN_PPS, H144_IN_PPS2);
 

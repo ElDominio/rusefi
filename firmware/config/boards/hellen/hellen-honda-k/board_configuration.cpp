@@ -27,8 +27,6 @@ static void setIgnitionPins() {
 }
 
 static void setupDefaultSensorInputs() {
-    engineConfiguration->vehicleSpeedSensorInputPin = Gpio::H144_IN_VSS;
-
 	engineConfiguration->tps1_1AdcChannel = H144_IN_TPS;
 
 

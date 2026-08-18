@@ -207,7 +207,8 @@ TESTS_SRC_CPP = \
 	tests/test_hellen_board_id.cpp \
 	tests/sensor/test_frequency_sensor.cpp \
 	tests/sensor/test_turbocharger_speed_converter.cpp \
-	tests/sensor/test_vehicle_speed_converter.cpp \
+	tests/sensor/test_output_shaft_speed_converter.cpp \
+	tests/sensor/test_wheel_speed_sensors.cpp \
 	tests/sensor/test_eot_estimator.cpp \
 	tests/sensor/test_cht_clt_estimator.cpp \
 	tests/actuators/test_aux_valves.cpp \

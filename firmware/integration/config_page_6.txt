@@ -64,6 +64,14 @@ custom fuel_pump_mode_e 1 bits, U08, @OFFSET@, [0:1], "Single", "Dual", "PWM"
 #define imrc_mode_e_enum "Disabled", "Solenoid", "H-Bridge"
 custom imrc_mode_e 1 bits, U08, @OFFSET@, [0:1], @@imrc_mode_e_enum@@
 
+#define wheel_speed_source_e_enum "None", "Vehicle Speed", "Front Axle", "Rear Axle", "Output Shaft Speed", "Aux Speed 1", "Aux Speed 2"
+custom wheel_speed_source_e 1 bits, U08, @OFFSET@, [0:2], @@wheel_speed_source_e_enum@@
+
+#define main_speed_sensor_source_e_enum "None", "Output Shaft Speed", "Front Axle", "Rear Axle"
+custom main_speed_sensor_source_e 1 bits, U08, @OFFSET@, [0:1], @@main_speed_sensor_source_e_enum@@
+#define wheel_speed_sensor_mode_e_enum "None", "Physical Pin", "CAN / Lua"
+custom wheel_speed_sensor_mode_e 1 bits, U08, @OFFSET@, [0:1], @@wheel_speed_sensor_mode_e_enum@@
+
 struct_no_prefix page6_s
 
 	! --- Downshift Blipper (automated rev-match on a clutch-in single-gear downshift) ---
@@ -232,13 +240,18 @@ struct_no_prefix page6_s
 
 	! --- Eco Mode (Engine State Machine sub-feature) ---
 	! Fuel-economy overlay. Engages once the engine has been in the Cruising state continuously for
-	! ecoModeCruisingTime AND MAP is at or below ecoModeMapLimit, and drops instantly on leaving
-	! Cruising or exceeding the MAP limit (a tip-in into Transient/WOT, or load creeping up while
-	! still nominally "cruising"). While active it overrides target AFR, adds/pulls ignition timing,
-	! optionally retargets the intake/exhaust VVT cams, scales the throttle target, and can hold a
-	! lower absolute alternator charging target (when smart alternator control is enabled). A manual
-	! switch / Lua gauge can Inhibit (block) eco; Limp mode and Sport Mode both out-vote eco
-	! entirely (Sport Mode and Eco Mode are mutually exclusive).
+	! ecoModeCruisingTime AND MAP is at or below ecoModeMapLimit AND RPM is at or below ecoModeMaxRpm,
+	! and drops instantly on leaving Cruising or exceeding the MAP/RPM limit (a tip-in into
+	! Transient/WOT, or load/RPM creeping up while still nominally "cruising"). Once eco engages,
+	! ecoModeEngageLockTime holds it forced active and ignores further state/MAP/VSS/RPM
+	! re-evaluation for that long, so the torque-delivery step from eco's own AFR/timing/VVT/
+	! throttle changes isn't misread as leaving Cruising and immediately dropped again -- Limp mode,
+	! Sport Mode and the Inhibit switch still override the lock instantly (safety/driver intent
+	! wins). While active it overrides target AFR, adds/pulls ignition timing, optionally retargets
+	! the intake/exhaust VVT cams, scales the throttle target, and can hold a lower absolute
+	! alternator charging target (when smart alternator control is enabled). A manual switch / Lua
+	! gauge can Inhibit (block) eco; Limp mode and Sport Mode both out-vote eco entirely (Sport Mode
+	! and Eco Mode are mutually exclusive).
 	bit ecoModeEnabled,"enabled","disabled";Eco Mode: master enable. Engages after sustained cruising to bias fuel/timing/throttle for economy.
 	bit ecoModeVvtOverride,"enabled","disabled";Eco Mode: also override the intake/exhaust VVT cam targets while active (engines with VVT only).
 
@@ -251,7 +264,9 @@ struct_no_prefix page6_s
 	uint16_t ecoModeCruisingTime;Eco Mode: continuous time in the Cruising state before eco engages.;"sec", 1, 0, 0, 600, 0
 	uint16_t ecoModeMapLimit;Eco Mode: MAP must be at or below this for eco to engage. Exceeding it drops eco instantly, just like leaving Cruising. 0 disables the MAP gate.;"kPa", 1, 0, 0, @@MAP_UPPER_LIMIT@@, 0
 	uint16_t ecoModeMinVss;Eco Mode: minimum vehicle speed for eco to engage. Below this the cruise timer is reset and eco cannot activate — catches low-speed crawls that the Accelerating state alone misses. 0 disables.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
+	uint16_t ecoModeMaxRpm;Eco Mode: engine RPM must be at or below this for eco to engage. Exceeding it drops eco instantly, just like leaving Cruising. 0 disables the RPM gate.;"RPM", 1, 0, 0, 15000, 0
 
+	float ecoModeEngageLockTime;Eco Mode: once eco engages, force it to stay active and ignore state/MAP/VSS/RPM changes for this long, so the torque-delivery step from eco's own AFR/timing/VVT/throttle changes doesn't get misread as leaving Cruising and drop eco right back off. Limp/Sport/Inhibit still override instantly. 0 disables the lock (instant re-evaluation, legacy behavior).;"sec", 1, 0, 0, 2, 2
 	float ecoModeLuaGaugeValue;Eco Mode: Lua gauge threshold for the switch source.;"", 1, 0, -30000, 30000, 3
 	float ecoTargetAfr;Eco Mode: absolute target AFR while active (leaner = more economy).;"afr", 1, 0, 10, 20, 1
 	float ecoTimingAdder;Eco Mode: ignition timing added (+) or pulled (-) while active.;"deg", 1, 0, -15, 15, 1
@@ -663,5 +678,44 @@ struct_no_prefix page6_s
 	float[VVT_ADV_DISTANCE_SIZE] vvtAdvPFactorExhaust;VVT Advanced Mode: exhaust PID P factor at each distance from target (curve Y). Replaces the fixed Exhaust PID "P factor" field. Entered/displayed x100 for friendlier decimal precision (e.g. 100 = 1.000 actual P factor, 0.1 = 0.001 actual).;"x100", 100, 0, -1000, 1000, 1
 	float[VVT_ADV_OILP_SIZE] vvtAdvOilPressureBinsExhaust;VVT Advanced Mode: exhaust oil pressure axis (curve X), shared by the base duty curve below.;"kPa", 1, 0, 0, 1000, 0
 	float[VVT_ADV_OILP_SIZE] vvtAdvDutyExhaust;VVT Advanced Mode: exhaust base duty cycle at each oil pressure (curve Y). Evaluated at 0 kPa if no oil pressure sensor is configured.;"%", 1, 0, -100, 100, 1
+
+	! --- Wheel Speed Sensors (Main Speed Sensor source, Output Shaft Speed, Front/Rear Axle,
+	! configurable Wheel Slip Ratio source) ---
+	! Main Speed Sensor Source picks which of the three feeds SensorType::VehicleSpeed, replacing
+	! the Speed Sensor dialog's pin/CAN choice for boards using this feature (see the "Main Speed
+	! Sensor" dialog). Output Shaft Speed measures the transmission output shaft directly (pre-
+	! differential) -- Gear Detection uses its RPM directly with no math when it's configured.
+	! Front/Rear Axle and Output Shaft Speed each independently choose Physical Pin (own tooth
+	! count/filter, plus a per-axle Wheel Revs/km for Front/Rear) or CAN/Lua (no pin config --
+	! Sensor.new("WheelSpeedFront"):set(value) etc, typically fed from a CAN wheel-speed decode
+	! done in a Lua script). The plausibility/glitch-rejection filter is shared: OSS, Front-
+	! physical and Rear-physical each run their own filter instance, but all read the one
+	! wheelSpeedMaxAccelPercent threshold below (expressed as %/sec of the current reading so the
+	! same number is meaningful for both RPM and km/h). Wheel Slip Ratio can be computed from any
+	! pair of the speed channels below instead of the fixed CAN-vendor or Aux-Speed-based calcs.
+	main_speed_sensor_source_e mainSpeedSensorSource;Main Speed Sensor: which sensor feeds Vehicle Speed.
+
+	uint8_t wheelSpeedMaxAccelPercent;Wheel Speed Sensors: shared glitch-rejection filter -- reject a reading implying more than this %/sec change, and dead-reckon from the last known rate instead. One shared threshold used independently by Output Shaft Speed, Front Axle (Physical Pin) and Rear Axle (Physical Pin). 0 disables.;"%/sec", 1, 0, 0, 200, 0
+
+	wheel_speed_sensor_mode_e ossMode;Output Shaft Speed: input mode.
+	switch_input_pin_e outputShaftSpeedSensorPin;Output Shaft Speed: hardware pulse input pin (e.g. a transmission-mounted hall sensor). Physical Pin mode only.
+	uint8_t outputShaftSpeedSensorTeeth;Output Shaft Speed: number of sensor pulses per output-shaft revolution. Physical Pin mode only.;"", 1, 0, 1, 255, 0
+	uint8_t ossFilterReciprocal;Output Shaft Speed: low-pass filter reciprocal (higher = more filtering, averaged over more teeth). Physical Pin mode only.;"", 1, 0, 3, 200, 0
+	float ossRevPerKm;Output Shaft Speed: wheel revolutions per kilometer, used to convert OSS RPM into Vehicle Speed. Only used when Main Speed Sensor (Setup -> Vehicle Information) is set to Output Shaft Speed.;"revs/km", 1, 0, 100, 1000, 1
+
+	wheel_speed_sensor_mode_e wheelSpeedFrontMode;Front Axle Speed: input mode.
+	switch_input_pin_e wheelSpeedFrontPin;Front Axle Speed: hardware pulse input pin. Physical Pin mode only.
+	uint8_t wheelSpeedFrontTeeth;Front Axle Speed: number of sensor pulses per wheel revolution. Physical Pin mode only.;"", 1, 0, 1, 255, 0
+	uint8_t wheelSpeedFrontFilterReciprocal;Front Axle Speed: low-pass filter reciprocal. Physical Pin mode only.;"", 1, 0, 3, 200, 0
+	float wheelSpeedFrontRevPerKm;Front Axle Speed: wheel revolutions per kilometer (tire size). Physical Pin mode only -- CAN/Lua mode feeds an already-final km/h value directly.;"revs/km", 1, 0, 100, 1000, 1
+
+	wheel_speed_sensor_mode_e wheelSpeedRearMode;Rear Axle Speed: input mode.
+	switch_input_pin_e wheelSpeedRearPin;Rear Axle Speed: hardware pulse input pin. Physical Pin mode only.
+	uint8_t wheelSpeedRearTeeth;Rear Axle Speed: number of sensor pulses per wheel revolution. Physical Pin mode only.;"", 1, 0, 1, 255, 0
+	uint8_t wheelSpeedRearFilterReciprocal;Rear Axle Speed: low-pass filter reciprocal. Physical Pin mode only.;"", 1, 0, 3, 200, 0
+	float wheelSpeedRearRevPerKm;Rear Axle Speed: wheel revolutions per kilometer (tire size). Physical Pin mode only -- CAN/Lua mode feeds an already-final km/h value directly.;"revs/km", 1, 0, 100, 1000, 1
+
+	wheel_speed_source_e wheelSlipRatioSource1;Wheel Slip Ratio: numerator source (e.g. Front Axle).
+	wheel_speed_source_e wheelSlipRatioSource2;Wheel Slip Ratio: denominator source (e.g. Rear Axle).
 
 end_struct

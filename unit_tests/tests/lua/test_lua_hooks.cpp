@@ -184,6 +184,33 @@ TEST(LuaHooks, LuaSensor) {
 	EXPECT_FALSE(Sensor::hasSensor(SensorType::Clt));
 }
 
+// WheelSpeedFront/Rear have no physical pin - they only ever get a value from a Lua script
+// (typically decoding individual wheel speeds off CAN), via this exact Sensor.new() mechanism.
+static const char* axleSpeedSensorTest = R"(
+function testFunc()
+	local frontAxle = Sensor.new("WheelSpeedFront")
+
+	frontAxle:set(123.5)
+	if getSensor("WheelSpeedFront") ~= 123.5 then
+		return 1
+	end
+
+	frontAxle:invalidate()
+	if getSensor("WheelSpeedFront") then
+		return 2
+	end
+
+	return 0
+end
+)";
+
+TEST(LuaHooks, LuaAxleSpeedSensor) {
+	EXPECT_EQ(testLuaReturnsNumber(axleSpeedSensorTest), 0);
+
+	// Ensure that the sensor got unregistered on teardown of the Lua interpreter
+	EXPECT_FALSE(Sensor::hasSensor(SensorType::WheelSpeedFront));
+}
+
 static const char* pidTest = R"(
 function testFunc()
 	local pid = Pid.new(0.5, 0, 0, -10, 10)

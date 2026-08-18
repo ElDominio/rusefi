@@ -105,11 +105,13 @@ static void sensorStartUpOrReconfiguration(bool isFirstTime) {
 	initTps();
 	initFluidPressure();
 	initThermistors();
-	initVehicleSpeedSensor();
 	initTurbochargerSpeedSensor();
 	initAuxSensors();
 	initAuxSpeedSensors();
 	initInputShaftSpeedSensor();
+	initWheelSpeedSensors();
+	initVehicleSpeedSensor();
+	initConfigurableWheelSlipRatio();
 #if EFI_TCU
 	initRangeSensors();
 #endif
@@ -171,6 +173,8 @@ void stopSensors() {
 	deinitAuxSpeedSensors();
 	deinitMap();
 	deinitInputShaftSpeedSensor();
+	deinitWheelSpeedSensors();
+	deinitConfigurableWheelSlipRatio();
 	stopEgt();
 }
 

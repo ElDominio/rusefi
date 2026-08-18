@@ -163,7 +163,6 @@ static void prometheus_boardDefaultConfiguration() {
 
 	// not used
 	engineConfiguration->triggerSimulatorPins[1] = Gpio::Unassigned;
-	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::Unassigned;
 
 	engineConfiguration->is_enabled_spi_2 = false;
 	engineConfiguration->is_enabled_spi_3 = true;

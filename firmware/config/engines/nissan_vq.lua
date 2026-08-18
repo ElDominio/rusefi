@@ -14,7 +14,10 @@ ENGINE_4_23E_574 = 574
 ENGINE_5_551_1361 = 1361
 ENGINE_6_580_1408 = 1408
 
-speedSensor = Sensor.new("VehicleSpeed")
+-- SensorType::VehicleSpeed is always pre-registered (Main Speed Sensor passthrough), so feed
+-- WheelSpeedFront here instead and set Main Speed Sensor = Front Axle in Setup -> Vehicle
+-- Information for this reading to become the reported VehicleSpeed.
+speedSensor = Sensor.new("WheelSpeedFront")
 speedSensor : setTimeout(3000)
 
 setTickRate(100)

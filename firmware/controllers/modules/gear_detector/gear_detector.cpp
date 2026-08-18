@@ -122,8 +122,16 @@ size_t GearDetector::determineGearFromRatio(float ratio) const {
 }
 
 float GearDetector::getDriveshaftRpm() const {
-	auto vssKph = Sensor::getOrZero(SensorType::VehicleSpeed);
+	if (engineConfiguration->gearDetectionUseOutputShaftSpeed) {
+		// OSS is measured at the transmission output - it already *is* driveshaft RPM, no
+		// conversion needed. Returns invalid/0 if OSS isn't actually configured/registered.
+		return Sensor::getOrZero(SensorType::OutputShaftSpeed);
+	}
 
+	// Main Vehicle Speed is already the fully-resolved km/h reading (whatever Main Speed Sensor
+	// -- OSS/Front/Rear -- is configured to feed it), so Gear Setup doesn't need to know or care
+	// which physical source produced it.
+	auto vssKph = Sensor::getOrZero(SensorType::VehicleSpeed);
 	if (vssKph < 3) {
 		// Vehicle too slow to determine gearbox ratio, avoid div/0
 		return 0;
@@ -147,7 +155,12 @@ float GearDetector::computeGearboxRatio() const {
 	}
 
 	float engineRpm;
-	if (Sensor::hasSensor(SensorType::InputShaftSpeed)) {
+	if (engineConfiguration->gearDetectionUseOutputShaftSpeed) {
+		// Explicit choice, only meaningful when paired with Output Shaft Speed.
+		engineRpm = engineConfiguration->gearDetectionRpmSourceIsInputShaftSpeed
+				? Sensor::getOrZero(SensorType::InputShaftSpeed)
+				: Sensor::getOrZero(SensorType::Rpm);
+	} else if (Sensor::hasSensor(SensorType::InputShaftSpeed)) {
 		engineRpm = Sensor::getOrZero(SensorType::InputShaftSpeed);
 	} else {
 		engineRpm = Sensor::getOrZero(SensorType::Rpm);

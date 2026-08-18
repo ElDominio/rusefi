@@ -30,7 +30,8 @@ CONTROLLERS_SENSORS_SRC_CPP = \
 	$(PROJECT_DIR)/controllers/sensors/converters/thermistor_func.cpp \
 	$(PROJECT_DIR)/controllers/sensors/converters/identity_func.cpp \
 	$(PROJECT_DIR)/controllers/sensors/converters/fuel_level_func.cpp \
-	$(PROJECT_DIR)/controllers/sensors/vr_pwm.cpp
+	$(PROJECT_DIR)/controllers/sensors/vr_pwm.cpp \
+	$(PROJECT_DIR)/controllers/sensors/wheel_slip_ratio_source.cpp
 
 
 CONTROLLERS_SENSORS_INC=\

@@ -53,7 +53,6 @@ void setMaverickX3() {
     engineConfiguration->vvtControlMinRpm = 2000;
 
     engineConfiguration->startButtonSuppressOnStartUpMs = 1000;
-    engineConfiguration->vssToothCount = 10;
 
     engineConfiguration->etb.pFactor = 12.0794;
     engineConfiguration->etb.iFactor = 213.349;
@@ -83,7 +82,6 @@ void setMaverickX3() {
 
 #if HW_PROTEUS && EFI_PROD_CODE
     engineConfiguration->camInputs[0] = PROTEUS_DIGITAL_6;
-   	engineConfiguration->vehicleSpeedSensorInputPin = PROTEUS_DIGITAL_5;
 	engineConfiguration->auxAnalogInputs[0] = PROTEUS_IN_ANALOG_VOLT_4;
 	setProteusEtbIO();
 	engineConfiguration->starterControlPin = Gpio::PROTEUS_LS_14;

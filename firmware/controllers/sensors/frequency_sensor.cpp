@@ -42,23 +42,7 @@ void FrequencySensor::initIfValid(brain_pin_e pin, SensorConverter &converter, f
 	Register();
 }
 
-void FrequencySensor::initShared(SensorConverter &converter, float filterParameter) {
-	// Filter parameter greater than or equal to 0.5 impossible as it causes filter instability, clamp
-	// far under that value.
-	if (filterParameter > 0.35f) {
-		filterParameter = 0.35f;
-	}
-
-	m_filter.configureLowpass(1, filterParameter);
-
-	setFunction(converter);
-
-	Register();
-}
-
 void FrequencySensor::deInit() {
-	m_sharedListener = nullptr;
-
 	if (!isBrainPinValid(m_pin)) {
 		return;
 	}
@@ -75,15 +59,6 @@ void FrequencySensor::onEdge(efitick_t nowNt) {
 	eventCounter++;
 	float rawFrequency = 1 / m_edgeTimer.getElapsedSecondsAndReset(nowNt);
 
-	if (m_sharedListener) {
-		m_sharedListener->onSharedEdge(rawFrequency, nowNt);
-	}
-
-	processFrequency(rawFrequency, nowNt);
-}
-
-void FrequencySensor::onSharedEdge(float rawFrequency, efitick_t nowNt) {
-	eventCounter++;
 	processFrequency(rawFrequency, nowNt);
 }
 

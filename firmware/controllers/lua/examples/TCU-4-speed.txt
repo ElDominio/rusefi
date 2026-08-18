@@ -15,7 +15,10 @@ if not buildIntoEcu then
   local engineRpmSensor = Sensor.new("Rpm")
   local manifoldPressureSensor = Sensor.new("Map")
   local throttlePosSensor = Sensor.new("Tps1")
-  local vehicleSpeedSensor = Sensor.new("VehicleSpeed")
+  -- SensorType::VehicleSpeed is always pre-registered (Main Speed Sensor passthrough), so feed
+  -- WheelSpeedFront here instead and set Main Speed Sensor = Front Axle in Setup -> Vehicle
+  -- Information for this reading to become the reported VehicleSpeed.
+  local vehicleSpeedSensor = Sensor.new("WheelSpeedFront")
   local detectedGearSensor = Sensor.new("DetectedGear")
 
   -- Sensor Timeouts

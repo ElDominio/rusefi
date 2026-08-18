@@ -232,3 +232,61 @@ TEST(GearDetector, ParameterValidation) {
 	engineConfiguration->totalGearsCount = 0;
 	EXPECT_NO_FATAL_ERROR(dut.onConfigurationChange(nullptr));
 }
+
+// Speed Source = Output Shaft Speed (explicit choice): OSS RPM is used directly as driveshaft RPM,
+// no VSS/wheel-size math at all.
+TEST(GearDetector, DriveshaftRpmUsesOutputShaftSpeedWhenSelected) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->totalGearsCount = 1;
+	engineConfiguration->gearRatio[0] = 1.0f;
+	// Deliberately implausible VSS-path config, to prove it's NOT used when OSS is selected.
+	engineConfiguration->driveWheelRevPerKm = 1;
+	engineConfiguration->finalGearRatio = 1;
+	Sensor::setMockValue(SensorType::VehicleSpeed, 0);
+
+	engineConfiguration->gearDetectionUseOutputShaftSpeed = true;
+	Sensor::setMockValue(SensorType::OutputShaftSpeed, 4200.0f);
+
+	auto& dut = engine->module<GearDetector>().unmock();
+
+	EXPECT_NEAR(4200.0f, dut.getRpmInGear(1), 1e-2);
+}
+
+// Speed Source = Main Vehicle Speed (default): converts SensorType::VehicleSpeed back to driveshaft
+// RPM via driveWheelRevPerKm/finalGearRatio, regardless of which physical sensor feeds VehicleSpeed.
+TEST(GearDetector, DriveshaftRpmUsesMainVehicleSpeedByDefault) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->totalGearsCount = 1;
+	engineConfiguration->gearRatio[0] = 3.35f;
+	engineConfiguration->finalGearRatio = 4.1f;
+	engineConfiguration->driveWheelRevPerKm = 507;
+
+	Sensor::setMockValue(SensorType::VehicleSpeed, 29.45f / 0.6214f);
+
+	auto& dut = engine->module<GearDetector>().unmock();
+	// Same numbers as the Volvo racecar case in ComputeGearRatio (507 revs/km, 4.1 final drive).
+	EXPECT_NEAR(5500, dut.getRpmInGear(1), 1);
+}
+
+// RPM Source (Engine RPM vs Input Shaft Speed) only takes effect when Speed Source = Output Shaft
+// Speed - selecting Input Shaft Speed there uses ISS instead of plain engine RPM as the numerator.
+TEST(GearDetector, RpmSourceOnlyAppliesWithOutputShaftSpeed) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->totalGearsCount = 1;
+	engineConfiguration->gearRatio[0] = 1.0f;
+
+	engineConfiguration->gearDetectionUseOutputShaftSpeed = true;
+	engineConfiguration->gearDetectionRpmSourceIsInputShaftSpeed = true;
+	Sensor::setMockValue(SensorType::OutputShaftSpeed, 2000.0f);
+	Sensor::setMockValue(SensorType::Rpm, 9999.0f);
+	Sensor::setMockValue(SensorType::InputShaftSpeed, 3000.0f);
+
+	engine->periodicSlowCallback();
+	auto& dut = engine->module<GearDetector>().unmock();
+
+	// 3000 ISS / 2000 OSS - proves ISS (not the deliberately-wrong 9999 RPM) fed the numerator.
+	EXPECT_NEAR_M3(1.5f, dut.getGearboxRatio());
+}

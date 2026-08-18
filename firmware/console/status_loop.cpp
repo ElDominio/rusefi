@@ -577,6 +577,9 @@ static void updateMiscSensors() {
 	engine->outputChannels.ISSValue = Sensor::getOrZero(SensorType::InputShaftSpeed);
 	engine->outputChannels.auxSpeed1 = Sensor::getOrZero(SensorType::AuxSpeed1);
 	engine->outputChannels.auxSpeed2 = Sensor::getOrZero(SensorType::AuxSpeed2);
+	engine->outputChannels.outputShaftSpeedValue = Sensor::getOrZero(SensorType::OutputShaftSpeed);
+	engine->outputChannels.wheelSpeedFront = Sensor::getOrZero(SensorType::WheelSpeedFront);
+	engine->outputChannels.wheelSpeedRear = Sensor::getOrZero(SensorType::WheelSpeedRear);
 
 #if	HAL_USE_ADC
 	engine->outputChannels.internalMcuTemperature = getMCUInternalTemperature();
@@ -778,8 +781,6 @@ void updateTunerStudioState() {
 	tsOutputChannels->turboSpeed = Sensor::getOrZero(SensorType::TurbochargerSpeed);
 	extern FrequencySensor inputShaftSpeedSensor;
 	tsOutputChannels->issEdgeCounter = inputShaftSpeedSensor.eventCounter;
-	extern FrequencySensor vehicleSpeedSensor;
-	tsOutputChannels->vssEdgeCounter = vehicleSpeedSensor.eventCounter;
 
 	tsOutputChannels->hasCriticalError = hasFirmwareError() || hasConfigError() || engine->engineState.warnings.hasWarningMessage();
 	tsOutputChannels->hasFaultReportFile = hasErrorReportFile();

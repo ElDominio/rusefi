@@ -36,8 +36,6 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->triggerInputPins[0] = Gpio::MM100_UART8_TX; // VR2 max9924 is the safer default
 	engineConfiguration->camInputs[0] = Gpio::MM100_IN_D2; // HALL2
 	engineConfiguration->camInputs[1] = Gpio::MM100_IN_D3; // HALL3
-
-  engineConfiguration->vehicleSpeedSensorInputPin = Gpio::MM100_IN_D1;  // HALL1
 }
 
 /**

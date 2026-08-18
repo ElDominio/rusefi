@@ -56,9 +56,6 @@ static void setupDefaultSensorInputs() {
 	// PPS (Pedal Position Sensor) Inputs
 	setPPSInputs(H144_IN_PPS, EFI_ADC_7); // PPSA on A18 (PA3), PPSB on A20 (PA7)
 
-	// Vehicle Speed Sensor
-	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::D6; // H144_UART2_RX (STM32_VSS)
-
 	// Flex Fuel Sensor
 	engineConfiguration->flexSensorPin = Gpio::D5; // H144_UART2_TX (STM32_FLEX)
 

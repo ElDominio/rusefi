@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260815
+#define FLASH_DATA_VERSION 260817
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -133,9 +133,6 @@ struct_no_prefix engine_configuration_s
 
 #define LUA_PWM_COUNT 8
 #define LUA_DIGITAL_INPUT_COUNT 8
-
-#define VSS_FILTER_MIN 3
-#define VSS_FILTER_MAX 200
 
 ! https://github.com/rusefi/rusefi/issues/2010 shows the corner case wheel with huge depth requirement
 #define GAP_TRACKING_LENGTH 18
@@ -218,7 +215,7 @@ struct_no_prefix engine_configuration_s
 
 #define CAM_INPUT_1_1_NAME "Cam sensor bank 1 intake"
 #define VVT_OFFSET_1_1_NAME "VVT offset bank 1 intake"
-#define GEAR_DETECTION_DIALOG_NAME "Gear Detection"
+#define GEAR_DETECTION_DIALOG_NAME "Gear Setup"
 #define ts_show_final_ratio true
 #define ts_show_bench_test true
 #define ts_show_ltft_sd_card_message true
@@ -758,7 +755,7 @@ include_file controllers/modules/fan_control/fan_control_engineConfiguration.txt
 include_file controllers/modules/configuration_wizard/configuration_wizard_engineConfiguration.txt
 output_pin_e acrPin;
 
-float driveWheelRevPerKm;Number of revolutions per kilometer for the wheels your vehicle speed sensor is connected to. Use an online calculator to determine this based on your tire size.;"revs/km", 1, 0, 100, 1000, 1
+float driveWheelRevPerKm;Number of revolutions per kilometer for the wheels your vehicle speed sensor is connected to. Use an online calculator to determine this based on your tire size. Used by Gear Setup to convert Main Vehicle Speed back to driveshaft RPM when its Speed Source is Main Vehicle Speed.;"revs/km", 1, 0, 100, 1000, 1
 
 int canSleepPeriodMs;CANbus thread period in ms;"ms", 1, 0, 0, 1000, 2
 	int byFirmwareVersion;;"index", 1, 0, 0, 300, 0
@@ -847,11 +844,6 @@ custom engineSyncCam_e 1 bits, S08, @OFFSET@, [0:1], @@engineSyncCam_enum@@
 engineSyncCam_e engineSyncCam;Select which cam is used for engine sync. Other cams will be used only for VVT measurement, but not engine sync.
 
 	pin_output_mode_e sdCardCsPinMode;
-
-	uint16_t autoscale vssGearRatio;Number of turns of your vehicle speed sensor per turn of the wheels. For example if your sensor is on the transmission output, enter your axle/differential ratio. If you are using a hub-mounted sensor, enter a value of 1.0.;"ratio", 0.001, 0, 0, 60, 3
-	uint8_t vssFilterReciprocal;Set this so your vehicle speed signal is responsive, but not noisy. Larger value give smoother but slower response.;"", 1, 0, @@VSS_FILTER_MIN@@, @@VSS_FILTER_MAX@@, 0
-	uint8_t vssToothCount;Number of pulses output per revolution of the shaft where your VSS is mounted. For example, GM applications of the T56 output 17 pulses per revolution of the transmission output shaft.;"count", 1, 0, 1, 100, 0
-	uint8_t vssMaxAcceleration;Reject VSS pulses that imply a faster acceleration or deceleration than this, and dead-reckon speed from the last known rate of change instead. Helps reject a single noisy tooth. Set to 0 to disable.;"km/h/sec", 1, 0, 0, 200, 0
 
 	#define ve_override_e_enum "None", "MAP", "TPS"
 	custom ve_override_e 1 bits, U08, @OFFSET@, [0:1], @@ve_override_e_enum@@
@@ -972,9 +964,7 @@ spi_device_e digitalPotentiometerSpiDevice;Digital Potentiometer is used by stoc
 	bit useHbridgesToDriveIdleStepper,"yes","no";If enabled we use two H-bridges to drive stepper idle air valve
 	bit multisparkEnable,"yes","no"
 	bit enableLaunchRetard,"yes","no";Enables absolute ignition timing control during launch (sets timing to the "Absolute Timing at Launch" value).
-	bit canInputBCM,"enabled","disabled"
 	bit consumeObdSensors,"yes","no";This property is useful if using rusEFI as TCM or BCM only
-	bit enableCanVss,"yes","no";Read VSS from OEM CAN bus according to selected CAN vehicle configuration.
 	bit stftIgnoreErrorMagnitude,"yes","no";If enabled, adjust at a constant rate instead of a rate proportional to the current lambda error. This mode may be easier to tune, and more tolerant of sensor noise.
 	bit vvtBooleanForVerySpecialCases,"true","false"
 	bit enableSoftwareKnock,"enabled","disabled"
@@ -1025,7 +1015,6 @@ spi_device_e digitalPotentiometerSpiDevice;Digital Potentiometer is used by stoc
 	Gpio lps25BaroSensorScl
 	Gpio lps25BaroSensorSda
 
-	brain_input_pin_e vehicleSpeedSensorInputPin;
 	switch_input_pin_e clutchUpPin;Some vehicles have a switch to indicate that clutch pedal is all the way up
 	custom InjectorNonlinearMode 1 bits, U08, @OFFSET@, [0:1], "None", "Polynomial", "Ford (dual slope)", "Curve (%)"
 	InjectorNonlinearMode injectorNonlinearMode
@@ -1353,7 +1342,6 @@ tps_limit_t tps2Max;Fully opened voltage for primary throttle position sensor
 	bit startRequestPinInverted,"Inverted","Normal"
 	bit tcu_rangeSensorPulldown,"yes","no"
 	bit devBit01,"true","false"
-	bit tcuInputSpeedSensorSharedWithVss,"Enabled","Disabled";Input speed sensor is the same physical sensor as the main VSS
 	bit devBit1,"true","false"
 	bit devBit2,"true","false"
 	bit devBit3,"true","false"
@@ -1616,9 +1604,6 @@ uint16_t[TRACTION_CONTROL_ETB_DROP_SLIP_SIZE] autoscale tractionControlSlipBins;
 uint8_t[TRACTION_CONTROL_ETB_DROP_SPEED_SIZE] tractionControlSpeedBins;;"RPM", 1, 0, 0, 250, 0
 
 
-	custom can_vss_nbc_e 1 bits, U08, @OFFSET@, [0:2], "BMW_e46", "W202", "BMW E8x/E9x MK60e5", "Nissan 350", "Hyundai PB", "Honda Civic9"
-	can_vss_nbc_e canVssNbcType
-
 	gppwm_channel[GPPWM_CHANNELS iterate] gppwm;
 
 	uint16_t mc33_i_boost;Boost Current;"mA", 1, 0, 1000, 25000, 0
@@ -1763,8 +1748,6 @@ pin_input_mode_e[LUA_DIGITAL_INPUT_COUNT iterate] luaDigitalInputPinModes;
 
 	switch_input_pin_e[RANGE_INPUT_COUNT iterate] tcu_rangeInput;
 	pin_input_mode_e[RANGE_INPUT_COUNT iterate] tcu_rangeInputMode;
-
-	uint16_t autoscale canVssScaling;Scale the reported vehicle speed value from CAN. Example: Parameter set to 1.1, CAN VSS reports 50kph, ECU will report 55kph instead.;"ratio", 0.0001, 0, 0.5, 1.5, 4
 
 	ThermistorConf oilTempSensor
 	ThermistorConf fuelTempSensor
@@ -1916,8 +1899,8 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit coastingFuelCutRequiresGear,"enabled","disabled";When enabled, overrun fuel cut will not engage while the transmission is in neutral (DetectedGear sensor reads neutral).\nRequires the gear ratio table (Total Gear Count / gear ratios) to be configured: if it is not set up, the detected gear always reads neutral and fuel cut will never engage.
 	bit eotFromIatCht,"yes","no";Use CHT/IAT sensors to estimate oil temperature (EOT) via first-order thermal model. Disable if a real oil temp sensor is wired.
 	bit primeOnTriggerTeeth,"Trigger teeth","Fixed delay";When enabled, the priming pulse fires after 'primingTriggerTeeth' raw primary trigger teeth are seen since ignition-on, instead of after the fixed 'primingDelay'. Tooth counting does not require trigger sync, and (like the fixed-delay mode) the pulse still only fires once per key cycle.
-	bit unusedBit_Fancy17
-	bit unusedBit_Fancy18
+	bit gearDetectionUseOutputShaftSpeed,"Output Shaft Speed","Main Vehicle Speed";Gear Setup's driveshaft speed reference. Main Vehicle Speed converts SensorType::VehicleSpeed back to driveshaft RPM via driveWheelRevPerKm/finalGearRatio. Output Shaft Speed uses the OSS sensor's RPM directly (it is already measured at the transmission output, no conversion needed) -- requires Output Shaft Speed to be configured under Drivetrain Sensors.
+	bit gearDetectionRpmSourceIsInputShaftSpeed,"Input Shaft Speed","Engine RPM";Only used when Speed Source above is Output Shaft Speed. Chooses the engine-side RPM reference for the gearbox ratio: plain engine RPM, or Input Shaft Speed (more accurate when paired with OSS, since together they measure the true instantaneous ratio without engine-side slip/lag e.g. through a torque converter).
 	bit unusedBit_Fancy19
 	bit unusedBit_Fancy20
 	bit unusedBit_Fancy21
@@ -2388,7 +2371,6 @@ uint8_t[ETB2_TRIM_RPM_SIZE] autoscale throttle2TrimRpmBins;;"RPM", @@RPM_AS_BYTE
 #define ts_show_sparkHardwareLatencyCorrection true
 #define ts_show_ignitionMode true
 #define ts_show_wbo_can_menu true
-#define ts_show_speedSensorCan true
 
 uint8_t[KNOCK_TABLE_SIZE x KNOCK_TABLE_RPM_SIZE] autoscale maxKnockRetardTable;;"deg", 0.25, 0, 0, 30, 2
 uint8_t[KNOCK_TABLE_SIZE] maxKnockRetardLoadBins;;"%", 1, 0, 0, 250, 0

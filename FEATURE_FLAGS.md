@@ -52,12 +52,12 @@ unused on a board where the feature is off.
 
 > Tip: to verify a board still builds with a feature off, set the `-D...=FALSE` and compile.
 
-## AlphaX custom subsystems (config lives in TS page 5)
+## AlphaX custom subsystems (config lives in TS page 6)
 
 > **Convention for new features on this branch.** Every new AlphaX feature added on this
 > branch MUST:
-> 1. Put its tuner-adjustable config on **TS page 5** (`config_page_5.txt`), not the main
->    config page — page 5 is the dedicated home for AlphaX custom features.
+> 1. Put its tuner-adjustable config on **TS page 6** (`config_page_6.txt`), not the main
+>    config page — page 6 is the dedicated home for AlphaX custom features.
 > 2. Ship with its own `EFI_<FEATURE>` conditional-compilation flag, declared in the MCU
 >    family headers using the `#ifndef` guard pattern so it can be enabled/disabled
 >    per board from `board.mk` (`-DEFI_<FEATURE>=TRUE|FALSE`).
@@ -93,6 +93,17 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_CHECK_ENGINE_TRIGGERING` | Check Engine Triggering (TS-configurable threshold checks with a points-gated CEL; TPS Stuck High/Low implemented, others reserved) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_CHT_CLT_ESTIMATOR` | CLT Estimator (estimates coolant temp from CHT via a competing-rate radiator model, with a lagged thermostat valve simulating the crossing/dip/recover hunting behavior) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_OIL_LIFE_MONITOR` | Weighted Engine Oil Life Monitor (temperature-weighted revolution counter, oil-life % gauge; accumulates in RAM only and flushes to flash exactly once on ignition-off; **requires `EFI_MAIN_RELAY_CONTROL`** — a build error if the flag is on without it, and consequently not enabled in the simulator, which sets `EFI_MAIN_RELAY_CONTROL FALSE`) | FALSE (f4) / TRUE (f7,h7) |
+
+**Exception to the table above:** `EFI_WHEEL_SPEED_SENSORS` (Main Speed Sensor: a Source
+selector — Output Shaft Speed / Front Axle / Rear Axle — that is the **sole** source of
+`SensorType::VehicleSpeed` on every board; there is no other mechanism, the legacy pin/CAN VSS
+code has been deleted entirely. Each source is independently Physical-pin or CAN/Lua, with a
+shared percentage-based glitch filter and a configurable Wheel Slip Ratio Source1/Source2
+selector) is **TRUE everywhere by default, including F4** — not the usual family-conditional
+FALSE-f4/TRUE-f7h7 pattern, and not opt-in either. It's a normal default-TRUE, opt-out flag, same
+pattern as `EFI_TOOTH_LOGGER`: any board that needs to disable it (eg. it no longer fits in flash)
+overrides with `DDEFS += -DEFI_WHEEL_SPEED_SENSORS=FALSE` in its own `board.mk`, same as
+`hellen/small-can-board` does for `EFI_TOOTH_LOGGER`.
 
 ## All flags
 
@@ -207,6 +218,7 @@ EFI_VEHICLE_SPEED
 EFI_VVT_COMPENSATION             ← AlphaX (VVT compensation)
 EFI_VVT_ADVANCED_MODE            ← AlphaX (VVT advanced-mode duty curves)
 EFI_VVT_PID
+EFI_WHEEL_SPEED_SENSORS         ← AlphaX (Main Speed Sensor / OSS / axle speed / wheel slip source; default TRUE everywhere, opt-out, see exception note above)
 EFI_WIDEBAND_FIRMWARE_UPDATE
 EFI_WIFI
 EFI_WS2812

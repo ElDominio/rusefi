@@ -89,6 +89,8 @@ enum class SensorType : unsigned char {
 
 	VehicleSpeed,
 	WheelSlipRatio,
+	WheelSpeedFront,
+	WheelSpeedRear,
 
 	TurbochargerSpeed,
 
@@ -99,6 +101,7 @@ enum class SensorType : unsigned char {
 	MapSlow,
 
 	InputShaftSpeed,
+	OutputShaftSpeed,
 
 	EGT1,
 	EGT2,

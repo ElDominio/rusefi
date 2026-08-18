@@ -67,10 +67,6 @@
 #include "digital_input_exti.h"
 #endif // HAL_USE_PAL
 
-#if EFI_CAN_SUPPORT
-#include "can_vss.h"
-#endif
-
 #include "board_overrides.h"
 
 std::optional<setup_custom_board_overrides_type> custom_board_InitHardwareEarly;
@@ -446,10 +442,6 @@ void initHardware() {
 #if EFI_UART_GPS
 	initGps();
 #endif
-
-#if EFI_CAN_SUPPORT
-	initCanVssSupport();
-#endif // EFI_CAN_SUPPORT
 
 #if EFI_CDM_INTEGRATION
 	cdmIonInit();

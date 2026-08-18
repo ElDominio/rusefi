@@ -2237,3 +2237,324 @@ updating the test.
 
 Open follow-ups: fix or delete the stale `LuaBasic.configLookup` `devBit0` reference (pre-existing,
 not touched by this change).
+
+## 2026-08-16 - Front/Rear Axle Speed, Output Shaft Speed, and configurable Wheel Slip Ratio source
+
+Added for an alphax-s550-pnp build that receives individual wheel speeds over CAN (decoded to
+front/rear axle values in Lua) and has a physical hall sensor on the transmission output shaft.
+Previously rusEFI had a single VSS channel (pin or CAN) and two hardcoded, mutually-exclusive
+wheel-slip-ratio calculations (CAN-vendor axle math in `can_vss.cpp`, or an Aux-Speed-based calc in
+`init_aux_speed_sensor.cpp`) -- no way to feed axle-level speeds from Lua, and no dedicated
+transmission output-shaft speed input. New AlphaX flag `EFI_WHEEL_SPEED_SENSORS` (page 6, FALSE on
+f4 / TRUE on f7,h7) bundles all of the below.
+
+New `SensorType` entries: `WheelSpeedFront`, `WheelSpeedRear` (no physical backing -- Lua-only,
+via the existing generic `Sensor.new("WheelSpeedFront"):set(value)` mechanism, same pattern as
+`LuaGauge1..8`), and `OutputShaftSpeed` (a real `FrequencySensor` pin input, mirrors Input Shaft
+Speed's converter/init shape exactly, but with its own dedicated pin -- deliberately NOT using
+ISS's VSS-pin-sharing trick, since that path's own header comment records it as unreliable).
+
+Key decisions (confirmed with the user before implementing):
+- Front/Rear axle only (2 channels), not per-wheel (4).
+- Output Shaft Speed is both a standalone loggable sensor AND selectable as the source for the
+  main Vehicle Speed reading (`vssSourceIsOutputShaftSpeed` page-6 bit) -- scaled via the existing
+  `finalGearRatio`/`driveWheelRevPerKm` fields (no new scaling config needed).
+- Wheel Slip Ratio gets a configurable Source1/Source2 selector (`wheel_speed_source_e`: None /
+  Vehicle Speed / Front Axle / Rear Axle / Output Shaft Speed / Aux Speed 1 / Aux Speed 2 --
+  Input Shaft Speed deliberately excluded, not wheel-related), resolved via a
+  `readWheelSpeedSource()` switch mirroring the existing `gppwm_channel_reader.cpp` idiom.
+
+Mutual exclusion: `SensorType::WheelSlipRatio` already had two producers (`can_vss.cpp`'s
+`wheelSlipRatio`, `init_aux_speed_sensor.cpp`'s `wheelSlipSensor`) that hard-error
+(`firmwareError`) on double `Sensor::Register()`. Added `isConfigurableWheelSlipRatioActive()`
+(`wheel_slip_ratio_source.h`, callable unconditionally, false when the flag is off) and guarded
+both existing `.Register()` call sites with it, so the configurable selector always wins
+structurally instead of crashing; `isVssSourceOutputShaftSpeed()` does the same for
+`SensorType::VehicleSpeed` between the pin/CAN/OSS producers. `engine_controller.cpp`'s
+`validateConfig()` additionally emits a non-fatal `configError()` when a tune has the configurable
+selector enabled alongside the Aux-Speed or CAN-vendor slip paths, so the user gets a clear signal
+that the configurable selector is the one actually in effect.
+
+| File | Change |
+|---|---|
+| `firmware/controllers/sensors/sensor_type.h` | 3 new `SensorType` entries |
+| `firmware/controllers/algo/rusefi_enums.h` | new `wheel_speed_source_e` enum |
+| `firmware/controllers/sensors/converters/output_shaft_speed_converter.h` | new |
+| `firmware/init/sensor/init_output_shaft_speed_sensor.cpp` | new |
+| `firmware/init/sensor/init_vehicle_speed_sensor.cpp` | `VehicleSpeedFromOutputShaft`, `isVssSourceOutputShaftSpeed()` |
+| `firmware/controllers/sensors/wheel_slip_ratio_source.h/.cpp` | new |
+| `firmware/controllers/can/can_vss.cpp`, `firmware/init/sensor/init_aux_speed_sensor.cpp` | guard `.Register()` against the configurable selector |
+| `firmware/init/init.h`, `firmware/init/sensor/init_sensors.cpp` | new init/deinit wiring |
+| `firmware/integration/config_page_6.txt` | new fields + `wheel_speed_source_e` custom type |
+| `firmware/config/stm32f4ems/efifeatures.h` (+f7ems override), `unit_tests/efifeatures.h`, `simulator/simulator/efifeatures.h` | `EFI_WHEEL_SPEED_SENSORS` |
+| `FEATURE_FLAGS.md` | documented new flag; also fixed a stale "config lives in TS page 5" heading left over from before page 6 became the AlphaX convention |
+| `firmware/tunerstudio/tunerstudio.template.ini`, `gauge_declarations.ini` | new `wheelSpeedSensorsPanel` under the existing Speed Sensor dialog; 3 new gauges |
+| `firmware/console/binary/output_channels.txt`, `status_loop.cpp` | 3 new log/output channels |
+| `firmware/controllers/engine_controller.cpp` | mutual-exclusion `configError()` check |
+| `firmware/controllers/sensors/sensors.mk`, `firmware/init/init.mk`, `unit_tests/tests/tests.mk` | new files wired into the build |
+
+Validation:
+- `unit_tests/test.sh` (full suite): 1422/1423 pass. Added 8 new tests (`OutputShaftSpeedConverterTest`
+  x2, `WheelSpeedSensors` x5, `LuaHooks.LuaAxleSpeedSensor` x1) covering the converter math, the
+  OSS-to-VehicleSpeed derivation, the configurable slip-ratio resolver/math, the priority-over-
+  Aux-Speed guard (`EXPECT_NO_THROW` around both `.Register()` paths), and the Lua
+  `Sensor.new("WheelSpeedFront")` round trip. The one failure, `LuaBasic.configLookup`, is the
+  same pre-existing `devBit0` issue logged in the previous entry above -- confirmed via
+  `git blame` to predate this session, unrelated to this feature.
+- Built `alphax-s550-pnp` (`compile_alphax-s550.sh`) end to end: confirmed the new fields land in
+  `page_6_generated.h` and the generated `.ini` (dialog fields, gauges, `wheelSlipRatioSource1`
+  enum labels all present and correctly offset).
+- Attempted a matching F4 flag-off build (`f407-discovery`) to confirm `EFI_WHEEL_SPEED_SENSORS
+  FALSE` compiles out cleanly, but that board currently fails to build for an unrelated
+  pre-existing reason: `check_engine_light.cpp:165` (commit 712c61ec07, 2026-08-15, "Merge master
+  stage 3/4: DTC manager / CheckEngineLight / MILController") calls
+  `engine->module<MisfireController>()` unconditionally, while `MisfireController` is only in the
+  `type_list` under `EFI_MISFIRE_DETECTION` (FALSE by f4ems default) -- a static_assert failure
+  with nothing to do with this change. Not fixed here (out of scope); the stub `#else` branches in
+  the new `init_output_shaft_speed_sensor.cpp` and `wheel_slip_ratio_source.cpp` were inspected
+  by hand instead.
+
+Open follow-ups:
+- `f407-discovery` (and likely every other f4 board without an `EFI_MISFIRE_DETECTION` override)
+  cannot currently build firmware at all, due to the unrelated `check_engine_light.cpp`/
+  `MisfireController` issue above.
+- Hardware validation (wiring the OSS hall sensor, a real Lua CAN-wheel-speed decode script)
+  deferred to the user.
+
+## 2026-08-16 - Wheel Speed Sensors v2: Main Speed Sensor selector, per-axle physical/CAN-Lua modes
+
+Redesign of the feature above, based on follow-up discussion before any hardware use. The v1
+design (a single "use OSS for VSS" bit, Front/Rear axle Lua-only) was replaced with a more
+general model:
+
+- Renamed the "Speed sensor" TS dialog to "Main Speed Sensor" with a `Source` dropdown (Output
+  Shaft Speed / Front Axle / Rear Axle) that unconditionally owns `SensorType::VehicleSpeed`
+  whenever `EFI_WHEEL_SPEED_SENSORS` is on, replacing the legacy pin/CAN mechanism rather than
+  sitting alongside it with a runtime opt-out.
+- All three of OSS/Front/Rear independently get a Mode dropdown (None / Physical Pin / CAN-Lua) --
+  Physical Pin registers a `FrequencySensor` with its own pin/tooth-count/filter; CAN/Lua leaves
+  the `SensorType` unregistered so Lua's existing `Sensor.new("WheelSpeedFront"):set(value)`
+  mechanism (or a CAN RX handler) can claim it directly.
+- OSS's own panel carries no wheel-size field (it's pre-differential) -- only tooth count and
+  filter. When OSS drives Main Speed Sensor, `VehicleSpeed = ossRpm / finalGearRatio`, a
+  deliberate simplification (no true wheel-circumference correction) the user chose explicitly.
+- Front/Rear Axle each get their own "Wheel Revs/km" field, used only in Physical Pin mode --
+  CAN/Lua mode feeds an already-final km/h value directly.
+- `GearDetector::getDriveshaftRpm()`: when OSS is configured, its RPM is used *directly* (OSS
+  already measures driveshaft RPM -- no VSS/wheel-size math needed at all). Otherwise it reuses
+  whichever axle feeds Main Speed Sensor: that axle's own Wheel Revs/km if it's Physical Pin, or
+  the legacy core `driveWheelRevPerKm` field (relabeled "Axle Ratio" in its tooltip, same
+  field/storage) if that axle is CAN/Lua-sourced. The flag-off `#else` path is byte-for-byte the
+  prior unconditional formula, so non-AlphaX / flag-off boards see zero behavior change.
+- The old absolute km/h/s glitch filter (`vssMaxAcceleration`) was generalized into a new,
+  percentage-based `WheelSpeedPlausibilityFilter` (`wheelSpeedMaxAccelPercent`, shared by all
+  three sensors as one config value but with three independent filter-state instances -- "same
+  config, triplicated instances") so the same number is physically meaningful whether the
+  sensor's native unit is RPM (OSS) or km/h (axles). Floored the percentage base at the previous
+  reading's absolute value (min 1.0) so a near-zero starting reading doesn't produce a near-zero
+  `maxDelta` and stall convergence; the existing 30-consecutive-reject give-up (copied from
+  `vehicle_speed_converter.h`) bounds worst-case recovery time regardless.
+
+**Flag default changed**: `EFI_WHEEL_SPEED_SENSORS` was TRUE by family default on all f7/h7
+AlphaX boards in the v1 session. Because v2's Main Speed Sensor replacement is unconditional
+whenever the flag is on, and a fresh config has every Mode at `None`, leaving the family default
+TRUE would have silently broken `VehicleSpeed` (unregistered) on every other AlphaX board that
+isn't using this feature -- not just alphax-s550-pnp. Changed to an explicit per-board opt-in
+(`FALSE` everywhere by default, `-DEFI_WHEEL_SPEED_SENSORS=TRUE` added only to
+`alphax-s550-pnp/board.mk`); documented as an explicit exception to the usual "FALSE f4 / TRUE
+f7,h7" convention in `FEATURE_FLAGS.md`. Verified by building `alphax-gold` (another f7 AlphaX
+board) after the flag-default change -- clean build, confirming no other board silently lost VSS.
+
+Key files: `firmware/controllers/algo/rusefi_enums.h` (`main_speed_sensor_source_e`,
+`wheel_speed_sensor_mode_e`), `firmware/integration/config_page_6.txt` (reworked block),
+`firmware/controllers/sensors/converters/wheel_speed_plausibility_filter.h` (new),
+`axle_speed_converter.h` (new, one class serves both Front/Rear via a constructor bool),
+`output_shaft_speed_converter.h` (filter added), `firmware/init/sensor/init_wheel_speed_sensors.cpp`
+(new, replaces `init_output_shaft_speed_sensor.cpp`, covers all three), `init_vehicle_speed_sensor.cpp`
+(`MainSpeedSensorPassthrough` replaces `VehicleSpeedFromOutputShaft`), `can_vss.cpp` (compile-time
+`#if !EFI_WHEEL_SPEED_SENSORS` guard replaces the old runtime check), `gear_detector.cpp`
+(`getDriveshaftRpm()` rewrite), `tunerstudio.template.ini` (Main Speed Sensor rename + reworked
+Wheel Speed Sensors panel), `rusefi_config.txt` (`driveWheelRevPerKm` tooltip only, field/storage
+unchanged).
+
+Validation:
+- `unit_tests/test.sh` (full suite): 1433/1434 pass. The one failure is the same pre-existing
+  `LuaBasic.configLookup` `devBit0` issue logged above, confirmed unrelated via `git blame`.
+  Rewrote/added tests: `test_output_shaft_speed_converter.cpp` (converter math + 4 new
+  plausibility-filter cases: disabled-by-default, glitch rejection, give-up recovery, near-zero
+  start), `test_wheel_speed_sensors.cpp` (Main Speed Sensor passthrough for all 3 sources,
+  `AxleSpeedConverter` math for both axles, slip-ratio selector unchanged), `test_gear_detector.cpp`
+  (3 new cases: OSS-direct, Front-axle Physical-Pin fallback, Front-axle CAN/Lua fallback -- the
+  existing pre-v1 tests in this file needed no changes, since the flag-on fallback path defaults
+  to `driveWheelRevPerKm` exactly like the flag-off path when Main Speed Sensor isn't set to a
+  Physical-Pin axle).
+- Built `alphax-s550-pnp` end to end twice (once catching a real bug -- see below); confirmed the
+  generated `.ini` shows "Main Speed Sensor" with the Source dropdown and mode-gated sub-fields.
+- Built `alphax-gold` (flag now FALSE via inherited default) to confirm no regression from the
+  flag-default change.
+
+Bug caught during board-build verification (not by unit tests): `rusefi_config.txt`'s
+`driveWheelRevPerKm` tooltip text included literal double-quotes around "Axle Ratio", which landed
+unescaped inside the generated `.ini`'s already-double-quoted description string
+(`driveWheelRevPerKm = "...the "Axle Ratio" fallback..."`). Unit tests never touch generated `.ini`
+content so this wasn't caught by `test.sh`; only visible by grepping the actual generated file
+after a board build. Fixed by dropping the quote marks from the tooltip text -- a reminder that
+`.txt` description fields need to stay ini-string-safe even though the `.txt`/`.ini` formats
+themselves don't share a comment/quoting convention (see the existing "Comment syntax differs"
+note in CLAUDE.md).
+
+Open follow-ups:
+- Same pre-existing `f407-discovery`/`MisfireController` build break as before (unrelated). While
+  finishing this session, `firmware/controllers/modules/check_engine_light/check_engine_light.cpp`
+  appeared in the working tree with an `#if EFI_MISFIRE_DETECTION` guard added around the
+  `MisfireController` usage -- this looks like a fix for that exact issue, but it was not made by
+  this session (no edit tool was used on that file here). Left untouched and unstaged; flagging in
+  case it's from a concurrent session on the same checkout, so it doesn't get silently lost or
+  double-attributed.
+- Hardware validation still deferred to the user.
+
+## 2026-08-17 - Eco Mode: add RPM ceiling gate + post-engage state-change lock
+
+Added two page-6 fields to Eco Mode (`EngineStateMachine::updateEcoMode()`,
+`engine_state_machine.h`/`.cpp`, `config_page_6.txt`, `custom_page.cpp`):
+
+- `ecoModeMaxRpm` (uint16, RPM, 0 disables): mirrors the existing `ecoModeMapLimit`/`ecoModeMinVss`
+  instant-drop gates -- RPM above this resets the cruise timer and blocks/drops engagement, even if
+  the state machine still reports Cruising (TPS-based) this cycle. Naming follows the existing
+  `<Feature>MaxRpm` convention (`upshiftRpmHoldMaxRpm`, `downshiftBlipperMaxRpm`,
+  `rollingLaunchMaxRpm`).
+- `ecoModeEngageLockTime` (float, seconds, 0-2.0, 0 disables): once `engineSmIsEcoMode` has a rising
+  edge, `m_ecoLockTimer` arms and `updateEcoMode()` skips *all* gate/state re-evaluation (cruise
+  timer, MAP, VSS, RPM, leaving Cruising/Transient) for this long, holding eco forced active. This
+  is the user's actual ask -- eco's own AFR/timing/VVT/throttle step is a real change in torque
+  delivery, and without the lock a state-machine re-read of that very transient could misread it as
+  "left Cruising" and immediately drop eco right back off. Limp mode, Sport Mode, and the Inhibit
+  switch all still override the lock instantly (checked before the lock branch) -- protective/
+  driver-explicit intent must win over a mechanism whose whole purpose is masking eco's own noise.
+
+This is a different mechanism from the pre-existing `m_ecoSettleHoldoffRemaining` /
+`smTransientHoldoffCallbacks` holdoff: that one suppresses only the Accelerating/Decelerating
+RPM-rate reclassification inside `determineState()` for a tick count, feeding back into next tick's
+state; the new lock is a direct, user-configurable-in-seconds freeze of `updateEcoMode()`'s own
+gate evaluation (MAP/VSS/RPM too, not just the rate check), and doesn't touch `determineState()` at
+all. Both remain armed independently.
+
+Default for both new fields is 0 (disabled / instant re-evaluation), preserving prior behavior
+exactly when a tune doesn't set them -- `Timer::hasElapsedSec(0)` is always true, so the lock branch
+never activates unless `ecoModeEngageLockTime` is explicitly raised.
+
+Key files: `firmware/controllers/algo/engine_state_machine.h` (`m_ecoLockTimer` member,
+`updateEcoMode()` doc comment), `firmware/controllers/algo/engine_state_machine.cpp` (lock check +
+RPM gate in `updateEcoMode()`), `firmware/integration/config_page_6.txt` (two new fields + updated
+block comment), `firmware/controllers/custom_page.cpp` (zero defaults),
+`unit_tests/tests/ignition_injection/test_eco_mode.cpp` (8 new cases: RPM gate above/at-limit/
+rising-drop/zero-disables, lock holds through a state change, lock expires and re-evaluates,
+zero lock time drops instantly, Inhibit overrides lock, Limp overrides lock).
+
+Validation:
+- `unit_tests/test.sh EcoMode`: 21/21 pass (13 pre-existing + 8 new).
+- `unit_tests/test.sh` (full suite): 1442/1443 pass. The one failure is the pre-existing
+  `LuaBasic.configLookup` `devBit0` mismatch (`rusefi_config.txt` defines `devBit01`, not `devBit0`;
+  the checked-in test still looks up the old name) -- confirmed unrelated to this change: I never
+  touched `rusefi_config.txt`, and this exact failure/root-cause was already logged in the
+  2026-08-16 Wheel Speed Sensors v2 entry above.
+
+Open follow-ups:
+- Hardware/tune validation still deferred to the user -- this session was unit-test-only.
+- The `devBit0`/`devBit01` mismatch above is now confirmed across two independent sessions but
+  still unfixed; worth a dedicated small fix (rename the test's lookup string, or the config field,
+  per `docs/calibration-compatibility.md` if the field itself changes) when someone picks it up.
+
+## 2026-08-17 - Wheel Speed Sensors v3: menu reorganization, OSS gets its own revs/km, None option
+
+Third revision of the Wheel Speed Sensors feature (see the two 2026-08-16 entries above), based on
+further discussion before hardware use. Purely a config/UI reorganization plus one new field --
+the underlying `FrequencySensor`/mode/plausibility-filter machinery from v2 is unchanged.
+
+- "Vehicle speed sensor" under Sensors -> Chassis sensors renamed to **"Wheel Speed Sensors"**;
+  now holds only Front/Rear Axle config (mode, pin, teeth, filter, revs/km), the shared
+  `wheelSpeedMaxAccelPercent` filter field, Wheel Slip Ratio Source1/2, and the legacy pin/CAN
+  panel (flag-off path) + Gear Detection panel, same as before.
+- New **"Drivetrain Sensors"** menu entry (its own `groupMenu`, parallel to "Chassis sensors")
+  holds Output Shaft Speed's config: mode, pin, teeth, filter, and a **new `ossRevPerKm` field**
+  ("Output Shaft Speed Wheel Revs/km") gated `{ mainSpeedSensorSource == 1 }` -- greyed out unless
+  Main Speed Sensor is actually set to Output Shaft Speed, since otherwise OSS is just an RPM
+  reading with nothing to convert.
+- **"Main Speed Sensor"** (the OSS/Front/Rear source dropdown) moved out of the Chassis-sensors
+  dialog entirely, into **Setup -> Vehicle Information** (`engineChars` dialog) -- this is a
+  vehicle-level configuration choice, not really a "sensor panel" setting.
+- `main_speed_sensor_source_e` gained a **`None = 0`** value (now the default for a fresh config)
+  so cars with no speed sensor at all have an explicit, safe "nothing feeds VehicleSpeed" state,
+  rather than silently defaulting to whichever value happened to be ordinal 0 before (previously
+  `OutputShaftSpeed`).
+- OSS's contribution to `SensorType::VehicleSpeed` no longer reuses `finalGearRatio` (Gear
+  Detection) at all -- it's now `speedKmh = ossRpm * 60 / ossRevPerKm`, the exact same formula
+  shape as `AxleSpeedConverter`'s Hz-to-km/h math, just starting from an already-converted RPM
+  value instead of a raw pulse frequency. `finalGearRatio` is now used *only* by Gear Detection's
+  non-OSS-direct fallback path, restoring its original pre-this-feature purpose with no incidental
+  coupling to the Main Speed Sensor mechanism.
+- `GearDetector::getDriveshaftRpm()`'s OSS-direct branch is unchanged (still keys off
+  `Sensor::hasSensor(SensorType::OutputShaftSpeed)`, independent of `ossRevPerKm` or which Main
+  Speed Sensor source is selected) -- OSS RPM *is* driveshaft RPM regardless of how it's converted
+  to a road speed elsewhere.
+
+Key files: `firmware/controllers/algo/rusefi_enums.h` (`main_speed_sensor_source_e` gains `None`),
+`firmware/integration/config_page_6.txt` (new `ossRevPerKm` field, updated enum label list),
+`firmware/init/sensor/init_vehicle_speed_sensor.cpp` (`MainSpeedSensorPassthrough::get()` OSS case
+rewritten, `None` case added), `firmware/tunerstudio/tunerstudio.template.ini` (dialog split:
+`wheelSpeedSensorsPanel` axle-only now, new `drivetrainSensors` dialog, `mainSpeedSensorSource`
+field moved into `engineChars`), `firmware/tunerstudio/top_level_menu.ini` (renamed
+`speedSensor` menu label, new `"Drivetrain sensors"` groupMenu).
+
+Validation:
+- `unit_tests/test.sh` (full suite): 1443/1444 pass, same pre-existing unrelated `devBit0` failure.
+  Updated `test_wheel_speed_sensors.cpp`'s OSS math test for the new `ossRevPerKm` formula; added
+  `mainSpeedSensorNoneStaysInvalid` (VehicleSpeed stays invalid with `None` selected even when
+  OSS/axle sensors have real mocked readings available).
+- Built `alphax-s550-pnp` end to end; confirmed via grep on the generated `.ini` that
+  `mainSpeedSensorSource` now lists `"None"` first, `ossRevPerKm` is gated correctly, and the menu
+  shows "Wheel Speed Sensors" / "Drivetrain Sensors" as separate entries.
+- Built `alphax-gold` (flag off) again to confirm no regression from this pass.
+
+Open follow-ups:
+- Same pre-existing `f407-discovery`/`MisfireController` issue as prior entries -- still present in
+  the working tree as an uncommitted fix not made by this session (see prior entry); not touched.
+- Hardware/tune validation still deferred to the user.
+
+## 2026-08-17 - Wheel Speed Sensors: Drivetrain Sensors moved under Chassis sensors; hardware bug diagnosed
+
+Two follow-ups from the user after flashing the v3 design (previous entry).
+
+**Menu fix**: "Drivetrain Sensors" was its own `groupMenu`, parallel to "Chassis sensors" -- user
+wanted it as a `groupChildMenu` sibling entry inside "Chassis sensors" instead, alongside "Wheel
+Speed Sensors". `firmware/tunerstudio/top_level_menu.ini`: moved the `groupChildMenu =
+drivetrainSensors` line into the existing "Chassis sensors" `groupMenu` block, removed the
+separate `groupMenu = "Drivetrain sensors"`. No C++ change; unit tests unaffected (menu-only).
+
+**Hardware bug reported and diagnosed (not a code bug)**: user has Main Speed Sensor = Front Axle,
+fed via Lua/CAN, Front/Rear axle gauges reading correctly, but `VehicleSpeed` stayed at 0. Console
+log: `Sensor "VehicleSpeed" is not configured.` -- traced this exact string to
+`firmware/controllers/sensors/core/sensor.cpp:102`, which *only* fires from `showInfo()` when
+`m_sensor == nullptr`, i.e. **no Sensor object has ever registered for that slot** (not a
+duplicate-registration conflict, not a wrong-source-selected bug -- registration never happened at
+all). Combined with "legacy config is None" (so the old pin-based path, which only registers when
+a pin is configured, also registers nothing), this is consistent with exactly one explanation: the
+firmware currently running on the ECU predates the `-DEFI_WHEEL_SPEED_SENSORS=TRUE` addition to
+`alphax-s550-pnp/board.mk` (the flag's default changed three times across today's three revisions
+of this feature -- see the three 2026-08-16 entries above). A build compiled at any point before
+that specific board.mk line landed would take `initVehicleSpeedSensor()`'s legacy `#else` branch,
+which registers nothing when no pin is configured -- exactly matching the symptom. Recommended fix:
+clean rebuild + full reflash from current source (a config burn alone won't help; this is a
+compile-time flag, not a tune setting). Not yet confirmed by the user as of this entry.
+
+Rejected in the same conversation: removing the Legacy Pin/CAN VSS panel from the shared ini
+template entirely. Flagged that doing so would remove VSS configuration UI for every non-AlphaX
+board in the project (proteus, hellen boards, microrusefi, etc. all depend on that exact
+`speedSensorAnalog`/`speedSensorCan` mechanism as their only in-TS way to configure VSS), and that
+there's no existing per-board conditional-ini mechanism in this codebase to hide it selectively.
+User agreed to drop this request rather than build one or accept the fleet-wide regression.
+
+Open follow-ups:
+- Confirm with the user whether a clean rebuild/reflash actually fixes the VehicleSpeed
+  registration issue.
+- Same pre-existing `f407-discovery`/`MisfireController` issue, still not fixed by this session.

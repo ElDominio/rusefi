@@ -632,6 +632,14 @@
 #define EFI_GHOST_CAM FALSE
 #endif
 
+// Wheel Speed Sensors: Main Speed Sensor (Output Shaft Speed / Front Axle / Rear Axle) is the
+// sole source of SensorType::VehicleSpeed on every board -- there is no other mechanism. Default
+// TRUE fleet-wide (like EFI_TOOTH_LOGGER); a board that needs to opt out (eg. flash-constrained)
+// can still override with -DEFI_WHEEL_SPEED_SENSORS=FALSE in its own board.mk.
+#ifndef EFI_WHEEL_SPEED_SENSORS
+#define EFI_WHEEL_SPEED_SENSORS TRUE
+#endif
+
 // CLT Estimator (estimates coolant temp from CHT via a competing-rate radiator model)
 #ifndef EFI_CHT_CLT_ESTIMATOR
 #define EFI_CHT_CLT_ESTIMATOR FALSE

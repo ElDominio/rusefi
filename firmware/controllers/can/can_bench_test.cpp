@@ -143,8 +143,9 @@ void sendQcBenchEventCounters(size_t bus) {
 		msg[2 + camIdx] = TRUNCATE_TO_BYTE(vvtRise + vvtFall);
 	}
 
-	extern FrequencySensor vehicleSpeedSensor;
-	msg[6] = TRUNCATE_TO_BYTE(vehicleSpeedSensor.eventCounter);
+	// No single VSS pin exists anymore (Main Speed Sensor can be OSS, Front Axle, or Rear Axle,
+	// each independently physical-pin or CAN/Lua) -- nothing sensible to report here.
+	msg[6] = 0;
 #endif // EFI_SHAFT_POSITION_INPUT
 }
 

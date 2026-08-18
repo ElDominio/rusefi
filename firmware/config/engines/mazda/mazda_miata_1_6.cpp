@@ -192,16 +192,6 @@ void miataNAcommonEngineSettings() {
 	// These may need to change based on your real car
 	engineConfiguration->driveWheelRevPerKm = 551;
 	engineConfiguration->finalGearRatio = 4.3;
-
-	// This should be correct for factory matched speedo gears and diffs,
-	// but will need to be adjusted for mismatched combinations.
-
-	// - 6 teeth on transmission output shaft
-	// - 23 teeth on speedometer sensor
-	// - 4.3 rear axle ratio
-	// 4.3 * 6 / 23 ~= 1.12
-	engineConfiguration->vssGearRatio = 4.3 * 6 / 23;
-	engineConfiguration->vssToothCount = 4;
 }
 
 /**

@@ -53,6 +53,7 @@
 #include "speedometer.h"
 #include "gppwm.h"
 #include "date_stamp.h"
+#include "wheel_slip_ratio_source.h"
 #include "rusefi_lua.h"
 #include "buttonshift.h"
 #include "start_stop.h"
@@ -578,6 +579,15 @@ static bool validateConfig(const engine_configuration_s* previousConfiguration) 
 		criticalError("knock frequency setting uses HZ not KHz: %f", engineConfiguration->knockFrequency);
 		return false;
   }
+
+#if EFI_WHEEL_SPEED_SENSORS
+  // The configurable Source1/Source2 selector wins (see init_aux_speed_sensor.cpp), so this is
+  // not fatal - just flag a tune that probably doesn't do what the user expects.
+  if (isConfigurableWheelSlipRatioActive() && engineConfiguration->useAuxSpeedForSlipRatio) {
+    configError("Wheel Slip Ratio: both the configurable Source1/Source2 selector and "
+        "'Use Aux Speed for slip ratio' are enabled - the configurable selector wins");
+  }
+#endif // EFI_WHEEL_SPEED_SENSORS
 
 
   // the only step which is allowed to modify configuration - everything else in this method is read-only validation

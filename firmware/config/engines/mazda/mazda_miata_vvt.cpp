@@ -340,17 +340,6 @@ static void setCommonMazdaNB() {
 	miataNA_setCltIdleCorrBins();
 	miataNA_setCltIdleRpmBins();
 	miataNA_setIacCoastingBins();
-
-	// All factory miata setups end up with 1.12 speed sensor turns
-	// per wheel turn, by matching the speedo sensor gear to the
-	// diff ratio
-
-	// - 6 teeth on transmission output shaft
-	// - 23 teeth on speedometer sensor
-	// - 3.909 rear axle ratio
-	// 3.909 * 6 / 21 ~= 1.12
-	engineConfiguration->vssGearRatio = 3.909 * 6 / 21;
-	engineConfiguration->vssToothCount = 4;
 }
 
 static void setMazdaMiataEngineNB2Defaults() {
@@ -414,11 +403,7 @@ void setMiataNB2_Proteus_TCU() {
 	engineConfiguration->triggerInputPins[0] = Gpio::Unassigned;
 	engineConfiguration->tcuInputSpeedSensorPin = PROTEUS_VR_1;
 
-	engineConfiguration->vehicleSpeedSensorInputPin = PROTEUS_VR_2;
-
 	engineConfiguration->driveWheelRevPerKm = 544;	// 205/50R15
-	engineConfiguration->vssGearRatio = 4.3;
-	engineConfiguration->vssToothCount = 22;
 
 	// "Highside 2"
 	engineConfiguration->tcu_solenoid[0] = Gpio::A8;

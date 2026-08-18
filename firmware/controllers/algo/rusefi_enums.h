@@ -414,15 +414,6 @@ typedef enum __attribute__ ((__packed__)) {
 	I2C_SPEED_5M = 4,
 } i2c_speed_e;
 
-typedef enum __attribute__ ((__packed__)) {
-	BMW_e46 = 0,
-	W202 = 1,
-	BMW_e90 = 2,
-	NISSAN_350 = 3,
-	HYUNDAI_PB = 4,
-  HONDA_CIVIC9 = 5,
-} can_vss_nbc_e;
-
 /**
  * inertia measurement unit, yawn accelerometer
  * By the way both kinds of BOSCH use Housing : TE 1-967640-1, pins 144969-1 seal 967056-1 plug 967067-2
@@ -1049,6 +1040,32 @@ enum class sm_shift_detection_mode_e : uint8_t {
 enum class oil_life_temp_source_e : uint8_t {
 	OilTemp = 0,
 	CoolantTemp = 1,
+};
+
+// Values must match main_speed_sensor_source_e_enum order in config_page_6.txt
+enum class main_speed_sensor_source_e : uint8_t {
+	None = 0,
+	OutputShaftSpeed = 1,
+	FrontAxle = 2,
+	RearAxle = 3,
+};
+
+// Values must match wheel_speed_sensor_mode_e_enum order in config_page_6.txt
+enum class wheel_speed_sensor_mode_e : uint8_t {
+	None = 0,
+	PhysicalPin = 1,
+	CanLua = 2,
+};
+
+// Values must match wheel_speed_source_e_enum order in config_page_6.txt
+enum class wheel_speed_source_e : uint8_t {
+	None = 0,
+	VehicleSpeed = 1,
+	FrontAxle = 2,
+	RearAxle = 3,
+	OutputShaftSpeed = 4,
+	AuxSpeed1 = 5,
+	AuxSpeed2 = 6,
 };
 
 // Values must match dfco_fuel_cut_mode_e_enum order in rusefi_config.txt

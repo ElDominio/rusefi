@@ -342,7 +342,6 @@ static void setDefaultCanSettings() {
 	engineConfiguration->canSleepPeriodMs = 50;
 	engineConfiguration->canReadEnabled = true;
 	engineConfiguration->canWriteEnabled = true;
-	engineConfiguration->canVssScaling = 1.0f;
 
 	for (size_t i = 0; i < efi::size(engineConfiguration->canSniffer); i++) {
 		engineConfiguration->canSniffer[i].listenOurs = true;
@@ -638,8 +637,6 @@ static void setDefaultEngineConfiguration() {
 
 	engineConfiguration->driveWheelRevPerKm = 1000;
 	engineConfiguration->finalGearRatio = 1;
-	engineConfiguration->vssGearRatio = 3.73;
-	engineConfiguration->vssToothCount = 21;
 
 	engineConfiguration->mapErrorDetectionTooLow = 5;
 	// todo: default limits should be hard-coded for each sensor type

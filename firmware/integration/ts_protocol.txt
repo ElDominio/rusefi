@@ -126,7 +126,6 @@
 #define CMD_SELF_STIMULATION "self_stimulation"
 #define CMD_EXTERNAL_STIMULATION "ext_stimulation"
 #define CMD_RPM "rpm"
-#define CMD_VSS_PIN "vss_pin"
 #define CMD_TRIGGER_PIN "set_trigger_input_pin"
 #define CMD_LOGIC_PIN "set_logic_input_pin"
 #define CMD_ALTERNATOR_PIN "set_alternator_pin"

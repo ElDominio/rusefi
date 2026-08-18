@@ -321,7 +321,10 @@ local groupsSize = 1
 
 local groupIndex = 1
 
-vssSensor = Sensor.new("VehicleSpeed")
+-- SensorType::VehicleSpeed is always pre-registered (Main Speed Sensor passthrough), so feed
+-- WheelSpeedFront here instead and set Main Speed Sensor = Front Axle in Setup -> Vehicle
+-- Information for this reading to become the reported VehicleSpeed.
+vssSensor = Sensor.new("WheelSpeedFront")
 vssSensor : setTimeout(2000)
 
 function onKombi(bus, id, dlc, data)

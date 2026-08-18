@@ -11,7 +11,6 @@
 
 void initCan();
 void setCanType(int type);
-void setCanVss(int type);
 
 #if EFI_CAN_SUPPORT
 

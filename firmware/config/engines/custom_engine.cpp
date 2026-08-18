@@ -327,7 +327,6 @@ static void setBasicNotECUmode() {
 	engineConfiguration->tps2_1AdcChannel = EFI_ADC_NONE;
 	engineConfiguration->throttlePedalPositionAdcChannel = EFI_ADC_NONE;
 	engineConfiguration->throttlePedalPositionSecondAdcChannel = EFI_ADC_NONE;
-	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::Unassigned;
 	engineConfiguration->clt.adcChannel = EFI_ADC_NONE;
 	engineConfiguration->iat.adcChannel = EFI_ADC_NONE;
 	engineConfiguration->map.sensor.hwChannel = EFI_ADC_NONE;
@@ -641,7 +640,6 @@ void proteusStimQc() {
    	engineConfiguration->triggerInputPins[1] = PROTEUS_DIGITAL_2;
    	engineConfiguration->camInputs[0] = PROTEUS_DIGITAL_3;
    	engineConfiguration->camInputs[1] = PROTEUS_DIGITAL_4;
-   	engineConfiguration->vehicleSpeedSensorInputPin = PROTEUS_DIGITAL_5;
    	engineConfiguration->brakePedalPin = PROTEUS_DIGITAL_6;
 
 	setProteusEtbIO();

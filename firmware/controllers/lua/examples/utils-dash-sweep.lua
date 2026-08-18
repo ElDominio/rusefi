@@ -23,7 +23,10 @@ iatSensor : setTimeout(timeout)
 mapSensor = Sensor.new("map")
 mapSensor : setTimeout(timeout)
 
-speedSensor = Sensor.new("VehicleSpeed")
+-- SensorType::VehicleSpeed is always pre-registered (Main Speed Sensor passthrough), so feed
+-- WheelSpeedFront here instead and set Main Speed Sensor = Front Axle in Setup -> Vehicle
+-- Information for this reading to become the reported VehicleSpeed.
+speedSensor = Sensor.new("WheelSpeedFront")
 speedSensor : setTimeout(timeout)
 
 gearSensor = Sensor.new("DetectedGear")

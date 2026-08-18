@@ -6,6 +6,7 @@
 #include "pch.h"
 #include "init.h"
 #include "frequency_sensor.h"
+#include "wheel_slip_ratio_source.h"
 
 static FrequencySensor auxSpeed1(SensorType::AuxSpeed1, MS2NT(500));
 static FrequencySensor auxSpeed2(SensorType::AuxSpeed2, MS2NT(500));
@@ -47,7 +48,9 @@ void initAuxSpeedSensors() {
 			engineConfiguration->auxSpeedSensorInputPin[0], converter, engineConfiguration->auxFrequencyFilter);
 	auxSpeed2.initIfValid(engineConfiguration->auxSpeedSensorInputPin[1], converter, 0.05f);
 
-	if (engineConfiguration->useAuxSpeedForSlipRatio) {
+	// A configured Source1/Source2 selector (page 6) takes priority over this Aux-Speed
+	// based slip ratio, avoiding a duplicate SensorType::WheelSlipRatio registration.
+	if (engineConfiguration->useAuxSpeedForSlipRatio && !isConfigurableWheelSlipRatioActive()) {
 		wheelSlipSensor.Register();
 	}
 }
