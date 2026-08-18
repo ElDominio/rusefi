@@ -52,10 +52,13 @@ public:
 
 	// Drives the Eco mode overlay: engages after the engine has been Cruising (brief AE-driven
 	// Transient blips tolerated) continuously for ecoModeCruisingTime with MAP at or below
-	// ecoModeMapLimit, drops instantly on leaving Cruising/Transient or exceeding the MAP limit,
-	// and can be inhibited by a manual switch / Lua gauge. Mutually exclusive with Sport Mode
-	// (engineSmIsSportMode out-votes eco, same as Limp). Takes the current state directly so
-	// unit tests can drive it without standing up the full state determination.
+	// ecoModeMapLimit and RPM at or below ecoModeMaxRpm, drops instantly on leaving
+	// Cruising/Transient or exceeding the MAP/RPM limit, and can be inhibited by a manual switch /
+	// Lua gauge. Once engaged, stays forced active for ecoModeEngageLockTime seconds regardless of
+	// state/MAP/VSS/RPM changes (see m_ecoLockTimer) -- Limp/Sport/Inhibit still override the lock
+	// instantly. Mutually exclusive with Sport Mode (engineSmIsSportMode out-votes eco, same as
+	// Limp). Takes the current state directly so unit tests can drive it without standing up the
+	// full state determination.
 	void updateEcoMode(EngineStateMachineState currentState);
 	void updateSportMode();
 	void updateGhostCam();
@@ -159,6 +162,12 @@ private:
 	bool isEcoModeSwitchAsserted() const; // manual switch / Lua gauge currently asserting
 	bool isEcoModeInhibited() const;      // asserted in Inhibit mode
 	Timer m_ecoCruiseTimer;               // measures continuous time in the Cruising state
+
+	// Post-engage lock: reset on the rising edge of engineSmIsEcoMode. While
+	// !m_ecoLockTimer.hasElapsedSec(ecoModeEngageLockTime), updateEcoMode() skips all gate/state
+	// re-evaluation and leaves engineSmIsEcoMode forced true, so the transient caused by eco's own
+	// AFR/timing/VVT/throttle step can't be misread as leaving Cruising and bounce eco back off.
+	Timer m_ecoLockTimer;
 
 	// Eco mode's own actuation (ecoThrottleMult, VVT override) is a real RPM-rate transient but
 	// not driver-initiated; misreading it as Accelerating/Decelerating would bounce eco straight

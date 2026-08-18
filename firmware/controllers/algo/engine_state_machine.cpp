@@ -166,10 +166,24 @@ void EngineStateMachine::onSlowCallback() {
 void EngineStateMachine::updateEcoMode(EngineStateMachineState currentState) {
 	// Limp mode is protective and out-votes eco; Sport Mode is the driver's explicit request for
 	// aggressive behavior and is mutually exclusive with eco, so it out-votes eco too. A disabled
-	// feature is always inactive.
+	// feature is always inactive. These override even an active engage lock below -- safety and
+	// explicit driver intent always win.
 	if (!getCustomPage()->ecoModeEnabled || engineSmIsLimp || engineSmIsSportMode) {
 		m_ecoCruiseTimer.reset();
 		engineSmIsEcoMode = false;
+		return;
+	}
+
+	// Inhibit also overrides the engage lock below -- the driver's explicit "no eco" request wins.
+	bool inhibited = isEcoModeInhibited();
+
+	// Post-engage lock: once eco is active, hold it forced on and skip all gate/state
+	// re-evaluation for ecoModeEngageLockTime. Eco's own AFR/timing/VVT/throttle step is a real
+	// change in torque delivery, and re-checking Cruising/MAP/VSS/RPM against the resulting
+	// transient could misread it as "left Cruising" and immediately drop eco right back off.
+	// 0 disables the lock (instant re-evaluation, same as before this existed).
+	if (engineSmIsEcoMode && !inhibited
+			&& !m_ecoLockTimer.hasElapsedSec(getCustomPage()->ecoModeEngageLockTime)) {
 		return;
 	}
 
@@ -201,8 +215,24 @@ void EngineStateMachine::updateEcoMode(EngineStateMachineState currentState) {
 		cruiseElapsed = false;
 	}
 
-	// Inhibit blocks the timer-based engage; there is no Force-On override of the timer/MAP gate.
-	engineSmIsEcoMode = cruiseElapsed && !isEcoModeInhibited();
+	// RPM ceiling: eco has no business engaging (or staying engaged) above this RPM -- Cruising
+	// can still be reported there (TPS-based), but it's no longer the steady-state economy cruise
+	// eco targets. 0 disables the gate.
+	uint16_t maxRpm = getCustomPage()->ecoModeMaxRpm;
+	if (maxRpm > 0 && Sensor::getOrZero(SensorType::Rpm) > static_cast<float>(maxRpm)) {
+		m_ecoCruiseTimer.reset();
+		cruiseElapsed = false;
+	}
+
+	bool newEcoActive = cruiseElapsed && !inhibited;
+
+	// Rising edge: (re-)arm the post-engage lock window.
+	if (newEcoActive && !engineSmIsEcoMode) {
+		m_ecoLockTimer.reset();
+	}
+
+	// Inhibit blocks the timer-based engage; there is no Force-On override of the timer/MAP/RPM gate.
+	engineSmIsEcoMode = newEcoActive;
 }
 
 void EngineStateMachine::updateTempOverlay() {
