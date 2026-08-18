@@ -162,9 +162,11 @@ void CheckEngineLight::updateCheckEngineTriggering() {
 	if (isTpsIntermittent) {
 		points += 1;
 	}
+#if EFI_MISFIRE_DETECTION
 	if (engine->module<MisfireController>().unmock().misfireLatched) {
 		points += 1;
 	}
+#endif // EFI_MISFIRE_DETECTION
 	if (m_battery.activeCode != ObdCode::None) {
 		points += 1;
 	}
