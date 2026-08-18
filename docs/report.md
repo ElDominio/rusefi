@@ -2558,3 +2558,262 @@ Open follow-ups:
 - Confirm with the user whether a clean rebuild/reflash actually fixes the VehicleSpeed
   registration issue.
 - Same pre-existing `f407-discovery`/`MisfireController` issue, still not fixed by this session.
+
+## 2026-08-17 - Wheel Speed Sensors: legacy pin/CAN VSS deleted entirely; fleet-wide flag flip
+
+Final revision of the Wheel Speed Sensors feature for now. The user confirmed, across several
+follow-up questions, that the legacy pin/CAN VSS mechanism should be deleted outright (not just
+hidden from TS) and that `EFI_WHEEL_SPEED_SENSORS` should become a normal default-TRUE/opt-out
+flag (like `EFI_TOOTH_LOGGER`) rather than opt-in, since Main Speed Sensor is now the *only* path
+to `SensorType::VehicleSpeed` on every board. Explicitly accepted trade-off: every non-AlphaX
+board loses its VSS pin/CAN configuration UI and fields; anyone building current source for those
+boards needs to reconfigure Main Speed Sensor + Wheel/Drivetrain Sensors from scratch.
+
+**Deleted outright**: `firmware/controllers/can/can_vss.cpp` + `.h` (BMW/Nissan/Hyundai/Honda/W202
+CAN-vendor VSS decode), `firmware/controllers/sensors/converters/vehicle_speed_converter.h`,
+`can_vss_nbc_e` enum, and 9 core config fields (`vehicleSpeedSensorInputPin`,
+`vssFilterReciprocal`, `enableCanVss`, `canVssNbcType`, `canVssScaling`, `vssGearRatio`,
+`vssToothCount`, `vssMaxAcceleration`, `canInputBCM`) — `FLASH_DATA_VERSION` bumped 260815 ->
+260817. `FrequencySensor`'s shared-listener mechanism (`initShared`/`setSharedListener`/
+`onSharedEdge`) removed too — its only consumer was ISS's "shared with main VSS" pairing
+(`tcuInputSpeedSensorSharedWithVss`, also deleted), which no longer makes sense once there's no
+single "main VSS pin"; that code's own header comment already called it unreliable, so this is a
+net cleanup, not just a mechanical consequence. `init_vehicle_speed_sensor.cpp`'s
+`MainSpeedSensorPassthrough` is now unconditional (no more `#if EFI_WHEEL_SPEED_SENSORS`/`#else`
+split) -- it is the *only* implementation, always registered.
+
+**`EFI_WHEEL_SPEED_SENSORS` flag**: flipped from opt-in (FALSE everywhere, explicit TRUE only on
+`alphax-s550-pnp`) to a normal default-TRUE/opt-out flag -- `firmware/config/stm32f4ems/efifeatures.h`
+base default is now `TRUE` (via the existing `#ifndef` guard, so any board can still override with
+`-DEFI_WHEEL_SPEED_SENSORS=FALSE` in its own `board.mk`, same pattern as
+`hellen/small-can-board`'s `EFI_TOOTH_LOGGER` opt-out). This is TRUE on F4 now too, not just f7/h7
+-- no per-board flash budget audit was done; `proteus_f4` (a real flash-constrained mainline
+board) was spot-checked and fits at 82.89% flash0 usage, but other F4 boards haven't been checked.
+
+**Blast radius was much larger than initially scoped** -- a first grep pass (build-system files,
+core call sites) missed a long tail only found via a second, broader repo-wide grep for the
+deleted symbols:
+- ~18 board/engine default-config `.cpp` files across `firmware/config/boards/` and
+  `firmware/config/engines/` directly set `vehicleSpeedSensorInputPin`/`vssGearRatio`/
+  `vssToothCount`/`enableCanVss`/`canVssNbcType` as part of their default setup -- each needed its
+  assignment line(s) removed individually.
+- `firmware/controllers/settings.cpp` had a second, separate CLI hook (`setVssPin`/`CMD_VSS_PIN`,
+  the `vss_pin` console command) beyond the `can_vss` command already found.
+- `firmware/controllers/engine_controller.cpp`'s `validateConfig()` had a configError check
+  (added in an earlier revision) that referenced `enableCanVss`/`canVssNbcType`/`HYUNDAI_PB`/
+  `NISSAN_350` directly -- now dead since the CAN-vendor slip-ratio producer it was warning about
+  no longer exists.
+- **Six Lua scripts** (`firmware/controllers/lua/examples/TCU-4-speed.txt`, `honda-bcm.txt`,
+  `nissan-350z-bcm.txt`, `utils-dash-sweep.lua`, and `firmware/config/engines/nissan_vq.lua` /
+  `vw_b6.lua`) all called `Sensor.new("VehicleSpeed"):set(...)` -- a pattern that now fails at Lua
+  runtime with a duplicate-registration error, since `MainSpeedSensorPassthrough` always
+  pre-registers that slot. Redirected all six to `Sensor.new("WheelSpeedFront")` instead, with a
+  comment pointing at the new Main Speed Sensor = Front Axle setting needed to make that feed
+  become the reported `VehicleSpeed`. `nissan_vq.lua`/`vw_b6.lua` are bundled with real engine
+  presets, not just documentation -- this would have broken real users of those presets.
+
+Validation:
+- `unit_tests/test.sh` (full suite): 1439/1440 pass, same pre-existing unrelated `devBit0` failure.
+  Fixed two tests that broke from the deletion: `unit_tests/tests/lua/test_lookup.cpp`'s
+  `LuaBasic.configLookup` and `configLookupScaledChannelRegression` both used `vssGearRatio` as
+  their scaled_channel round-trip example -- swapped for `finalGearRatio` (still exists, same
+  scaled_channel shape, unrelated to this deletion) in both.
+- Built 3 boards clean from a full `rm -rf build .dep`: `alphax-s550-pnp`, `alphax-gold` (both
+  AlphaX/f7, confirming no regression from the flag-default change), and `proteus_f4` (mainline,
+  non-AlphaX, flash-constrained -- confirms the flag-flip's flash impact is survivable on at least
+  this board, and confirms Main Speed Sensor / Wheel Speed Sensors / Drivetrain Sensors now show
+  up correctly in a genuinely non-AlphaX board's generated `.ini`).
+- Grepped every generated `.ini` for leftover references to the 9 deleted fields after each build
+  -- zero hits.
+
+Open follow-ups:
+- No per-board flash budget audit beyond `proteus_f4` -- some other F4 board may not fit once this
+  flag is TRUE by default; would surface as a build failure (out of flash) that's straightforward
+  to diagnose, but hasn't been checked here.
+- Same pre-existing `f407-discovery`/`MisfireController` issue, still not fixed by this session.
+- Hardware/tune validation still deferred to the user -- this session was build/unit-test-only.
+
+## 2026-08-17 - Gear Setup: split out of Wheel Speed Sensors into its own dialog, explicit OSS/RPM source choice
+
+Follow-up to the same day's Wheel Speed Sensors work. User asked to move Gear Detection's config
+(forward gear count, per-gear ratios, wheel-size/final-drive fields) out of the "Wheel Speed
+Sensors" dialog into its own top-level "Gear Setup" dialog under "Chassis sensors", and to make
+Gear Detection's driveshaft-RPM source an explicit user choice (Main Vehicle Speed vs Output Shaft
+Speed) instead of the previous auto-detect, with a second explicit choice (Engine RPM vs Input
+Shaft Speed) governing the engine-side numerator when OSS is selected. Confirmed via
+`AskUserQuestion` before implementing: (1) the RPM/ISS choice only applies when Speed Source =
+Output Shaft Speed -- Main Vehicle Speed keeps the old ISS-if-present-else-RPM auto-detect
+unchanged; (2) the Main Vehicle Speed path should be simplified to just use
+`SensorType::VehicleSpeed` (already fully-resolved km/h) x `driveWheelRevPerKm` x `finalGearRatio`
+universally, dropping the old per-axle special-casing that reached into
+`wheelSpeedFrontRevPerKm`/`wheelSpeedRearRevPerKm` depending on which axle fed Main Speed Sensor.
+
+Changes:
+- `gearDetection` dialog (`tunerstudio.template.ini`) is now its own `groupChildMenu` entry ("Gear
+  Setup") under "Chassis sensors", a sibling of "Wheel Speed Sensors"/"Drivetrain Sensors" --
+  removed as a `panel` from the `speedSensor` dialog. `#define GEAR_DETECTION_DIALOG_NAME` retitled
+  "Gear Detection" -> "Gear Setup". Updated a stray reference in the TCU `transmissionPanel` field
+  comment that still said "Speed Sensor dialog".
+- Two new bit fields added to `engine_configuration_s`: `gearDetectionUseOutputShaftSpeed`
+  (false=default: Main Vehicle Speed: true: Output Shaft Speed) and
+  `gearDetectionRpmSourceIsInputShaftSpeed` (false=default: Engine RPM; true: Input Shaft Speed,
+  only meaningful when the first bit is true). Both reuse previously-reserved
+  `unusedBit_Fancy17`/`18` slots rather than growing the struct, so no `FLASH_DATA_VERSION` bump
+  was needed -- old tunes have these bits at 0, which is the safe default.
+- `GearDetector::getDriveshaftRpm()`/`computeGearboxRatio()` (`gear_detector.cpp`) rewritten:
+  dropped the `#if EFI_WHEEL_SPEED_SENSORS`/`#else` split and the `custom_page.h` dependency
+  entirely (per the confirmed simplification, Main Vehicle Speed path no longer needs to know
+  which axle/mode feeds it). `getDriveshaftRpm()` now a plain if/else on the new bit;
+  `computeGearboxRatio()`'s engine-RPM numerator uses the explicit RPM Source bit only when OSS is
+  selected, otherwise falls through to the unchanged legacy auto-detect.
+- `driveWheelRevPerKm`'s field comment updated to describe its new universal role (no longer framed
+  as an "Axle Ratio fallback for CAN/Lua axles").
+
+Recovery incident (important lesson, not just a note): while isolating the Gear Setup change to
+investigate an unrelated `f407-discovery` link failure (see below), `git checkout --` was run on
+the 6 touched files to inspect a "before" build. `gear_detector.cpp` had status `M` (unstaged only,
+no staged portion) -- checkout reverted it straight to `HEAD`, which turned out to have *never*
+contained the elaborate `#if EFI_WHEEL_SPEED_SENSORS`/`custom_page.h`/per-axle-revPerKm v2/v3 logic
+from earlier the same day: that logic had been sitting in the working tree, uncommitted *and
+unstaged*, this entire session, and `git log -1 -- gear_detector.cpp` showed the last real commit
+touching the file was `first-order-rpm-master-merge`, far back in history. The checkout silently
+destroyed it -- there was no staged blob to fall back to. Recovered losslessly by reconstructing
+the file from the full `Read` tool output captured earlier in the same conversation turn (before
+any edits), then re-applying the Gear Setup edits on top. Net effect ended up identical either way
+here, since the destroyed per-axle logic was exactly what this task's own confirmed simplification
+was about to remove anyway -- but that was luck, not the reason it was safe. **Lesson: `git status`
+alone (`M` vs `MM`) doesn't tell you whether reverting a file with `git checkout --` is safe --
+`M`-only means the working-tree content has no git-level backup at all.** Before running
+`checkout`/`restore`/`reset` on a file to "look at a clean version," check whether you have another
+way to reconstruct current content (a recent `Read` in-context, an editor undo history) *before*
+running the destructive command, not after. Safer alternative for future isolation-style
+investigation: `git diff > patch; git stash push -- <files>` (stash keeps a recoverable ref even for
+unstaged-only content, checkout does not) or just `cp` the file aside first.
+
+`f407-discovery` link failure (found during board-build verification, confirmed pre-existing and
+unrelated to this task): `arm-none-eabi-ld: rules_memory.ld:314 cannot move location counter
+backwards (from 20023040 to 20020000)` -- a RAM overflow at link time. Verified analytically (not
+just asserted) that today's Gear Setup change cannot be the cause: the two new fields are a pure
+bitfield relabel of already-allocated reserved bits (zero struct growth, confirmed by grepping the
+remaining `unusedBit_FancyNN` count), `gear_detector.h` has zero diff from `HEAD` (no new members),
+and the `.cpp`/`.ini` changes are logic/TS-only. This is the previously-flagged, previously-accepted
+"no per-board flash budget audit" open follow-up from the legacy-VSS-deletion entry above, now
+concretely confirmed on `f407-discovery` specifically (RAM, not flash, and at link time rather than
+a %-used warning) -- caused by that entry's `EFI_WHEEL_SPEED_SENSORS` default-TRUE flip, not by
+today's work. Left unfixed, out of scope for this task; flagging so it isn't mistaken for a
+regression introduced by Gear Setup.
+
+Validation:
+- `unit_tests/test.sh` (two full-suite runs, before and after the recovery incident): 1439/1440
+  pass both times, same pre-existing unrelated `devBit0` failure, all `GearDetector.*` tests pass
+  including the 3 new/rewritten ones (`DriveshaftRpmUsesOutputShaftSpeedWhenSelected`,
+  `DriveshaftRpmUsesMainVehicleSpeedByDefault`, `RpmSourceOnlyAppliesWithOutputShaftSpeed`).
+  Replaced 2 obsolete tests that exercised the removed per-axle-revPerKm logic.
+- `alphax-s550-pnp`: clean build from `rm -rf build .dep`, byte-identical flash/RAM totals before
+  and after the recovery incident (654012 B flash0, confirming the restore-and-redo reproduced the
+  exact same source). Verified the generated `.ini` shows the new "Gear Setup" top-level dialog
+  with both dropdowns correctly wired (`[18:18]`/`[19:19]` bit offsets, label order correct: TS
+  `bits` ini emits `[value0_label, value1_label]`, confirmed against the pre-existing
+  `primeOnTriggerTeeth` field as a known-good reference).
+- `f407-discovery`: fails at link (RAM overflow) -- pre-existing, see above, not fixed here.
+
+Open follow-ups:
+- `f407-discovery` (and possibly other small F4 boards) needs either a flash/RAM trim or an
+  `EFI_WHEEL_SPEED_SENSORS=FALSE` opt-out in its own `board.mk` -- unresolved from the prior
+  legacy-VSS-deletion entry, now concretely reproduced.
+- Hardware/tune validation still deferred to the user -- this session was build/unit-test-only.
+
+## 2026-08-17 - Traction Control: ETB/timing drop tables now positive-magnitude, fixed spark-skip scaling bug
+
+User asked three questions about `traction_control.cpp`'s three correction tables (ETB drop, timing
+drop, spark skip) that turned into a small safety/correctness fix plus one confirmed regression fix.
+
+Findings and changes:
+- **ETB drop was sign-correct but only by relying on the TS UI's range clamp** (`rusefi_config.txt`
+  had `tractionControlEtbDrop` clamped `-100..0`) -- the C++ applied it via a bare `+=` with no
+  runtime clamp, so a stray positive raw byte (old tune leftover, flash corruption, or a unit test
+  poking an out-of-range value) would have added throttle instead of removing it. Per user request,
+  flipped the table to store a **positive** drop magnitude (`0..100`, "%"), and negate it in
+  `TractionControlController::update()` (`traction_control.cpp`) *after* the Lua-gauge multiplier is
+  applied, then `minF(-rawEtbDrop, 0.0f)` -- this guarantees the value can never go positive
+  regardless of the multiplier's sign, and since the held/decay math downstream is a convex
+  combination of two already-clamped values, the invariant holds through the whole pipeline with a
+  single clamp point (no need to also clamp at the `electronic_throttle.cpp` consumer).
+- **Timing drop, per user request, converted from bipolar (`-100..100`, could advance OR retard) to
+  the same positive-magnitude/negate/clamp pattern** -- it's a traction-control *retard*, so it
+  should never be able to add timing either. Same single-clamp-point technique as ETB drop.
+- **Spark skip: confirmed a real scaling bug while answering the user's question** ("does 100 mean
+  100% skipped?"). `SoftSparkLimiter::shouldSkip()` compares `targetSkipRatio` directly against
+  `tinymt32_generate_float()` which returns `[0, 1)` -- but the raw table value (`0..100`, "%") was
+  never divided by 100 before being added into that ratio. Since the random draw never exceeds 1,
+  *any* table value >= 1 already produced near-100% skip -- `50` behaved identically to `100`, not
+  half as often. Fixed by dividing by 100 right where the table is read in `traction_control.cpp`,
+  so the full 0-100 range is now actually proportional as the "%" unit label claims.
+- Spark skip itself was already correctly one-directional (table range `0..100`, pure `+=`, no sign
+  ambiguity) -- left that part alone.
+- Updated 3 `.txt` field comments in `rusefi_config.txt` to describe the new positive-only
+  convention (also documents "can never add throttle/advance timing" inline for future readers).
+
+Compatibility note (not addressed further, by design): this changes the *meaning* of existing
+`tractionControlEtbDrop`/`tractionControlTimingDrop` cell values, not their storage format/size --
+no `FLASH_DATA_VERSION` bump needed (see [[project_flash_data_version_bump]] in memory for when that
+*would* apply). An old tune's negative cells now negate-then-clamp to 0 (fails closed: TC silently
+goes inert rather than reversing direction), so no danger, but any existing AlphaX tune using these
+tables needs its ETB-drop/timing-drop cells re-entered as positive magnitudes to keep working.
+Flagged but not fixed as a separate pre-existing issue: `electronic_throttle.txt`'s `tcEtbDrop` log
+gauge field is declared `"%", 1, 0, 0, 100, 0` (positive range) while the value it logs
+(`getAppliedEtbDrop()`) has always been internally negative both before and after this change --
+that TS gauge range mismatch predates this session and is unrelated to it.
+
+Validation:
+- Updated 6 existing unit tests across `test_etb.cpp`, `test_ignition_state.cpp`,
+  `test_launch_target_skip_ratio.cpp`, `test_engine_state_machine.cpp` to the new sign convention
+  and skip-ratio scale; added a new regression test `etb.tractionControlEtbDropNeverAddsThrottle`
+  that feeds an out-of-range negative raw table value and asserts the setpoint never exceeds the
+  unmodified pedal request.
+- `unit_tests/test.sh` (GCC, full suite): 1440/1441 pass. The one failure,
+  `LuaBasic.configLookup`, is pre-existing and unrelated -- `rusefi_config.txt:1344` defines the
+  field as `devBit01` but the test looks up `devBit0`, nowhere near anything touched here (confirmed
+  by inspecting the config source directly, not just by assumption).
+- Did not run the `CC=clang` cross-compiler check per [[feedback_skip_clang_verification]] (user has
+  asked this be skipped on this dev box for now).
+
+Open follow-ups:
+- Existing AlphaX tunes with non-zero `tractionControlEtbDrop`/`tractionControlTimingDrop` cells
+  need those re-entered as positive magnitudes after this update (old values silently zero out
+  rather than misbehaving, but TC will read as inactive until retuned).
+- The pre-existing `tcEtbDrop` TS gauge range mismatch (`electronic_throttle.txt`) and the
+  pre-existing `devBit0`/`devBit01` unit test naming drift are both unfixed, out of scope for this
+  task.
+
+## 2026-08-17 - Cleanup pass: VVT min-RPM decoupling, MisfireController build break, devBit0 test drift
+
+End-of-session cleanup: reviewed everything still uncommitted after the Wheel Speed Sensors, Gear
+Setup, Eco Mode, and Traction Control work above and split it into logical commits. Three pieces
+had accumulated without their own report entries:
+
+- **VVT Advanced Mode**: `getSetpoint()`'s near-zero hysteresis gate is now skipped entirely when
+  `vvtAdvancedModeEnabled` (Advanced Mode's duty comes purely from the oil-pressure feedforward +
+  gain-scheduled PID math, which has no fixed near-zero duty to guard against). Also removed the
+  `applyDefaultsOrFixAfterBurn()` auto-fix that forced `vvtControlMinRpm >= cranking.rpm` -- VVT is
+  still fully disabled below `vvtControlMinRpm` in every mode (no held duty while cranking, per
+  standing user preference), so the two thresholds don't need to stay coupled. New tests:
+  `VVT.SetpointHysteresisSkippedInAdvancedMode`, `VVT.DisabledBelowMinRpmEvenInAdvancedMode`.
+- **`check_engine_light.cpp` / `MisfireController` build break**: this is the fix for the
+  `f407-discovery` (and every other f4 board without an `EFI_MISFIRE_DETECTION` override) build
+  failure flagged as an open follow-up in every Wheel Speed Sensors entry above, back to
+  2026-08-16 -- `updateCheckEngineTriggering()` called `engine->module<MisfireController>()`
+  unconditionally while the module is only in `type_list` under `EFI_MISFIRE_DETECTION`. Wrapped
+  the call in `#if EFI_MISFIRE_DETECTION`.
+- **`devBit0`/`devBit01` unit test drift**: also flagged as a recurring pre-existing/unrelated
+  failure across multiple entries above (`LuaBasic.configLookup`). `rusefi_config.txt` has defined
+  the field as `devBit01` (not `devBit0`) since before this session; the test still looked up the
+  old name. One-line fix in `test_lookup.cpp`.
+
+Validation:
+- `unit_tests/test.sh` (GCC, full suite): **1441/1441 pass** -- first fully-green run this session;
+  confirms the `devBit0` fix actually closes out that long-standing failure.
+- Rebuilt `f407-discovery` (`compile_f407-discovery.sh -j12`) to confirm the `MisfireController`
+  fix above actually resolves the build break, using a separate `git worktree` checked out at the
+  pre-cleanup HEAD (`82134fad19`) to compare against, per [[feedback_no_stash_for_verification]]
+  (never stash/checkout the working tree itself for a "clean" comparison).
