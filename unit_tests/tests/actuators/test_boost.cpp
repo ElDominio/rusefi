@@ -40,8 +40,13 @@ TEST(BoostControl, Setpoint) {
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 35.0f);
 	EXPECT_FLOAT_EQ(bc.getSetpoint().value_or(-1), 35.0f);
 
-	// Back in open loop mode, setpoint should be 0
+	// Open loop mode still computes the real target from the target map - it's needed as the
+	// "Boost target kPa" Y axis option for the open loop duty table (see BoostController::getOpenLoop()).
 	engineConfiguration->boostType = OPEN_LOOP;
+	EXPECT_FLOAT_EQ(bc.getSetpoint().value_or(-1), 35.0f);
+
+	// ...but open loop must still work gracefully without a valid TPS/pedal reading.
+	Sensor::resetMockValue(SensorType::DriverThrottleIntent);
 	EXPECT_FLOAT_EQ(bc.getSetpoint().value_or(-1), 0);
 }
 
@@ -262,6 +267,12 @@ TEST(BoostControl, BoostOpenLoopYAxis)
 
 	engineConfiguration->boostOpenLoopYAxis = GPPWM_Egt2;
 	EXPECT_FLOAT_EQ(bc.getOpenLoop(0).value_or(-1), EGT2_TEST_VALUE);
+
+	// Unlike every other channel, GPPWM_BoostTarget isn't read via readGppwmChannel() - it's the
+	// setpoint argument passed into getOpenLoop() itself, computed this cycle by getSetpoint().
+	constexpr float BOOST_TARGET_TEST_VALUE = 44.0f;
+	engineConfiguration->boostOpenLoopYAxis = GPPWM_BoostTarget;
+	EXPECT_FLOAT_EQ(bc.getOpenLoop(BOOST_TARGET_TEST_VALUE).value_or(-1), BOOST_TARGET_TEST_VALUE);
 }
 
 TEST(BoostControl, OpenLoopBlendBias) {

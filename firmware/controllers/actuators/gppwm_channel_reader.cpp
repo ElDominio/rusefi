@@ -96,6 +96,10 @@ expected<float> readGppwmChannel(gppwm_channel_e channel) {
 #else
 		return 0;
 #endif // EFI_ENGINE_CONTROL
+	case GPPWM_BoostTarget:
+		// Only meaningful as the Y axis of the boost open loop table, where BoostController::getOpenLoop()
+		// substitutes this cycle's freshly-computed boost target before ever calling readGppwmChannel().
+		return unexpected;
 	}
 	return unexpected;
 }

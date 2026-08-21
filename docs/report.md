@@ -2863,3 +2863,45 @@ now `BUILD SUCCESSFUL` (only pre-existing, unrelated `Sensor` deprecation warnin
 Open follow-ups: none new. The `f407-discovery` RAM-overflow link failure from the entry above is
 still open and unrelated to this fix.
 
+## 2026-08-20 - Boost open loop: "Boost target kPa" Y axis option + un-gated target dialog
+
+What was done: added `GPPWM_BoostTarget` as a new Y-axis option for the "Boost control Open loop
+base duty cycle" table (`boostTableTbl`/`boostOpenLoopYAxis`), and un-gated the "Boost control
+target" menu entry (`boostTargetDialog`) so it is editable whenever boost control is enabled, not
+only when `boostType == 1` (Open + Closed Loop). Requested by the user: with the new Y axis
+selected, the open loop duty table is indexed by the closed-loop target table's value even in
+open-loop-only mode, so that table has to be populate-able regardless of `boostType`.
+
+Key decisions:
+- `gppwm_channel_e`/`pwmAxisLabels` is a *shared* bit-field enum used by several other Y-axis
+  pickers (VE blends, GPPWM outputs, torque reduction axes, etc.), so the new option is selectable
+  there too -- but it is only functionally wired for the boost open loop table.
+  `gppwm_channel_reader.cpp`'s `readGppwmChannel()` returns `unexpected` for `GPPWM_BoostTarget` to
+  keep that switch exhaustive; selecting the option anywhere else is inert, not wired.
+- `BoostController::getSetpoint()` previously short-circuited to a constant `0` setpoint whenever
+  `boostType != CLOSED_LOOP`, before ever reading TPS/pedal or touching the target map -- meaning
+  the "Boost control target" output channel (`boostControlTarget`) was always `0` in open-loop-only
+  mode, and the target table was never consulted. Changed it to always compute the real target
+  (target map + blends + lua adders + temp adder + limp cap), gating only the *actual PID
+  correction* (`getClosedLoopImpl`, unchanged) on `boostType`. Open-loop resilience is preserved
+  separately: invalid TPS/pedal still returns a `0` setpoint (not `unexpected`) when
+  `boostType != CLOSED_LOOP`, same as before.
+- `BoostController::getOpenLoop()` special-cases `GPPWM_BoostTarget` to use its own `target`
+  parameter directly (this cycle's setpoint, already computed by `getSetpoint()`) instead of
+  routing through `readGppwmChannel()`, avoiding both a stale-by-one-cycle read of
+  `boostControlTarget` and duplicating the target-table lookup logic.
+- Left `cltBoostAdderCurve`/`iatBoostAdderCurve`/blends dialogs and the PID gains gated on
+  `boostType == 1` as before -- out of scope for this request; they default to no-op contributions
+  when unpopulated, so leaving them inaccessible in open-loop mode doesn't block the new feature.
+
+Validation: `unit_tests/test.sh` (GCC, full suite) -- 1441/1441 pass. Updated
+`BoostControl.Setpoint` (`unit_tests/tests/actuators/test_boost.cpp`), which had hard-coded the old
+"open loop setpoint is always 0" behavior being fixed here; added a `GPPWM_BoostTarget` case to
+`BoostControl.BoostOpenLoopYAxis` verifying the pass-through of the `target` argument. Did not
+build any firmware board target or verify in TunerStudio UI this session.
+
+Open follow-ups:
+- Not verified against a real TunerStudio project/gauge that the new axis option renders/behaves
+  as expected in the UI, or that the ungated dialog no longer shows grayed out in Open Loop mode.
+- Per-board firmware builds not run for this change; only unit tests were built/executed.
+

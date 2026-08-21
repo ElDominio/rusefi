@@ -79,13 +79,10 @@ expected<float> BoostController::observePlant() {
 }
 
 expected<float> BoostController::getSetpoint() {
-	// If we're in open loop only mode, disregard any target computation.
-	// Open loop needs to work even in case of invalid closed loop config
+	// The closed-loop target table is also used as the "Boost target kPa" Y axis option for the
+	// open loop duty table (see GPPWM_BoostTarget in getOpenLoop()), so it needs to be computed
+	// here regardless of boostType, not only when actually running closed loop PID correction.
 	isNotClosedLoop = engineConfiguration->boostType != CLOSED_LOOP;
-	if (isNotClosedLoop) {
-		boostControllerClosedLoopPart = 0;
-		return (float)boostControllerClosedLoopPart;
-	}
 
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
 
@@ -93,6 +90,11 @@ expected<float> BoostController::getSetpoint() {
 	isTpsInvalid = !driverIntent.Valid;
 
 	if (isTpsInvalid) {
+		boostControllerClosedLoopPart = 0;
+		if (isNotClosedLoop) {
+			// Open loop needs to work even in case of invalid closed loop config
+			return 0;
+		}
 		return unexpected;
 	}
 
@@ -120,8 +122,9 @@ expected<float> BoostController::getSetpoint() {
 		target += temperatureAdder.value();
 	}
 
-	// Limp Mode boost ceiling: cap the closed-loop boost target while limp is latched.
-	// Note: this only limits closed-loop target; open-loop wastegate duty is unaffected.
+	// Limp Mode boost ceiling: cap the boost target while limp is latched.
+	// Note: this only limits closed-loop correction directly; open-loop wastegate duty is only
+	// affected indirectly, if and only if boostOpenLoopYAxis == GPPWM_BoostTarget.
 	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
 		float limpBoost = getCustomPage()->limpModeBoostLimit;
 		if (limpBoost > 0 && target > limpBoost) {
@@ -133,11 +136,14 @@ expected<float> BoostController::getSetpoint() {
 }
 
 expected<percent_t> BoostController::getOpenLoop(float target) {
-	// Boost control open loop doesn't care about target - only TPS/RPM
-	UNUSED(target);
-
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
-	auto driverIntent = readGppwmChannel(engineConfiguration->boostOpenLoopYAxis);
+
+	// GPPWM_BoostTarget isn't a generic sensor readGppwmChannel() knows how to read - it's this
+	// cycle's already-computed boost target (see getSetpoint()), so use it directly.
+	expected<float> driverIntent = readGppwmChannel(engineConfiguration->boostOpenLoopYAxis);
+	if (engineConfiguration->boostOpenLoopYAxis == GPPWM_BoostTarget) {
+		driverIntent = target;
+	}
 
 	isTpsInvalid = !driverIntent.Valid;
 
