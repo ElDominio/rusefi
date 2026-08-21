@@ -2,9 +2,11 @@
 #include "traction_control.h"
 
 void TractionControlController::init() {
-	tcEtbDropTable.initTable(engineConfiguration->tractionControlEtbDrop, engineConfiguration->tractionControlSlipBins, engineConfiguration->tractionControlSpeedBins);
-	tcTimingDropTable.initTable(engineConfiguration->tractionControlTimingDrop, engineConfiguration->tractionControlSlipBins, engineConfiguration->tractionControlSpeedBins);
-	tcSparkSkipTable.initTable(engineConfiguration->tractionControlIgnitionSkip, engineConfiguration->tractionControlSlipBins, engineConfiguration->tractionControlSpeedBins);
+	// columnBins must match TColNum (SPEED_SIZE), rowBins must match TRowNum (SLIP_SIZE) -- see the
+	// Map3D declarations in traction_control.h.
+	tcEtbDropTable.initTable(engineConfiguration->tractionControlEtbDrop, engineConfiguration->tractionControlSpeedBins, engineConfiguration->tractionControlSlipBins);
+	tcTimingDropTable.initTable(engineConfiguration->tractionControlTimingDrop, engineConfiguration->tractionControlSpeedBins, engineConfiguration->tractionControlSlipBins);
+	tcSparkSkipTable.initTable(engineConfiguration->tractionControlIgnitionSkip, engineConfiguration->tractionControlSpeedBins, engineConfiguration->tractionControlSlipBins);
 
 	tractionTimer.reset(getTimeNowNt());
 }
@@ -27,9 +29,11 @@ void TractionControlController::update() {
 	engine->engineState.tractionControlYAxisValue = yAxisValue;
 
 	// Tables store positive magnitudes (% throttle removed, degrees retarded, % sparks skipped).
-	float rawEtbDrop = tcEtbDropTable.getValue(yAxisValue, vehicleSpeed);
-	float rawTimingDrop = tcTimingDropTable.getValue(yAxisValue, vehicleSpeed);
-	float rawSparkSkip = tcSparkSkipTable.getValue(yAxisValue, vehicleSpeed) / 100.0f;
+	// getValue(xColumn, yRow): xColumn pairs with the speed bins (TColNum), yRow with the slip
+	// bins (TRowNum) -- see the Map3D declarations in traction_control.h.
+	float rawEtbDrop = tcEtbDropTable.getValue(vehicleSpeed, yAxisValue);
+	float rawTimingDrop = tcTimingDropTable.getValue(vehicleSpeed, yAxisValue);
+	float rawSparkSkip = tcSparkSkipTable.getValue(vehicleSpeed, yAxisValue) / 100.0f;
 
 	float multiplier = 1.0f;
 	if (engineConfiguration->tractionControlUseLuaGauge) {
@@ -50,18 +54,30 @@ void TractionControlController::update() {
 
 	bool isTractionActive = (rawEtbDrop != 0.0f) || (rawTimingDrop != 0.0f) || (rawSparkSkip != 0.0f);
 
-	if (isTractionActive) {
-		// If wheel slip (Y-axis) increases, reset hold timer and update held values
-		if (wheelSlip > lastWheelSlip) {
+	// Re-check "is slip increasing" only every tractionControlSlipCheckRateMs rather than every
+	// fast-loop tick: WheelSlipRatio is noisy at 5ms resolution, so comparing tick-to-tick makes the
+	// hold trigger re-arm on single-sample jitter instead of a real trend. Floored to the fast-loop
+	// period, so a value below that (including 0, from an older tune) reproduces the original
+	// every-tick behavior.
+	slipCheckTimer -= dt;
+	if (slipCheckTimer <= 0.0f) {
+		float checkRateMs = engineConfiguration->tractionControlSlipCheckRateMs;
+		if (checkRateMs < FAST_CALLBACK_PERIOD_MS) {
+			checkRateMs = FAST_CALLBACK_PERIOD_MS;
+		}
+		slipCheckTimer = checkRateMs / 1000.0f;
+
+		// If wheel slip (Y-axis) increased since the last check, reset hold timer and update held values
+		if (isTractionActive && wheelSlip > lastCheckedWheelSlip) {
 			holdTimer = (float)engineConfiguration->tractionControlHoldTime / 1000.0f; // ms to seconds
 			heldEtbDrop = rawEtbDrop;
 			heldTimingDrop = rawTimingDrop;
 			heldSparkSkip = rawSparkSkip;
 			decayTimer = 0.0f;
 		}
-	}
 
-	lastWheelSlip = wheelSlip;
+		lastCheckedWheelSlip = wheelSlip;
+	}
 
 	float targetEtb = rawEtbDrop;
 	float targetTiming = rawTimingDrop;

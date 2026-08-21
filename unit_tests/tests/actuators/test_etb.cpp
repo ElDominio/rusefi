@@ -990,8 +990,12 @@ TEST(etb, tractionControlEtbDrop) {
 	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0);
 	Sensor::setMockValue(SensorType::WheelSlipRatio, 0.9);
 
-	engineConfiguration->tractionControlEtbDrop[0][0] = 15;
-	engineConfiguration->tractionControlEtbDrop[0][1] = 15;
+	// tractionControlEtbDrop is indexed [slipIndex][speedIndex]. Slip = 0.9 is exactly slip bin 0
+	// (frac 0), so only slip-row 0 contributes at the probe below regardless of speed -- write to
+	// slip-row 1 so these cells are guaranteed unreached rather than relying on the speed bin's
+	// fractional position not to overlap.
+	engineConfiguration->tractionControlEtbDrop[1][0] = 15;
+	engineConfiguration->tractionControlEtbDrop[1][1] = 15;
 
 	size_t lastYIndex = TRACTION_CONTROL_ETB_DROP_SLIP_SIZE - 1;
 	size_t lastXIndex = TRACTION_CONTROL_ETB_DROP_SPEED_SIZE - 1;
@@ -999,7 +1003,7 @@ TEST(etb, tractionControlEtbDrop) {
 	engineConfiguration->tractionControlEtbDrop[lastYIndex - 1][lastXIndex - 1] = 25;
 	engineConfiguration->tractionControlEtbDrop[lastYIndex][lastXIndex] = 25;
 
-	// [0][0]/[0][1] aren't the cells sampled at this point, so the setpoint is unaffected: still 37.
+	// [1][0]/[1][1] aren't the cells sampled at this point, so the setpoint is unaffected: still 37.
 	// The corner cells (25) are only reached at the extreme coordinates probed below: 47 - 25 = 22.
 
 	engine->tractionController.update();
@@ -1052,11 +1056,12 @@ TEST(etb, tractionControlHoldAndDecay) {
 	setLinearCurve(engineConfiguration->tractionControlSlipBins, /*from*/0.0, /*to*/1.0, 0.2);
 	setLinearCurve(engineConfiguration->tractionControlSpeedBins, /*from*/10, /*to*/120, 5);
 
-	// Set drop to 0% for slip bin 0 (slip = 0.0) and 10% (positive table value) for slip bins 1-5
-	for (int i = 0; i < TRACTION_CONTROL_ETB_DROP_SPEED_SIZE; i++) {
-		engineConfiguration->tractionControlEtbDrop[i][0] = 0;
-		for (int j = 1; j < TRACTION_CONTROL_ETB_DROP_SLIP_SIZE; j++) {
-			engineConfiguration->tractionControlEtbDrop[i][j] = 10;
+	// Set drop to 0% for slip bin 0 (slip = 0.0) and 10% (positive table value) for slip bins 1-5,
+	// the same for every speed bin. tractionControlEtbDrop is indexed [slipIndex][speedIndex].
+	for (int speedIdx = 0; speedIdx < TRACTION_CONTROL_ETB_DROP_SPEED_SIZE; speedIdx++) {
+		engineConfiguration->tractionControlEtbDrop[0][speedIdx] = 0;
+		for (int slipIdx = 1; slipIdx < TRACTION_CONTROL_ETB_DROP_SLIP_SIZE; slipIdx++) {
+			engineConfiguration->tractionControlEtbDrop[slipIdx][speedIdx] = 10;
 		}
 	}
 
@@ -1083,44 +1088,49 @@ TEST(etb, tractionControlHoldAndDecay) {
 	engine->tractionController.update();
 	EXPECT_EQ(50, etb.getSetpoint().value_or(-1)); // pedal only
 
-	// Time = 0. Slip increases to 1.0 (raw drop should be -10)
+	// Time = 5ms. Slip increases to 1.0 (raw drop should be -10).
+	// The "is slip increasing" trigger only re-checks every tractionControlSlipCheckRateMs (floored
+	// to the fast-loop period, 5ms, since the field is unset/0 here) -- advance by that much so this
+	// tick's check actually runs, rather than two updates at the same simulated instant.
+	setTimeNowUs(5000); // 5 ms
 	Sensor::setMockValue(SensorType::WheelSlipRatio, 1.0);
 	engine->tractionController.update();
 	EXPECT_EQ(40, etb.getSetpoint().value_or(-1)); // 50 - 10 = 40
 
-	// Time = 50ms. Slip decreases to 0.0. But we hold for 100ms.
-	setTimeNowUs(50000); // 50 ms
+	// Time = 55ms (50ms after slip increase). Slip decreases to 0.0. But we hold for 100ms.
+	setTimeNowUs(55000);
 	Sensor::setMockValue(SensorType::WheelSlipRatio, 0.0);
 	engine->tractionController.update();
 	EXPECT_EQ(40, etb.getSetpoint().value_or(-1)); // held at 40
 
-	// Time = 100ms. Slip still 0. Hold timer is exactly at 0 (since 100ms hold time elapsed).
-	// It should start to decay. Since decay is 200ms, and 50ms has elapsed since hold expired (100ms - 50ms),
-	// wait, hold timer started at t=0 when slip was 1.0, and slip decreased at t=50ms.
+	// Time = 105ms (100ms after slip increase). Slip still 0. Hold timer is exactly at 0 (since
+	// 100ms hold time elapsed). It should start to decay. Since decay is 200ms, and 50ms has
+	// elapsed since hold expired (100ms - 50ms),
+	// wait, hold timer started when slip was 1.0, and slip decreased 50ms later.
 	// Wait, does the hold timer reset when slip decreases? No, it only resets when slip increases.
-	// So the hold timer started at t=0. It expires at t=100ms.
-	// At t=120ms (20ms into decay), it should decay.
-	// Let's test at t=150ms (50ms into decay).
+	// So the hold timer started at the slip-increase instant. It expires 100ms later.
+	// At 20ms into decay, it should decay.
+	// Let's test at 50ms into decay.
 	// Decay progress = 50ms / 200ms = 0.25.
 	// Applied drop = heldDrop * (1 - 0.25) = -10 * 0.75 = -7.5%.
 	// Note: tcEtbDrop is an int8_t, so -7.5% is truncated to -7%.
 	// Setpoint = 50 - 7 = 43.
-	setTimeNowUs(150000); // 150 ms
+	setTimeNowUs(155000); // 150ms after slip increase
 	engine->tractionController.update();
 	EXPECT_NEAR(43.0f, etb.getSetpoint().value_or(-1), EPS4D);
 
-	// Time = 250ms (150ms into decay).
+	// 150ms into decay.
 	// Decay progress = 150ms / 200ms = 0.75.
 	// Applied drop = -10 * (1 - 0.75) = -2.5%.
 	// Note: tcEtbDrop is an int8_t, so -2.5% is truncated to -2%.
 	// Setpoint = 50 - 2 = 48.
-	setTimeNowUs(250000); // 250 ms
+	setTimeNowUs(255000); // 250ms after slip increase
 	engine->tractionController.update();
 	EXPECT_NEAR(48.0f, etb.getSetpoint().value_or(-1), EPS4D);
 
-	// Time = 300ms (hold expired at 100ms + 200ms decay = 300ms).
+	// Hold expired at 100ms + 200ms decay = 300ms after slip increase.
 	// Decay should be complete (applied drop = 0).
-	setTimeNowUs(300000); // 300 ms
+	setTimeNowUs(305000); // 300ms after slip increase
 	engine->tractionController.update();
 	EXPECT_EQ(50, etb.getSetpoint().value_or(-1));
 }

@@ -2948,3 +2948,92 @@ verify in TunerStudio UI this session.
 
 Open follow-ups: same as above -- no live TunerStudio verification, no per-board firmware build.
 
+## 2026-08-21 - Traction Control: fixed slip/speed axis transpose bug, added configurable slip-check rate
+
+What was done: root-caused a real-world "wheel slip sharply increasing, no corrective action" report
+from a GT350_PNP tune/log (`sliplog.msl`) down to a genuine firmware bug, then fixed it and added a
+configurable trigger-check rate the user requested alongside it.
+
+Root cause: `tractionControlEtbDrop`/`tractionControlTimingDrop`/`tractionControlIgnitionSkip`
+(`rusefi_config.txt`) were declared `[SPEED_SIZE x SLIP_SIZE]`, but the `.ini` binds
+`yBins=tractionControlSlipBins`/`xBins=tractionControlSpeedBins`, and `interpolate3d`'s own header
+comment documents the convention as `[y_row_count x x_column_count]` -- i.e. the field should have been
+`[SLIP_SIZE x SPEED_SIZE]`. `traction_control.h`'s `Map3D<...>` template args and `traction_control.cpp`'s
+`initTable()`/`getValue()` call sites were written to match the wrong (but internally self-consistent, so
+no compile error) `[SPEED x SLIP]` order. Net effect: current vehicle speed was used to pick a position on
+what is actually the slip axis, and current wheel slip was used to pick a position on what is actually the
+speed axis -- silently wrong data, no crash, since both axes happened to be sized 6 on this tune (a board
+with unequal `TRACTION_CONTROL_ETB_DROP_SLIP_SIZE`/`_SPEED_SIZE`, e.g. `f429-discovery` at 10/16, would
+have been cross-wiring two differently-sized axes, not just swapping data).
+
+Verified against the user's actual burned tune (`~/TunerStudioProjects/GT350_PNP/CurrentTune.msq`) before
+touching code: hand-replicated the "transposed" read against the real stored slip/speed bins and ETB/timing
+tables at two independent log timestamps, and it matched the logged ECU output to within rounding (e.g.
+-23.5 calculated vs -23 logged ETB correction at slip=1.012/speed=48.7 kph; -10.0 calculated vs -9 logged at
+slip=1.315/speed=69.8 kph; same match on the timing-drop table). This is why the user's table topping out at
+-50%/-10 deg at slip=1.15 was unreachable in practice -- that cell only gets read when speed's bin-index
+position numerically resembles the slip value and vice versa, which normal driving never produces.
+
+Fix (3 coordinated files, no MSQ/tune migration needed -- TunerStudio already serializes the table
+slip-major, matching the corrected layout):
+1. `rusefi_config.txt`: `tractionControlEtbDrop`/`TimingDrop`/`IgnitionSkip` redeclared
+   `[TRACTION_CONTROL_ETB_DROP_SLIP_SIZE x ..._SPEED_SIZE]`.
+2. `traction_control.h`: `Map3D<...>` template args swapped to `<SPEED_SIZE, SLIP_SIZE, int8_t, uint8_t,
+   uint16_t>` (TXColumn/TRow scalar types also swapped -- speed bins are plain `uint8_t`, slip bins are
+   `autoscale uint16_t`).
+3. `traction_control.cpp`: `initTable()` and `getValue()` call argument order swapped to match.
+
+Second request, same session: a configurable rate for the "is wheel slip increasing" hold-trigger check,
+instead of re-checking every 5ms fast-loop tick (raw `WheelSlipRatio` is noisy at that resolution, so a
+tick-to-tick compare re-arms on single-sample jitter rather than a real trend). Added
+`tractionControlSlipCheckRateMs` (`uint16_t`, ms, min 5 / max 500 per user request -- TS has no native
+"multiples of 5" step enforcement for a plain scalar field, so that constraint is documented in the field
+comment rather than enforced in the UI) to `rusefi_config.txt`, exposed as "Slip Increase Check Rate" in
+`tractionControlSettingsDialog` (`tunerstudio.template.ini`). Implementation follows the same
+anchor-and-hold-until-window-elapsed idiom as `EngineStateMachine::recordRpmSampleAndComputeRate`
+(`smRpmRateWindowMs`) rather than a ring buffer: a countdown timer (`slipCheckTimer`, seconds, decremented
+by `dt` every tick like the existing `holdTimer`/`decayTimer`) gates the increase-check and the
+`lastCheckedWheelSlip` update; the trigger and hold/decay math themselves are unchanged. Floored to
+`FAST_CALLBACK_PERIOD_MS` (5ms) so an unset/legacy tune (field reads 0) reproduces the original every-tick
+behavior exactly -- no migration/default needed.
+
+Key decisions:
+- Did not add a `FLASH_DATA_VERSION`-style bump: these three fields live in the main
+  `engine_configuration_s` (via `rusefi_config.txt`), not the page-5 struct that macro guards: same total
+  byte size (36 bytes each, `SLIP_SIZE`==`SPEED_SIZE`==6 on every board that currently ships this feature),
+  just reordered internally. A previously-burned tune under the old firmware will read back with axes
+  swapped until re-burned from TunerStudio (normal "settings changed, re-apply tune" flow after any
+  firmware update) -- this is the same class of change as any other struct layout edit and isn't unique to
+  this fix.
+- No default set for the new field in `default_base_engine.cpp`: 0 (the all-zero-struct default for an
+  unset field, same convention as `tractionControlHoldTime`/`DecayTime`) floors to 5ms in code, so it's
+  backward compatible by construction rather than needing an explicit default entry.
+
+Validation: `unit_tests/test.sh` (GCC, full suite) -- 1442/1442 pass. Two pre-existing tests
+(`etb.tractionControlEtbDrop`, `etb.tractionControlHoldAndDecay`) initially failed after the axis fix and
+needed updating:
+- `tractionControlEtbDrop` had baked in the *old* (buggy) axis assumption in its own cell writes ([0][1] was
+  believed unreached by the "should be unaffected" probe, but under the corrected `[slip][speed]` layout
+  that cell partially overlaps the probed speed bin) -- moved the "unreached" cells to a slip row that's
+  provably never sampled at that probe (frac=0 exactly) instead of relying on speed-bin-fraction arithmetic
+  not to overlap.
+- `tractionControlHoldAndDecay`'s fill loop had its two index variables bound to the swapped macros
+  (`SPEED_SIZE` outer / `SLIP_SIZE` inner, matching the *old* physical layout) -- corrected to
+  `[slipIdx][speedIdx]`. Separately, the test called `update()` twice at the identical mocked timestamp to
+  simulate an instantaneous slip increase; under the new default 5ms check-rate floor the second call's
+  check was skipped (window not yet elapsed), so the hold never armed -- advanced that call (and every
+  later one, preserving all relative deltas) by 5ms to represent a real fast-loop tick.
+Also built firmware for `alphax-s550-pnp` (`compile_alphax-s550.sh`) clean with no errors/warnings from this
+change (ram0 100% as expected/unrelated, see prior board_config_gui.py note).
+
+Open follow-ups:
+- Not verified live on hardware/in TunerStudio -- the user should re-burn the `GT350_PNP` tune after
+  flashing this fix and confirm the ETB/timing drop now tracks slip as tuned (was independently predicting
+  ~-42% ETB / ~-1.6 deg at the log's slip=1.315/speed=69.8 kph point vs. the -9/-1.48 actually observed
+  under the bug).
+- `tractionControlIgnitionSkip` (spark-skip table) was all-zero in the user's actual tune, unrelated to this
+  bug -- flagged to the user but not populated or otherwise addressed.
+- Did not check whether any other board's `prepend.txt` overrides `TRACTION_CONTROL_ETB_DROP_SLIP_SIZE`/
+  `_SPEED_SIZE` to unequal values besides the already-known `f429-discovery` (10/16) -- that board isn't
+  built in CI (`at_start_f435`-family boards disabled), so the fix's correctness there is by code inspection
+  only, not a build/test run.
