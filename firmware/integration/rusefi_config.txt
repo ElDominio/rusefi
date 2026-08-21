@@ -1741,6 +1741,7 @@ pin_input_mode_e[LUA_DIGITAL_INPUT_COUNT iterate] luaDigitalInputPinModes;
 	uint16_t autoscale benchTestOffTime;Time between bench test pulses;"ms", 0.1, 0, 5, 2000, 1
 	uint8_t autoscale boostCutPressureHyst;Defines a pressure range below the cut limit at which boost can resume, providing smoother control over boost cut actions.\nFor example: if hard cut is 240kpa, and boost cut hysteresis is 20, when the ECU sees 240kpa, fuel/ign will cut, and stay cut until 240-20=220kpa is reached;{bitStringValue(pressureUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 0.5 : 0.072519}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 125 : 18.13}, 1
 	int8_t[TCU_GEAR_COUNT] autoscale gearBasedOpenLoopBoostAdder;Boost duty cycle modified by gear;"%", 0.5, 0, -63, 63, 1
+	int8_t[TCU_GEAR_COUNT] autoscale gearBasedBoostTargetAdder;Boost target modified by gear, applied in both open and closed loop;"kPa", 1, 0, -50, 50, 0
 
 	uint32_t benchTestCount;How many test bench pulses do you want;"", 1, 0, 1, 10000000, 0
 	uint8_t autoscale iacByTpsHoldTime;How long initial idle adder is held before starting to decay.;"seconds", 0.1, 0, 0, 25, 1

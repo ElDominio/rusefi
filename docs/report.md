@@ -2905,3 +2905,46 @@ Open follow-ups:
   as expected in the UI, or that the ungated dialog no longer shows grayed out in Open Loop mode.
 - Per-board firmware builds not run for this change; only unit tests were built/executed.
 
+## 2026-08-20 - Boost control follow-up: CLT/IAT adder ungating, target gear adder, fixed unnamed enum entries
+
+What was done: three follow-ups to the same-day boost control change above, all requested by the user.
+1. Ungated the "CLT boost target adder" and "IAT boost target adder" dialogs (`cltBoostAdderCurve`,
+   `iatBoostAdderCurve` in `top_level_menu.ini`) from `{ isBoostControlEnabled && boostType == 1 }` to
+   `{ isBoostControlEnabled }` -- same reasoning as the "Boost control target" dialog fix earlier today:
+   `BoostController::getSetpoint()` already computes these adders unconditionally (regardless of
+   `boostType`), so the dialogs were pointlessly grayed out in Open Loop mode even though populating
+   them had a real effect.
+2. Added a new "Boost control target gear adder" table: `gearBasedBoostTargetAdder[TCU_GEAR_COUNT]`
+   (`int8_t autoscale`, "kPa", range -50..50), added next to `gearBasedOpenLoopBoostAdder` in
+   `rusefi_config.txt` (same `engineConfiguration->` struct) plus a new curve/dialog (`boostTargetGearAdderCurve`/`boostTargetGearAdderDialog` in `tunerstudio.template.ini`,
+   `groupChildMenu` entry in `top_level_menu.ini`). Applied in `BoostController::getSetpoint()`
+   (`boost_control.cpp`) right after the CLT/IAT temperature adder, indexed the same way as the existing
+   `gearBasedOpenLoopBoostAdder` duty adder (`gear + 1`, no bounds clamping, matching that precedent).
+   Since `getSetpoint()` now runs unconditionally, this new adder is active in both Open Loop and Closed
+   Loop from the start -- ungated in `top_level_menu.ini` (`{ isBoostControlEnabled }` only).
+3. Fixed unnamed dropdown entries at enum indices 35/36 (`GPPWM_ThrottleRatio`, `GPPWM_BoostTarget`):
+   the actual combo-box value list backing every `gppwm_channel_e`-typed field (the "Y Axis" selector,
+   blend parameters, torque reduction axes, etc.) is `#define gppwm_channel_e_enum=...` at
+   `tunerstudio.template.ini:123`, driven by `custom gppwm_channel_e ... $gppwm_channel_e_enum` in
+   `rusefi_config.txt`. This is a *separate* list from `pwmAxisLabels` (which only labels table axis
+   headers via `bitStringValue()`) and had not been extended past index 34 ("Fuel Pressure") when
+   `GPPWM_ThrottleRatio`/`GPPWM_BoostTarget` were added -- appended "Throttle Pressure Ratio" and
+   "Boost target" to match.
+
+Key decisions:
+- Kept the new gear target adder as a plain indexed array (not a `Map2D`/`ValueProvider2D` curve),
+  matching `gearBasedOpenLoopBoostAdder`'s existing pattern -- gear is discrete, so interpolation
+  machinery isn't needed, and it avoids adding new `init()` plumbing.
+- Left `boostPidDialog` and the closed-loop blend dialogs gated on `boostType == 1` -- those are PID
+  correction / closed-loop-only concepts, unlike the target and its adders which are meaningful in open
+  loop too.
+
+Validation: `unit_tests/test.sh` (GCC, full suite) -- 1442/1442 pass, including a new
+`BoostControl.SetpointGearAdder` test verifying the gear adder applies identically in both `CLOSED_LOOP`
+and `OPEN_LOOP`. Spot-checked the regenerated `firmware/tunerstudio/generated/rusefi_f407-discovery.ini`
+and `engine_configuration_generated_structures_f407-discovery.h` to confirm the new field/curve/dialog
+and the fixed enum list came through codegen correctly. Did not build any firmware board target or
+verify in TunerStudio UI this session.
+
+Open follow-ups: same as above -- no live TunerStudio verification, no per-board firmware build.
+

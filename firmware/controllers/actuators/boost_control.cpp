@@ -122,6 +122,10 @@ expected<float> BoostController::getSetpoint() {
 		target += temperatureAdder.value();
 	}
 
+	// Gear-based target adder, applies in both open and closed loop since this whole function does now.
+	auto targetAdderGear = Sensor::getOrZero(SensorType::DetectedGear);
+	target += engineConfiguration->gearBasedBoostTargetAdder[static_cast<int>(targetAdderGear) + 1];
+
 	// Limp Mode boost ceiling: cap the boost target while limp is latched.
 	// Note: this only limits closed-loop correction directly; open-loop wastegate duty is only
 	// affected indirectly, if and only if boostOpenLoopYAxis == GPPWM_BoostTarget.

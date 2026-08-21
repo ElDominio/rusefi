@@ -50,6 +50,33 @@ TEST(BoostControl, Setpoint) {
 	EXPECT_FLOAT_EQ(bc.getSetpoint().value_or(-1), 0);
 }
 
+TEST(BoostControl, SetpointGearAdder) {
+	MockVp3d targetMap;
+	EXPECT_CALL(targetMap, getValue(_, _)).WillRepeatedly([](float, float) { return 100.0f; });
+
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	testBoostCltCorr.initTable(config->cltBoostCorr, config->cltBoostCorrBins);
+	testBoostIatCorr.initTable(config->iatBoostCorr, config->iatBoostCorrBins);
+	testBoostCltAdder.initTable(config->cltBoostAdder, config->cltBoostAdderBins);
+	testBoostIatAdder.initTable(config->iatBoostAdder, config->iatBoostAdderBins);
+
+	BoostController bc;
+	bc.init(nullptr, nullptr, &targetMap, testBoostCltCorr, testBoostIatCorr, testBoostCltAdder, testBoostIatAdder, nullptr);
+
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
+	Sensor::setMockValue(SensorType::DetectedGear, 2.0f);
+	// gear + 1 offset (see BoostController::getSetpoint())
+	engineConfiguration->gearBasedBoostTargetAdder[3] = 10;
+
+	// Gear-based target adder applies whether or not closed loop PID correction is active.
+	engineConfiguration->boostType = CLOSED_LOOP;
+	EXPECT_FLOAT_EQ(bc.getSetpoint().value_or(-1), 110.0f);
+
+	engineConfiguration->boostType = OPEN_LOOP;
+	EXPECT_FLOAT_EQ(bc.getSetpoint().value_or(-1), 110.0f);
+}
+
 TEST(BoostControl, ObservePlant) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->boostType = CLOSED_LOOP;
