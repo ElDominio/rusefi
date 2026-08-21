@@ -2837,3 +2837,29 @@ Open follow-ups:
   opt-out flag or a RAM trim before this board can build again.
 - Still no audit of every *other* F4 board for the same RAM/flash budget risk from
   `EFI_WHEEL_SPEED_SENSORS` defaulting TRUE.
+
+## 2026-08-18 - Fix: java_console build break from legacy VSS pin autotest fallout
+
+What was done: `build_gui.py`'s alphax-s550 build failed at the `java_tools`/`rusefi_console.jar`
+stage (`:autotest:compileJava`) with `cannot find symbol: variable CMD_VSS_PIN` in
+`VssHardwareTestLogic.java:33`. Firmware itself compiled fine -- this was pure Java fallout, one
+step further downstream than any report entry so far had looked.
+
+Root cause: the prior session's `b90fe2fb3e` ("Wheel Speed Sensors + Gear Setup: axle/OSS speed
+replaces legacy pin/CAN VSS", see the entry above) deleted the legacy pin/CAN VSS feature outright,
+including the `vss_pin` console command and its `CMD_VSS_PIN` constant in `rusefi_config.txt`.
+Three hardware-in-loop autotest files under `java_console/autotest/` still referenced it and were
+never updated in that commit: `common/VssHardwareTestLogic.java` (the shared test logic, calling
+`CMD_VSS_PIN`/`CMD_IDLE_PIN`/`CMD_TRIGGER_PIN` etc. to jumper-test a physical VSS pin), and its two
+callers `f4discovery/VssHardwareLoopTest.java` and `nucleo/NucleoVssHardwareTest.java`. Since the
+underlying firmware command no longer exists, these three files were testing a deleted feature, not
+a real regression to fix forward -- deleted all three outright rather than reworking them, and
+removed their `.class` references from the `HwCiF4Discovery`/`HwCiNucleoF7` hardware-test suite
+lists (`java_console/autotest/src/main/java/com/rusefi/HwCi{F4Discovery,NucleoF7}.java`).
+
+Validation: `./gradlew :autotest:compileJava` -- was failing with the `CMD_VSS_PIN` symbol error,
+now `BUILD SUCCESSFUL` (only pre-existing, unrelated `Sensor` deprecation warnings remain).
+
+Open follow-ups: none new. The `f407-discovery` RAM-overflow link failure from the entry above is
+still open and unrelated to this fix.
+

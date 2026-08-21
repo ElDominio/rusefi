@@ -28,7 +28,6 @@ public class HwCiF4Discovery {
             MiscTest.class,
             CommonFunctionalTest.class,
             DiscoveryPwmHardwareTest.class,
-            VssHardwareLoopTest.class,
             HighRevTest.class,
     };
 
