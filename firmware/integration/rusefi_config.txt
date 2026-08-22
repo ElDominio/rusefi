@@ -1793,6 +1793,8 @@ float ignKeyAdcDivider
 	uint16_t tractionControlHoldTime;Traction control hold time. When traction control is active, the peak drop values are held for this duration.;"ms", 1, 0, 0, 10000, 0
 	uint16_t tractionControlDecayTime;Traction control decay time. After the hold time expires, values decay back to the current table value over this duration.;"ms", 1, 0, 0, 10000, 0
 	uint16_t tractionControlSlipCheckRateMs;How often the "is slip increasing" hold trigger is re-checked, instead of every fast-loop tick. Reduces sensitivity to sensor noise. Must be a multiple of 5 - values below 5, including 0 from an older tune, behave as 5.;"ms", 1, 0, 5, 500, 0
+	uint8_t tractionControlMinVss;Minimum vehicle speed for traction control to be active. Below this speed traction control is fully disabled, regardless of table values. 0 disables this gate (traction control can be active at any speed, including standstill).;"kph", 1, 0, 0, 250, 0
+	uint8_t tractionControlMinDriverDemand;Minimum accelerator pedal position for traction control to be active. Below this pedal position traction control is fully disabled, regardless of table values. Prevents intervention during coast/off-throttle. 0 disables this gate.;"%", 1, 0, 0, 100, 0
 	custom tc_y_axis_e 1 bits, U08, @OFFSET@, [0:0], "Wheel Slip Ratio", "RPM Accel (/100)"
 	tc_y_axis_e tractionControlYAxisSource;Selects the Y axis source for traction control tables. In RPM Accel mode the axis value is RPM/s divided by 100 (e.g. a bin value of 1.0 represents 100 RPM/s).;
 

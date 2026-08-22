@@ -46,6 +46,19 @@ void TractionControlController::update() {
 	rawTimingDrop *= multiplier;
 	rawSparkSkip *= multiplier;
 
+	// Below the configured minimum vehicle speed or minimum driver demand (accelerator pedal),
+	// traction control is fully disabled -- treat the table lookup as zero so the existing
+	// hold/decay state machine smoothly relaxes any already-applied correction rather than
+	// snapping it off. 0 disables the respective gate (preserves old-tune behavior).
+	float driverDemand = Sensor::getOrZero(SensorType::AcceleratorPedal);
+	bool belowMinVss = (engineConfiguration->tractionControlMinVss != 0) && (vehicleSpeed < engineConfiguration->tractionControlMinVss);
+	bool belowMinDriverDemand = (engineConfiguration->tractionControlMinDriverDemand != 0) && (driverDemand < engineConfiguration->tractionControlMinDriverDemand);
+	if (belowMinVss || belowMinDriverDemand) {
+		rawEtbDrop = 0.0f;
+		rawTimingDrop = 0.0f;
+		rawSparkSkip = 0.0f;
+	}
+
 	// ETB and timing corrections only ever remove throttle/advance, never add them: convert the
 	// positive table magnitude to a subtractive correction here, and clamp so a negative multiplier
 	// (or any other upstream sign mistake) can never flip these positive and add throttle/timing.
