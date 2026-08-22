@@ -2948,6 +2948,26 @@ verify in TunerStudio UI this session.
 
 Open follow-ups: same as above -- no live TunerStudio verification, no per-board firmware build.
 
+## 2026-08-22 - Traction Control: minimum vehicle speed / driver demand gate
+
+What was done: added two new gates to `TractionControlController::update()` (`traction_control.cpp`) --
+`tractionControlMinVss` (kph) and `tractionControlMinDriverDemand` (% accelerator pedal), both new
+`uint8_t` fields in `rusefi_config.txt` and exposed in `tractionControlSettingsDialog`
+(`tunerstudio.template.ini`). Below either configured threshold, traction control is fully disabled by
+zeroing `rawEtbDrop`/`rawTimingDrop`/`rawSparkSkip` before the existing sign-conversion/clamp step, rather
+than early-returning out of `update()` -- this lets the existing hold/decay state machine relax any
+already-applied correction smoothly instead of snapping it off mid-intervention. Each gate is independently
+disabled when its threshold is 0, preserving old-tune (all-zero-struct default) behavior.
+
+Validation: not yet run -- this entry documents committing pre-existing uncommitted working-tree changes as
+part of an end-of-session cleanup pass; `unit_tests/test.sh` has not been re-run against this specific
+commit.
+
+Open follow-ups:
+- No unit test coverage added for either new gate (no existing test references
+  `tractionControlMinVss`/`tractionControlMinDriverDemand`).
+- Not verified on hardware/in TunerStudio.
+
 ## 2026-08-21 - Traction Control: fixed slip/speed axis transpose bug, added configurable slip-check rate
 
 What was done: root-caused a real-world "wheel slip sharply increasing, no corrective action" report
