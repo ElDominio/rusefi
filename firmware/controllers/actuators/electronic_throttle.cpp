@@ -347,6 +347,14 @@ expected<percent_t> EtbController::getSetpointEtb() {
 		return unexpected;
 	}
 
+	// Cranking TPS target override: while cranking, force a fixed raw throttle position instead of
+	// the normal pedal/idle blend below. The instant RPM crosses the Cranking RPM limit, isCranking()
+	// flips false and control reverts to the standard idle logic (Idle Position vs CLT / Cranking Air
+	// Amount / Cranking Idle RPM Flare) untouched.
+	if (engineConfiguration->crankingTpsTargetEnabled && engine->rpmCalculator.isCranking()) {
+		return clampPercentValue(engineConfiguration->cranking.tpsTarget);
+	}
+
 	float sanitizedPedal = getSanitizedPedal();
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
 

@@ -461,6 +461,49 @@ TEST(etb, setpointIdle) {
 	EXPECT_FLOAT_EQ(55, etb.getSetpoint().value_or(-1));
 }
 
+TEST(etb, setpointCrankingTpsTarget) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->cranking.rpm = 500;
+	engineConfiguration->crankingTpsTargetEnabled = true;
+	engineConfiguration->cranking.tpsTarget = 65;
+
+	// Idle blend active too, so we can confirm cranking bypasses it entirely
+	engineConfiguration->etbIdleThrottleRange = 10;
+
+	// Must have TPS & PPS initialized for ETB setup
+	Sensor::setMockValue(SensorType::Tps1Primary, 0);
+	Sensor::setMockValue(SensorType::Tps1, 0.0f, true);
+	Sensor::setMockValue(SensorType::AcceleratorPedal, 20.0f, true);
+
+	EtbController etb;
+
+	// Mock pedal map that's just passthru pedal -> target
+	StrictMock<MockVp3d> pedalMap;
+	EXPECT_CALL(pedalMap, getValue(_, _))
+		.WillRepeatedly([](float xRpm, float y) {
+			return y;
+		});
+	etb.init(DC_Throttle1, nullptr, nullptr, &pedalMap);
+	etb.setIdlePosition(50);
+
+	// Below cranking.rpm: forced to the configured cranking TPS target, ignoring pedal/idle blend
+	engine->rpmCalculator.setRpmValue(300);
+	Sensor::setMockValue(SensorType::Rpm, 300);
+	EXPECT_FLOAT_EQ(65, etb.getSetpoint().value_or(-1));
+
+	// The instant RPM crosses cranking.rpm: back to the normal pedal/idle blend
+	engine->rpmCalculator.setRpmValue(2000);
+	Sensor::setMockValue(SensorType::Rpm, 2000);
+	EXPECT_FLOAT_EQ(24, etb.getSetpoint().value_or(-1));
+
+	// Disabled: even while cranking, normal pedal/idle blend applies
+	engineConfiguration->crankingTpsTargetEnabled = false;
+	engine->rpmCalculator.setRpmValue(300);
+	Sensor::setMockValue(SensorType::Rpm, 300);
+	EXPECT_FLOAT_EQ(24, etb.getSetpoint().value_or(-1));
+}
+
 TEST(etb, setpointRevLimit) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 

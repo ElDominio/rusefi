@@ -3057,3 +3057,62 @@ Open follow-ups:
   `_SPEED_SIZE` to unequal values besides the already-known `f429-discovery` (10/16) -- that board isn't
   built in CI (`at_start_f435`-family boards disabled), so the fix's correctness there is by code inspection
   only, not a build/test run.
+
+## 2026-08-22 - Cranking TPS Target (ETB-only) + unrelated pre-existing GPPWM_BoostTarget build break
+
+What was done:
+- Added a "TPS Target for Cranking (%)" feature: while the engine is cranking (`engine->rpmCalculator.isCranking()`)
+  and the throttle is running in ETB mode, force the throttle to a fixed configured position instead of
+  computing the normal pedal/idle blend. The instant RPM crosses `cranking.rpm`, `isCranking()` flips false and
+  control reverts untouched to the existing idle logic (Idle Position vs CLT / Cranking Air Amount / Cranking
+  Idle RPM Flare) -- none of that idle-controller code was touched.
+- New fields, both in `firmware/integration/rusefi_config.txt`:
+  - `cranking.tpsTarget` (`uint8_t`, 0-100%) added to `cranking_parameters_s` -- grows `engine_configuration_s`,
+    so bumped `FLASH_DATA_VERSION` 260817 -> 260822.
+  - `crankingTpsTargetEnabled` bit -- reused a previously-unused `unusedBit_Fancy19` slot (no size growth, no
+    version bump needed for the bit itself), so old tunes default to disabled/off and get byte-identical
+    cranking ETB behavior to before.
+  - Exposed as two new fields ("TPS Target for Cranking" / "TPS Target for Cranking (%)", the latter gated on
+    the former via `{ crankingTpsTargetEnabled }`) in the existing `crankingDialog` in
+    `firmware/tunerstudio/tunerstudio.template.ini`.
+- Implementation: `EtbController::getSetpointEtb()` (`firmware/controllers/actuators/electronic_throttle.cpp`)
+  gets an early-return: `if (engineConfiguration->crankingTpsTargetEnabled && engine->rpmCalculator.isCranking())
+  return clampPercentValue(engineConfiguration->cranking.tpsTarget);`. Since this function is only ever reached
+  for `m_function == DC_Throttle1/DC_Throttle2` (see `getSetpoint()`'s switch), reaching it already implies ETB
+  mode -- no separate "is ETB configured" check needed.
+- Placement matters: the override had to go *after* the existing `if (!m_pedalProvider) { ... return unexpected;
+  }` guard, not before it. `etb.setpointNoPedalMap` constructs a bare `EtbController` with no `EngineTestHelper`/
+  `commonInitEngineController()`, relying on that guard to bail out before anything touches the global
+  `engine`/`engineConfiguration` pointers. Placing the cranking check earlier (my first attempt) dereferenced
+  those globals before the guard and crashed that test with an ASan SEGV in `getSetpointEtb()`. Moved after the
+  guard; all 1442 (now 1443) unit tests pass.
+- Added `etb.setpointCrankingTpsTarget` (`unit_tests/tests/actuators/test_etb.cpp`): confirms the override fires
+  and ignores idle blend while cranking, reverts to pedal/idle blend once RPM crosses `cranking.rpm`, and stays
+  on the normal blend even while cranking if the feature bit is off.
+
+Unrelated pre-existing build break found and fixed along the way (full unit-test suite could not build without
+it): `boost_control.cpp`'s `BoostController::getOpenLoop()` referenced `GPPWM_BoostTarget`, left over from an
+earlier session's "Boost open loop: compute real target for the 'Boost target kPa' Y axis option" commit
+(3ea6cbc638) and its follow-up (187d3fa1e5) -- the TS-side display strings for that enum slot (index 36) were
+already added to `tunerstudio.template.ini`'s `gppwm_channel_e_enum`/`pwmAxisLabels`, and `gppwm_channel_reader.cpp`
+already had a correct no-op case for it, but the actual C++ enum value was never appended to `gppwm_channel_e` in
+`firmware/controllers/algo/rusefi_enums.h`. Added `GPPWM_BoostTarget = 36,` after `GPPWM_ThrottleRatio = 35,`
+(append-only, no renumbering). `firmware/controllers/algo/auto_generated_commonenum.{h,cpp}` regenerated
+automatically by the normal build (do not hand-edit; already showed as pre-modified/stale in `git status` before
+this session).
+
+Validation:
+- `unit_tests/test.sh` (GCC, full suite): 1443/1443 pass, including the new `etb.setpointCrankingTpsTarget`.
+- `firmware/config/boards/alphax-s550-pnp/compile_alphax-s550.sh -j12`: clean build, links fine (ram0 100% as
+  usual/expected for this board, not a new-OOM signal -- see prior `board_config_gui.py`-adjacent note).
+- Did not run `make CC=clang` per standing instruction for this dev box (clang verification currently skipped
+  here).
+
+Open follow-ups:
+- Not yet verified on real hardware/TunerStudio -- user should confirm the TS field shows up correctly under
+  Cranking -> Cranking Settings, gated properly on the new enable checkbox, and that a burned tune with the
+  feature enabled actually holds the configured TPS% during real starter cranking then releases cleanly into
+  normal idle once RPM clears `cranking.rpm`.
+- Old tunes need `FLASH_DATA_VERSION` bump acknowledgment/re-burn per the usual convention (see
+  `[[project_flash_data_version_bump]]`-style prior work) -- this only changes struct size, not existing field
+  meaning, so no data migration is needed beyond the standard reburn.

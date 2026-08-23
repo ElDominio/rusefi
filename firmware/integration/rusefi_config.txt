@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260817
+#define FLASH_DATA_VERSION 260822
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -400,6 +400,7 @@ custom UiMode 1 bits, S08, @OFFSET@, [0:1], @@UiMode_enum@@
 
 struct cranking_parameters_s
 int16_t rpm;This sets the RPM limit below which the ECU will use cranking fuel and ignition logic, typically this is around 350-450rpm. \nset cranking_rpm X;"RPM", 1, 0, 0, 12000, 0
+uint8_t tpsTarget;ETB-only: raw throttle target position while cranking, overriding the normal Idle Position vs CLT / Cranking Air Amount / Cranking Idle RPM Flare logic. The instant RPM crosses the Cranking RPM limit above, control reverts to that standard logic. Requires 'TPS Target for Cranking' to be enabled and Electronic Throttle Body to be configured.;"%", 1, 0, 0, 100, 0
 end_struct
 
 #define debug_mode_e_enum "INVALID", "TPS acceleration enrichment", "INVALID", "Stepper Idle Control", "Engine Load accl enrich", "Trigger Counters", "Soft Spark Cut", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "SD card", "sr5", "Knock", "INVALID", "Electronic Throttle", "Executor", "Bench Test / TS commands", "INVALID", "Analog inputs #1", "INSTANT_RPM", "INVALID", "Status", "INVALID", "INVALID", "MAP", "Metrics", "INVALID", "Ion Sense", "TLE8888", "Analog inputs #2", "Dwell Metric", "INVALID", "INVALID", "Boost Control", "INVALID", "INVALID", "ETB Autotune", "Composite Log", "INVALID", "INVALID", "INVALID", "Dyno_View", "Logic_Analyzer", "INVALID", "TCU", "Lua"
@@ -1905,7 +1906,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit primeOnTriggerTeeth,"Trigger teeth","Fixed delay";When enabled, the priming pulse fires after 'primingTriggerTeeth' raw primary trigger teeth are seen since ignition-on, instead of after the fixed 'primingDelay'. Tooth counting does not require trigger sync, and (like the fixed-delay mode) the pulse still only fires once per key cycle.
 	bit gearDetectionUseOutputShaftSpeed,"Output Shaft Speed","Main Vehicle Speed";Gear Setup's driveshaft speed reference. Main Vehicle Speed converts SensorType::VehicleSpeed back to driveshaft RPM via driveWheelRevPerKm/finalGearRatio. Output Shaft Speed uses the OSS sensor's RPM directly (it is already measured at the transmission output, no conversion needed) -- requires Output Shaft Speed to be configured under Drivetrain Sensors.
 	bit gearDetectionRpmSourceIsInputShaftSpeed,"Input Shaft Speed","Engine RPM";Only used when Speed Source above is Output Shaft Speed. Chooses the engine-side RPM reference for the gearbox ratio: plain engine RPM, or Input Shaft Speed (more accurate when paired with OSS, since together they measure the true instantaneous ratio without engine-side slip/lag e.g. through a torque converter).
-	bit unusedBit_Fancy19
+	bit crankingTpsTargetEnabled,"enabled","disabled";ETB-only. While cranking, force the throttle to 'TPS Target for Cranking (%)' instead of the normal idle logic. Reverts to standard idle behavior the instant RPM crosses the Cranking RPM limit.
 	bit unusedBit_Fancy20
 	bit unusedBit_Fancy21
 	bit unusedBit_Fancy22
