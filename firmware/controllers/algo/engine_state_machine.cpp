@@ -1013,6 +1013,9 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float currentVss
 bool EngineStateMachine::isEnabled() const { return false; }
 EngineStateMachineState EngineStateMachine::getCurrentState() const { return EngineStateMachineState::Off; }
 void EngineStateMachine::reportLimpCondition() { /* state machine compiled out — no limp mode */ }
+// No clutch switch config exists when the state machine is compiled out — same "always engaged"
+// default as the enabled build with no switch configured (see IdleController's use of this).
+bool EngineStateMachine::isTransmissionEngaged() const { return true; }
 void EngineStateMachine::onSlowCallback() { }
 void EngineStateMachine::updatePopsAndBangs(bool /*isOverrun*/) { engineSmIsPopsAndBangs = false; }
 void EngineStateMachine::updateEcoMode(EngineStateMachineState /*currentState*/) { engineSmIsEcoMode = false; }

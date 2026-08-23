@@ -3116,3 +3116,58 @@ Open follow-ups:
 - Old tunes need `FLASH_DATA_VERSION` bump acknowledgment/re-burn per the usual convention (see
   `[[project_flash_data_version_bump]]`-style prior work) -- this only changes struct size, not existing field
   meaning, so no data migration is needed beyond the standard reburn.
+
+## 2026-08-23 - Idle undershoot investigation (tolight.msl/.msq) + clutch/neutral VSS-gate override for idle
+
+What was done:
+- Investigated a user-provided log (`tolight.msl`/`tolight.msq`, not committed) of a maneuver where the driver
+  blips the throttle to force the transmission to neutral while still rolling at ~46 km/h, expecting the engine
+  to settle to idle. RPM instead free-fell from ~1637 to 211 RPM (near-stall) over ~2s, then hunted in open loop
+  for a further ~4.6s before finally entering closed-loop idle only once Vehicle Speed dropped under 4 km/h.
+- Root cause: `IdleController::determinePhase()` (`firmware/controllers/actuators/idle_thread.cpp`) gates closed-
+  loop idle (`Phase::Idling`) off entirely whenever `VehicleSpeed > maxIdleVss` (tune had `maxIdleVss = 4.0
+  km/h`), with **no gear or clutch awareness** -- so a car in neutral coasting at any speed above that gets zero
+  idle authority no matter how low RPM falls. Confirmed via log: `Idle: Closed loop active` / `Idle: idling` were
+  0 for the entire ~6.6s window, and `Idle: Position` (IAC valve target) sat frozen at 35.65% throughout even as
+  measured RPM cratered -- because the only open-loop path available (`getRunningOpenLoop()`) is a static
+  feedforward table lookup keyed on target RPM + CLT, with no measured-RPM error term, so it cannot react to a
+  real-time undershoot.
+- Separately confirmed a second, likely primary contributor: `Timing: ignition` crossed zero and went slightly
+  negative (as low as -0.28 deg) exactly during the RPM trough. Traced this to the tune's `ignitionTable` itself
+  having very low/negative values in the low-RPM (<=850) x elevated-load (>=55 kPa) corner -- a MAP/RPM
+  combination that essentially never occurs in normal driving (idle/low-RPM operation normally pairs with low
+  MAP), so that region of the table was effectively never characterized. A ~5 deg DFCO retard hangover
+  (`DfcoController::getTimingRetard()`'s post-cut ramp-out, confirmed subtracted into published timing via
+  `ignition_state.cpp`'s `getAdvanceCorrections()`) stacked on top during roughly the first 1.3s. Not yet fixed
+  -- flagged to the user as a tune-side follow-up (reshape `ignitionTable` for that corner).
+- Implemented the requested fix for the idle-gate side: a new opt-in tune bit,
+  `idleVssGateClutchOverride` ("Clutch disengaged/neutral while high VSS ignore VSS limit", under Idle Detection
+  Thresholds, gated visible on `maxIdleVss > 0`). When enabled, if `SensorType::DetectedGear == 0` (neutral) or
+  the Engine State Machine's clutch switch reads disengaged, the VSS gate is bypassed and closed-loop idle is
+  allowed to run regardless of `maxIdleVss`.
+  - Reused `unusedBit_Fancy20` (no `FLASH_DATA_VERSION` bump; old tunes default to disabled/unchanged behavior).
+  - Reuses `EngineStateMachine::isTransmissionEngaged()` (moved from private to public) rather than duplicating
+    the `smUpshiftClutchSwitch`/`smDownshiftClutchSwitch` interpretation -- so it automatically respects
+    whatever clutch-switch config the user already has for shift detection. Added a compiled-out stub
+    (`return true`, i.e. "assume engaged", matching the no-switch-configured default) for
+    `EFI_ENGINE_STATE_MACHINE=FALSE` boards so the call still links there.
+- Added `idle_v2.clutchOrNeutralOverridesVssGate` (`unit_tests/tests/test_idle_controller.cpp`): covers baseline
+  (gated when disabled), still-gated-in-gear-with-clutch-engaged, neutral-detected override, clutch-switch-
+  disengaged override (no gear signal), and re-gating on clutch release.
+
+Validation:
+- `unit_tests` full suite (GCC): 1444/1444 pass after the change, including the new test.
+- Did not build firmware for a specific board this session (logic-only change confined to `idle_thread.cpp`
+  determinePhase() and the new config bit; no board-specific code paths).
+
+Open follow-ups:
+- `ignitionTable` low-RPM/elevated-load corner is still effectively untuned -- user needs to either fill it in
+  by hand/bench, or ask for a pass at reshaping it, before this maneuver is fully safe even with the new gate
+  enabled.
+- Not yet verified on real hardware -- user should confirm the new "Clutch disengaged/neutral while high VSS
+  ignore VSS limit" checkbox appears under Idle Detection Thresholds and actually prevents the undershoot on a
+  repeat of the same maneuver.
+- `DfcoController::getTimingRetard()`'s ramp-out (`firmware/controllers/algo/fuel/dfco.cpp`) computes
+  `rampInTime` from `engineConfiguration->dfcoRetardRampInTime` but the `interpolateClamped()` call that follows
+  it hardcodes `0.5` as the ramp-out duration instead of using `rampInTime` -- noticed in passing while tracing
+  the DFCO retard stacking above, not yet confirmed as a real bug or investigated/fixed.

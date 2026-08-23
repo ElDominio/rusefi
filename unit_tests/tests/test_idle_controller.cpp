@@ -122,6 +122,47 @@ TEST(idle_v2, testDeterminePhase) {
 	EXPECT_EQ(ICP::Coasting, dut.determinePhase(5000, targetInfo, 0, 0, 10));
 }
 
+// A throttle-blip-to-neutral at speed leaves VSS above maxIdleVss even though the engine is
+// producing no ground torque -- idleVssGateClutchOverride lets closed-loop idle run anyway once
+// the driver has explicitly decoupled the engine (clutch out or neutral), instead of leaving idle
+// wide open-loop for as long as it takes the car to coast down below maxIdleVss.
+TEST(idle_v2, clutchOrNeutralOverridesVssGate) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+
+	engineConfiguration->idlePidDeactivationTpsThreshold = 5;
+	engineConfiguration->maxIdleVss = 10;
+
+	TgtInfo targetInfo;
+	targetInfo.IdleEntryRpm = 1000 + 100;
+	targetInfo.IdleExitRpm = 1000 + 100;
+
+	engine->rpmCalculator.setRpmValue(1000);
+
+	// Baseline: above maxIdleVss forces Running, override disabled (default).
+	EXPECT_EQ(ICP::Running, dut.determinePhase(1000, targetInfo, 0, 25, 10));
+
+	engineConfiguration->idleVssGateClutchOverride = true;
+
+	// Override enabled, but still in gear with clutch engaged -- VSS gate still applies.
+	Sensor::setMockValue(SensorType::DetectedGear, 3);
+	EXPECT_EQ(ICP::Running, dut.determinePhase(1000, targetInfo, 0, 25, 10));
+
+	// Neutral detected (Detected Gear == 0) -- override allows closed-loop idle despite high VSS.
+	Sensor::setMockValue(SensorType::DetectedGear, 0);
+	EXPECT_EQ(ICP::Idling, dut.determinePhase(1000, targetInfo, 0, 25, 10));
+
+	// No gear signal, but the clutch switch itself reports disengaged -- override still applies.
+	Sensor::resetMockValue(SensorType::DetectedGear);
+	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engine->engineState.clutchDownState = true;
+	EXPECT_EQ(ICP::Idling, dut.determinePhase(1000, targetInfo, 0, 25, 10));
+
+	// Clutch released again (pedal at rest) -- VSS gate re-applies.
+	engine->engineState.clutchDownState = false;
+	EXPECT_EQ(ICP::Running, dut.determinePhase(1000, targetInfo, 0, 25, 10));
+}
+
 // Ghost Cam deliberately makes RPM hunt around its target -- while active, RPM excursions that
 // would normally read as Coasting must still classify as Idling, so the lope itself doesn't
 // drop the idle timing PID (and engineSmIsIdle) every time RPM swings past IdleExitRpm. Throttle

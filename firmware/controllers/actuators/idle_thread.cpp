@@ -124,9 +124,21 @@ IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController
 		return Phase::Coasting;
 	}
 
-	// If the vehicle is moving too quickly, disable CL idle
+	// If the vehicle is moving too quickly, disable CL idle -- unless the driver has explicitly
+	// decoupled the engine from the road (clutch out or neutral) and the override is enabled.
+	// Without this override, a throttle-blip-to-neutral at speed leaves the engine with no
+	// closed-loop idle authority for as long as VSS stays above maxIdleVss, even though the
+	// engine is producing no ground torque and is just as "idle" as if the car were stopped.
 	auto maxVss = engineConfiguration->maxIdleVss;
 	looksLikeRunning = maxVss != 0 && vss > maxVss;
+	if (looksLikeRunning && engineConfiguration->idleVssGateClutchOverride) {
+		bool clutchOut = !engine->module<EngineStateMachine>().unmock().isTransmissionEngaged();
+		auto detectedGear = Sensor::get(SensorType::DetectedGear);
+		bool inNeutral = detectedGear.Valid && detectedGear.Value == 0;
+		if (clutchOut || inNeutral) {
+			looksLikeRunning = false;
+		}
+	}
 	if (looksLikeRunning) {
 		return Phase::Running;
 	}

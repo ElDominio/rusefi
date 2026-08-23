@@ -1907,7 +1907,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit gearDetectionUseOutputShaftSpeed,"Output Shaft Speed","Main Vehicle Speed";Gear Setup's driveshaft speed reference. Main Vehicle Speed converts SensorType::VehicleSpeed back to driveshaft RPM via driveWheelRevPerKm/finalGearRatio. Output Shaft Speed uses the OSS sensor's RPM directly (it is already measured at the transmission output, no conversion needed) -- requires Output Shaft Speed to be configured under Drivetrain Sensors.
 	bit gearDetectionRpmSourceIsInputShaftSpeed,"Input Shaft Speed","Engine RPM";Only used when Speed Source above is Output Shaft Speed. Chooses the engine-side RPM reference for the gearbox ratio: plain engine RPM, or Input Shaft Speed (more accurate when paired with OSS, since together they measure the true instantaneous ratio without engine-side slip/lag e.g. through a torque converter).
 	bit crankingTpsTargetEnabled,"enabled","disabled";ETB-only. While cranking, force the throttle to 'TPS Target for Cranking (%)' instead of the normal idle logic. Reverts to standard idle behavior the instant RPM crosses the Cranking RPM limit.
-	bit unusedBit_Fancy20
+	bit idleVssGateClutchOverride,"enabled","disabled";Clutch disengaged/neutral while high VSS ignore VSS limit. When enabled, closed-loop idle control is allowed to run above 'maxIdleVss' as long as the clutch switch reads disengaged (per the Engine State Machine's Upshift/Downshift Clutch Switch config) or the Detected Gear sensor reads neutral -- e.g. blipping the throttle into neutral while still rolling at speed.
 	bit unusedBit_Fancy21
 	bit unusedBit_Fancy22
 	bit unusedBit_Fancy23
