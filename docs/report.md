@@ -3171,3 +3171,58 @@ Open follow-ups:
   `rampInTime` from `engineConfiguration->dfcoRetardRampInTime` but the `interpolateClamped()` call that follows
   it hardcodes `0.5` as the ramp-out duration instead of using `rampInTime` -- noticed in passing while tracing
   the DFCO retard stacking above, not yet confirmed as a real bug or investigated/fixed.
+
+## 2026-08-24 - Session cleanup: split accumulated WIP into 3 commits, fixed a broken regression test
+
+What was done:
+- Working tree had several days' worth of uncommitted source changes mixed together (on top of two already-
+  committed-but-incomplete prior commits). Split into three separate, independently buildable commits:
+  1. `RPM_UPDATE_FIRST_ORDER: fix engine latched in SPINNING_UP forever` (`rpm_calculator.cpp` +
+     `test_fasterEngineSpinningUp.cpp`) -- follow-up bug fix to `17d0436c85` (same session, already pushed to
+     this branch): that commit switched the FIRST_ORDER spin-up path to `assignRpmValue()`, but `state` only
+     ever leaves `SPINNING_UP` inside `setRpmValue()`, so `isRunning()` could never become true in
+     `RPM_UPDATE_FIRST_ORDER` mode with `isFasterEngineSpinUpEnabled`. Fix: also drive the cycle-averaged
+     `setRpmValue(cycleRpm)` call while still spinning up in FIRST_ORDER mode (mirroring what
+     `RPM_UPDATE_PER_CYCLE` already did unconditionally).
+  2. `Quick Warmup: finish quickWarmupTimingRetard -> quickWarmupIdleTimingOverride rename in TS UI`
+     (`tunerstudio.template.ini` only) -- `f3171b5b2f` (same session) renamed the field in C++ and
+     `config_page_6.txt` but missed the TunerStudio-facing tooltip/dialog label/description, which still
+     described the old additive-retard semantics.
+  3. `Add manual per-bank fuel trim table` (`engine2.cpp`, `fuel_math.cpp/h`, `rusefi_config.txt`,
+     `top_level_menu.ini`, `tunerstudio.template.ini`) -- new `fuelBankTrims` (`fuel_cyl_trim_s[FT_BANK_COUNT
+     iterate]`, sharing the existing `fuelTrimRpmBins`/`fuelTrimLoadBins` axes), applied as an extra multiplier
+     in `EngineState::periodicFastCallback()` alongside the existing closed-loop STFT/LTFT bank trim and
+     per-cylinder trim. `FLASH_DATA_VERSION` bumped for the new field.
+- While verifying commit 1, the new regression test (`testFasterEngineSpinningUpFirstOrderReachesRunning`)
+  initially failed -- but the failure was in the test's own hand-rolled trigger tooth pattern
+  (`fireTriggerEvents2(58,1)` + a too-narrow `fireRise(2)` gap), not the production fix: it never produced a
+  wide-enough sync gap for `TT_TOOTHED_WHEEL_60_2`, so `PrimaryTriggerDecoder::onTriggerError()` fired every
+  simulated revolution, which calls `engine->rpmCalculator.lastTdcTimer.init()` and reset it back to
+  `Timer::InitialState` each time -- so `RpmCalculator::checkIfSpinning()` always saw a ~42.9s (2^32-tick-
+  saturated) elapsed time and `hadRpmRecently` was permanently false, silently skipping the cycle-averaged
+  `setRpmValue()` path the fix depends on. Rewrote the test to use the existing, already-proven
+  `EngineTestHelper::spin60_2UntilDeg()` helper (used elsewhere up to 1200 RPM without trigger errors) instead
+  of a bespoke tooth-firing loop; it then passed immediately, confirming the production fix in
+  `rpm_calculator.cpp` was correct all along.
+- Also hit and recovered from a self-inflicted git mistake: ran `git add <path>` with a relative path from
+  inside `unit_tests/` while intending a repo-root-relative path, so the add silently failed (wrong resolved
+  path) and a subsequent `git commit --amend` picked up unrelated already-staged files (the bank-trim feature's
+  files) into the RPM commit, while keeping the *old, broken* version of the test. Caught it by inspecting `git
+  show --stat` right after the amend, then `git reset HEAD~1` (mixed) to unwind cleanly and redid the two
+  commits correctly. No data was lost since nothing had been pushed yet.
+- Left several large untracked files at the repo root untouched (not committed, not deleted): `CAN_TUNING.md`,
+  `rusefi_lua.txt` (reference/doc dumps), and `coldstart.msl` / `sliplog.msl` / `tolight.msl` / `tolight.msq` /
+  `vvterrorsathigherrpm.msl` (multi-MB datalogs/tunes from prior investigations, several MB each) -- these are
+  scratch/reference files, not source, and weren't part of this cleanup's scope.
+
+Validation:
+- `unit_tests` full suite (GCC, `./test.sh`): 1446/1446 pass after all three commits, including the corrected
+  `testFasterEngineSpinningUpFirstOrderReachesRunning`.
+- Did not build firmware for a specific board this session (all three changes are host-buildable
+  logic/config/`.ini` changes with no board-specific code paths).
+
+Open follow-ups:
+- None of the three commits have been pushed yet (per CLAUDE.md, pushing to a shared branch is left to the
+  human).
+- The untracked scratch/log files listed above are still sitting in the repo root uncommitted; user should
+  decide whether to move them elsewhere or `.gitignore` them if this recurs.
