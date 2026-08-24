@@ -118,7 +118,7 @@ void customPageSetDefaults() {
 
 	// Quick Warmup (Engine State Machine sub-feature) — disabled by default; safe inert calibration.
 	d.quickWarmupEnabled      = false;
-	d.quickWarmupTimingRetard = -8.0f;   // 8 deg retard — heats exhaust for catalyst light-off
+	d.quickWarmupIdleTimingOverride = 8.0f;   // absolute idle timing, retarded to heat exhaust for catalyst light-off
 	d.quickWarmupLambdaTarget = 0.95f;   // 5% rich — improves combustion stability when cold
 	d.quickWarmupEtbOffset    = 3;       // 3% extra throttle — compensates for reduced torque
 

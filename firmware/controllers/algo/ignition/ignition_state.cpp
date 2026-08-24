@@ -112,7 +112,11 @@ angle_t getRunningAdvance(float rpm, float engineLoad) {
 #if EFI_IDLE_CONTROL
 	if (engineConfiguration->useSeparateAdvanceForIdle &&
 		(engine->module<IdleController>()->isIdlingOrTaper() || engine->module<IdleController>()->isCoastingAdvance())) {
-		float idleAdvance = interpolate2d(rpm, config->idleAdvanceBins, config->idleAdvance);
+		// Quick Warmup: while active, a single absolute value replaces the idle timing curve outright
+		// (only meaningful here, since useSeparateAdvanceForIdle gates this whole block).
+		float idleAdvance = engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup
+			? getCustomPage()->quickWarmupIdleTimingOverride
+			: interpolate2d(rpm, config->idleAdvanceBins, config->idleAdvance);
 
 		auto tps = Sensor::get(SensorType::DriverThrottleIntent);
 		if (tps) {
@@ -325,10 +329,6 @@ angle_t IgnitionState::getWrappedAdvance(const float rpm, const float engineLoad
     // Eco Mode: add (or pull) timing while the economy overlay is active.
     if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
         angle += getCustomPage()->ecoTimingAdder;
-    }
-    // Quick Warmup: pull timing when cold + idle to heat the exhaust and aid catalyst light-off.
-    if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
-        angle += getCustomPage()->quickWarmupTimingRetard;
     }
     wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
     return angle;

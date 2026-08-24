@@ -417,16 +417,16 @@ struct_no_prefix page6_s
 	int16_t smHotTempThreshold;Engine Temperature Overlay: CLT above this is Hot engine. Below smColdTempThreshold is Cold, between both is Operating temperature.;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -40 : -40}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
 
 	! --- Quick Warmup (Engine State Machine sub-feature) ---
-	! Active only while the SM reports Cold AND Idle simultaneously. Retards ignition timing,
-	! overrides the closed-loop lambda target, and adds a feed-forward throttle offset so the
-	! idle controller can hold the RPM target even when closed-loop idle is disabled. Exits
-	! automatically when the SM leaves the Cold state (CLT rises above smColdTempThreshold).
-	! The Idle SM state excludes cranking and the after-start stabilization window, so this
-	! never fires until the engine has settled. With no valid CLT sensor the SM treats the
-	! engine as Operating, so the feature stays inactive.
-	bit quickWarmupEnabled,"enabled","disabled";Quick Warmup: master enable. Retards timing, richens the lambda target, and adds a throttle feed-forward at cold idle to heat the exhaust and aid catalyst light-off.
+	! Active only while the SM reports Cold AND Idle simultaneously. Overrides idle ignition
+	! timing (requires useSeparateAdvanceForIdle), overrides the closed-loop lambda target, and
+	! adds a feed-forward throttle offset so the idle controller can hold the RPM target even
+	! when closed-loop idle is disabled. Exits automatically when the SM leaves the Cold state
+	! (CLT rises above smColdTempThreshold). The Idle SM state excludes cranking and the
+	! after-start stabilization window, so this never fires until the engine has settled. With
+	! no valid CLT sensor the SM treats the engine as Operating, so the feature stays inactive.
+	bit quickWarmupEnabled,"enabled","disabled";Quick Warmup: master enable. Overrides idle timing, richens the lambda target, and adds a throttle feed-forward at cold idle to heat the exhaust and aid catalyst light-off.
 	int8_t autoscale quickWarmupEtbOffset;Quick Warmup: feed-forward throttle position (%) added to the open-loop idle target while active. Compensates for the torque loss from timing retard and a richer mixture. Applied even when closed-loop idle is disabled.;"%", 0.1, 0, -12.5, 12.5, 1
-	float quickWarmupTimingRetard;Quick Warmup: ignition timing pulled while active. Use a negative value to retard (e.g. -8 deg retards timing by 8 degrees). Positive values advance timing.;"deg", 1, 0, -30, 10, 1
+	float quickWarmupIdleTimingOverride;Quick Warmup: absolute idle ignition timing advance while active, replacing the idle timing curve. Only takes effect when useSeparateAdvanceForIdle is enabled - that curve becomes the base timing lookup this overrides.;"deg", 1, 0, -20, 90, 1
 	float quickWarmupLambdaTarget;Quick Warmup: absolute lambda target while active. Values below 1.0 richen the mixture (e.g. 0.95 = 5 percent rich). Applied as a hard override over the normal lambda table.;"lambda", 1, 0, 0.7, 1.2, 2
 
 	! --- Fan A/C Control Mode ---
