@@ -364,7 +364,19 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 					}
 					rpmState->prevCycleRpm = cycleRpm;
 
-					if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE) {
+					// Also drive the cycle-averaged setRpmValue() call for FIRST_ORDER while
+					// still spinning up: 'state' only ever leaves SPINNING_UP inside setRpmValue()
+					// (never assignRpmValue()), and unlike RPM_UPDATE_PER_CYCLE - which always
+					// calls setRpmValue(cycleRpm) here, regardless of spin-up state - the FIRST_ORDER
+					// per-tooth path below uses assignRpmValue() while isSpinningUp() is true (to
+					// avoid setRpmValue()'s MAX_ALLOWED_RPM/state-hysteresis side effects reacting to
+					// noisy early instant-RPM samples). Without this, isSpinningUp() would gate that
+					// per-tooth branch forever and 'state' would never advance past SPINNING_UP in
+					// FIRST_ORDER mode, so isCranking()/isRunning() would never reflect reality.
+					// Restricting this to isSpinningUp() leaves steady-state FIRST_ORDER behavior
+					// (post spin-up) exactly as before.
+					if (rpmMode == rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE
+							|| (rpmMode == rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER && rpmState->isSpinningUp())) {
 						rpmState->setRpmValue(cycleRpm);
 					}
 				}
@@ -396,6 +408,8 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 				// No cycle-averaged sample exists yet during spin-up (prevCycleRpm/rpmRate are
 				// still zero), so the extrapolation below would compute 0 and mask instant RPM.
 				// Mirror the Per-cycle fast spin-up path until the first real cycle period lands.
+				// 'state' still advances out of SPINNING_UP via the cycle-averaged setRpmValue()
+				// call above - see the comment there.
 				rpmState->assignRpmValue(instantRpm);
 			} else {
 				float timeSinceTdc = rpmState->lastTdcTimer.getElapsedSeconds(nowNt);

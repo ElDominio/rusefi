@@ -181,3 +181,30 @@ TEST(cranking, testFasterEngineSpinningUp60_2_FirstOrder) {
 	doTestFasterEngineSpinningUp60_2_FirstOrder(100, 1000, 1000);
 	doTestFasterEngineSpinningUp60_2_FirstOrder(1000, 1000, 1000);
 }
+
+// Regression for the bug where RPM_UPDATE_FIRST_ORDER + isFasterEngineSpinUpEnabled left the
+// engine latched in SPINNING_UP forever: 'state' only ever leaves SPINNING_UP inside
+// setRpmValue() (never assignRpmValue(), which the spin-up per-tooth path uses exclusively so
+// that noisy pre-sync instant RPM can't trip setRpmValue()'s MAX_ALLOWED_RPM/state-hysteresis
+// logic). Without also driving setRpmValue() from the cycle-averaged RPM while still spinning
+// up, isCranking() stays true and isRunning() never becomes true no matter how high real RPM
+// climbs, so the engine keeps applying cranking fuel/timing maps well past actual start.
+TEST(cranking, testFasterEngineSpinningUpFirstOrderReachesRunning) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	engineConfiguration->isFasterEngineSpinUpEnabled = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER;
+	engineConfiguration->cranking.rpm = 550;
+
+	setupSimpleTestEngineWithMaf(&eth, IM_SEQUENTIAL, trigger_type_e::TT_TOOTHED_WHEEL_60_2);
+
+	// Spin at a steady 1000 RPM for several full engine cycles - long enough for the trigger to
+	// synchronize and for cycle-averaged RPM samples to land, which is what should carry 'state'
+	// out of SPINNING_UP. Uses the same proven tooth/gap generator as test_utils.spin60_2UntilDeg,
+	// which already exercises TT_TOOTHED_WHEEL_60_2 up to 1200 RPM without tripping trigger errors.
+	testSpinEngineUntilData spinInfo = { 0, 0, 0 };
+	eth.spin60_2UntilDeg(spinInfo, 1000, 3 * 720);
+
+	EXPECT_NE(SPINNING_UP, engine->rpmCalculator.getState());
+	EXPECT_TRUE(engine->rpmCalculator.isRunning());
+	EXPECT_NEAR(1000, Sensor::getOrZero(SensorType::Rpm), 50);
+}
