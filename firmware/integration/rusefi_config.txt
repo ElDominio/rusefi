@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260822
+#define FLASH_DATA_VERSION 260824
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -2317,6 +2317,8 @@ ign_cyl_trim_s[MAX_CYLINDER_COUNT iterate] ignTrims
 uint16_t[FUEL_TRIM_SIZE] fuelTrimLoadBins;;{bitStringValue(veLoadUnitLabels, veLoadUnitIdxPcv)}, {!(veOverrideMode == 1 || (veOverrideMode == 0 && fuelAlgorithm == 0)) || useMetricOnInterface ? 1 : @@UNITS_KPA_TO_PSI@@}, 0, 0, {veOverrideMode == 1 || (veOverrideMode == 0 && fuelAlgorithm == 0) ? (useMetricOnInterface ? @@MAP_UPPER_LIMIT@@ : @@MAP_UPPER_LIMIT@@ * @@UNITS_KPA_TO_PSI@@) : (veOverrideMode == 2 ? 100 : @@MAP_UPPER_LIMIT@@)}, 0
 uint16_t[FUEL_TRIM_SIZE] fuelTrimRpmBins;;"rpm", 1, 0, 0, 20000, 0
 fuel_cyl_trim_s[MAX_CYLINDER_COUNT iterate] fuelTrims
+! Manual per-bank fuel trim, applied to every cylinder assigned to that bank via cylinderBankSelect. Shares axes with fuelTrims.
+fuel_cyl_trim_s[FT_BANK_COUNT iterate] fuelBankTrims
 
 ! Retired field: the old 1D E100 cranking multiplier. Cranking flex now uses crankingFuelFlexTable, and old
 ! tunes are migrated into it by CrankingFlexTableMigrator (java_console). Renamed with the 'unused' prefix so the

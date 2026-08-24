@@ -265,10 +265,11 @@ void EngineState::periodicFastCallback() {
 #endif
 			1.0;
 		auto cylinderTrim = getCylinderFuelTrim(cylinderIndex, rpm, fuelLoad);
+		auto manualBankTrim = getBankFuelTrim(bankIndex, rpm, fuelLoad);
 		auto knockTrim = engine->module<KnockController>()->getFuelTrimMultiplier();
 
 		// Apply both per-bank and per-cylinder trims
-		engine->engineState.injectionMass[cylinderIndex] = untrimmedInjectionMass * bankTrim * cylinderTrim * knockTrim;
+		engine->engineState.injectionMass[cylinderIndex] = untrimmedInjectionMass * bankTrim * manualBankTrim * cylinderTrim * knockTrim;
 
 		angle_t cylinderIgnitionAdvance = correctedIgnitionAdvance
 									+ getCylinderIgnitionTrim(cylinderIndex, rpm, l_ignitionLoad)

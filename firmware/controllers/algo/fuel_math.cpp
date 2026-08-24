@@ -551,6 +551,17 @@ float getCylinderFuelTrim(size_t cylinderNumber, float rpm, float fuelLoad) {
 	return (100 + trimPercent) / 100;
 }
 
+float getBankFuelTrim(uint8_t bankIndex, float rpm, float fuelLoad) {
+	auto trimPercent = interpolate3d(
+		config->fuelBankTrims[bankIndex].table,
+		config->fuelTrimLoadBins, fuelLoad,
+		config->fuelTrimRpmBins, rpm
+	);
+
+	// Convert from percent +- to multiplier
+	return (100 + trimPercent) / 100;
+}
+
 static Hysteresis stage2Hysteresis;
 
 float getStage2InjectionFraction(float rpm, float load) {
