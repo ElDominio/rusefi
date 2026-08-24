@@ -152,3 +152,32 @@ TEST(cranking, testFasterEngineSpinningUp60_2) {
 	doTestFasterEngineSpinningUp60_2(100, 1000, 1000);
 	doTestFasterEngineSpinningUp60_2(1000, 1000, 1000);
 }
+
+static void doTestFasterEngineSpinningUp60_2_FirstOrder(int startUpDelayMs, int rpm1, int expectedRpm) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	// turn on FasterEngineSpinUp mode
+	engineConfiguration->isFasterEngineSpinUpEnabled = true;
+	// RPM_UPDATE_FIRST_ORDER must also see instant RPM during spin-up, not just RPM_UPDATE_PER_CYCLE
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER;
+
+	setupSimpleTestEngineWithMaf(&eth, IM_SEQUENTIAL, trigger_type_e::TT_TOOTHED_WHEEL_60_2);
+	eth.moveTimeForwardMs(startUpDelayMs);
+
+	// fire 30 tooth rise/fall signals
+	eth.fireTriggerEvents2(30 /* count */, 1 /*ms*/);
+	// now fire missed tooth rise/fall
+	eth.fireRise(5 /*ms*/);
+	EXPECT_EQ(rpm1, round(Sensor::getOrZero(SensorType::Rpm)));
+
+	eth.fireFall(1);
+	eth.fireTriggerEvents2(30, 1);
+
+	// After some more regular teeth, instant RPM is still correct
+	EXPECT_EQ(rpm1, round(Sensor::getOrZero(SensorType::Rpm)));
+}
+
+TEST(cranking, testFasterEngineSpinningUp60_2_FirstOrder) {
+	doTestFasterEngineSpinningUp60_2_FirstOrder(0, 1000, 1000);
+	doTestFasterEngineSpinningUp60_2_FirstOrder(100, 1000, 1000);
+	doTestFasterEngineSpinningUp60_2_FirstOrder(1000, 1000, 1000);
+}

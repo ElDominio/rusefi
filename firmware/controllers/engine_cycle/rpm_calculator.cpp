@@ -392,9 +392,16 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 			rpmState->setRpmValue(instantRpm);
 			break;
 		case rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER: {
-			float timeSinceTdc = rpmState->lastTdcTimer.getElapsedSeconds(nowNt);
-			float extrapolatedRpm = rpmState->prevCycleRpm + rpmState->rpmRate * timeSinceTdc;
-			rpmState->setRpmValue(extrapolatedRpm);
+			if (rpmState->isSpinningUp()) {
+				// No cycle-averaged sample exists yet during spin-up (prevCycleRpm/rpmRate are
+				// still zero), so the extrapolation below would compute 0 and mask instant RPM.
+				// Mirror the Per-cycle fast spin-up path until the first real cycle period lands.
+				rpmState->assignRpmValue(instantRpm);
+			} else {
+				float timeSinceTdc = rpmState->lastTdcTimer.getElapsedSeconds(nowNt);
+				float extrapolatedRpm = rpmState->prevCycleRpm + rpmState->rpmRate * timeSinceTdc;
+				rpmState->setRpmValue(extrapolatedRpm);
+			}
 			break;
 		}
 		case rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE:
