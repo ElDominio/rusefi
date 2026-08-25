@@ -9,4 +9,5 @@ struct_no_prefix trigger_state_s
 
     uint8_t triggerStateIndex
     int8_t triggerCountersError
+    uint8_t lastSyncLossReason;Last Sync Loss Reason\n0=None 1=Timeout 2=MissingTooth 3=ExtraTooth 4=TooManyTeeth
 end_struct

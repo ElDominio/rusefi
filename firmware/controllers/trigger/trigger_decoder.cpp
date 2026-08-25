@@ -498,6 +498,7 @@ expected<TriggerDecodeResult> TriggerDecoderBase::decodeTriggerEvent(
 		 * We are here if there is a time gap between now and previous shaft event - that means the engine is not running.
 		 * That means we have lost synchronization since the engine is not running :)
 		 */
+		lastSyncLossReason = static_cast<uint8_t>(TriggerSyncLossReason::Timeout);
 		setShaftSynchronized(false);
 		if (triggerStateListener) {
 			triggerStateListener->OnTriggerSynchronizationLost();
@@ -648,6 +649,9 @@ expected<TriggerDecodeResult> TriggerDecoderBase::decodeTriggerEvent(
 			// In either case, we should wait for another sync point before doing anything to try and run an engine,
 			// so we clear the synchronized flag.
 			if (wasSynchronized && isDecodingError) {
+				lastSyncLossReason = static_cast<uint8_t>(triggerCountersError < 0
+						? TriggerSyncLossReason::MissingTooth
+						: TriggerSyncLossReason::ExtraTooth);
 				setTriggerErrorState();
 				onNotEnoughTeeth(currentCycle.current_index, triggerShape.getSize());
 
@@ -687,6 +691,8 @@ expected<TriggerDecodeResult> TriggerDecoderBase::decodeTriggerEvent(
 	if (getShaftSynchronized() && !isValidIndex(triggerShape)) {
 		// We've had too many events since the last sync point, we should have seen a sync point by now.
 		// This is a trigger error.
+
+		lastSyncLossReason = static_cast<uint8_t>(TriggerSyncLossReason::TooManyTeeth);
 
 		// let's not show a warning if we are just starting to spin
 		if (Sensor::getOrZero(SensorType::Rpm) != 0) {

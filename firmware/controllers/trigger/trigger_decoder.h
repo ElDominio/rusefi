@@ -15,6 +15,17 @@
 const char *getTrigger_event_e(trigger_event_e value);
 const char *getTrigger_value_e(TriggerValue value);
 
+// Mirrors the values documented in the trigger_state_s.lastSyncLossReason comment
+// (trigger_state.txt) - keep both in sync. Stored there as a plain uint8_t (not this
+// enum type) because "custom ..._e" fields are dropped from the SD/.mlg log stream.
+enum class TriggerSyncLossReason : uint8_t {
+	None = 0,
+	Timeout = 1,
+	MissingTooth = 2,
+	ExtraTooth = 3,
+	TooManyTeeth = 4,
+};
+
 struct TriggerStateListener {
 #if EFI_SHAFT_POSITION_INPUT
 	virtual void OnTriggerStateProperState(efitick_t nowNt, size_t triggerStateIndex) = 0;
