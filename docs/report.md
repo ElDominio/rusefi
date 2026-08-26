@@ -3226,3 +3226,28 @@ Open follow-ups:
   human).
 - The untracked scratch/log files listed above are still sitting in the repo root uncommitted; user should
   decide whether to move them elsewhere or `.gitignore` them if this recurs.
+
+## 2026-08-25 - Add trigger last-sync-loss-reason logged channel
+
+What was done:
+- Added `lastSyncLossReason` (`trigger_state_s`, `firmware/controllers/trigger/trigger_state.txt`) so the
+  trigger decoder's most recent sync-loss cause flows through the existing LiveData/.mlg pipeline for the
+  crank decoder and every VVT decoder (trg/vvt1i/vvt1e/vvt2i/vvt2e) and is visible in MegaLogViewer.
+- Stored as a plain `uint8_t`, not the `TriggerSyncLossReason` enum type, because enum-typed fields are
+  dropped from the SD/.mlg log stream by the codegen (see `trigger_decoder.h` comment). The mapping is
+  documented in two places that must be kept in sync: the field comment in `trigger_state.txt` and the
+  `TriggerSyncLossReason` enum class in `firmware/controllers/trigger/trigger_decoder.h`.
+- Values:
+  - 0 = None
+  - 1 = Timeout (no trigger edges for >1s -- engine considered stopped)
+  - 2 = MissingTooth (sync point reached, but fewer teeth than expected since the last one)
+  - 3 = ExtraTooth (sync point reached, but more teeth than expected)
+  - 4 = TooManyTeeth (too many teeth without ever reaching an expected sync point)
+
+Validation:
+- Not independently re-verified this session (documenting commit `5934d72729`, which landed without a
+  report.md entry).
+
+Open follow-ups:
+- None known.
+
