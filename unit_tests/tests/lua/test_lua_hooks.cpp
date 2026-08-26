@@ -48,6 +48,20 @@ TEST(LuaHooks, TestSetCalibration) {
 }
 
 
+TEST(LuaHooks, TestSetLaunchRpm) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	engineConfiguration->launchRpm = 3000;
+	const char* sourceCode = R"(
+
+	function testFunc()
+		setLaunchRpm(4500)
+		return getCalibration("launchRpm")
+	end
+
+	)";
+	EXPECT_EQ(testLuaReturnsNumber(sourceCode), 4500);
+}
+
 TEST(LuaHooks, TestGetSensorByIndex) {
 	const char* getSensorTestByIndex = R"(
 

@@ -853,6 +853,11 @@ extern int luaCommandCounters[LUA_BUTTON_COUNT];
   	engine->launchController.luaLaunchState = value;
 		return 0;
 	});
+	lua_register(lState, "setLaunchRpm", [](lua_State* l) {
+		auto rpm = luaL_checknumber(l, 1);
+		engineConfiguration->launchRpm = clampF(0, rpm, 20000);
+		return 0;
+	});
 #endif // EFI_LAUNCH_CONTROL
 #if EFI_ROLLING_LAUNCH
 	lua_register(lState, "setRollingLaunchTrigger", [](lua_State* l) {

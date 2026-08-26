@@ -3251,3 +3251,26 @@ Validation:
 Open follow-ups:
 - None known.
 
+## 2026-08-25 - Add setLaunchRpm(rpm) Lua hook
+
+What was done:
+- Added a `setLaunchRpm(rpm)` Lua hook (`firmware/controllers/lua/lua_hooks.cpp`, under `#if EFI_LAUNCH_CONTROL`,
+  next to `setLaunchTrigger`) so a script can overwrite the current Launch RPM (TS: Advanced -> Torque
+  Management -> Launch Control -> "Launch RPM (RPM)") in RAM only, no persistence needed.
+- Implementation writes straight into `engineConfiguration->launchRpm` (clamped 0..20000 via `clampF`), the
+  same field every launch-control call site (`launch_control.cpp`, `ignition_state.cpp`) already reads
+  directly -- no shadow/override field was introduced, matching the existing `setIdleRpm(rpm)` precedent
+  (which similarly pokes `config->cltIdleRpm` directly) rather than the `luaLaunchState`-style dedicated
+  runtime-only field pattern used for booleans. Since nothing calls `burnConfig()`, the change never reaches
+  flash unless a script or the user explicitly requests a burn later.
+- Documented in `docs/AI/lua_scripting.md` category 4 (closed-loop trims/adjustments), next to `setIdleRpm`.
+- Added `LuaHooks.TestSetLaunchRpm` in `unit_tests/tests/lua/test_lua_hooks.cpp`, alongside the existing
+  `TestSetCalibration`, verifying the write round-trips through `getCalibration("launchRpm")`.
+
+Validation:
+- `unit_tests`, `LuaHooks` suite only (GCC, `./test.sh LuaHooks`): 17/17 pass, including the new test.
+- Did not run the full unit-test suite or build firmware this session.
+
+Open follow-ups:
+- Not yet committed (per CLAUDE.md, left for the human).
+
