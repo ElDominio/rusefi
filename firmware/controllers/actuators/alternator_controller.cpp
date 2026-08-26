@@ -58,9 +58,14 @@ expected<float> AlternatorController::getSetpoint() {
 
 	// Eco Mode: hold a lower absolute charging target to reduce alternator drag while the economy
 	// overlay is active. A target of 0 disables the override (use the normal voltage target table).
+	// Blends in/out over smSlowStateTransitionEnabled's ramp instead of snapping (see
+	// getEcoModeBlend()).
 	const float ecoTarget = getCustomPage()->ecoAlternatorVoltageTarget;
-	if (ecoTarget > 0 && engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
-		targetVoltage = ecoTarget;
+	if (ecoTarget > 0) {
+		float ecoModeBlend = engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
+		if (ecoModeBlend > 0) {
+			targetVoltage = interpolateClamped(0, targetVoltage, 1, ecoTarget, ecoModeBlend);
+		}
 	}
 
 	engine->outputChannels.alternatorVoltageTarget = targetVoltage;

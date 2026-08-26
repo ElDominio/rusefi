@@ -90,16 +90,26 @@ expected<angle_t> VvtController::getSetpoint() {
 	float target = m_targetMap->getValue(rpm, load);
 
 	// Eco Mode: retarget the cams for economy while the overlay is active (intake = cam 0,
-	// exhaust = cam 1). Opt-in so non-VVT and untuned setups are unaffected.
-	if (getCustomPage()->ecoModeVvtOverride
-			&& engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
-		target = (m_cam == 0) ? getCustomPage()->ecoVvtIntakeTarget : getCustomPage()->ecoVvtExhaustTarget;
+	// exhaust = cam 1). Opt-in so non-VVT and untuned setups are unaffected. Blends in/out over
+	// smSlowStateTransitionEnabled's ramp instead of snapping (see getEcoModeBlend()).
+	if (getCustomPage()->ecoModeVvtOverride) {
+		float ecoModeBlend = engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
+		if (ecoModeBlend > 0) {
+			float ecoTarget = (m_cam == 0) ? getCustomPage()->ecoVvtIntakeTarget : getCustomPage()->ecoVvtExhaustTarget;
+			target = interpolateClamped(0, target, 1, ecoTarget, ecoModeBlend);
+		}
 	}
 
 #if EFI_GHOST_CAM
 	// Ghost Cam: override VVT targets while active. Cam overlap is the primary lope mechanism.
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam) {
-		target = (m_cam == 0) ? getCustomPage()->ghostCamIntakeCamAngle : getCustomPage()->ghostCamExhaustCamAngle;
+	// Blends in/out over smSlowStateTransitionEnabled's ramp instead of snapping (see
+	// getGhostCamBlend()).
+	{
+		float ghostCamBlend = engine->module<EngineStateMachine>().unmock().getGhostCamBlend();
+		if (ghostCamBlend > 0) {
+			float ghostCamTarget = (m_cam == 0) ? getCustomPage()->ghostCamIntakeCamAngle : getCustomPage()->ghostCamExhaustCamAngle;
+			target = interpolateClamped(0, target, 1, ghostCamTarget, ghostCamBlend);
+		}
 	}
 #endif // EFI_GHOST_CAM
 

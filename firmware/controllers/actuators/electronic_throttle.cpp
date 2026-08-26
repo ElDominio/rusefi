@@ -399,9 +399,15 @@ expected<percent_t> EtbController::getSetpointEtb() {
 		targetPosition += getCustomPage()->popsAndBangsAirAdd;
 	}
 
-	// Eco Mode: scale the throttle target (0.8-1.2) while the economy overlay is active.
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
-		targetPosition *= clampF(0.8f, getCustomPage()->ecoThrottleMult, 1.2f);
+	// Eco Mode: scale the throttle target (0.8-1.2) while the economy overlay is active. Blends
+	// the multiplier itself in/out over smSlowStateTransitionEnabled's ramp instead of snapping
+	// (see getEcoModeBlend()).
+	{
+		float ecoModeBlend = engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
+		if (ecoModeBlend > 0) {
+			float ecoMult = clampF(0.8f, getCustomPage()->ecoThrottleMult, 1.2f);
+			targetPosition *= interpolateClamped(0, 1.0f, 1, ecoMult, ecoModeBlend);
+		}
 	}
 
 	// Quick Warmup: feed-forward ETB offset to compensate for torque lost to timing retard + rich target.

@@ -3274,3 +3274,42 @@ Validation:
 Open follow-ups:
 - Not yet committed (per CLAUDE.md, left for the human).
 
+## 2026-08-25 - Slow Eco Mode / Ghost Cam target transition
+
+What was done:
+- Added `smSlowStateTransitionEnabled` (page 6, `config_page_6.txt`, Engine SM Thresholds dialog in
+  `tunerstudio.template.ini`), a single opt-in bit that ramps Eco Mode's and Ghost Cam's overlay
+  targets linearly over 1 second on engage/disengage instead of snapping instantly. Off by default,
+  so existing tunes and behavior are unchanged unless the user turns it on.
+- `EngineStateMachine::onSlowCallback()` computes two blend values (`m_ecoModeBlend`,
+  `m_ghostCamBlend`, exposed via `getEcoModeBlend()`/`getGhostCamBlend()`), stepped toward 0/1 by
+  `dtMs / SM_SLOW_TRANSITION_MS` (1000 ms) each slow-callback tick when the new bit is set, or
+  snapped straight to 0/1 when it's off (`EngineStateMachine::updateOverlayBlend()`,
+  `engine_state_machine.cpp`). The `engineSmIsEcoMode`/`engineSmIsGhostCam` booleans themselves stay
+  instant -- they still drive state logic (mutual exclusivity, dash display, holdoff arming); only
+  the blend is new.
+- Updated every call site that snaps an overlay *target* on the boolean to instead interpolate
+  between the normal value and the mode's target using the blend (`interpolateClamped`, the same
+  idiom `downshift_blipper.cpp`'s RampOpen/RampClose phases already use):
+  - `fuel_computer.cpp` -- Eco/Ghost Cam AFR target.
+  - `ignition_state.cpp` -- Eco timing adder (scaled by blend, since it's additive).
+  - `vvt.cpp` -- Eco/Ghost Cam intake+exhaust VVT cam angle targets.
+  - `electronic_throttle.cpp` -- Eco throttle multiplier (blends the multiplier itself from 1.0).
+  - `alternator_controller.cpp` -- Eco alternator voltage target.
+  - `idle_thread.cpp` -- Ghost Cam idle RPM target (`getTargetRpm()`, entry/exit thresholds
+    re-derived from the blended base) and Ghost Cam open-loop idle duty.
+- Deliberately left instant (per explicit decision, not ramped): Ghost Cam's idle timing-PID gain
+  swap (`idle_thread.cpp`'s `m_timingPid.initPidClass` switch) and the Coasting-classification
+  bypass while Ghost Cam is active -- these are control-loop plumbing, not target values, and the
+  PID naturally settles as its target ramps in underneath it.
+
+Validation:
+- `unit_tests` full suite (GCC, `make -j12` + `./build/rusefi_test`): 1447/1447 pass. All existing
+  Eco Mode/Ghost Cam tests pass unchanged because the new bit defaults off (blend snaps to 0/1
+  exactly like the old instant boolean check).
+- Did not build firmware for a specific board or bench-test on hardware this session.
+
+Open follow-ups:
+- Not yet committed (per CLAUDE.md, left for the human).
+- No hardware validation yet of how the 1s ramp actually feels/drives on alphax-s550-pnp.
+

@@ -58,12 +58,19 @@ IIdleController::TargetInfo IdleController::getTargetRpm(float clt) {
 	idleExitRpm = exitRpm;
 
 #if EFI_GHOST_CAM
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam) {
+	// Blends the target RPM in/out over smSlowStateTransitionEnabled's ramp instead of snapping
+	// (see getGhostCamBlend()); entry/exit thresholds are derived from the blended base so they
+	// stay consistent with idleTarget throughout the transition.
+	float ghostCamBlend = engine->module<EngineStateMachine>().unmock().getGhostCamBlend();
+	if (ghostCamBlend > 0) {
 		float ghostRpm = static_cast<float>(getCustomPage()->ghostCamIdleRpm);
-		idleTarget = ghostRpm;
-		idleEntryRpm = ghostRpm + rpmUpperLimit;
-		idleExitRpm = ghostRpm + 1.5f * rpmUpperLimit;
-		return { ghostRpm, ghostRpm + rpmUpperLimit, ghostRpm + 1.5f * rpmUpperLimit };
+		float blendedTarget = interpolateClamped(0, target, 1, ghostRpm, ghostCamBlend);
+		float blendedEntryRpm = blendedTarget + rpmUpperLimit;
+		float blendedExitRpm = blendedTarget + 1.5f * rpmUpperLimit;
+		idleTarget = blendedTarget;
+		idleEntryRpm = blendedEntryRpm;
+		idleExitRpm = blendedExitRpm;
+		return { blendedTarget, blendedEntryRpm, blendedExitRpm };
 	}
 #endif // EFI_GHOST_CAM
 
@@ -639,9 +646,14 @@ float IdleController::getIdlePosition(float rpm) {
 			baseIdlePosition = iacPosition;
 
 #if EFI_GHOST_CAM
-		if (m_lastGhostCamActive && phase == Phase::Idling) {
-			iacPosition = getCustomPage()->ghostCamIdleBaseDuty;
-			baseIdlePosition = iacPosition;
+		// Blends the open-loop duty in/out over smSlowStateTransitionEnabled's ramp instead of
+		// snapping (see getGhostCamBlend()).
+		if (phase == Phase::Idling) {
+			float ghostCamDutyBlend = engine->module<EngineStateMachine>().unmock().getGhostCamBlend();
+			if (ghostCamDutyBlend > 0) {
+				iacPosition = interpolateClamped(0, iacPosition, 1, getCustomPage()->ghostCamIdleBaseDuty, ghostCamDutyBlend);
+				baseIdlePosition = iacPosition;
+			}
 		}
 #endif // EFI_GHOST_CAM
 

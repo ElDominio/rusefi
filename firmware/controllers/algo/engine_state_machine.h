@@ -50,6 +50,18 @@ public:
 	// Public so unit tests can call it directly without needing a full slow-callback setup.
 	void updatePopsAndBangs(bool isOverrun);
 
+	// Eco Mode / Ghost Cam overlay-target transition blend, 0..1: 0 = fully disengaged (normal
+	// target), 1 = fully engaged (mode target). While smSlowStateTransitionEnabled is off, this
+	// snaps directly to 0/1 alongside engineSmIsEcoMode/engineSmIsGhostCam (legacy instant
+	// behavior). While it's on, this ramps linearly over SM_SLOW_TRANSITION_MS on each edge.
+	// Consumers that apply an overlay target (AFR, timing, VVT, idle RPM/duty, throttle
+	// multiplier, alternator voltage) should interpolate between their normal value and the mode
+	// target using this blend instead of switching on the boolean flag directly. The
+	// engineSmIsEcoMode/engineSmIsGhostCam flags themselves are unaffected -- they stay instant
+	// gates for state logic (mutual exclusivity, dash display, holdoff arming, etc).
+	float getEcoModeBlend() const { return m_ecoModeBlend; }
+	float getGhostCamBlend() const { return m_ghostCamBlend; }
+
 	// Drives the Eco mode overlay: engages after the engine has been Cruising (brief AE-driven
 	// Transient blips tolerated) continuously for ecoModeCruisingTime with MAP at or below
 	// ecoModeMapLimit and RPM at or below ecoModeMaxRpm, drops instantly on leaving
@@ -155,6 +167,13 @@ private:
 	float recordRpmSampleAndComputeRate(float rpm, efitimems_t nowMs);
 
 	void updateTempOverlay();
+
+	// Eco Mode / Ghost Cam overlay-target transition ramp duration (see getEcoModeBlend()).
+	static constexpr float SM_SLOW_TRANSITION_MS = 1000.0f;
+	float m_ecoModeBlend      = 0;
+	float m_ghostCamBlend     = 0;
+	efitimems_t m_lastBlendTickMs = 0;
+	void updateOverlayBlend(float& blend, bool active, efitimems_t dtMs);
 
 	// Limp mode latch — set by reportLimpCondition(), never auto-cleared (matches the old
 	// ETB-jam behaviour which persisted until reboot). TODO: an un-latch path (e.g. a

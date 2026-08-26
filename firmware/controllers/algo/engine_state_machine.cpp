@@ -132,6 +132,15 @@ void EngineStateMachine::onSlowCallback() {
 	// Must run after engineSmIsIdle, engineSmIsLimp and engineSmIsSportMode are set.
 	updateGhostCam();
 
+	// Overlay-target transition blend — must run after both engineSmIsEcoMode and
+	// engineSmIsGhostCam are finalized above (see getEcoModeBlend()/getGhostCamBlend()).
+	{
+		efitimems_t blendDtMs = (m_lastBlendTickMs == 0) ? 0 : (nowMs - m_lastBlendTickMs);
+		m_lastBlendTickMs = nowMs;
+		updateOverlayBlend(m_ecoModeBlend, engineSmIsEcoMode, blendDtMs);
+		updateOverlayBlend(m_ghostCamBlend, engineSmIsGhostCam, blendDtMs);
+	}
+
 	// Sport Pedal overlay — ETB pedal-to-throttle ratio shaping via switch or Lua gauge.
 	updateSportPedal();
 
@@ -379,6 +388,25 @@ void EngineStateMachine::updateGhostCam() {
 #else // !EFI_GHOST_CAM
 	engineSmIsGhostCam = false;
 #endif // EFI_GHOST_CAM
+}
+
+// Steps `blend` toward 1.0 (active) or 0.0 (!active) by dtMs/SM_SLOW_TRANSITION_MS, or snaps
+// directly to the target when smSlowStateTransitionEnabled is off (legacy instant behavior) or on
+// the very first tick (dtMs == 0, no elapsed-time reference yet).
+void EngineStateMachine::updateOverlayBlend(float& blend, bool active, efitimems_t dtMs) {
+	float targetBlend = active ? 1.0f : 0.0f;
+
+	if (!getCustomPage()->smSlowStateTransitionEnabled || dtMs <= 0) {
+		blend = targetBlend;
+		return;
+	}
+
+	float step = dtMs / SM_SLOW_TRANSITION_MS;
+	if (blend < targetBlend) {
+		blend = std::min(targetBlend, blend + step);
+	} else if (blend > targetBlend) {
+		blend = std::max(targetBlend, blend - step);
+	}
 }
 
 void EngineStateMachine::updateSportPedal() {

@@ -44,8 +44,11 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 #endif // EFI_WOT_ENRICHMENT
 
 	// Eco Mode: lean the mixture to an absolute target AFR while the economy overlay is active.
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsEcoMode) {
-		afr = getCustomPage()->ecoTargetAfr;
+	// Blends in/out over smSlowStateTransitionEnabled's ramp instead of snapping (see
+	// EngineStateMachine::getEcoModeBlend()).
+	float ecoModeBlend = engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
+	if (ecoModeBlend > 0) {
+		afr = interpolateClamped(0, afr, 1, getCustomPage()->ecoTargetAfr, ecoModeBlend);
 		lambda = afr / stoich; // keep published targetLambda consistent with the eco target
 	}
 
@@ -57,8 +60,11 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 
 #if EFI_GHOST_CAM
 	// Ghost Cam: override AFR target while active. STFT stays active and chases this target.
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam) {
-		afr = getCustomPage()->ghostCamTargetAfr;
+	// Blends in/out over smSlowStateTransitionEnabled's ramp instead of snapping (see
+	// EngineStateMachine::getGhostCamBlend()).
+	float ghostCamBlend = engine->module<EngineStateMachine>().unmock().getGhostCamBlend();
+	if (ghostCamBlend > 0) {
+		afr = interpolateClamped(0, afr, 1, getCustomPage()->ghostCamTargetAfr, ghostCamBlend);
 		lambda = afr / stoich;
 	}
 #endif // EFI_GHOST_CAM
