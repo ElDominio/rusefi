@@ -3402,4 +3402,79 @@ Open follow-ups:
 - Not yet committed (per CLAUDE.md, left for the human).
 - No hardware validation of the VSS gate on alphax-s550-pnp.
 
+## 2026-08-27 - Cranking No-Spark: ECU spark suppressed until cranking ends, for external ignition modules
+
+What was done:
+- New opt-in AlphaX feature: for engines with a distributor/module-based ignition (points, HEI,
+  magneto, etc.) that fires spark on its own with no ECU signal during cranking, rusEFI's own
+  spark scheduling is now suppressed entirely while cranking, and normal ECU-controlled spark
+  takes over the instant cranking ends. Fuel injection and every other cranking behavior
+  (cranking fuel, cranking TPS target, etc.) is unaffected -- only spark is cut.
+- Reused the existing `LimpManager` cut-spark machinery rather than adding new plumbing: added
+  `ClearReason::CrankingNoSpark` (`firmware/controllers/limp_manager.h`) and a new condition in
+  `LimpManager::updateState()` (`firmware/controllers/limp_manager.cpp`) mirroring the existing
+  `kickStartCranking` block --
+  `if (getCustomPage()->crankingNoSparkEnabled && engine->rpmCalculator.isCranking()) { allowSpark.clear(ClearReason::CrankingNoSpark); }`
+  -- gated `#if EFI_CRANKING_NO_SPARK`. Clearing `allowSpark` makes `spark_logic.cpp` skip the
+  coil dwell/charge step entirely (`scheduleSparkEvent()`), so the ECU never drives the coil
+  output at all during cranking -- it doesn't fire an alternate pattern, it does nothing, leaving
+  the external module in full control.
+- RPM gate: deliberately reused `engine->rpmCalculator.isCranking()` (driven by the existing
+  `cranking.rpm` threshold and its normal hysteresis) rather than adding a second, separately
+  tunable threshold field. User's call after being asked directly -- one less field to tune, and
+  "until after cranking rpm" maps directly onto the existing cranking/running state transition
+  with no ambiguity about which threshold governs what.
+- New AlphaX page-6 feature, following the established convention (`AlphaX page-6 feature
+  convention` memory): `bit crankingNoSparkEnabled` in `firmware/integration/config_page_6.txt`,
+  `EFI_CRANKING_NO_SPARK` default `FALSE` in `firmware/config/stm32f4ems/efifeatures.h` / `TRUE`
+  in `firmware/config/stm32f7ems/efifeatures.h` (also added to `unit_tests/efifeatures.h` as
+  `TRUE`, matching the other AlphaX unit-test flags) -- live by default on both AlphaX boards
+  (alphax-gold, alphax-s550, both F7) with no board.mk override needed.
+- TunerStudio UI: at the user's explicit request, the enable/disable toggle was placed directly
+  under the existing "Cranking Settings" dialog (`crankingDialog` in
+  `firmware/tunerstudio/tunerstudio.template.ini`) rather than a new standalone dialog --
+  `field = "Cranking No-Spark (external ignition module)", crankingNoSparkEnabled`. The cut
+  reason also had to be appended to `fuelIgnCutCodeList` (index 23, "Cranking No-Spark") to stay
+  in sync with the `ClearReason` enum per the header comment in `limp_manager.h` -- this list is
+  what drives the existing "Ignition OK" / cut-reason indicator in TS, so the new reason shows up
+  there automatically with no other UI work.
+- Documented the new flag in `FEATURE_FLAGS.md` (both the AlphaX table and the alphabetical
+  `EFI_*` list).
+- Follow-up per user question ("does paralela have this?"): the default is FALSE on stm32f4ems,
+  so any F4-based custom board that enables AlphaX features individually (rather than inheriting
+  the stm32f7ems TRUE default) needed an explicit override. Grepped every `board.mk` for the
+  existing curated-AlphaX-flag pattern (`EFI_LUA_LIMITER=TRUE` / `EFI_BURST_KNOCK=TRUE` /
+  `EFI_ENGINE_STATE_MACHINE=TRUE` / `EFI_WOT_ENRICHMENT=TRUE` / `EFI_OFF_IDLE_RPM_ADDER=TRUE` /
+  `EFI_CHT_CLT_ESTIMATOR=TRUE` / `EFI_MISFIRE_DETECTION=TRUE` / `EFI_CLUTCH_DELAY_VALVE=TRUE`) to
+  find every board doing this, not just paralela. Found 4 boards total: `alphax-s550-pnp` is
+  ARCH_STM32F7, already TRUE via the stm32f7ems default, no change needed; the other 3 are
+  ARCH_STM32F4 and were missing it -- added `DDEFS += -DEFI_CRANKING_NO_SPARK=TRUE` to
+  `firmware/config/boards/fw-custom-paralela-master/board.mk`,
+  `firmware/config/boards/alphax-s197-v2/board.mk`, and
+  `firmware/config/boards/protorico-econoline/board.mk` (alphabetically ordered into that board's
+  existing "Added by Board Configuration Editor" block, next to `EFI_BURST_KNOCK`).
+
+Validation:
+- `unit_tests` full suite (GCC, `./test.sh` after `touch firmware/integration/rusefi_config.txt`
+  to force page-6/ClearReason-consuming regeneration): 1449/1449 pass, confirming the build compiles
+  cleanly and the `fuelIgnCutCodeList` / `ClearReason` counts stayed in sync (a mismatch there
+  would not fail to compile, only misdisplay in TS, so this was checked by inspection, not by a
+  test).
+- Added `unit_tests/tests/ignition_injection/test_cranking_no_spark.cpp` (registered in
+  `unit_tests/tests/tests.mk`), exercising `LimpManager` directly (same style as
+  `test_kickstart.cpp`'s `limpManagerSuppressesNormalSpark` test): disabled-by-default leaves
+  cranking spark uncut; enabled + cranking (`engine->rpmCalculator.isCranking()` true via
+  `setRpmValue`/`Sensor::setMockValue` below `cranking.rpm`) cuts spark with
+  `ClearReason::CrankingNoSpark` while leaving `allowInjection()` true; RPM crossing `cranking.rpm`
+  resumes normal spark immediately. Did not add a full pin-level (`enginePins.coils[...]`)
+  end-to-end test -- the underlying "clearing `allowSpark` suppresses coil dwell" mechanism is
+  already covered generically by other `LimpManager`-consumer tests (e.g. `test_limp.cpp`), so a
+  `LimpManager`-level test was judged sufficient for this feature's own logic.
+- Full suite re-run after adding the new test: 1452/1452 pass. Did not run `make CC=clang` (per
+  standing guidance on this dev box) or build/bench-test firmware this session.
+
+Open follow-ups:
+- Not yet committed (per CLAUDE.md, left for the human).
+- No firmware build or hardware validation on alphax-s550-pnp yet -- unit-test-only verification
+  this session.
 

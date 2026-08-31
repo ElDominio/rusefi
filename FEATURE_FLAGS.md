@@ -93,6 +93,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_CHECK_ENGINE_TRIGGERING` | Check Engine Triggering (TS-configurable threshold checks with a points-gated CEL; TPS Stuck High/Low implemented, others reserved) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_CHT_CLT_ESTIMATOR` | CLT Estimator (estimates coolant temp from CHT via a competing-rate radiator model, with a lagged thermostat valve simulating the crossing/dip/recover hunting behavior) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_OIL_LIFE_MONITOR` | Weighted Engine Oil Life Monitor (temperature-weighted revolution counter, oil-life % gauge; accumulates in RAM only and flushes to flash exactly once on ignition-off; **requires `EFI_MAIN_RELAY_CONTROL`** — a build error if the flag is on without it, and consequently not enabled in the simulator, which sets `EFI_MAIN_RELAY_CONTROL FALSE`) | FALSE (f4) / TRUE (f7,h7) |
+| `EFI_CRANKING_NO_SPARK` | Cranking No-Spark (suppresses ECU-scheduled coil dwell/charge entirely while `isCranking()`, for engines with a distributor/module that fires spark on its own during crank; normal ECU spark control resumes as soon as cranking ends, reusing the existing Cranking RPM threshold — no separate threshold field. Fuel/everything else unaffected. Cut via `LimpManager`/`ClearReason::CrankingNoSpark`, same mechanism as `kickStartCranking`) | FALSE (f4) / TRUE (f7,h7) |
 
 **Exception to the table above:** `EFI_WHEEL_SPEED_SENSORS` (Main Speed Sensor: a Source
 selector — Output Shaft Speed / Front Axle / Rear Axle — that is the **sole** source of
@@ -136,6 +137,7 @@ EFI_CONSOLE_RX_BRAIN_PIN_MODE
 EFI_CONSOLE_TX_BRAIN_PIN
 EFI_CONSOLE_TX_BRAIN_PIN_MODE
 EFI_CONSOLE_USB_DEVICE
+EFI_CRANKING_NO_SPARK            ← AlphaX (cranking no-spark, external ignition module)
 EFI_CUSTOM_PANIC_METHOD
 EFI_DAC
 EFI_DETAILED_LOGGING

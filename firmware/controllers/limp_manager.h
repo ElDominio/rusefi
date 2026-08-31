@@ -34,6 +34,7 @@ enum class ClearReason : uint8_t {
 	FatalErrorRevLimit, // 20
 	GdiLimits, // 21
 	GdiPumpLimit, // 22
+	CrankingNoSpark, // 23 - external distributor/module fires spark during cranking, see EFI_CRANKING_NO_SPARK
 
 	// Keep this list in sync with fuelIgnCutCodeList in tunerstudio.template.ini!
 	// todo: add a code generator between ClearReason and fuelIgnCutCodeList in tunerstudio.template.ini

@@ -146,6 +146,14 @@ void LimpManager::updateState(float rpm, efitick_t nowNt) {
 		allowSpark.clear(ClearReason::KickStart);
 	}
 
+#if EFI_CRANKING_NO_SPARK
+	if (getCustomPage()->crankingNoSparkEnabled && engine->rpmCalculator.isCranking()) {
+		// External distributor/module (points, HEI, magneto, etc.) fires spark on its own during
+		// cranking; ECU-controlled spark scheduling resumes as soon as cranking ends.
+		allowSpark.clear(ClearReason::CrankingNoSpark);
+	}
+#endif // EFI_CRANKING_NO_SPARK
+
 	updateRevLimit(rpm);
 	if (m_revLimitHysteresis.test(rpm, m_revLimit, resumeRpm)) {
 		if (engineConfiguration->cutFuelOnHardLimit) {

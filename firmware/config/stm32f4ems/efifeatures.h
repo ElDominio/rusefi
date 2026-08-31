@@ -611,6 +611,11 @@
 #define EFI_BURST_KNOCK FALSE
 #endif
 
+// Cranking No-Spark (external distributor/module fires spark during cranking, ECU takes over after)
+#ifndef EFI_CRANKING_NO_SPARK
+#define EFI_CRANKING_NO_SPARK FALSE
+#endif
+
 // WOT Time Enrichment (richen target AFR after prolonged WOT; needs Engine State Machine at runtime)
 #ifndef EFI_WOT_ENRICHMENT
 #define EFI_WOT_ENRICHMENT FALSE

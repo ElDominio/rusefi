@@ -57,6 +57,7 @@ TESTS_SRC_CPP = \
 	tests/ignition_injection/test_startOfCrankingPrimingPulse.cpp \
 	tests/ignition_injection/test_multispark.cpp \
 	tests/ignition_injection/test_kickstart.cpp \
+	tests/ignition_injection/test_cranking_no_spark.cpp \
 	tests/ignition_injection/test_hd_cranking.cpp \
 	tests/ignition_injection/test_hd_cranking2.cpp \
 	tests/ignition_injection/test_ignition_scheduling.cpp \

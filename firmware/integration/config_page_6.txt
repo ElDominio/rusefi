@@ -719,4 +719,16 @@ struct_no_prefix page6_s
 	wheel_speed_source_e wheelSlipRatioSource1;Wheel Slip Ratio: numerator source (e.g. Front Axle).
 	wheel_speed_source_e wheelSlipRatioSource2;Wheel Slip Ratio: denominator source (e.g. Rear Axle).
 
+	! --- Cranking No-Spark (EFI_CRANKING_NO_SPARK) ---
+	! For engines with a distributor/module-based ignition that fires on its own with no ECU
+	! signal during cranking (points, HEI, magneto, etc.): while enabled and the engine is
+	! cranking (isCranking()), rusEFI's own spark scheduling is suppressed entirely -- coil
+	! dwell/charge is never started, so the ECU never drives the coil output at all during crank.
+	! As soon as the engine transitions out of cranking (crosses the existing Cranking RPM
+	! threshold with its normal hysteresis), normal ECU-controlled spark scheduling takes over
+	! immediately -- no separate threshold to tune. Fuel injection and every other cranking
+	! behavior (cranking fuel, cranking TPS target, etc.) is unaffected -- only spark is cut.
+	! See LimpManager::updateState(), ClearReason::CrankingNoSpark.
+	bit crankingNoSparkEnabled,"enabled","disabled";Cranking No-Spark: master enable. Suppresses ECU spark entirely while cranking, for engines with an external distributor/module firing spark during crank. Normal ECU spark control resumes once cranking ends (Cranking RPM threshold).
+
 end_struct
