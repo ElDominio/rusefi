@@ -140,11 +140,31 @@ IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController
 	looksLikeRunning = maxVss != 0 && vss > maxVss;
 	if (looksLikeRunning && engineConfiguration->idleVssGateClutchOverride) {
 		bool clutchOut = !engine->module<EngineStateMachine>().unmock().isTransmissionEngaged();
-		auto detectedGear = Sensor::get(SensorType::DetectedGear);
-		bool inNeutral = detectedGear.Valid && detectedGear.Value == 0;
-		if (clutchOut || inNeutral) {
+		if (clutchOut) {
+			// Direct mechanical clutch-switch read -- trust it immediately in both directions,
+			// same as the rest of isTransmissionEngaged()'s callers.
+			m_vssGateOverrideEngaged = false;
 			looksLikeRunning = false;
+		} else {
+			auto detectedGear = Sensor::get(SensorType::DetectedGear);
+			bool inNeutral = detectedGear.Valid && detectedGear.Value == 0;
+			// Sticky: once granted via a neutral read, idle authority is not revoked just
+			// because GearDetector's ratio match flickers back -- its match band is narrow
+			// and keys off the same RPM the idle PID is actively moving, which otherwise
+			// chatters this override (and Idling/Running) every cycle, see docs/report.md
+			// 2026-08-26. Only give it back once RPM has genuinely climbed back out of the
+			// idle corner, same threshold used for the Coasting hysteresis above.
+			if (inNeutral) {
+				m_vssGateOverrideEngaged = true;
+			} else if (rpm > targetRpm.IdleExitRpm) {
+				m_vssGateOverrideEngaged = false;
+			}
+			if (m_vssGateOverrideEngaged) {
+				looksLikeRunning = false;
+			}
 		}
+	} else {
+		m_vssGateOverrideEngaged = false;
 	}
 	if (looksLikeRunning) {
 		return Phase::Running;

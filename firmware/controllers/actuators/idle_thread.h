@@ -122,6 +122,8 @@ private:
 
 	// These are stored by getIdlePosition() and used by getIdleTimingAdjustment()
 	Phase m_lastPhase = Phase::Cranking;
+	// Sticky latch for the VSS clutch/neutral idle-gate override, see determinePhase()
+	bool m_vssGateOverrideEngaged = false;
 	efitimeus_t restoreAfterPidResetTimeUs = 0;
 	// used by "soft" idle entry
 	float m_crankTaperEndTime = 0.0f;

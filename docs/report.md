@@ -3313,3 +3313,54 @@ Open follow-ups:
 - Not yet committed (per CLAUDE.md, left for the human).
 - No hardware validation yet of how the 1s ramp actually feels/drives on alphax-s550-pnp.
 
+## 2026-08-26 - Fixed idle-while-cruising Idling/Running chatter (idleVssGateClutchOverride)
+
+What was done:
+- Diagnosed a reported bug from a provided log (`noidlecruise.msl`, decel from ~1600 RPM with the
+  car still showing ~90 km/h and clutch engaged) and tune (`gt350tuneaug26.msq`): while coasting
+  down through the idle corner, `Idle: idling`/`Engine SM: Idle` repeatedly engaged and disengaged
+  (about 7 cycles over ~18s) instead of settling, with RPM sagging as low as 634 before recovering
+  each time.
+- Root cause: `maxIdleVss`=4 km/h and `idleVssGateClutchOverride` enabled means, at VSS well above
+  the threshold, idle authority is granted only via `IdleController::determinePhase()`'s
+  `clutchOut || inNeutral` override (`idle_thread.cpp`). `Clutch: up` was true throughout (no real
+  clutch action), so the override rode entirely on `SensorType::DetectedGear == 0`. With
+  `gearDetectionUseOutputShaftSpeed` on, `Output Shaft Speed` was pegged (~2555-2590, unrelated to
+  engine RPM -- a bench/simulated VSS stimulus, not a real drive), so GearDetector's ratio-match
+  window for gear 6 flipped in/out purely as a function of engine RPM: as idle closed-loop opened
+  the throttle and RPM climbed back through ~1000-1070, gear re-matched (0 -> 6), instantly
+  revoking the override (no hysteresis on that check, unlike `looksLikeCoasting` right above it in
+  the same function) and kicking the engine back to `Phase::Running`, which yanked the idle-open
+  ETB target away and let RPM sag again -- a closed feedback loop between the idle PID's own RPM
+  output and GearDetector's RPM-dependent neutral classification.
+- Fix (`firmware/controllers/actuators/idle_thread.{cpp,h}`): added a sticky latch
+  (`m_vssGateOverrideEngaged`) around the `inNeutral` path only. A direct clutch-switch read
+  (`clutchOut`) still applies immediately in both directions (it's a real-time mechanical signal,
+  per `isTransmissionEngaged()`'s own header comment). But once `inNeutral` grants the override,
+  it now stays granted until RPM climbs back out past `targetRpm.IdleExitRpm` -- the same
+  threshold already used for the Coasting classification just above -- instead of re-arming on
+  every transient gear re-match. At that RPM the ordinary Coasting check (evaluated earlier in
+  `determinePhase()`) already takes over anyway, so the exit path lands on `Coasting`, not a bare
+  `Running` bounce.
+- Added `idle_v2.neutralOverrideStaysLatchedThroughTransientGearRematch` in
+  `unit_tests/tests/test_idle_controller.cpp`, replaying the log's transient-gear-rematch pattern
+  (RPM sag -> gear briefly re-matches mid-recovery -> RPM finally exits past IdleExitRpm).
+  Confirmed the existing `idle_v2.clutchOrNeutralOverridesVssGate` test still passes unchanged --
+  its final "clutch released again -- VSS gate re-applies" assertion relies on the clutch-switch
+  path, which stays instantaneous and is untouched by the new latch.
+
+Validation:
+- `unit_tests` full suite (GCC, `make -j12` + `./build/rusefi_test`): 1448/1448 pass (1447 existing
+  + 1 new).
+- Did not run `make CC=clang` (per standing guidance on this dev box) or build/bench-test firmware
+  this session.
+
+Open follow-ups:
+- Not yet committed (per CLAUDE.md, left for the human).
+- No hardware re-test yet to confirm the fix resolves the chatter on the actual vehicle/bench setup
+  that produced `noidlecruise.msl`.
+- Untracked `noidlecruise.msl`/`gt350tuneaug26.msq` (and several other untracked scratch files at
+  the repo root -- `CAN_TUNING.md`, `coldstart.msl`, `rusefi_lua.txt`, `sliplog.msl`, `tolight.msl`,
+  `tolight.msq`, `vvterrorsathigherrpm.msl`) were left as-is; not part of this change.
+
+

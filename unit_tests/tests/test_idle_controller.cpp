@@ -163,6 +163,50 @@ TEST(idle_v2, clutchOrNeutralOverridesVssGate) {
 	EXPECT_EQ(ICP::Running, dut.determinePhase(1000, targetInfo, 0, 25, 10));
 }
 
+// Reproduces a real-world log (noidlecruise.msl, 2026-08-26 report entry): with the clutch
+// switch reading engaged the whole time, the neutral-gear override is the only thing granting
+// idle authority at high VSS. GearDetector's ratio-match band is narrow and keys off the same
+// RPM the idle PID is actively pulling up, so a transient re-match used to immediately revoke
+// looksLikeRunning=false and kick the engine back to Running mid-recovery -- chattering
+// Idling/Running every cycle instead of settling. The override must stay latched until RPM
+// climbs back out past IdleExitRpm, not release the instant gear briefly re-matches.
+TEST(idle_v2, neutralOverrideStaysLatchedThroughTransientGearRematch) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+
+	engineConfiguration->idlePidDeactivationTpsThreshold = 5;
+	engineConfiguration->maxIdleVss = 10;
+	engineConfiguration->idleVssGateClutchOverride = true;
+
+	TgtInfo targetInfo;
+	targetInfo.IdleEntryRpm = 1000 + 100;
+	targetInfo.IdleExitRpm = 1000 + 100;
+
+	engine->rpmCalculator.setRpmValue(1000);
+
+	// Neutral detected while RPM is sagging below entry -- override grants idle authority.
+	Sensor::setMockValue(SensorType::DetectedGear, 0);
+	EXPECT_EQ(ICP::Idling, dut.determinePhase(900, targetInfo, 0, 25, 10));
+
+	// RPM sags further under closed-loop idle correction, still neutral.
+	EXPECT_EQ(ICP::Idling, dut.determinePhase(700, targetInfo, 0, 25, 10));
+
+	// RPM recovers and GearDetector's ratio briefly re-matches a gear again -- but RPM is
+	// still well below IdleExitRpm, so the override must stay latched: this is the exact
+	// transient that used to bounce back to Running before reaching a real exit.
+	Sensor::setMockValue(SensorType::DetectedGear, 6);
+	EXPECT_EQ(ICP::Idling, dut.determinePhase(1000, targetInfo, 0, 25, 10));
+
+	// Gear flickers back to neutral -- still idling either way.
+	Sensor::setMockValue(SensorType::DetectedGear, 0);
+	EXPECT_EQ(ICP::Idling, dut.determinePhase(1050, targetInfo, 0, 25, 10));
+
+	// Only once RPM genuinely climbs past IdleExitRpm does the override release -- at that point
+	// the ordinary Coasting classification (checked before the VSS gate) already takes over.
+	Sensor::setMockValue(SensorType::DetectedGear, 6);
+	EXPECT_EQ(ICP::Coasting, dut.determinePhase(1101, targetInfo, 0, 25, 10));
+}
+
 // Ghost Cam deliberately makes RPM hunt around its target -- while active, RPM excursions that
 // would normally read as Coasting must still classify as Idling, so the lope itself doesn't
 // drop the idle timing PID (and engineSmIsIdle) every time RPM swings past IdleExitRpm. Throttle
