@@ -3363,4 +3363,43 @@ Open follow-ups:
   the repo root -- `CAN_TUNING.md`, `coldstart.msl`, `rusefi_lua.txt`, `sliplog.msl`, `tolight.msl`,
   `tolight.msq`, `vvterrorsathigherrpm.msl`) were left as-is; not part of this change.
 
+## 2026-08-26 - Suppressed cranking ETB TPS-target blip while vehicle is moving
+
+What was done:
+- User-reported concern: the `crankingTpsTargetEnabled` cranking ETB override (forces throttle to
+  `engineConfiguration->cranking.tpsTarget` while `isCranking()`, added for stationary cold-start
+  throttle blip) had no vehicle-speed gate, so it could open the throttle during any cranking event
+  regardless of whether the car was moving -- e.g. a bump-start or rolling-restart crank attempt.
+- Fix (`firmware/controllers/actuators/electronic_throttle.cpp`, `EtbController::getSetpointEtb()`):
+  added `Sensor::getOrZero(SensorType::VehicleSpeed) < crankingTpsTargetVssToleranceKph` (a local
+  `constexpr float ... = 2.0f`) to the override's guard condition, matching the
+  `Sensor::getOrZero(SensorType::VehicleSpeed)` idiom already used by
+  `idle_thread.cpp`/`downshift_blipper.cpp`/`upshift_rpm_hold.cpp`. Deliberately not an exact-zero
+  equality check: VSS here is derived from wheel/axle pulse frequency
+  (`AxleSpeedConverter`/`WheelSpeedPlausibilityFilter`, `init_vehicle_speed_sensor.cpp`'s Main Speed
+  Sensor passthrough), and a single stray tooth pulse -- cranking vibration being a classic source
+  -- can read a couple of km/h even while genuinely parked; `== 0` would make the blip unreliable
+  even at a standstill. Above the 2 km/h tolerance the override is skipped entirely and control
+  falls through unchanged to the normal pedal/idle blend (same fallback path already exercised by
+  the existing "disabled" case in `etb.setpointCrankingTpsTarget`). Considered exposing the
+  tolerance as a new tunable field in `cranking_parameters_s`, but the struct has no reserved
+  padding and it would need a `FLASH_DATA_VERSION` bump -- user opted to keep it a fixed in-code
+  constant instead.
+- Added `etb.setpointCrankingTpsTargetSuppressedByVss` in `unit_tests/tests/actuators/test_etb.cpp`,
+  covering: VSS=0 -> override applies (65%); VSS=1.5 (within tolerance, simulating a stray-pulse
+  glitch while parked) -> override still applies; VSS=5 while still cranking -> override
+  suppressed, falls back to pedal/idle blend (24%, matching the existing test's post-cranking
+  expectation); VSS back to 0 -> override re-engages. No new EFI_ flag or config field -- this only
+  tightens an existing guard condition, no `FLASH_DATA_VERSION` impact.
+
+Validation:
+- `unit_tests` full suite (GCC, `make -j12` + `./test.sh etb`): 46/46 tests in the `etb` suite pass
+  (45 existing + 1 new); full-suite run not repeated this session beyond the `etb` filter.
+- Did not run `make CC=clang` (per standing guidance on this dev box) or build/bench-test firmware
+  this session.
+
+Open follow-ups:
+- Not yet committed (per CLAUDE.md, left for the human).
+- No hardware validation of the VSS gate on alphax-s550-pnp.
+
 

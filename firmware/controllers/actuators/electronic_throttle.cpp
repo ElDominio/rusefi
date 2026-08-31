@@ -350,8 +350,15 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// Cranking TPS target override: while cranking, force a fixed raw throttle position instead of
 	// the normal pedal/idle blend below. The instant RPM crosses the Cranking RPM limit, isCranking()
 	// flips false and control reverts to the standard idle logic (Idle Position vs CLT / Cranking Air
-	// Amount / Cranking Idle RPM Flare) untouched.
-	if (engineConfiguration->crankingTpsTargetEnabled && engine->rpmCalculator.isCranking()) {
+	// Amount / Cranking Idle RPM Flare) untouched. Suppressed once VSS is clearly nonzero: this blip
+	// is meant for a stationary start only, and must never open the throttle while the vehicle is
+	// already rolling (e.g. bump/rolling-restart cranking). Compares against a small tolerance
+	// rather than exact zero -- VSS is derived from wheel/axle pulse frequency
+	// (WheelSpeedPlausibilityFilter), and a single stray tooth pulse (cranking vibration is a
+	// classic source) can read a couple of km/h even while genuinely parked.
+	constexpr float crankingTpsTargetVssToleranceKph = 2.0f;
+	if (engineConfiguration->crankingTpsTargetEnabled && engine->rpmCalculator.isCranking()
+			&& Sensor::getOrZero(SensorType::VehicleSpeed) < crankingTpsTargetVssToleranceKph) {
 		return clampPercentValue(engineConfiguration->cranking.tpsTarget);
 	}
 
