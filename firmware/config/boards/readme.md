@@ -5,8 +5,9 @@ TL,DR: for community edition see f407-discovery.
 rusEFI supports quite a wide array of hardware:
  * most supported platforms are stm32f4 and stm32f7
  * alpha version support stm32h7
- * experimental support [kinetis](https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/k-series-cortex-m4:KINETIS_K_SERIES)
- * experimental support cypress MCUs.
+ * experimental/abandoned support [kinetis](https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/k-series-cortex-m4:KINETIS_K_SERIES)
+ * experimental/abandoned support cypress MCUs.
+ * experimental/abandoned support AT32 MCUs.
 
 Looking for most default firmware for your own hardware? See f407-discovery
 
@@ -32,6 +33,13 @@ New board procedure once you have new folder in this *boards* directory
 
 
 See also https://wiki.rusefi.com/Hardware
+
+See also:
+
+- [readme-boards.md](readme-boards.md) - overview of the board directories in this folder, plus the canonical pinout naming conventions for connector yaml files
+- [Board configuration override hooks](../../../docs/board-configuration-override-hooks.md) - which of the five custom_board_* config hooks to use in board_configuration.cpp
+- [Hellen board mapping](../../../docs/hellen-board-mapping.md) - connector pin -> hellen-one module -> STM32 pin mapping chain, meta headers and connector yaml codegen
+- [Hardware re-init & requiresPowerCycle](../../../docs/hardware-reinit-and-power-cycle.md) - how settings are applied live on Burn, and which settings are reboot-only
 
 
 ## FAQ

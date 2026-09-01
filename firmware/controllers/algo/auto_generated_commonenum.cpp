@@ -1,6 +1,6 @@
 #include "global.h"
 #include "rusefi_enums.h"
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sat Aug 15 05:03:40 AST 2026
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Sun Aug 30 22:05:20 UTC 2026
 // see also gen_config_and_enums.bat
 
 
@@ -46,8 +46,6 @@ const char *getInjectorNonlinearMode(InjectorNonlinearMode value) {
 			return "INJ_FordModel";
 		case INJ_None:
 			return "INJ_None";
-		case INJ_PercentCurve:
-			return "INJ_PercentCurve";
 		case INJ_PolynomialAdder:
 			return "INJ_PolynomialAdder";
 	}
@@ -569,6 +567,8 @@ const char *getCranking_condition_e(cranking_condition_e value) {
 }
 const char *getDc_function_e(dc_function_e value) {
 	switch (value) {
+		case DC_Gpio:
+			return "DC_Gpio";
 		case DC_IdleValve:
 			return "DC_IdleValve";
 		case DC_None:
@@ -582,17 +582,6 @@ const char *getDc_function_e(dc_function_e value) {
 	}
 	return NULL;
 }
-const char *getDfco_fuel_cut_mode_e(dfco_fuel_cut_mode_e value) {
-	switch (value) {
-		case dfco_fuel_cut_mode_e::Both:
-			return "Both";
-		case dfco_fuel_cut_mode_e::Decel:
-			return "Decel";
-		case dfco_fuel_cut_mode_e::Overrun:
-			return "Overrun";
-	}
-	return NULL;
-}
 const char *getDisplay_mode_e(display_mode_e value) {
 	switch (value) {
 		case DM_HD44780:
@@ -601,15 +590,6 @@ const char *getDisplay_mode_e(display_mode_e value) {
 			return "DM_HD44780_OVER_PCF8574";
 		case DM_NONE:
 			return "DM_NONE";
-	}
-	return NULL;
-}
-const char *getEco_mode_switch_mode_e(eco_mode_switch_mode_e value) {
-	switch (value) {
-		case eco_mode_switch_mode_e::Inhibit:
-			return "Inhibit";
-		case eco_mode_switch_mode_e::Off:
-			return "Off";
 	}
 	return NULL;
 }
@@ -627,52 +607,6 @@ const char *getEgo_sensor_e(ego_sensor_e value) {
 			return "ES_Innovate_MTX_L";
 		case ES_PLX:
 			return "ES_PLX";
-	}
-	return NULL;
-}
-const char *getExhaust_cutout_activation_e(exhaust_cutout_activation_e value) {
-	switch (value) {
-		case EXHAUST_CUTOUT_AUTO_SPORT_MODE:
-			return "EXHAUST_CUTOUT_AUTO_SPORT_MODE";
-		case EXHAUST_CUTOUT_OFF:
-			return "EXHAUST_CUTOUT_OFF";
-		case EXHAUST_CUTOUT_SPORT_MODE:
-			return "EXHAUST_CUTOUT_SPORT_MODE";
-		case EXHAUST_CUTOUT_SWITCH:
-			return "EXHAUST_CUTOUT_SWITCH";
-	}
-	return NULL;
-}
-const char *getExhaust_cutout_behavior_e(exhaust_cutout_behavior_e value) {
-	switch (value) {
-		case EXHAUST_CUTOUT_ALWAYS_CLOSED:
-			return "EXHAUST_CUTOUT_ALWAYS_CLOSED";
-		case EXHAUST_CUTOUT_ALWAYS_OPEN:
-			return "EXHAUST_CUTOUT_ALWAYS_OPEN";
-		case EXHAUST_CUTOUT_AUTO:
-			return "EXHAUST_CUTOUT_AUTO";
-	}
-	return NULL;
-}
-const char *getExhaust_cutout_output_mode_e(exhaust_cutout_output_mode_e value) {
-	switch (value) {
-		case EXHAUST_CUTOUT_OUTPUT_DIGITAL:
-			return "EXHAUST_CUTOUT_OUTPUT_DIGITAL";
-		case EXHAUST_CUTOUT_OUTPUT_HBRIDGE:
-			return "EXHAUST_CUTOUT_OUTPUT_HBRIDGE";
-		case EXHAUST_CUTOUT_OUTPUT_PWM:
-			return "EXHAUST_CUTOUT_OUTPUT_PWM";
-	}
-	return NULL;
-}
-const char *getFan_ac_mode_e(fan_ac_mode_e value) {
-	switch (value) {
-		case fan_ac_mode_e::Disabled:
-			return "Disabled";
-		case fan_ac_mode_e::Pressure:
-			return "Pressure";
-		case fan_ac_mode_e::Relay:
-			return "Relay";
 	}
 	return NULL;
 }
@@ -697,17 +631,6 @@ const char *getFuel_pressure_sensor_mode_e(fuel_pressure_sensor_mode_e value) {
 			return "FPM_Differential";
 		case FPM_Gauge:
 			return "FPM_Gauge";
-	}
-	return NULL;
-}
-const char *getFuel_pump_mode_e(fuel_pump_mode_e value) {
-	switch (value) {
-		case FP_MODE_DUAL:
-			return "FP_MODE_DUAL";
-		case FP_MODE_PWM:
-			return "FP_MODE_PWM";
-		case FP_MODE_SINGLE:
-			return "FP_MODE_SINGLE";
 	}
 	return NULL;
 }
@@ -898,17 +821,6 @@ const char *getIgnition_mode_e(ignition_mode_e value) {
 	}
 	return NULL;
 }
-const char *getImrc_mode_e(imrc_mode_e value) {
-	switch (value) {
-		case IMRC_DISABLED:
-			return "IMRC_DISABLED";
-		case IMRC_HBRIDGE:
-			return "IMRC_HBRIDGE";
-		case IMRC_SOLENOID:
-			return "IMRC_SOLENOID";
-	}
-	return NULL;
-}
 const char *getImu_type_e(imu_type_e value) {
 	switch (value) {
 		case IMU_MM5_10:
@@ -945,8 +857,6 @@ const char *getInjector_compensation_mode_e(injector_compensation_mode_e value) 
 			return "ICM_FixedRailPressure";
 		case ICM_HPFP_Manual_Compensation:
 			return "ICM_HPFP_Manual_Compensation";
-		case ICM_ManualPressureCorrection:
-			return "ICM_ManualPressureCorrection";
 		case ICM_None:
 			return "ICM_None";
 		case ICM_SensedRailPressure:
@@ -969,23 +879,12 @@ const char *getLaunchActivationMode_e(launchActivationMode_e value) {
 			return "ALWAYS_ACTIVE_LAUNCH";
 		case CLUTCH_INPUT_LAUNCH:
 			return "CLUTCH_INPUT_LAUNCH";
-		case CLUTCH_UP_INPUT_LAUNCH:
-			return "CLUTCH_UP_INPUT_LAUNCH";
 		case LUA_LAUNCH:
 			return "LUA_LAUNCH";
 		case STOP_INPUT_LAUNCH:
 			return "STOP_INPUT_LAUNCH";
 		case SWITCH_INPUT_LAUNCH:
 			return "SWITCH_INPUT_LAUNCH";
-	}
-	return NULL;
-}
-const char *getLimiter_adder_source_e(limiter_adder_source_e value) {
-	switch (value) {
-		case LIMITER_ADDER_LUA_GAUGE:
-			return "LIMITER_ADDER_LUA_GAUGE";
-		case LIMITER_ADDER_SPORT_MODE:
-			return "LIMITER_ADDER_SPORT_MODE";
 	}
 	return NULL;
 }
@@ -1060,15 +959,6 @@ const char *getNitrous_arming_method_e(nitrous_arming_method_e value) {
 	}
 	return NULL;
 }
-const char *getOil_life_temp_source_e(oil_life_temp_source_e value) {
-	switch (value) {
-		case oil_life_temp_source_e::CoolantTemp:
-			return "CoolantTemp";
-		case oil_life_temp_source_e::OilTemp:
-			return "OilTemp";
-	}
-	return NULL;
-}
 const char *getOperation_mode_e(operation_mode_e value) {
 	switch (value) {
 		case FOUR_STROKE_CAM_SENSOR:
@@ -1122,46 +1012,6 @@ const char *getPin_output_mode_e(pin_output_mode_e value) {
 	}
 	return NULL;
 }
-const char *getPops_and_bangs_cutout_inhibit_e(pops_and_bangs_cutout_inhibit_e value) {
-	switch (value) {
-		case pops_and_bangs_cutout_inhibit_e::Inhibit:
-			return "Inhibit";
-		case pops_and_bangs_cutout_inhibit_e::Off:
-			return "Off";
-	}
-	return NULL;
-}
-const char *getRpmUpdateMode_e(rpmUpdateMode_e value) {
-	switch (value) {
-		case rpmUpdateMode_e::RPM_UPDATE_FIRST_ORDER:
-			return "RPM_UPDATE_FIRST_ORDER";
-		case rpmUpdateMode_e::RPM_UPDATE_INSTANT:
-			return "RPM_UPDATE_INSTANT";
-		case rpmUpdateMode_e::RPM_UPDATE_PER_CYCLE:
-			return "RPM_UPDATE_PER_CYCLE";
-	}
-	return NULL;
-}
-const char *getSm_clutch_switch_e(sm_clutch_switch_e value) {
-	switch (value) {
-		case sm_clutch_switch_e::ClutchDown:
-			return "ClutchDown";
-		case sm_clutch_switch_e::ClutchUp:
-			return "ClutchUp";
-		case sm_clutch_switch_e::None:
-			return "None";
-	}
-	return NULL;
-}
-const char *getSm_shift_detection_mode_e(sm_shift_detection_mode_e value) {
-	switch (value) {
-		case sm_shift_detection_mode_e::RpmRate:
-			return "RpmRate";
-		case sm_shift_detection_mode_e::VssRate:
-			return "VssRate";
-	}
-	return NULL;
-}
 const char *getSpi_device_e(spi_device_e value) {
 	switch (value) {
 		case SPI_DEVICE_1:
@@ -1178,28 +1028,6 @@ const char *getSpi_device_e(spi_device_e value) {
 			return "SPI_DEVICE_6";
 		case SPI_NONE:
 			return "SPI_NONE";
-	}
-	return NULL;
-}
-const char *getSport_mode_activation_e(sport_mode_activation_e value) {
-	switch (value) {
-		case SPORT_MODE_LUA_GAUGE:
-			return "SPORT_MODE_LUA_GAUGE";
-		case SPORT_MODE_OFF:
-			return "SPORT_MODE_OFF";
-		case SPORT_MODE_SWITCH:
-			return "SPORT_MODE_SWITCH";
-	}
-	return NULL;
-}
-const char *getSport_pedal_activation_e(sport_pedal_activation_e value) {
-	switch (value) {
-		case SPORT_PEDAL_OFF:
-			return "SPORT_PEDAL_OFF";
-		case SPORT_PEDAL_SPORT_MODE:
-			return "SPORT_PEDAL_SPORT_MODE";
-		case SPORT_PEDAL_SWITCH:
-			return "SPORT_PEDAL_SWITCH";
 	}
 	return NULL;
 }
@@ -1228,6 +1056,8 @@ const char *getStft_state_e(stft_state_e value) {
 			return "stftDisabledDFCO";
 		case stftDisabledFuelCut:
 			return "stftDisabledFuelCut";
+		case stftDisabledLaunch:
+			return "stftDisabledLaunch";
 		case stftDisabledRPM:
 			return "stftDisabledRPM";
 		case stftDisabledSettings:
@@ -1249,15 +1079,6 @@ const char *getTChargeMode_e(tChargeMode_e value) {
 			return "TCHARGE_MODE_AIR_INTERP_TABLE";
 		case TCHARGE_MODE_RPM_TPS:
 			return "TCHARGE_MODE_RPM_TPS";
-	}
-	return NULL;
-}
-const char *getTc_y_axis_e(tc_y_axis_e value) {
-	switch (value) {
-		case TC_Y_AXIS_RPM_ACCEL:
-			return "TC_Y_AXIS_RPM_ACCEL";
-		case TC_Y_AXIS_WHEEL_SLIP:
-			return "TC_Y_AXIS_WHEEL_SLIP";
 	}
 	return NULL;
 }

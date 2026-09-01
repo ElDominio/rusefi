@@ -12,6 +12,7 @@ After each completed unit of work (a landed feature, a fixed bug, or a finished 
 
 1. **Append** a dated entry to `docs/report.md` — never rewrite or reorder earlier entries. Cover: what was done, key decisions and why, validation performed (tests run, hardware checks), and open follow-ups. Match the file's existing style: plain ASCII, `-`/`->` instead of dashes/arrows, tables for change inventories.
 2. **Fold durable, non-obvious knowledge into this CLAUDE.md**: build/tooling quirks, hardware protocols, architecture invariants, recurring debugging root-causes. Skip anything derivable from the code or git history — CLAUDE.md records what the code cannot say.
+3. **Update user-facing wiki docs**: the rusEFI wiki source may be checked out as a sibling repo at `../rusefi_documentation`. When a change alters user-visible behavior documented there — notably Lua scripting (hooks, `print()` semantics, console Lua tab behavior, console magic strings -> `Lua-Scripting.md`) — edit the matching page in the same unit of work, if that checkout is available. Same source-control rules apply there: never commit or push, leave edits for the human.
 
 ## Build Commands
 
@@ -74,9 +75,18 @@ To inspect what a test actually scheduled/executed (events, timings, sniffer/log
 
 See also unit_tests/test_results/readme.md for unit tests output.
 
+#### Replaying `.teeth` (rusEFI tooth logger) captures in trigger tests
+
+`.teeth` files under `unit_tests/tests/trigger/resources/` are rusEFI's own tooth-logger exports, not logic-analyzer traces, and they carry two traps: (1) the logger records in bursts, so long captures contain periodic ~0.6 s holes with no edges at all - each hole costs one resync error that no gap window can remove, so assert error counts per clean section rather than a global zero; (2) the `Sync`/`TDC` columns are the recording ECU's own decoder state and serve as ground truth - if the unit-test error counter increments at the same timestamps the `Sync` column drops, the test reproduces the field behaviour and the remaining errors are in the signal, not the decoder. Captures longer than a few seconds overflow the 16 MB per-test log cap - wrap the test in `ScopedUnitTestCreateLogs logDisabler(false)` (see `test_real_genmax_24_2.cpp`, `test_real_bmw_e90_cam.cpp`).
+
 **Cross-platform requirement**: Unit test code MUST build and run on all supported host platforms — Linux (GCC/Clang), macOS (Clang), and Windows (MSVC and MinGW). Avoid POSIX-only APIs (e.g. `realpath`, `PATH_MAX`, `dirent.h` without guards) unless wrapped in `#ifdef` guards or replaced by portable C++ equivalents. Prefer `std::filesystem` over POSIX path APIs.
 
-### Code Generation
+### Simulator Functional Test (local WSL quirks)
+
+`./gradlew simulatorFunctionalTestLauncherWithSimulator` (repo root; also CI `build-simulator.yaml`, Linux-only) launches `simulator/build/rusefi_simulator` and talks TS protocol over TCP :29001. Two local traps, both hit 2026-08-25:
+
+- **Anything already listening/connecting on :29001 corrupts the run.** Windows-side apps (e.g. `rusefi_dash.exe`) reach the WSL simulator via WSL2 localhost forwarding and auto-connect to every simulator the test launches; the launcher then fails with "No response from simulator". Check `tasklist.exe` for dash/console processes before debugging "mystery" connection failures.
+- **Bench-pin timing asserts (`testPwmPin`, `testOutputPin`) are wall-clock based and flaky under WSL2 load** — a loaded machine fails a *different* pin test each run with duration mismatches. The FS-image / CAN / trigger asserts are deterministic; treat lone pin-duration failures locally as environmental and let CI arbitrate.
 
 ```bash
 # Generate configs for a specific board
@@ -116,6 +126,7 @@ For detailed technical documentation intended for AI assistants, see:
 - [Ignition System](docs/AI/ignition_system.md) - Timing calculation and spark scheduling.
 - [Engine Protection](docs/AI/protection_system.md) - LimpManager and cut logic.
 - [Sensor Framework](docs/AI/sensors_system.md) - Sensor registry, conversion pipeline, redundancy and mocking.
+- [Kick-Start Cranking](docs/AI/kick-start.md) - kickStartCranking mode: both coils charged off the trigger edge and fired a dwell-time later below 800 RPM, normal spark suppressed via ClearReason::KickStart.
 - [Scheduling & Timing](docs/AI/scheduling_system.md) - Microsecond timer, event queue/executor, angle-based scheduling, periodic callback rates (fast 200 Hz / slow 20 Hz) and other fixed-rate loops.
 - [Lua Scripting API](docs/AI/lua_scripting.md) - Custom Lua hooks (lua_hooks.cpp and friends) grouped by category, indexing conventions, how to add a hook.
 - [SD Card Logging](docs/AI/sd_card_logging.md) - SD thread mode state machine, .mlg/.teeth formats, f_expand pre-allocation.
@@ -137,6 +148,7 @@ For detailed technical documentation intended for AI assistants, see:
 - **Calibration Compatibility**: Maintaining [compatibility with older tunes](docs/calibration-compatibility.md) when adding new parameters.
 - **ChibiOS RTOS**: Real-time operating system foundation
 - **Config validate vs fix separation**: `validateConfigOnStartUpOrBurn()` is read-only validation; ALL configuration mutation on startup/burn belongs in `applyDefaultsOrFixAfterBurn()` (returns true if it changed anything). Board-specific fixes go in the `custom_board_fix_configuration` override (same changed-flag contract); `custom_board_validateConfig` must never mutate config.
+- **No sensor has a value during init**: `initNewSensors()` only *subscribes* sensors to the ADC — the first sample arrives on a later slow-ADC callback. `initSensors()` runs a few instructions later on the same thread, so `Sensor::get()` on any ADC-backed sensor is still invalid for every `init*()` function. Code that needs a real reading at start-up must defer to the slow callback and latch there (worked example: `updateFixedBaroFromMap()` in `controllers/sensors/impl/map.cpp`). A `Sensor::get(...).value_or(someDefault)` at init time does not "read the sensor, with a fallback" — it latches the default, every single boot; that was issue #9744.
 - **Engine modules**: Engine-asynchronous control logic derives from `EngineModule` and registers in the `type_list` in `firmware/controllers/algo/engine.h`. Before creating a module or making one compile-time optional, search the codebase for `[tag:disable_engine_module]` and read those comments — they document the module lifecycle and the TS-page guard-flag rules (a module that owns a TunerStudio page must have its `EFI_*` flag declared in the board `prepend.txt`, never in `board.mk` or `efifeatures.h`).
 - **`totalGearsCount`/`gearRatio[]` are shared, not TCU-exclusive**: `GearDetector` (`firmware/controllers/modules/gear_detector/gear_detector.cpp`) compiles into *every* board unconditionally (`controllers/modules/modules.mk`) and infers the current gear from an RPM/driveshaft-RPM ratio for any vehicle — manual or automatic, `EFI_TCU` or not — using `engineConfiguration->totalGearsCount` and the per-gear `gearRatio[]` table, both configured in their own top-level **"Gear Setup"** dialog (`gearDetection` in `tunerstudio.template.ini`, a `groupChildMenu` sibling of "Wheel Speed Sensors"/"Drivetrain Sensors" under "Chassis sensors" — moved out of the Wheel Speed Sensors dialog on 2026-08-17). Don't add a board- or feature-specific clamp to `totalGearsCount`'s range or duplicate it into another dialog without checking this — it silently breaks `GearDetector` for every non-TCU consumer too. Its output is `SensorType::DetectedGear`, consumed by `tcu.cpp`'s `isShiftCompleted()` and (as of 2026-08-01) `TransmissionControllerBase::postState()`'s "Current Gear" gauge. **Safety note**: `GearDetector::initGearDetector()` calls `criticalError(...)` (halts the engine) if `totalGearsCount != 0` but any `gearRatio[i] <= 0` for `i < totalGearsCount` — never give `totalGearsCount` a nonzero default without also giving `gearRatio[]` sane defaults.
   - Gear Setup's driveshaft-RPM source is an explicit two-bit choice, not auto-detected: `engineConfiguration->gearDetectionUseOutputShaftSpeed` (false=default: use `SensorType::VehicleSpeed` × `driveWheelRevPerKm` × `finalGearRatio`, regardless of which physical sensor feeds VehicleSpeed; true: use `SensorType::OutputShaftSpeed` directly, since OSS is already driveshaft RPM). The paired `gearDetectionRpmSourceIsInputShaftSpeed` bit (Engine RPM vs `SensorType::InputShaftSpeed`) only applies when `gearDetectionUseOutputShaftSpeed` is true — when it's false, the engine-side numerator still auto-prefers ISS-if-present else RPM (unchanged legacy behavior, not exposed as a UI choice for that path). Both bits reuse previously-reserved `unusedBit_Fancy17`/`18` slots (`rusefi_config.txt`'s `unusedBit_FancyNN` bit region exists exactly so new booleans can be added without growing `engine_configuration_s`) rather than adding new struct fields, so no `FLASH_DATA_VERSION` bump was needed — old tunes have these bits at 0, which is the safe default (Main Vehicle Speed / Engine RPM).
@@ -219,6 +231,8 @@ Any code reachable from a unit-test build (`unit_tests/` itself, plus firmware s
 - **No RTTI**: `dynamic_cast` and `typeid` are unavailable.
 - **Interrupt safety**: Be mindful of code that runs in interrupt context vs. thread context. Use appropriate synchronization primitives.
 - **Stack usage**: Keep stack allocations small. Large arrays should be static or global, not local variables.
+- **Null-pointer derefs on STM32 look like wild-pointer bus faults, not faults near 0**: address 0x0 is the readable ITCM alias of flash (the vector table — the bootloader's on OpenBLT boards), so reading through a null struct pointer *succeeds* and returns flash image content; only a *subsequent* hop through that junk faults, with BFAR = junk_value + member_offset. Decoding rule for HardFault dumps: if `faulting_reg + ldr_offset == BFAR` and the reg value is not a valid RAM/flash *pointer*, check whether the reg value equals the flash *content* at `0x00000000 + ldr_offset` — that proves a null-head/null-pointer walk, not memory corruption (this is exactly how issue #9435, the `TriggerScheduler::cancel` null-head `LL_DELETE2` walk, was decoded). Related: rusEFI's vendored utlist `LL_DELETE2`/`LL_APPEND2` dereference the list head without a null check on their search-loop branches.
+- **Text-logging line buffers are not guaranteed null-terminated - never `strlen` them**: `efiPrintf` formats into a 256-byte `LogLineBuffer` with `chvsnprintf` (which always terminates at or before `buffer[size-1]` and returns the *untruncated* length); any longer line (a big Lua `print()`, a long `%s`) is truncated. `priv::terminateLogLine()` re-adds the trailing `LOG_DELIMITER` while preserving the terminator, and `LogBuffer::writeInternal()` bounds its read with `memchr(..., maxLength)`. The pre-#10159 code overwrote `buffer[255]` with the delimiter, so the flusher's `strlen` walked out of the `lineBuffers[]` array and rebooted the ECU under heavy Lua printing. Keep both invariants when touching `loggingcentral.cpp`.
 - **No float→int64 conversions**: CI (`firmware/check_illegal_conversion.sh`) fails any board image containing `__aeabi_f2lz`. The usual trigger is adding a float time offset to an `efitick_t` timestamp (e.g. `timestamp + MS2NT(floatMs)` — `MS2NT` promotes the int64 to float and back, losing precision). Use `sumTickAndFloat(timestamp, MSF2NT(floatMs))` (or `USF2NT` for µs) from `firmware/util/efitime.h` instead; see `spark_logic.cpp` for the idiom.
 
 ## Java Version Constants
@@ -236,6 +250,13 @@ rusEFI provides two MCP (Model Context Protocol) servers for LLM-driven tooling 
 ## Serial Connectivity
 
 All rusEFI serial connections use the USB CDC (Communications Device Class) profile. Baud rate is irrelevant and never a concern — the USB serial profile handles throughput natively regardless of any baud rate setting in host software or code.
+
+### SLCAN CAN sniffer on the second VCP
+
+Boards built with `HAL_USE_USB_CDC_2` (uaefi pro, purple-gateway) expose an SLCAN (Lawicel ASCII) CAN sniffer on the **second** USB VCP (`CanSniffer` on `SDU[1]`) — full doc: `firmware/controllers/can/can_sniffer.md`. Non-obvious traps (each verified on hardware 2026-08-23):
+- Both VCPs share one composite USB identity — identify the sniffer port by probing (`V` command), like the console's `SlcanTab` does; do not trust `/dev/ttyACM*` ordering.
+- `O` (open) is refused with BELL unless an `S0`..`S8` was accepted since the last close, and `C` clears that state — the (re)open sequence is always `C`/`S6`/`O`.
+- Defaults stream **only the ECU's own TX** (`canSnifferN_listenOurs` on, `canSnifferN_read` off, `canSnifferTxBus` None): a live bus shows zero foreign frames until `canSnifferN_read` is enabled in the tune. An ID inventory identical to the ECU's own TX schedule means the `read` flag is off, not that the bus is dead.
 
 ### USB Mass Storage SCSI (known Wireshark false-positive)
 

@@ -449,12 +449,12 @@ static_assert(sizeof(MAP_sensor_config_s) == 140);
 // start of thermistor_conf_s
 struct thermistor_conf_s {
 	/**
-	 * units: {bitStringValue(pressureUnitsLabels, useMetricOnInterface)}
+	 * units: {bitStringValue(unitsLabels, useMetricOnInterface)}
 	 * offset 0
 	 */
 	float tempC_1;
 	/**
-	 * units: {bitStringValue(pressureUnitsLabels, useMetricOnInterface)}
+	 * units: {bitStringValue(unitsLabels, useMetricOnInterface)}
 	 * offset 4
 	 */
 	float tempC_2;
@@ -2989,7 +2989,7 @@ struct engine_configuration_s {
 	offset 848 bit 27 */
 	bool useAbsolutePressureForLagTime : 1 {};
 	/**
-	 * Ramp the idle target down from the entry threshold over N seconds when returning to idle. Helps prevent overshooting (below) the idle target while returning to idle from coasting.
+	 * When returning to idle from coasting, start the closed-loop RPM target elevated by the 'RPM upper limit' idle detection threshold, then ramp it down to the normal target over the 'Ramp target duration'. Helps prevent RPM from dipping below the idle target on return to idle.
 	offset 848 bit 28 */
 	bool idleReturnTargetRamp : 1 {};
 	/**
@@ -6110,8 +6110,9 @@ struct engine_configuration_s {
 	offset 4348 bit 1 */
 	bool vvlControlEnabled : 1 {};
 	/**
+	 * By default the idle solenoid is switched off whenever the engine is not turning, to be quieter and save power. Enable this to keep driving it to the position the idle controller asks for, which at zero RPM is the cranking curve for the current coolant temperature - for valves which need to rest somewhere other than de-energized. The valve is only driven for a minute after the engine stops turning, then switched off anyway to protect the coil and the battery.
 	offset 4348 bit 2 */
-	bool unusedBit_Fancy3 : 1 {};
+	bool keepIdleSolenoidWhenStopped : 1 {};
 	/**
 	offset 4348 bit 3 */
 	bool unusedBit_Fancy4 : 1 {};
@@ -6386,7 +6387,7 @@ struct engine_configuration_s {
 	 */
 	int8_t airmassToTimingValues[8] = {};
 	/**
-	 * idle return target ramp duration
+	 * Time for the idle RPM target to ramp down from the elevated return-to-idle value (normal target + 'RPM upper limit') to the normal target. Longer duration gives a gentler, slower settle to idle. Only used when 'Ramp target on return to idle' is enabled.
 	 * units: seconds
 	 * offset 4458
 	 */
@@ -6812,7 +6813,7 @@ struct blend_table_s_BLEND_PRECISION {
 	/**
 	 * offset 0
 	 */
-	scaled_channel<int16_t, 1, 1> table[BLEND_TABLE_COUNT][BLEND_TABLE_COUNT] = {};
+	scaled_channel<int16_t, 10, 1> table[BLEND_TABLE_COUNT][BLEND_TABLE_COUNT] = {};
 	/**
 	 * units: Load
 	 * offset 128
@@ -6854,7 +6855,7 @@ struct blend_table_s_TARGET_AFR_BLEND_PRECISION {
 	/**
 	 * offset 0
 	 */
-	scaled_channel<int16_t, 1, 1> table[BLEND_TABLE_COUNT][BLEND_TABLE_COUNT] = {};
+	scaled_channel<int16_t, 100, 1> table[BLEND_TABLE_COUNT][BLEND_TABLE_COUNT] = {};
 	/**
 	 * units: Load
 	 * offset 128

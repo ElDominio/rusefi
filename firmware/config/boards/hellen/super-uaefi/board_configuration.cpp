@@ -155,4 +155,5 @@ void setup_custom_board_overrides() {
 	custom_board_InitHardware = super_uaefi_boardInitHardware;
 	custom_board_DefaultConfiguration = super_uaefi_boardDefaultConfiguration;
 	custom_board_ConfigOverrides = super_uaefi_boardConfigOverrides;
+	custom_board_applyBasicConfiguration = applyUaefiBasicConfiguration;
 }

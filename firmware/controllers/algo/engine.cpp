@@ -173,6 +173,7 @@ void Engine::periodicSlowCallback() {
 
 	efiWatchdog();
 	updateSlowSensors();
+	updateFixedBaroFromMap();
 	checkShutdown();
 
 	module<TpsAccelEnrichment>()->onNewValue(Sensor::getOrZero(SensorType::Tps1));

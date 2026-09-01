@@ -76,8 +76,8 @@ Fuel enrichment adder percentage.
 ### etbJamTimeout
 Time after which the throttle is considered jammed.
 
-### primingTriggerTeeth
-Number of primary trigger teeth to see (since ignition-on) before firing the priming pulse. Counting is raw and does not require trigger sync. Only used when 'primeOnTriggerTeeth' is enabled.
+### acIdleExtraOffset
+Additional idle % while A/C is active
 
 ### multisparkMaxSparkingAngle
 This parameter sets the latest that the last multispark can occur after the main ignition event. For example, if the ignition timing is 30 degrees BTDC, and this parameter is set to 45, no multispark will ever be fired after 15 degrees ATDC.
@@ -106,11 +106,11 @@ On some Ford and Toyota vehicles one of the throttle sensors is not linear on th
 ### overrideTriggerGaps
 
 
-### chtSensorPulldown
+### enableFan1WithAc
+Turn on this fan when AC is on.
 
-
-### useLinearChtSensor
-
+### enableFan2WithAc
+Turn on this fan when AC is on.
 
 ### enableTrailingSparks
 Enable secondary spark outputs that fire after the primary (rotaries, twin plug engines).
@@ -144,12 +144,6 @@ This uses separate ignition timing and VE tables not only for idle conditions, a
 
 ### useRunningMathForCranking
 For cranking either use the specified fixed base fuel mass, or use the normal running math (VE table). Note: in 'Fuel Map' (running math) mode the base mass already reflects the flex-adjusted stoich ratio, so the cranking flex multipliers act as ADDITIONAL enrichment on top of that - do not re-apply the full ethanol correction there.
-
-### crankingAirAmountEnabled
-Enable CLT-based cranking air amount table. During cranking, open-loop valve position is taken from this table instead of the running idle tables.
-
-### crankingIdleRpmFlareEnabled
-Enable CLT-based cranking idle RPM flare. An RPM adder from the table is applied during cranking, tapering to zero as the engine transitions to idle.
 
 ### displayLogicLevelsInEngineSniffer
 Shall we display real life signal or just the part consumed by trigger decoder.\nApplies to both trigger and cam/vvt input.
@@ -202,20 +196,11 @@ This sets the RPM limit below which the ECU will use cranking fuel and ignition 
 ### ignitionDwellForCrankingMs
 Dwell duration while cranking
 
+### etbRevLimitStart
+Once engine speed passes this value, start reducing ETB angle.
+
 ### etbRevLimitRange
-RPM below the hard RPM limit at which the ETB rev limiter PID starts managing throttle position. Below this window throttle control is normal.
-
-### etbRevLimitSeedTps
-Throttle position the ETB rev limiter PID seeds itself with as soon as it engages, so it starts near the right operating point instead of ramping up from zero.
-
-### etbRevLimitKp
-Proportional gain for the ETB rev limiter PID.
-
-### etbRevLimitKi
-Integral gain for the ETB rev limiter PID.
-
-### etbRevLimitKd
-Derivative gain for the ETB rev limiter PID.
+This far above 'Soft limiter start', fully close the throttle. At the bottom of the range, throttle control is normal. At the top of the range, the throttle is fully closed.
 
 ### map.sensor.lowValue
 kPa/psi value at low volts
@@ -352,12 +337,6 @@ null
 ### disableFan2AtSpeed
 null
 
-### disableFan1AtSpeedHysteresis
-Hysteresis below the disable-at-speed threshold before the fan is allowed back on. Prevents rapid on/off cycling at the threshold speed.
-
-### disableFan2AtSpeedHysteresis
-Hysteresis below the disable-at-speed threshold before the fan is allowed back on. Prevents rapid on/off cycling at the threshold speed.
-
 ### disableFan1WhenStopped
 Inhibit operation of this fan while the engine is not running.
 
@@ -478,30 +457,6 @@ Set this so your vehicle speed signal is responsive, but not noisy. Larger value
 ### vssToothCount
 Number of pulses output per revolution of the shaft where your VSS is mounted. For example, GM applications of the T56 output 17 pulses per revolution of the transmission output shaft.
 
-### vssMaxAcceleration
-Reject VSS pulses that imply a faster acceleration or deceleration than this, and dead-reckon speed from the last known rate of change instead. Helps reject a single noisy tooth. Set to 0 to disable.
-
-### fuelPumpControl.pFactor
-
-
-### fuelPumpControl.iFactor
-
-
-### fuelPumpControl.dFactor
-
-
-### fuelPumpControl.offset
-Linear addition to PID logic\nAlso known as feedforward.
-
-### fuelPumpControl.periodMs
-PID dTime
-
-### fuelPumpControl.minValue
-Output Min Duty Cycle
-
-### fuelPumpControl.maxValue
-Output Max Duty Cycle
-
 ### gapVvtTrackingLengthOverride
 How many consecutive VVT gap rations have to match expected ranges for sync to happen
 
@@ -563,7 +518,7 @@ CAN broadcast using custom rusEFI protocol
 
 
 ### measureMapOnlyInOneCylinder
-Useful for individual intakes
+Sample MAP during only one cylinder's intake per engine cycle instead of every cylinder.\nEnable for individual throttle bodies, where the MAP sensor reads a single runner with its own pressure pulses. Leave disabled for a shared plenum or single throttle so every intake event is averaged together for a smoother reading.
 
 ### stepperForceParkingEveryRestart
 
@@ -611,7 +566,7 @@ AEM X-Series or rusEFI Wideband
 
 
 ### idleReturnTargetRamp
-Ramp the idle target down from the entry threshold over N seconds when returning to idle. Helps prevent overshooting (below) the idle target while returning to idle from coasting.
+When returning to idle from coasting, start the closed-loop RPM target elevated by the 'RPM upper limit' idle detection threshold, then ramp it down to the normal target over the 'Ramp target duration'. Helps prevent RPM from dipping below the idle target on return to idle.
 
 ### useInjectorFlowLinearizationTable
 
@@ -757,9 +712,6 @@ Maximum time to crank starter when start/stop button is pressed
 ### lambdaProtectionTimeout
 Only respond once lambda is out of range for this period of time. Use to avoid transients triggering lambda protection when not needed
 
-### disableLaunchWithClutchUp
-When Launch Control is NOT activated by Clutch Up, use the Clutch Up switch to positively confirm the clutch has been released and disable launch.
-
 ### boostPid.pFactor
 
 
@@ -904,9 +856,6 @@ Treat milliseconds value as duty cycle value, i.e. 0.5ms would become 50%
 ### isAlternatorControlEnabled
 This enables smart alternator control and activates the extra alternator settings.
 
-### alternatorBaseDutyUseTable
-Select base duty source: a 2D table (indexed by target voltage and RPM) or the legacy scalar offset in the PID settings.
-
 ### invertPrimaryTriggerSignal
 https://wiki.rusefi.com/Trigger-Configuration-Guide\nThis setting flips the signal from the primary engine speed sensor.
 
@@ -960,6 +909,9 @@ When enabled if TPS is held above 95% no fuel is injected while cranking to clea
 
 ### complexWallModel
 Should we use tables to vary tau/beta based on CLT/MAP, or just with fixed values?
+
+### alwaysInstantRpm
+RPM is measured based on last 720 degrees while instant RPM is measured based on the last 90 degrees of crank revolution
 
 ### isMapAveragingEnabled
 
@@ -1054,17 +1006,14 @@ Also require MAP at/above this to start logging (0 = ignore)
 ### sdLogMinVss
 Also require vehicle speed at/above this to start logging (0 = ignore)
 
-### rpmRateSmoothingPct
-Only used by First Order RPM mode. Smoothing applied to the RPM rate of change (the slope used to extrapolate RPM between cycles) each engine cycle. 0% = fully raw: the slope is replaced by the latest cycle-to-cycle measurement every cycle (most responsive, but cycle-to-cycle combustion/measurement noise passes straight through). Higher % blends in more of the previous slope, smoothing that noise out at the cost of slower response to genuine acceleration/deceleration. Capped at 95%: at 100% the slope would never incorporate a new measurement and would freeze permanently.
-
 ### engineChartSize
 
 
 ### turboSpeedSensorMultiplier
 
 
-### acIdleRpmAdder
-RPM added on top of the normal CLT-based idle target while A/C is enabled. Some cars need the extra speed to keep the AC efficient while idling.
+### acIdleRpmTarget
+Idle target speed when A/C is enabled. Some cars need the extra speed to keep the AC efficient while idling.
 
 ### warningPeriod
 set warningPeriod X
@@ -1222,9 +1171,6 @@ global_can_data performance hack
 ### useHardSkipInTraction
 
 
-### tractionControlUseLuaGauge
-Use a Lua gauge as a traction control multiplier input
-
 ### useAuxSpeedForSlipRatio
 Use Aux Speed 1 as one of speeds for wheel slip ratio?
 
@@ -1249,8 +1195,8 @@ AEM X-Series EGT gauge kit or rusEFI EGT sensor from Wideband controller
 ### devBit01
 
 
-### tcuInputSpeedSensorSharedWithVss
-Input speed sensor is the same physical sensor as the main VSS
+### devBit0
+
 
 ### devBit1
 
@@ -1295,7 +1241,7 @@ Above this speed, allow DFCO. Use this to prevent jerkiness from fuel enable/dis
 Maximum change delta of TPS percentage over the 'length'. Actual TPS change has to be above this value in order for TPS/TPS acceleration to kick in.
 
 ### totalGearsCount
-Number of forward gears, shared by GearDetector (any count) and the TCU's Automatic mode (currently hardcoded to a 4-gear GEAR_1..GEAR_4 state machine, 5-10 gear support planned for a future release). Configured together with the per-gear ratios in the Speed Sensor dialog.
+
 
 ### fan1ExtraIdle
 Additional idle % when fan #1 is active
@@ -1482,18 +1428,6 @@ Use to limit the max.current through the stepper motor (100% = no limit)
 
 ### vvtControlMinClt
 Minimum coolant temperature to activate VVT
-
-### vvtIntake_iTermMin
-VVT intake cam PID: iTerm min value
-
-### vvtIntake_iTermMax
-VVT intake cam PID: iTerm max value
-
-### vvtExhaust_iTermMin
-VVT exhaust cam PID: iTerm min value
-
-### vvtExhaust_iTermMax
-VVT exhaust cam PID: iTerm max value
 
 ### oilPressure.v1
 
@@ -1807,9 +1741,6 @@ Degrees of timing REMOVED from actual timing during soft RPM limit window
 ### rpmHardLimitHyst
 Sets a buffer below the RPM hard limit, helping avoid rapid cycling of cut actions by defining a range within which RPM must drop before cut actions are re-enabled.\nHysterisis: if the hard limit is 7200rpm and rpmHardLimitHyst is 200rpm, then when the ECU sees 7200rpm, fuel/ign will cut, and stay cut until 7000rpm (7200-200) is reached
 
-### rpmSoftLimitRange
-Width of the RPM window below the RPM hard limit over which the Soft RPM Limit's timing retard and fuel added ramp from zero up to their full configured value at the hard limit. Independent of RPM limit hysteresis, which only controls when cut actions re-enable.
-
 ### benchTestOffTime
 Time between bench test pulses
 
@@ -1912,62 +1843,11 @@ Pull-up resistor value on your board
 ### compressorDischargeTemperature.config.bias_resistor
 Pull-up resistor value on your board
 
-### chtSensor.config.tempC_1
-
-
-### chtSensor.config.tempC_2
-
-
-### chtSensor.config.tempC_3
-
-
-### chtSensor.config.resistance_1
-
-
-### chtSensor.config.resistance_2
-
-
-### chtSensor.config.resistance_3
-
-
-### chtSensor.config.bias_resistor
-Pull-up resistor value on your board
-
-### eotEstK0
-EOT-from-CHT/IAT estimation: base delta. The head/block runs this many deg C hotter than the oil at zero IAT influence.
-
-### eotEstK1
-EOT-from-CHT/IAT estimation: CHT coefficient. This fraction of the current CHT reading is added to the delta (hotter head = harder to reject heat into the oil).
-
-### eotEstK2
-EOT-from-CHT/IAT estimation: IAT coefficient. Additional deg C of delta per deg C of intake air temperature (cooler incoming air increases the delta).
-
-### eotEstK3
-EOT-from-CHT/IAT estimation: oil pressure coefficient. Additional deg C of delta per kPa of oil pressure. Higher pressure means more oil flow and better convective heat transfer, typically shrinking the delta (negative value).
-
-### eotEstTauHeat
-EOT-from-CHT/IAT estimation: heating time factor in seconds. Short blips barely register while sustained load integrates fully.
-
-### eotEstTauCool
-EOT-from-CHT/IAT estimation: cooling time factor in seconds. How long it takes for the delta to decay after load drops. Usually longer than heating because oil retains heat after load disappears.
-
-### eotEstFallbackEot
-Fallback EOT value used when the CHT sensor or oil pressure reads invalid.
-
-### pad_eot_reserved
-
-
 ### speedometerPulsePerKm
 Number of speedometer pulses per kilometer travelled.
 
 ### ignKeyAdcDivider
 null
-
-### tractionControlHoldTime
-Traction control hold time. When traction control is active, the peak drop values are held for this duration.
-
-### tractionControlDecayTime
-Traction control decay time. After the hold time expires, values decay back to the current table value over this duration.
 
 ### maxInjectorDutyInstant
 This sets an immediate limit on injector duty cycle. If this threshold is reached, the system will immediately cut the injectors.
@@ -2016,18 +1896,6 @@ value of A/C pressure in kPa/psi before that compressor is disengaged
 
 ### maxAcPressure
 value of A/C pressure in kPa/psi after that compressor is disengaged
-
-### clutchPressure.v1
-
-
-### clutchPressure.value1
-
-
-### clutchPressure.v2
-
-
-### clutchPressure.value2
-
 
 ### minimumOilPressureTimeout
 Delay before cutting fuel due to low oil pressure. Use this to ignore short pressure blips and sensor noise.
@@ -2086,47 +1954,8 @@ This is the pressure at which your injector flow is known.\nFor example if your 
 ### vvlControlEnabled
 
 
-### exhaustCutoutEnabled
-
-
-### exhaustCutoutShowOpenState
-
-
-### exhaustCutoutInvertedOutput
-
-
-### exhaustCutoutKeyOnTestEnabled
-
-
-### exhaustCutoutEngineOnTestEnabled
-
-
-### useEngineStateMachine
-Centralized Engine State Machine. When enabled, state detection is driven by a single priority-ordered evaluator. When disabled, each controller manages its own state detection.
-
-### cdvControlEnabled
-
-
-### cdvUseClutchExit
-Deactivate CDV solenoid when clutch pedal is released
-
-### luaLimiterEnabled
-
-
-### cdvSmartMode
-Clutch Delay Valve activation mode. Simple: activate on launch/pre-launch entry. Smart: also require clutch pressure to be inside the configured window (cdvSmartMinPressure/cdvSmartMaxPressure) before activating, and deactivate immediately on leaving the window.
-
-### cutEtbOnRpmLimit
-Uses Electronic Throttle Limiting (a PID) to try to hold engine RPM about 50rpm below the hard RPM limit, instead of (or in addition to) cutting fuel/spark at the limit. This is a real distinction from the hard RPM limit: the hard limit only cuts, while this tries to actively manage throttle to stay just under it.
-
-### coastingFuelCutRequiresGear
-When enabled, overrun fuel cut will not engage while the transmission is in neutral (DetectedGear sensor reads neutral).\nRequires the gear ratio table (Total Gear Count / gear ratios) to be configured: if it is not set up, the detected gear always reads neutral and fuel cut will never engage.
-
-### eotFromIatCht
-Use CHT/IAT sensors to estimate oil temperature (EOT) via first-order thermal model. Disable if a real oil temp sensor is wired.
-
-### primeOnTriggerTeeth
-When enabled, the priming pulse fires after 'primingTriggerTeeth' raw primary trigger teeth are seen since ignition-on, instead of after the fixed 'primingDelay'. Tooth counting does not require trigger sync, and (like the fixed-delay mode) the pulse still only fires once per key cycle.
+### keepIdleSolenoidWhenStopped
+By default the idle solenoid is switched off whenever the engine is not turning, to be quieter and save power. Enable this to keep driving it to the position the idle controller asks for, which at zero RPM is the cranking curve for the current coolant temperature - for valves which need to rest somewhere other than de-energized. The valve is only driven for a minute after the engine stops turning, then switched off anyway to protect the coil and the battery.
 
 ### nitrousLuaGaugeArmingValue
 
@@ -2188,6 +2017,9 @@ Compensates for trigger delay due to belt stretch, or other electromechanical is
 ### maxOilPressureTimeout
 Delay before cutting fuel due to extra high oil pressure. Use this to ignore short pressure blips and sensor noise.
 
+### idleReturnTargetRampDuration
+Time for the idle RPM target to ramp down from the elevated return-to-idle value (normal target + 'RPM upper limit') to the normal target. Longer duration gives a gentler, slower settle to idle. Only used when 'Ramp target on return to idle' is enabled.
+
 ### wastegatePositionOpenedVoltage
 Voltage when the wastegate is fully open
 
@@ -2239,8 +2071,41 @@ Rotational Idle Auto engage CLT.
 ### launchRpmThreshold
 Launch RPM Threshold: when above 0, launch only engages if the activation switch (button/clutch) is pressed at or below this RPM, and stays latched while held - even past this RPM. This lets a standing launch (switch pressed low, revved up) coexist with flat shift / torque reduction (switch blipped high during an upshift). 0 disables the gate (legacy behavior).
 
-### popsAndBangsEnabled
-Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce turbocharger life.
+### misfireDetectionEnabled
+Misfire Detection: master enable. Active at idle only. Latches check-engine light (P0300) once the count threshold is reached.
+
+### misfireConsecutiveCount
+Misfire Detection: minimum flagged firings within the recent-firings window before a misfire is counted.
+
+### misfireWindowFirings
+Misfire Detection: sliding window size in firings across all cylinders.
+
+### misfireCountThreshold
+Misfire Detection: total counted misfires before the MIL latches. 0 = monitor-only.
+
+### misfireK
+Misfire Detection: threshold multiplier (baseline + K * wobble). Default 3.0.
+
+### misfireWindowStart
+Misfire Detection: window start, degrees after each cylinder's TDC.
+
+### misfireWindowEnd
+Misfire Detection: window end, degrees after each cylinder's TDC.
+
+### misfireEmaAlphaDecel
+Misfire Detection: EMA alpha when segment is slowing (above baseline).
+
+### misfireEmaAlphaAccel
+Misfire Detection: EMA alpha when segment is recovering (below baseline).
+
+### misfireWobbleAlphaRise
+Misfire Detection: wobble EMA alpha when spread is increasing.
+
+### misfireWobbleAlphaFall
+Misfire Detection: wobble EMA alpha when spread is decreasing.
+
+### misfireSettleCycles
+Misfire Detection: firings to wait after entering idle before flagging starts. 0 = immediate.
 
 ### dwellDutyModeEnabled
 Dwell Duty Mode: when enabled, ignores the RPM/voltage dwell tables and computes dwell as a fixed percentage of the time between consecutive ignition pulses. Required for Ford TFI modules that expect a 50% duty cycle square wave.
@@ -2250,12 +2115,6 @@ Dwell Duty Mode: percentage of the inter-spark interval used as coil dwell time.
 
 ### tcu_shiftTime
 
-
-### tcuIdleShiftToFirstEnabled
-
-
-### tcuIdleShiftToFirstMaxVss
-Idle-shift VSS threshold. A value of 0 disables the speed check entirely, so only the idle RPM/TPS condition is required.
 
 ### cel_battery_min_v
 "Minimum Battery Voltage"

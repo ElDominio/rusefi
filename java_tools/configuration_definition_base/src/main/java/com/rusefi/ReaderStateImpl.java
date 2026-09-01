@@ -426,9 +426,14 @@ public class ReaderStateImpl implements ReaderState {
                 }
                 templateArgs = new LinkedHashMap<>();
                 for (int i = 0; i < templateParams.size(); i++) {
-                    String rawArg = argValues[i];
-                    String resolved = state.getVariableRegistry().get(rawArg);
-                    templateArgs.put(templateParams.get(i), resolved != null ? resolved : rawArg);
+                    String argValue = argValues[i];
+                    // a macro NAME argument (e.g. blend_table_s<BLEND_PRECISION>) must become its
+                    // #define value here, before substitution bakes it into tsInfo verbatim
+                    String resolved = state.variableRegistry.get(argValue);
+                    if (resolved != null) {
+                        argValue = resolved;
+                    }
+                    templateArgs.put(templateParams.get(i), argValue);
                 }
 
                 String instanceName = baseTypeName + "_" + typeName.substring(bracketStart + 1, typeName.length() - 1)

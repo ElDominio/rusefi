@@ -283,6 +283,21 @@ bool applyDefaultsOrFixAfterBurn(const engine_configuration_s* previousConfigura
 		engineConfiguration->rpmSoftLimitRange = engineConfiguration->rpmHardLimitHyst;
 	}
 
+	if (engineConfiguration->fan1PwmFrequency == 0) {
+        engineConfiguration->fan1PwmFrequency = 250;
+        changed = true;
+    }
+
+    if (engineConfiguration->fan2PwmFrequency == 0) {
+        engineConfiguration->fan2PwmFrequency = 250;
+        changed = true;
+    }
+
+	if (engineConfiguration->vvtControlMinRpm < engineConfiguration->cranking.rpm) {
+		engineConfiguration->vvtControlMinRpm = engineConfiguration->cranking.rpm;
+		changed = true;
+	}
+
 
 	// Conditional SD logging: seed sensible start/stop/delay for tunes that predate the
 	// feature (a zero start RPM means it was never configured), so enabling conditional
