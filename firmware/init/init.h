@@ -32,6 +32,7 @@ void initThermistors();
 // Live measured resistance of a thermistor-type temperature sensor, in ohms. 0 if unavailable.
 float getThermistorResistance(SensorType type);
 void initCanSensors();
+void initExternalCanEtbSensors();
 void initLambda();
 void initEgt();
 void initFlexSensor(bool isFirstTime);

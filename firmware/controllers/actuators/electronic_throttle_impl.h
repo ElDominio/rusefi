@@ -15,6 +15,7 @@
 #include "error_accumulator.h"
 #include "electronic_throttle_generated.h"
 #include "tunerstudio_calibration_channel.h"
+#include "can_etb.h"
 
 /**
  * Hard code ETB update speed.
@@ -75,6 +76,10 @@ public:
 
 	bool isEtbMode() const override {
 		return m_function == DC_Throttle1 || m_function == DC_Throttle2;
+	}
+
+	bool isEtbFaulted() const override {
+		return etbErrorCode != (int8_t)EtbStatus::None;
 	}
 
 	// Lua throttle adjustment
@@ -184,6 +189,10 @@ public:
 	template <typename... TArgs>
 	EtbImpl(TArgs&&... args) : TBase(std::forward<TArgs>(args)...) { }
 
+	bool isAutocalOrBenchTestActive() const override {
+		return m_benchTestActive || m_autocalPhase != ACPhase::Stopped;
+	}
+
 	void update() override {
 #if EFI_TUNER_STUDIO
 		if (m_benchTestActive) {
@@ -236,7 +245,93 @@ public:
 		}
 	}
 
+	// External CAN ETB (RUSEFI_SIDE_TODO.md #3.2/#6): the board's TPS is a single already-CANsensed
+	// channel with no local Volts to read, and its raw ADC (needed to determine calibration
+	// endpoints) arrives via ETB_RAW, not a local ADC subscription - so the normal doAutocal()'s
+	// Sensor::getRaw(Tps1Primary/Secondary) + Volts-based engineConfiguration->tpsMin/tpsMax writes
+	// don't apply. This mirrors doAutocal()'s Start/Open/Close shape and 1000ms dwell exactly (that
+	// timing is a fixed sweep, not a latency-sensitive detector - see the file's own comment above
+	// on why 10Hz remote telemetry doesn't need special handling here), but captures from
+	// getExternalEtbRawTps() and finishes by transmitting ETB_CAL_TPS instead of writing local
+	// config or driving the TS calibration-wizard's Volts-shaped Transmit* phases.
+	ACPhase doAutocalExternalCan(ACPhase phase) {
+		if (Sensor::getOrZero(SensorType::Rpm) > 0) {
+			efiPrintf(" ****************** ERROR: Not while RPM ********************");
+			return ACPhase::Stopped;
+		}
+
+		auto motor = TBase::getMotor();
+		if (!motor) {
+			efiPrintf(" ****************** ERROR: No DC motor ********************");
+			return ACPhase::Stopped;
+		}
+
+		TBase::etbErrorCode = (uint8_t)EtbStatus::AutoCalibrate;
+
+		switch (phase) {
+		case ACPhase::Start:
+			motor->set(0.5f);
+			motor->enable();
+			return ACPhase::Open;
+		case ACPhase::Open:
+			if (m_autocalTimer.hasElapsedMs(1000)) {
+				uint16_t tps1, tpsB;
+				if (getExternalEtbRawTps(tps1, tpsB)) {
+					// repurposing the Volts-typed members to hold raw ADC counts (0-4095) for this
+					// branch only - see the comment above doAutocalExternalCan()
+					m_primaryMax = tps1;
+					m_secondaryMax = tpsB;
+				}
+				motor->set(-0.5f);
+				return ACPhase::Close;
+			}
+			break;
+		case ACPhase::Close:
+			if (m_autocalTimer.hasElapsedMs(1000)) {
+				uint16_t tps1, tpsB;
+				if (getExternalEtbRawTps(tps1, tpsB)) {
+					m_primaryMin = tps1;
+					m_secondaryMin = tpsB;
+				}
+				motor->disable("autotune");
+
+				// placeholder threshold pending real bench validation (no hardware available in
+				// this pass) - analogous to the local path's 0.5V minimum swing, in raw-ADC terms
+				if (std::abs(m_primaryMax - m_primaryMin) < 50) {
+					firmwareError(ObdCode::OBD_TPS_Configuration,
+						"External CAN ETB auto calibrate failed - raw TPS1 barely moved (min %.0f max %.0f), check the board's TPS wiring",
+						m_primaryMin, m_primaryMax);
+					return ACPhase::Stopped;
+				}
+
+				// Persisted (not just transmitted once): the board doesn't remember calibration
+				// across its own reset (can_command_state_init_defaults() re-defaults it every
+				// boot, external-etb/firmware/src/main.c), so this needs to survive here and get
+				// re-sent periodically (can_tx.cpp's sendExternalEtbCalibration()) for that case.
+				engineConfiguration->canEtbTps1RawMin = (uint16_t)m_primaryMin;
+				engineConfiguration->canEtbTps1RawMax = (uint16_t)m_primaryMax;
+				engineConfiguration->canEtbTpsBRawMin = (uint16_t)m_secondaryMin;
+				engineConfiguration->canEtbTpsBRawMax = (uint16_t)m_secondaryMax;
+
+				sendExternalEtbCalTps((uint16_t)m_primaryMin, (uint16_t)m_primaryMax,
+					(uint16_t)m_secondaryMin, (uint16_t)m_secondaryMax);
+				efiPrintf("External CAN ETB auto calibrate done: TPS1 raw %.0f..%.0f, TPSB raw %.0f..%.0f",
+					m_primaryMin, m_primaryMax, m_secondaryMin, m_secondaryMax);
+				return ACPhase::Stopped;
+			}
+			break;
+		default:
+			return ACPhase::Stopped;
+		}
+
+		return phase;
+	}
+
 	ACPhase doAutocal(ACPhase phase) {
+		if (TBase::isEtbMode() && engineConfiguration->enableExternalCanEtb) {
+			return doAutocalExternalCan(phase);
+		}
+
 		// Don't allow if engine is running!
 		if (Sensor::getOrZero(SensorType::Rpm) > 0) {
 			efiPrintf(" ****************** ERROR: Not while RPM ********************");

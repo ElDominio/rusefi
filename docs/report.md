@@ -3678,3 +3678,553 @@ Validation:
 Open follow-ups:
 - `unit_tests/mocks.cpp:38` still trips GCC 16's `-Wmaybe-uninitialized`; only
   a local concern until CI moves to that compiler (see previous entry).
+
+## 2026-09-01 - External CAN ETB controller: step 1, TPS1/TPS2 CanSensor wiring
+
+What was done:
+- New branch `external-etb-can-controller` off `alphax-beta`, implementing
+  `../../external-etb/rusefi/RUSEFI_SIDE_TODO.md` on the rusEFI side (that doc
+  covers what the external CH32V203-based ETB controller board needs from
+  rusEFI; nothing on this side existed before this branch).
+- Step 7.1 of that doc (architecture decisions before code):
+  - Setpoint exposure decision: deferred to when the gains/target TX (doc
+    #3.1) is implemented - not needed for this step.
+  - Coexistence decision (normal vs autocal CAN paths racing the board):
+    deferred to the same later step for the same reason.
+- Step 7.2: wired `SensorType::Tps1`/`Tps2` to the board's `ETB_STATUS`
+  (`0x300`) CAN frame via `CanSensor<int16_t, PACK_MULT_PERCENT>`, following
+  the `AemXSeriesLambda`/`init_lambda.cpp` pattern referenced in
+  `can_rx.cpp`'s "see AemXSeriesWideband as an example" comment.
+  - `firmware/controllers/can/can_etb.h` (new): mirrors the board's
+    `external-etb/firmware/src/can_bus.h` CAN IDs and byte offsets for all 8
+    frames (not just `ETB_STATUS`) so the later TX/RX steps in the TODO doc's
+    build order don't have to re-derive them. No shared codegen between the
+    two repos - has to be kept in sync by hand.
+  - `firmware/init/sensor/init_etb_can.cpp` (new): two module-scope
+    `CanSensor` instances at `ETB_STATUS` offsets 2/4, registered via
+    `registerCanSensor()` only when the new `enableExternalCanEtb` config bit
+    is set. Timeout set to 3x the board's documented 10Hz telemetry rate
+    (300ms), matching `AemXSeriesLambda`'s `3 * WBO_TX_PERIOD_MS` margin.
+  - `rusefi_config.txt`: repurposed `unusedBit_Fancy21` (the reserved-bit
+    region CLAUDE.md documents for exactly this - no `FLASH_DATA_VERSION`
+    bump needed) into `enableExternalCanEtb`.
+  - Hooked into `initNewSensors()` (`init_sensors.cpp`) via a new
+    `initExternalCanEtbSensors()` declared in `init.h`, added to
+    `init.mk`'s `INIT_SRC_CPP`.
+
+Key decisions and why:
+- No change to `init_tps.cpp`'s local-ADC TPS init path. Local TPS1/TPS2
+  registration there is naturally skipped when its ADC channel is
+  unconfigured (`isAdcChannelValid()` check in `LinearSensorUnit::configure`)
+  - exactly the precondition a board using the external CAN ETB would already
+  meet (no local TPS wiring). Registering both the local and CAN sensor for
+  the same `SensorType` would hit `sensor.cpp`'s "Duplicate registration"
+  `firmwareError`, so this constraint is called out in `init_etb_can.cpp`'s
+  file comment rather than enforced in code - same as how `obdTpsSensor` in
+  `init_can_sensors.cpp` already relies on it unstated.
+- Gated on `EFI_CAN_SUPPORT` only (not `EFI_PROD_CODE && EFI_CAN_SUPPORT` like
+  `initCanSensors()`), so this also builds/works in the simulator - matches
+  `initLambda()`'s gating, since bench-testing over CAN without real ECU
+  hardware is a plausible use case here too.
+- Base CAN ID (`0x300`) kept as-is even though the TODO doc's #5.1 flags it as
+  an unconfirmed placeholder - renumbering needs coordination with the board
+  repo and isn't blocking this step; `can_etb.h`'s header comment repeats the
+  warning so it isn't lost.
+
+Validation:
+- `unit_tests`: `make -j12` - `init_etb_can.o` builds clean (also exercises
+  the `rusefi_config.txt` bit rename through full config codegen). One
+  pre-existing, unrelated failure surfaced in the same run:
+  `test_real_kawasaki_8_minus_1.cpp` references a config field
+  (`alwaysInstantRpm`) that no longer exists anywhere in `rusefi_config.txt`
+  on this branch (superseded by `rpmUpdateMode` per `07024f4c3b`); confirmed
+  pre-existing on `alphax-beta` before this branch's changes, not touched.
+- No hardware available in this session - RX decode path (scaling, offsets)
+  verified by reading against the board's `can_bus.c::can_tx_status()`
+  implementation, not bench-tested against a live board.
+
+Open follow-ups (rest of the TODO doc's build order, `RUSEFI_SIDE_TODO.md` #7):
+- `ETB_PID_STATUS` -> `outputChannels.etbStatus` wiring (step 3).
+- Gains/target TX + the two deferred architecture decisions above (step 4).
+- `CanDcMotor`/`CanSensor` pairing for autocal/bench test (step 5).
+- Endpoint-detection adaptation for `autoCalibrateTps()` (step 6).
+- Fault/plausibility wiring once the sensor path is confirmed working on
+  real hardware (step 7).
+- Real CAN ID negotiation with the board side before this is more than a
+  bench experiment (TODO doc #5.1).
+
+## 2026-09-01 - External CAN ETB controller: TS enable flag + local h-bridge/redundancy bypass
+
+What was done:
+- User request: a single enable/disable flag in the ETB actuator settings
+  panel that (1) tells rusEFI a throttle is driven by the external CAN ETB
+  board so local h-bridge wiring and dual-TPS redundancy aren't required,
+  (2) keeps that from tripping rusEFI's critical errors, and (3) explicitly
+  stops the local closed-loop path from doing anything for that throttle.
+  Reused `enableExternalCanEtb` (added in the previous entry, currently only
+  gating the `CanSensor` RX wiring) as the single flag for all of this.
+- `electronic_throttle.cpp` (`EtbController::init()`): when
+  `isEtbMode() && engineConfiguration->enableExternalCanEtb`, the existing
+  `!isBoardAllowingLackOfPps() && !Sensor::isRedundant(m_positionSensor)`
+  redundancy check is skipped (the CAN-sourced single TPS reading is
+  authoritative on its own, same reasoning as `isBoardAllowingLackOfPps()`
+  already gives per-board), and `m_motor` is forced to `nullptr` regardless
+  of what `motor` the caller passed in.
+- `tunerstudio.template.ini`: added the `enableExternalCanEtb` checkbox to
+  `etbDialogBase` ("Base ETB settings" - the actuator settings panel), and
+  hid `pauseEtbControl`/`etbFreq` (local-motor-only settings) and the
+  TPS-calibration/bench-test/autotune panels (`etbTps1Calib`, `etbTps2Calib`,
+  `etbAutotune` - all drive the local motor directly) behind
+  `!enableExternalCanEtb`. Left the PID dialog (`etbPidDialog`) visible: its
+  `engineConfiguration->etb` gains are still needed as the future source for
+  the not-yet-built `ETB_GAINS_1/2` CAN TX (TODO doc #3.1/step 4), even
+  though `EtbController`'s own PID never runs against them for this throttle.
+
+Key decisions and why:
+- Chose "null out `m_motor`" over adding a new state/early-return in
+  `update()`. `update()` (`electronic_throttle.cpp:788`, guarded
+  `#if !EFI_UNIT_TEST`) already fail-fasts on a null motor before running any
+  local PID math, `setOutput()` (`:679`) already no-ops on null motor instead
+  of touching pins, and both `startBenchTest()`/`doAutocal()`
+  (`electronic_throttle_impl.h`) already null-check `getMotor()` and print an
+  informative message instead of crashing. One null pointer reuses three
+  already-correct existing guards instead of adding new ones - this *is*
+  "explicitly shuts down on-board ETB operability", not a side effect of it.
+- Did not change `doInitElectronicThrottle()`'s unconditional `initDcMotor()`
+  call. It's harmless (unassigned/misconfigured h-bridge pins are already a
+  no-op via the standard `OutputPin::initPin()`/PWM-on-unassigned-pin path)
+  and nulling `m_motor` inside `EtbController::init()` already means whatever
+  `initDcMotor()` returns is discarded for this throttle - so "don't have to
+  worry about hbridges wired locally" holds without touching that call.
+- Guarded the new `engineConfiguration->enableExternalCanEtb` read with
+  `#if !EFI_UNIT_TEST`, matching the existing `iTermMin`/`iTermMax` read a few
+  lines below it in the same function. Necessary, not just stylistic: caught
+  by `etb.initializationNotRedundantTps` (`test_etb.cpp:187`) via
+  AddressSanitizer SEGV - that test constructs `EtbController` directly
+  without an `EngineTestHelper`, leaving the global `engineConfiguration`
+  pointer null, and the first version of this change dereferenced it
+  unconditionally.
+- TS ini gotcha hit while adding the conditions: `field = "X", someBit@@if_flag, { cond }`
+  fails config codegen (`Malformed @@if_ condition: token [...] is not a
+  plain identifier ... separate the token from following syntax with
+  whitespace`, `TSProjectConsumer.getToken()`) because `@@if_` reads
+  everything up to the next whitespace as the flag name, swallowing the
+  trailing comma. Existing usages in this file always put `@@if_flag` last on
+  the line, after any `{ }` condition (e.g. `firmware/tunerstudio/tunerstudio.template.ini:4528`)
+  - followed that ordering instead.
+
+Validation:
+- `unit_tests`: config regenerates cleanly (bit description length is fine -
+  the 34-char gauge-name cap from CLAUDE.md applies to LiveData comments, not
+  config bit descriptions, and this isn't a LiveData field). Full suite
+  (`./build/rusefi_test`, no filter): 1493/1493 passed, including all 45 `etb`
+  tests and 5 `DcHardwarePool` tests - the SEGV above was caught and fixed
+  before this run.
+  - Getting a linkable binary required temporarily neutralizing the
+    pre-existing, unrelated `test_real_kawasaki_8_minus_1.cpp` failure from
+    the previous entry (commented the offending line, ran the suite, then
+    `git checkout --` on that one file to restore it exactly - confirmed
+    clean via `git status`/`git diff --stat` before and after). That file is
+    otherwise untouched by this branch.
+- No hardware available - same caveat as the previous entry; this step is
+  config/init-path logic only, doesn't touch the CAN wire format.
+
+Open follow-ups: unchanged from the previous entry's list (`RUSEFI_SIDE_TODO.md`
+#7 steps 3-7), plus:
+- `test_real_kawasaki_8_minus_1.cpp`'s `alwaysInstantRpm` breakage (superseded
+  by `rpmUpdateMode` per `07024f4c3b`) is still unfixed on this branch -
+  out of scope for this work, flagging again since it currently blocks
+  `make`'s link step for anyone running the full suite on `alphax-beta`.
+
+## 2026-09-01 - External CAN ETB controller: step 3, ETB_PID_STATUS -> outputChannels.etbStatus
+
+What was done:
+- `RUSEFI_SIDE_TODO.md` #7 step 3: wired `ETB_PID_STATUS`'s iTerm/dTerm, and
+  `ETB_STATUS`'s actualDuty, into `engine->outputChannels.etbStatus` - the
+  same `pid_status_s` struct `Pid::postState()` (`efi_pid.cpp:152`) writes
+  for a *local* PID loop, populated here from the board's own reported terms
+  instead, since there's no live local `Pid` instance for this throttle.
+- Extended `firmware/init/sensor/init_etb_can.cpp` (rather than a new file -
+  the TODO doc's own #3.1 groups all of this RX wiring into one
+  "init_etb_can.cpp-style file") with two plain `CanListener` subclasses,
+  registered via `registerCanListener()` only when `enableExternalCanEtb` is
+  set, same gating as the existing `CanSensor` registrations:
+  - `EtbCanDutyListener` on `CAN_ID_ETB_STATUS` (0x300), reading the duty
+    field (offset 6, `scaled_channel<int16_t, 10000>`, -1.0..+1.0) and
+    writing `outputChannels.etbStatus.output = duty * 100.0f` - percent,
+    matching the space `Pid::postState()`'s `output` field is already in
+    (the inverse of `ETB_PERCENT_TO_DUTY()`).
+  - `EtbCanPidStatusListener` on `CAN_ID_ETB_PID_STATUS` (0x301), reading
+    iTerm/dTerm (offsets 0/2, `scaled_channel<int16_t, 100>`) straight into
+    the matching `outputChannels.etbStatus` fields, which are generated as
+    the identical `scaled_channel<int16_t, 100, 1>` type
+    (`output_channels_generated.h:15-19`) - the CAN wire encoding and the
+    in-memory struct encoding happen to use the same x100 int16 scale, so
+    decode and re-store round-trip exactly.
+  - `pTerm`/`error`/`resetCounter` are left at their default 0: the CH32
+    doesn't transmit them (`can_bus.c`'s `can_tx_pid_status()` only sends
+    iTerm/dTerm/current-sense/status/seq - no pTerm, since the board doesn't
+    track it as a separate term).
+- Confirmed (per the TODO doc's own "confirm this doesn't race" caveat) that
+  the new listeners are the *only* writer of `outputChannels.etbStatus` while
+  `enableExternalCanEtb` is on: the local writer,
+  `EtbController::checkStatus()`'s `m_pid.postState(...)` for `DC_Throttle1`,
+  is unreachable in that mode because `update()` (`electronic_throttle.cpp:788`)
+  fail-fasts on the null `m_motor` set in the previous entry's change, before
+  `checkStatus()` is ever called (`#if !EFI_UNIT_TEST` only - see that
+  entry's note on why unit tests can't rely on this guard).
+
+Key decisions and why:
+- Registered two listeners on the *same* `CAN_ID_ETB_STATUS` (0x300) as the
+  existing TPS `CanSensor`s (three listeners total on that ID) rather than
+  one combined class. `can_rx.cpp`'s `serviceCanSubscribers()` walks the
+  entire registered-listener list per received frame regardless, so this
+  costs nothing extra, and keeping the duty listener next to the PID-status
+  listener (both feed the same `etbStatus` struct) reads better than bolting
+  it onto the TPS `CanSensor`s (which feed unrelated `SensorType`s).
+- Followed the doc's literal `ETB_PID_STATUS's iTerm/dTerm/duty` wording only
+  partially: the actual wire format (`can_bus.c::can_tx_pid_status()`) has no
+  duty field on 0x301 - duty is `ETB_STATUS`'s (0x300) `actualDuty`. Read the
+  board's C source as authoritative over the doc's prose here; noting the
+  discrepancy in case the doc gets revised later.
+
+Validation:
+- `unit_tests`: `init_etb_can.cpp` builds clean. Full suite (same temporary
+  kawasaki-test neutralize/restore procedure as the previous two entries,
+  confirmed clean via `git status` after): 1493/1493 passed.
+- No hardware available - decode offsets/scales verified by reading
+  `can_bus.c`'s actual encode calls and the generated `pid_status_s` layout,
+  not bench-tested against a live board.
+
+Open follow-ups: unchanged (`RUSEFI_SIDE_TODO.md` #7 steps 4-7), plus the
+still-open `alwaysInstantRpm` breakage noted in the previous two entries.
+
+## 2026-09-02 - External CAN ETB controller: steps 4-7 (gains/target TX, autocal/bench over CAN)
+
+What was done (user asked to continue through the rest of `RUSEFI_SIDE_TODO.md`'s build order,
+#7 steps 4-7, in one pass):
+
+- **#5.2 setpoint exposure** (deferred decision from the first entry): went with option (a),
+  expose. `IEtbController` (`electronic_throttle.h`) now re-declares
+  `expected<percent_t> getSetpoint() override = 0;` and a new `isAutocalOrBenchTestActive()`/
+  `isEtbFaulted()` pair. `ClosedLoopController<percent_t,percent_t>::getSetpoint()`
+  (`closed_loop_controller.h`) is `private`; `EtbController::getSetpoint()` already overrode it
+  `public`, but that was only reachable through the concrete type - re-declaring it in the
+  interface (still pure, now `public`) makes it callable through `IEtbController*`, which is all
+  `engine->etbControllers[]` externally exposes. Verified this compiles and works via the full
+  test suite (private-virtual-overridden-by-a-more-accessible-derived-declaration is a legal,
+  if under-used, C++ pattern - same mechanism `EtbController` itself was already using one level
+  further down).
+- **#6 coexistence** (the other deferred decision): resolved by reading, not designed from
+  scratch - `EtbImpl<TBase>::update()` (`electronic_throttle_impl.h`) already never calls
+  `TBase::update()` (the local closed-loop tick) while `m_benchTestActive` or
+  `m_autocalPhase != Stopped`. Exposed that fact as `isAutocalOrBenchTestActive()` so the new
+  remote-CAN component can check it too, instead of building new suspension logic.
+- **Step 4, gains/target TX** (`can_etb_remote.cpp`, new file): `sendExternalEtbGains()`
+  (`ETB_GAINS_1`/`2`, `engineConfiguration->etb.pFactor/iFactor/dFactor/offset`, resent every
+  250ms) and `sendExternalEtbTarget()` (`ETB_TARGET` mode=Normal, resent every 20ms) called from
+  `can_tx.cpp`'s `CanWrite::PeriodicTask()`. Target comes from
+  `engine->etbControllers[0]->getSetpoint()` - the full blended value (idle, sport pedal, antilag,
+  pops-and-bangs, eco mode, quick warmup, traction control drop, per-throttle trim, downshift
+  blipper/upshift hold, rev limiter - all of `getSetpointEtb()`), computed exactly as it would be
+  for a local throttle, just never locally acted on.
+- **Step 5, bench-test/auto-calibrate over CAN**: `CanDcMotor` (`can_etb.h`/`can_etb_remote.cpp`)
+  - a `DcMotor` whose `set()`/`disable()` send `ETB_TARGET` with `mode=OpenLoop` instead of
+  driving PWM pins. `EtbController::init()` wires it in as `m_motor` for any external-CAN-ETB
+  throttle, which is what lets `startBenchTest()`/`doAutocal()` drive it via the *existing*
+  `DcMotor` interface with no changes to those two functions - confirms the TODO doc's own guess
+  that this piece "would actually work unmodified" for bench-test. Auto-calibrate needed real
+  adaptation despite that guess (see below): new `doAutocalExternalCan()`
+  (`electronic_throttle_impl.h`), reusing `doAutocal()`'s exact Start/Open/Close shape and 1000ms
+  dwell timing, but capturing raw ADC via `getExternalEtbRawTps()` (new `ETB_RAW` listener in
+  `init_etb_can.cpp`) instead of local Volts, and finishing with `sendExternalEtbCalTps()`
+  (`ETB_CAL_TPS`) instead of writing `engineConfiguration->tpsMin`/`tpsMax` or driving the TS
+  calibration wizard's Volts-shaped `Transmit*` phases.
+- **Step 6, endpoint-detection adaptation**: resolved by reading `doAutocal()`'s actual code, not
+  assumed. The TODO doc speculated a "current-spike/stall detection" mechanism that might not
+  transfer to 10Hz remote telemetry; the real mechanism is a fixed 1000ms dwell timer in each
+  direction - latency-tolerant by construction, no timing adaptation needed. The real adaptation
+  need was different from what the doc guessed: `doAutocal()` reads
+  `Sensor::getRaw(Tps1Primary/Secondary)` (local redundant-pair Volts) and writes
+  `engineConfiguration->tpsMin`/`tpsMax` (local ADC calibration) - neither applies to a
+  CAN-sourced single-reading TPS with board-side raw-ADC calibration (`ETB_CAL_TPS`), so the
+  branch had to swap both the capture source and the destination, not just tolerate latency.
+- **Step 7, fault/plausibility wiring**: found and fixed a real gap while wiring this up, not
+  purely "falls out for free" as the TODO doc hoped. `EtbController::update()`'s early return
+  (added in the previous entry) was originally placed *before* `checkStatus()`, which meant
+  `checkStatus()` - the function that updates `etbTpsErrorCounter`/`etbErrorCode`/limp-manager
+  interaction - never ran at all for an external-CAN-ETB throttle. Moved the early return to
+  *after* `checkStatus()` (skipping only the local-PID/motor-drive portion), so fault detection,
+  `etbErrorCode`, and dash indicators stay live using the CAN-backed sensor's own timeout-provided
+  invalidity - matching the doc's "ideally falls out of the existing path" hope, but it needed
+  this reordering to actually be true. Separately, `checkStatus()`'s `m_pid.postState(...)` call
+  (throttle 1 only) had to be skipped for external-CAN-ETB throttles: since `m_pid` never runs for
+  that throttle, it would post all-zero state over the CAN-sourced iTerm/dTerm the previous
+  entry's listener writes, every tick - this is exactly the race that entry's "confirm this
+  doesn't race" note flagged, caught and fixed in the same pass rather than left open.
+  `sendExternalEtbTarget()` checks the resulting `isEtbFaulted()` (and `pauseEtbControl`) and
+  simply stops sending `ETB_TARGET` when either is true - there is no "disable" value on the wire
+  (`can_bus.h`: silence is the fail-safe signal, the board's own staleness watchdog takes over).
+
+Mid-course correction (user interrupted to redirect): the first pass through steps 4-5 scoped all
+of this to `DC_Throttle1` only, reasoning that the wire protocol has one fixed base CAN ID with no
+per-throttle addressing. User clarified the intent for a dual-throttle-body engine: two physical
+CAN ETB boards share the *same* bus/ID and mirror one broadcast target (no per-board addressing
+needed at all - simpler than what was built), and *both* throttles should drop all local
+hardware/redundancy/closed-loop work when the flag is set, while the full target computation
+(idle math, traction control, etc.) still happens exactly as before. Reverted the `DC_Throttle1`-
+only checks back to `isEtbMode()` in `EtbController::init()`/`update()` and the `doAutocal()`
+dispatch; `externalEtbCanMotor` and `sendExternalEtbTarget()`'s target source stay as a single
+shared instance, but `sendExternalEtbTarget()`'s bench-test/autocal/fault gate now loops over
+every configured `ETB_COUNT` slot (not just throttle 1) - bench-test can be triggered per-throttle
+via separate TS buttons/commands, and with both throttles now pointing `m_motor` at the same
+`externalEtbCanMotor`, throttle 2's bench-test would otherwise race throttle 1's periodic Normal
+send. Also reverted the TS ini changes hiding the TPS-calibration/bench-test panels and "Disable
+ETB Motor" behind `!enableExternalCanEtb` from earlier in this same session - those were right for
+the state after step 3 (autocal/bench-test were genuinely non-functional, `m_motor` was null) but
+wrong after step 5 made them work over CAN again. Only PWM Frequency (no local PWM exists) and PID
+autotune (tunes `m_pid`, which never runs for this throttle - autotuning the *board's* PID would
+be a different, unbuilt mechanism) stay hidden.
+
+Key decisions and why:
+- `CanCategory::ETB` (new enum value, `can_category.h`) - none of the existing categories
+  (WBO_SERVICE, BENCH_TEST, etc.) fit semantically, and the enum has no codegen/Java-side
+  consumer to keep in sync (checked before adding).
+- Gains sent every 250ms, target every 20ms (`can_tx.cpp`) - mirrors wideband's periodic
+  full-state resend (`can_bus.h`: re-sent so the board stays in sync after its own reset) for
+  gains, which rarely change; target gets a much tighter interval since it tracks the pedal.
+  Neither number is specified by the TODO doc or board doc - both are reasonable, defensible
+  choices, not measured against real latency requirements (no hardware in this session).
+- Auto-calibrate's "did it move enough" threshold (50 raw ADC counts out of 4095) is a placeholder
+  by the same token - the local path's analogous check is 0.5V, and there's no hardware here to
+  derive a real raw-ADC equivalent from.
+- Did not build a CAN-sourced pedal-position pipeline. The board doc's `ETB_RAW` frame also
+  carries `PEDAL1`/`PEDAL2` raw ADC (the pedal sensor is wired to the CH32 board, not to rusEFI's
+  own ADC, in this design) - meaning a real deployment needs *some* way for rusEFI to get a
+  calibrated pedal percent, and `RUSEFI_SIDE_TODO.md` never actually addresses this (its steps
+  4-7 all discuss TPS calibration and target push, treating pedal as a given). Building a parallel
+  raw-ADC-based pedal calibration store (the existing `throttlePedalUpVoltage`/`WOTVoltage` fields
+  are Volts-shaped, they don't apply to CH32-reported raw counts) felt like exactly the kind of
+  safety-relevant architectural gap that shouldn't be silently papered over in the same pass as
+  everything else - left `Sensor::get(SensorType::AcceleratorPedal)` completely untouched
+  (whatever it already resolves to - local ADC, unchanged from a non-external-ETB build) and did
+  not raise it as a question this time; flagging here so it's visible for the next session.
+
+Validation:
+- `unit_tests`: full suite (same temporary kawasaki-test neutralize/restore procedure as prior
+  entries, confirmed reverted cleanly via `git status` both times this session) - 1493/1493 passed
+  after the first (`DC_Throttle1`-only) pass, and again after the dual-throttle correction.
+  `electronic_throttle.cpp`/`.h`/`_impl.h`, `can_etb.h`, `can_etb_remote.cpp` all compile clean in
+  both passes; the `getSetpoint()` re-publicization and the `checkStatus()`-ordering fix were each
+  caught by this same full-suite run (not reasoned out in advance) - see the SEGV note in the
+  previous entry for the first, and there is no equivalent automatic catch for the second (no unit
+  test exercises `checkStatus()` under `enableExternalCanEtb=true`, since that requires CAN RX
+  simulation this session didn't build out - the ordering was reasoned through by reading
+  `checkStatus()`'s body, not caught by a failing assertion).
+- No hardware available - none of steps 4-7 have been bench-tested against a live board this
+  session. In particular, the wire-format structs (`EtbCanTargetFrame`, `EtbCanGains1/2Frame`,
+  `EtbCanCalFrame`) were checked byte-for-byte against `external-etb/firmware/src/can_bus.c`'s
+  actual `memcpy`/`bytes_to_float` calls, not verified against a running board.
+
+Open follow-ups:
+- Pedal-position-over-CAN (see "did not build" above) - a real gap, not yet even scoped.
+- Auto-calibrate's PEDAL1/PEDAL2 endpoints (`ETB_CAL_PEDAL`) - only TPS calibration was built;
+  pedal calibration has the same Volts-vs-raw-ADC mismatch as TPS did, plus the open question
+  above about whether rusEFI computes pedal percent from CAN raw at all.
+- PID autotune over CAN (tuning the board's own PID loop, not rusEFI's unused local one) - not
+  attempted; `etbAutotune` stays hidden in external CAN ETB mode.
+- Every placeholder number (250ms/20ms send intervals, 50-count movement threshold,
+  `FAILSAFE_STALENESS_TIMEOUT_MS` on the board side, the 0x300 base ID itself) needs real bench
+  validation before this is more than a desk exercise.
+- `alwaysInstantRpm` breakage (see previous two entries) - still unfixed, still unrelated to this
+  branch.
+
+## 2026-09-02 - External CAN ETB controller: pedal-over-CAN, pedal grab-calibration, PID autotune over CAN
+
+What was done (addressing the three gaps flagged at the end of the previous entry):
+
+- **Pedal over CAN**: new `CanPedalSensor` (`init_etb_can.cpp`) reads `ETB_RAW`'s raw PEDAL1/PEDAL2
+  (the pedal is wired to the CH32 board, not rusEFI's own ADC, per the board doc) and scales it to
+  percent using new persistent calibration fields, registering as
+  `SensorType::AcceleratorPedalPrimary`/`Secondary`. A `RedundantSensor` combines them into
+  `AcceleratorPedalUnfiltered`, which `initTps()`'s existing, unconditional `ppsFilterSensor` then
+  picks up automatically (same `ppsExpAverage` smoothing as local pedal) to produce
+  `SensorType::AcceleratorPedal` - the value `getSanitizedPedal()` actually reads. No changes
+  needed to any of that downstream pipeline.
+- **Pedal auto-calibrate via "grab"**: per the user's explicit direction (not the sweep-based flow
+  TPS uses) - `grabPedalIsUp()`/`grabPedalIsWideOpen()` (`tps.cpp`) are TunerStudio's *existing*,
+  client-hardcoded pedal-calibration buttons (dispatched via a binary `X14` command, not an `.ini`
+  `commandButton` - confirmed by reading `bench_test.cpp`'s `handleCommandX14()`), already reading
+  `Sensor::getRaw(AcceleratorPedalPrimary/Secondary)` and routing through
+  `tsCalibrationSetData()`/`TsCalMode`. Reused them as-is, just branching the `TsCalMode` (new
+  `CanEtbPedalMin`/`Max` values, `rusefi_enums.h`) and destination fields (new
+  `canEtbPedal1/2RawMin/Max`, raw ADC not volts) when `enableExternalCanEtb` is set -
+  `CanPedalSensor::getRaw()` returns the raw ADC count for exactly this call path. New `.ini`
+  `maintainConstantValue` bindings mirror the existing `PedalMin`/`PedalMax` ones exactly.
+- **PID autotune over CAN**: reused the *exact same* `TsCalMode::EtbKp/Ki/Kd` +
+  `tsCalibrationSetData()` mechanism and "Start/Stop ETB PID Autotune" buttons the local
+  relay-autotune (`getClosedLoopAutotune()`) already uses - so the TS UI is identical regardless of
+  source, only where the P/I/D numbers come from differs. `sendExternalEtbTarget()`
+  (`can_etb_remote.cpp`) now sends `ETB_TARGET` with a new `EtbCanMode::Autotune` (`can_etb.h`)
+  instead of `Normal` while `engine->etbAutoTune` is set - the *same* engine-wide flag the existing
+  autotune buttons already toggle, so no new command/button was needed on the rusEFI side either.
+  Two new listeners (`EtbCanAutotuneStatus1/2Listener`, `init_etb_can.cpp`) decode the board's
+  reported pFactor/iFactor/dFactor and forward it into `tsCalibrationSetData`, cycling P->I->D per
+  report the same way the local implementation cycles every 5 oscillation cycles (only one
+  `calibrationMode`/`calibrationValue` slot exists at a time, so only one can be "live" per call).
+- **Calibration persistence fix** (found while building pedal - applies to TPS too, which had the
+  same gap from the previous entry): the board does not remember `ETB_CAL_TPS`/`PEDAL` across its
+  own reset (`can_command_state_init_defaults()` re-defaults every boot,
+  `external-etb/firmware/src/main.c:175`, confirmed no flash-write anywhere in that repo). TPS's
+  auto-calibrate previously only transmitted the sweep result once; now it also persists into new
+  `canEtbTps1/BRawMin/Max` fields, and a new `sendExternalEtbCalibration()` re-sends both TPS and
+  pedal calibration from persisted config every 250ms alongside gains (`can_tx.cpp`) - same "board
+  forgets its state on reset, so keep re-announcing" reasoning `can_bus.h`'s own header comment
+  already gives for gains.
+
+Explicitly NOT done (scope boundary, stated up front rather than silently skipped): the CH32 board
+firmware does not implement PID autotune today - `EtbCanMode::Autotune` and
+`CAN_ID_ETB_AUTOTUNE_STATUS_1/2` are a rusEFI-side-only protocol *proposal*, documented in
+`can_etb.h` with the same detail as the rest of the protocol (frame IDs, byte layout, the relay/
+bang-bang algorithm it should mirror) but not implemented in `external-etb/firmware/src/can_bus.c`.
+That's a separate embedded-C codebase this session was not asked to modify and has no way to build
+or bench-test from here; nothing rusEFI sends for autotune will do anything until that board-side
+piece exists.
+
+Key decisions and why:
+- Went with raw ADC (0-4095) as the calibration unit for pedal, not volts - matches what actually
+  arrives over CAN (`ETB_RAW`), consistent with the TPS calibration decision from the previous
+  entry, and avoids inventing a fictional "board ADC volts" conversion with no real scale/reference
+  to derive it from.
+- `CanPedalSensor` computes percent itself in `decodeFrame()` rather than being a template
+  `CanSensor<>` instance: that template assumes the wire value already is the scaled reading (a
+  fixed multiplier), but here the "scale" is user-calibrated config that can change at Burn time,
+  so it has to be read fresh on every decode.
+- Reused `grabPedalIsUp()`/`grabPedalIsWideOpen()` rather than inventing new console/TS commands:
+  TunerStudio's pedal-calibration buttons are hardcoded client-side (binary `X14` protocol) with no
+  `.ini`-level hook to add a *new* pair of buttons for the CAN case - branching the existing ones
+  on `enableExternalCanEtb` was the only way to reach that already-existing UI at all.
+- Reused `engine->etbAutoTune` and the existing autotune buttons/`TsCalMode` slots for the same
+  reason as pedal grab: no new UI surface needed, and it keeps local and CAN autotune
+  indistinguishable from the user's perspective (as the user asked - "external etb reports current
+  pid values" mapping onto the same display the local path already produces).
+- Did not gate the autotune status listeners' `tsCalibrationSetData` calls on anything besides
+  `engine->etbAutoTune` (no sequence/staleness check on the two new frames) - matches the "not yet
+  implemented, this is a proposal" status; a real implementation should probably add the same kind
+  of staleness handling `CanSensor`'s timeout already gives TPS/pedal, once the board side exists
+  to actually validate against.
+
+Validation:
+- `unit_tests`: all touched files (`electronic_throttle.cpp/.h/_impl.h`, `tps.cpp`, `rusefi_enums.h`,
+  `can_etb.h`, `can_etb_remote.cpp`, `init_etb_can.cpp`, `can_tx.cpp`, `rusefi_config.txt`,
+  `tunerstudio.template.ini`) compile clean, config regenerates cleanly with the 8 new
+  `canEtb*RawMin/Max` fields and 2 new `TsCalMode` values. Full suite (same temporary
+  kawasaki-test neutralize/restore procedure as every prior entry, confirmed reverted via
+  `git status`): 1493/1493 passed.
+- No hardware, and no unit test exercises the CAN RX/TX paths added here (would need CAN frame
+  simulation this session didn't build) - `CanPedalSensor`'s percent math, the wire-format structs,
+  and the autotune cycling logic are all reasoned/read-verified, not test-verified.
+
+Open follow-ups:
+- PID autotune's actual board-side implementation (`external-etb` repo) - the largest remaining
+  piece, and out of scope for this session as noted above.
+- No staleness/fault handling on the autotune status frames (see "key decisions" above).
+- Every placeholder number from the previous entries (send intervals, movement thresholds, base
+  ID) still needs real bench validation - unchanged by this entry.
+- `alwaysInstantRpm` breakage - still unfixed, still unrelated to this branch.
+
+## 2026-09-02 - External CAN ETB controller: board-side PID autotune (external-etb repo)
+
+What was done: implemented the board half of the previous entry's PID-autotune protocol proposal,
+closing that entry's largest open follow-up. This work is in the **`external-etb` repo**
+(`/home/normanpaulino/Documents/GitHub/external-etb`, CH32V203F6P6 RISC-V, not the `rusefi` repo
+this file lives in) - noted here because it's the direct continuation of the CAN ETB work above and
+that repo has no `report.md`/`CLAUDE.md` of its own; its own design doc
+(`CH32V203_ETB_CONTROLLER.md`'s §12 "Current implementation status") got the equivalent entry
+directly, and `rusefi/RUSEFI_SIDE_TODO.md` (in that repo) got a short status note at the top instead
+of a rewrite, pointing back at this file for the narrative.
+
+- New `firmware/src/autotune.c`/`.h` module: ports the same Åström-Hägglund relay/bang-bang
+  algorithm and constants (20% amplitude, 0.05 filter alpha, the Ziegler-Nichols-flavored Kp/Ki/Kd
+  multipliers, seeded `a=8`/`Tu=0.1` starting points) as rusEFI's own
+  `EtbController::getClosedLoopAutotune()` (`electronic_throttle.cpp`), read directly from this
+  repo to port faithfully rather than re-deriving the math. Cycle timing accumulates
+  `CONTROL_TICK_PERIOD_SEC` ticks instead of reading a separate hardware timer, since the 100Hz
+  control tick (`main.c`) is already a precise fixed-period base - no new timer peripheral needed.
+- `can_bus.c`/`.h` extended with `ETB_AUTOTUNE_STATUS_1/2` (0x309/0x30A, `can_tx_autotune_status()`)
+  and `ETB_STATUS_AUTOTUNE`, matching the byte layout the rusEFI-side listeners
+  (`init_etb_can.cpp`, previous entry) already expect.
+- `main.c`'s `control_tick()` mode dispatch gained a `mode == 2` branch calling
+  `autotune_get_output()` instead of `pid_get_output()`, reusing `targetPosition` unchanged (rusEFI
+  already sends 50% during autotune via the existing `getSetpoint()`/`m_isAutotune` path - confirmed
+  by re-reading that rusEFI code, not assumed). `autotune_reset()` is called alongside the existing
+  `pid_reset()` on every mode change and at boot.
+- Updated `CH32V203_ETB_CONTROLLER.md`'s §5.5 protocol table and §12 status section to match.
+
+Key decisions and why:
+- Deliberately did **not** replicate rusEFI's local autotune's open-loop feed-forward/bias-curve
+  term (a tune-specific table interpolated by target%, compensating for the throttle spring at the
+  50% autotune setpoint) - that data isn't sent over CAN and there's no board-side equivalent to
+  interpolate against. Pure relay bang-bang doesn't need it (the classical method's whole point),
+  but flagged in both `autotune.h` and the board doc as a possible source of asymmetric oscillation
+  on a stiff-springed throttle, for whoever bench-validates this.
+- No `math.h`/libm dependency added - checked first (`grep`, nothing else in this codebase uses
+  it) and defined a local `AUTOTUNE_PI` constant instead, consistent with this being a
+  flash/RAM-constrained target (10KB RAM total).
+
+Validation:
+- `make main.bin` (real `riscv64-unknown-elf-gcc` toolchain, confirmed present) compiles clean, zero
+  warnings: 7484B/32KB flash (22.84%, up from 21% before this change), 240B/10KB RAM (up from 152B).
+  Build artifacts (`main.elf`/`.bin`/`.hex`/`.lst`/`.map`, the generated linker script) cleaned up
+  after verification - not part of the source tree.
+- **Not bench-verified** - no hardware access this session. The relay algorithm's correctness (does
+  it actually converge to sane gains against a real throttle spring, does the missing feed-forward
+  term matter in practice) is unverified beyond "ported the same math, compiles clean."
+- This repo has no version control (`git status` confirmed: no `.git` anywhere in the tree) - no
+  diff/revert safety net was available; changes were made carefully and verified by full rebuild
+  rather than by diffing against a prior committed state.
+
+Open follow-ups:
+- Bench validation of the whole autotune path - the actual gap now, replacing "not implemented."
+- Same staleness/fault-handling gap noted in the previous entry still applies on the rusEFI side
+  for the status frames this now actually sends.
+- This `external-etb` repo has no version control at all - worth flagging to the user directly,
+  separate from this log entry.
+
+## 2026-09-02 - External CAN ETB controller: CAN-enabled guard + configurable bus index
+
+What was done (user asked to close two specific gaps flagged in the previous walkthrough):
+
+- **CAN-enabled guard**: `initExternalCanEtbSensors()` (`init_etb_can.cpp`) now checks
+  `engineConfiguration->canWriteEnabled`/`canReadEnabled` and calls `criticalError(...)` if either
+  is off, before registering anything - copied directly from `initLambda()`'s identical guard for
+  CAN wideband (`init_lambda.cpp`), so external CAN ETB fails loudly instead of silently doing
+  nothing if CAN isn't actually enabled on the board.
+- **Configurable bus index**: new `canEtbBusIndex` config field, reusing the existing
+  `can_broadcast_channel_e` dropdown type (`can_verbose.cpp`/`can_dash.cpp`'s
+  `canBroadcastUseChannel` already uses it) rather than inventing a new one - it's already exactly
+  "pick CAN1/CAN2/CAN3" with (int)-castable 0/1/2 values. New `getExternalEtbBus()` accessor
+  (`can_etb_remote.cpp`) replaces the previous hardcoded `DEFAULT_BUS_INDEX` at all 6 call sites
+  (gains, target, both cal frames, both CanDcMotor sends). New "External CAN ETB Bus" dropdown in
+  the TS ETB dialog, shown only when `enableExternalCanEtb` is set.
+
+Key decisions and why:
+- Reused `can_broadcast_channel_e` instead of declaring a new enum - it's already the exact right
+  shape (3-way 0/1/2, board-name-aware labels via `@#PRIMARY_CAN_NAME#@` etc.) and already proven
+  by an existing consumer, so no new TS-side plumbing was needed beyond the field itself.
+- Hit (and fixed) a real config-codegen ordering constraint while doing this: a `custom` type must
+  be declared (`custom can_broadcast_channel_e 1 bits, ...`) before any field uses it as a type,
+  file-processing-order in `rusefi_config.txt` - not obvious from the error
+  (`Unknown type can_broadcast_channel_e`), diagnosed by finding where the existing
+  `canBroadcastUseChannel` field (which does work) sits in the file relative to that declaration.
+  First attempt placed the new field earlier in the file, next to the other `canEtb*` fields added
+  in a previous session, and hit exactly this. Fixed by moving the field to sit immediately after
+  `canBroadcastUseChannel`, next to the type's one declaration site instead.
+
+Validation: `unit_tests` full suite (same temporary kawasaki-test neutralize/restore procedure as
+every entry in this series, confirmed reverted via `git status`) - 1493/1493 passed, config
+regenerates cleanly with the new field and dropdown.
+
+Open follow-ups: unchanged from the previous two entries (board-side autotune bench validation,
+autotune status frame staleness handling, `external-etb`'s lack of version control - now addressed
+separately - and the still-unrelated `alwaysInstantRpm` breakage).

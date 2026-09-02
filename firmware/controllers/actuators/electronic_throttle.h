@@ -83,4 +83,27 @@ public:
 	virtual const pid_state_s& getPidState() const = 0;
   virtual float getCurrentTarget() const = 0;
 	virtual void setLuaAdjustment(percent_t adjustment) = 0;
+
+	// Re-declares ClosedLoopController's getSetpoint() (private there) so external code holding
+	// only an IEtbController* can read the final blended throttle target (post idle/antilag/eco
+	// blend - the same value the local PID would chase) without duplicating that computation. See
+	// external-etb/RUSEFI_SIDE_TODO.md #3.1/#5.2's "expose vs duplicate" decision - this is the
+	// concrete "expose it" seam, used by the external CAN ETB's remote target component
+	// (can_etb_remote.cpp's sendExternalEtbTarget()). EtbController's own override is already
+	// public, but that was only reachable through the concrete type, not this interface.
+	expected<percent_t> getSetpoint() override = 0;
+
+	// True while autocal or bench-test owns the motor directly instead of the normal closed-loop
+	// tick (EtbImpl::update() skips TBase::update() during this time - see electronic_throttle_impl.h).
+	// Lets the external CAN ETB's periodic remote-target component (#3.1) stay off the wire while
+	// bench-test/autocal (#3.2) is driving ETB_TARGET itself, instead of racing it - see #6's
+	// coexistence question.
+	virtual bool isAutocalOrBenchTestActive() const { return false; }
+
+	// True when checkStatus() (electronic_throttle.cpp) found a fault/pause condition. Since a
+	// throttle owned by an external CAN ETB controller never reaches its own local-motor-disable
+	// path (update() returns before that - see #1/#3.1), the remote-target component checks this
+	// instead, to stop sending ETB_TARGET rather than racing a "disable" with no wire
+	// representation (can_bus.h: silence is the fail-safe signal, there is no disable bit).
+	virtual bool isEtbFaulted() const { return false; }
 };

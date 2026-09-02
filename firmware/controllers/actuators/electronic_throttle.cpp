@@ -48,6 +48,7 @@
 #include "defaults.h"
 #include "tunerstudio.h"
 #include "tunerstudio_calibration_channel.h"
+#include "can_etb.h"
 #include "transition_events.h"
 
 #if defined(HAS_OS_ACCESS)
@@ -184,6 +185,21 @@ bool EtbController::init(dc_function_e function, DcMotor *motor, pid_s *pidParam
 	m_function = function;
 	m_positionSensor = functionToPositionSensor(function);
 
+	// An external CAN ETB controller (see the external-etb project) owns this throttle's TPS
+	// redundancy and h-bridge entirely - the single CAN-sourced TPS reading (wired in
+	// init_etb_can.cpp) is authoritative on its own, so neither applies here. Covers both
+	// DC_Throttle1 and DC_Throttle2: a dual-throttle-body engine in this mode is two physical CAN
+	// ETB boards on the same bus/ID, both mirroring the one shared broadcast target sent by
+	// sendExternalEtbTarget() (can_etb.h) - there's no per-throttle trim/split in CAN mode, only
+	// the single blended target (idle/traction-control/etc, still fully computed - see
+	// sendExternalEtbTarget()'s comment) that both boards receive identically.
+	bool isExternalCanEtb = false;
+#if !EFI_UNIT_TEST
+	// Some ETB unit tests construct EtbController directly without an EngineTestHelper, leaving
+	// the global engineConfiguration null - same hazard as the iTermMin/iTermMax read below.
+	isExternalCanEtb = isEtbMode() && engineConfiguration->enableExternalCanEtb;
+#endif // !EFI_UNIT_TEST
+
 	// If we are a throttle, require redundant TPS sensor
 	if (isEtbMode()) {
 		// If no sensor is configured for this throttle, skip initialization.
@@ -192,13 +208,18 @@ bool EtbController::init(dc_function_e function, DcMotor *motor, pid_s *pidParam
 			return false;
 		}
 
-		if (!isBoardAllowingLackOfPps() && !Sensor::isRedundant(m_positionSensor)) {
+		if (!isExternalCanEtb && !isBoardAllowingLackOfPps() && !Sensor::isRedundant(m_positionSensor)) {
 			etbErrorCode = (int8_t)EtbStatus::Redundancy;
 			return false;
 		}
 	}
 
-	m_motor = motor;
+	// A throttle owned by an external CAN ETB controller gets a CanDcMotor instead of the local
+	// h-bridge: startBenchTest()/doAutocal() (electronic_throttle_impl.h) drive it unmodified via
+	// the normal DcMotor interface, sending ETB_TARGET(mode=OpenLoop) over CAN instead of PWM pins.
+	// Normal closed-loop operation never reaches m_motor at all for this throttle - see
+	// EtbController::update()'s own early-return below, and can_etb.h's sendExternalEtbTarget().
+	m_motor = isExternalCanEtb ? &externalEtbCanMotor : motor;
 	m_pedalProvider = pedalProvider;
 
 	m_pid.initPidClass(pidParameters);
@@ -713,7 +734,12 @@ void EtbController::setOutput(expected<percent_t> outputValue) {
 bool EtbController::checkStatus() {
 #if EFI_TUNER_STUDIO
 	// Only debug throttle #1
-	if (m_function == DC_Throttle1) {
+	// An external CAN ETB controller has its own listener (init_etb_can.cpp's
+	// EtbCanPidStatusListener) posting the board's real PID terms into this same
+	// outputChannels.etbStatus struct - m_pid never runs for this throttle (see update()'s early
+	// return below), so posting its all-zero state here would stomp that every tick. See
+	// RUSEFI_SIDE_TODO.md #3.1's "confirm this doesn't race" note.
+	if (m_function == DC_Throttle1 && !engineConfiguration->enableExternalCanEtb) {
 		m_pid.postState(engine->outputChannels.etbStatus);
 	} else if (m_function == DC_Wastegate) {
 		m_pid.postState(engine->outputChannels.wastegateDcStatus);
@@ -792,6 +818,19 @@ void EtbController::update() {
 #endif // EFI_UNIT_TEST
 
 	bool isOk = checkStatus();
+
+	// An external CAN ETB controller owns normal closed-loop operation via its own periodic
+	// component (can_etb_remote.cpp's sendExternalEtbTarget(), gated on the same etbErrorCode
+	// checkStatus() just computed) instead of this local PID/setOutput() pipeline - see
+	// RUSEFI_SIDE_TODO.md #1/#3.1. checkStatus() above still ran (fault detection/etbErrorCode/dash
+	// indicators stay correct either way), but m_motor (a CanDcMotor for this throttle) must only
+	// ever be driven by bench-test/autocal's own direct calls, never from here. This function is
+	// only reached on a "normal" tick to begin with - EtbImpl::update() (electronic_throttle_impl.h)
+	// already skips calling it while bench-test/autocal own the tick instead, which is what answers
+	// #6's coexistence question: the two mechanisms already can't run at the same time.
+	if (isEtbMode() && engineConfiguration->enableExternalCanEtb) {
+		return;
+	}
 
 	if (!isOk) {
 		// If engine is stopped and so configured, skip the ETB update entirely

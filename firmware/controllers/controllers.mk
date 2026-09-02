@@ -54,6 +54,7 @@ CONTROLLERS_SRC_CPP = \
 	$(CONTROLLERS_DIR)/can/can_bench_test.cpp \
 	$(CONTORLLERS_DIR)/can/rusefi_wideband.cpp \
 	$(CONTROLLERS_DIR)/can/can_tx.cpp \
+	$(CONTROLLERS_DIR)/can/can_etb_remote.cpp \
 	$(CONTROLLERS_DIR)/can/can_dash.cpp \
 	$(CONTROLLERS_DIR)/can/can_dash_ms.cpp \
 	$(CONTROLLERS_DIR)/can/can_dash_nissan.cpp \

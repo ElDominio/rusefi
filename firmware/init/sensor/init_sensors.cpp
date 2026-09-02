@@ -124,6 +124,9 @@ void initNewSensors() {
 #if EFI_PROD_CODE && EFI_CAN_SUPPORT
 	initCanSensors();
 #endif
+#if EFI_CAN_SUPPORT
+	initExternalCanEtbSensors();
+#endif
 
 	initOverrideSensors();
 
