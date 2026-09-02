@@ -245,6 +245,7 @@ public:
 		}
 	}
 
+#if EFI_EXTERNAL_CAN_ETB
 	// External CAN ETB (RUSEFI_SIDE_TODO.md #3.2/#6): the board's TPS is a single already-CANsensed
 	// channel with no local Volts to read, and its raw ADC (needed to determine calibration
 	// endpoints) arrives via ETB_RAW, not a local ADC subscription - so the normal doAutocal()'s
@@ -326,11 +327,14 @@ public:
 
 		return phase;
 	}
+#endif // EFI_EXTERNAL_CAN_ETB
 
 	ACPhase doAutocal(ACPhase phase) {
+#if EFI_EXTERNAL_CAN_ETB
 		if (TBase::isEtbMode() && engineConfiguration->enableExternalCanEtb) {
 			return doAutocalExternalCan(phase);
 		}
+#endif // EFI_EXTERNAL_CAN_ETB
 
 		// Don't allow if engine is running!
 		if (Sensor::getOrZero(SensorType::Rpm) > 0) {

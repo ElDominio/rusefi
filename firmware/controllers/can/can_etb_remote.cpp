@@ -29,8 +29,9 @@
 #include "pch.h"
 #include "can_etb.h"
 
-#if EFI_CAN_SUPPORT
+#if EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB
 #include "can_msg_tx.h"
+#include "electronic_throttle.h"
 
 size_t getExternalEtbBus() {
 	return (size_t)engineConfiguration->canEtbBusIndex;
@@ -178,11 +179,11 @@ void sendExternalEtbCalibration() {
 		engineConfiguration->canEtbPedal2RawMin, engineConfiguration->canEtbPedal2RawMax);
 }
 
-#else // EFI_CAN_SUPPORT
+#else // !(EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB)
 
-// Stubs so electronic_throttle.cpp/.h don't need their own EFI_CAN_SUPPORT guards - the board
-// config that leaves enableExternalCanEtb reachable without CAN support is a config error, not
-// something these no-ops need to detect themselves.
+// Stubs so electronic_throttle.cpp/.h don't need their own EFI_CAN_SUPPORT/EFI_EXTERNAL_CAN_ETB
+// guards - the board config that leaves enableExternalCanEtb reachable without this feature
+// compiled in is a config error, not something these no-ops need to detect themselves.
 CanDcMotor externalEtbCanMotor;
 size_t getExternalEtbBus() { return 0; }
 bool CanDcMotor::set(float) { return false; }
@@ -195,4 +196,4 @@ void sendExternalEtbCalTps(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void sendExternalEtbCalPedal(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void sendExternalEtbCalibration() {}
 
-#endif // EFI_CAN_SUPPORT
+#endif // EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB

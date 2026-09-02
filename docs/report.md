@@ -4251,3 +4251,72 @@ Validation:
 
 Open follow-ups: none - this closes out the `alwaysInstantRpm` item repeated across the three
 prior entries in this series.
+
+## 2026-09-02 - External CAN ETB controller: gate behind EFI_EXTERNAL_CAN_ETB, opt-in per board
+
+What was done: the external CAN ETB feature (CH32V203 board integration, commit
+66ca87b442/the four preceding entries in this series) previously compiled into every board's
+firmware unconditionally, gated only by the runtime TS bit `enableExternalCanEtb`. Per user
+request, added a compile-time `EFI_EXTERNAL_CAN_ETB` flag (default `FALSE`) so the feature is
+opt-in per board, following the same convention as `EFI_BURST_KNOCK`/`EFI_UPSHIFT_RPM_HOLD`:
+
+- `firmware/config/stm32f4ems/efifeatures.h`, `firmware/config/stm32f7ems/efifeatures.h`,
+  `unit_tests/efifeatures.h` - default `EFI_EXTERNAL_CAN_ETB FALSE`.
+- `firmware/config/boards/fw-custom-paralela-master/board.mk` - `-DEFI_EXTERNAL_CAN_ETB=TRUE`,
+  the only board that gets it (per explicit user instruction - this is a bench experiment tied to
+  one physical board, not a general AlphaX feature).
+- Wrapped the feature's C++ logic in `#if EFI_EXTERNAL_CAN_ETB`: `can_etb_remote.cpp`'s and
+  `init_etb_can.cpp`'s top-level guards became `#if EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB`
+  (existing `#else` stubs cover the compiled-out case unchanged); `electronic_throttle.cpp`'s
+  `isExternalCanEtb` assignment, `checkStatus()`'s CAN-ETB branch, and `update()`'s early return;
+  `electronic_throttle_impl.h`'s `doAutocalExternalCan()` and its dispatch from `doAutocal()`;
+  `can_tx.cpp`'s periodic gains/target/calibration send block; `tps.cpp`'s
+  `grabPedalIsUp()`/`grabPedalIsWideOpen()` CAN-ETB calibration-mode ternaries (restored to their
+  pre-feature single-mode form when the flag is off). Left the small always-`false`/no-op
+  `IEtbController` interface additions (`isAutocalOrBenchTestActive()`, `isEtbFaulted()`) and the
+  `getSetpoint()` re-declaration ungated - inert plumbing, same pattern `BurstKnock`'s
+  always-compiled pieces use.
+- Also hid the now-inert TunerStudio dialog fields ("External CAN ETB Controller" checkbox, CAN
+  bus dropdown) on every board except `fw-custom-paralela-master`, using the existing
+  `ts_show_*`/`@@if_...@@` mechanism: `#define ts_show_external_can_etb false` default in
+  `rusefi_config.txt`, `@@if_ts_show_external_can_etb@@` appended to the two `etbDialogBase` field
+  lines in `tunerstudio.template.ini`, overridden `true` only in
+  `fw-custom-paralela-master/prepend.txt`. Left the `CanEtbPedalMin`/`CanEtbPedalMax`
+  `maintainConstantValue` lines and `TsCalMode` enum entries ungated - harmless dead code paths
+  since the calibration mode can never be set without the now-hidden UI.
+- Struct fields (`enableExternalCanEtb`, `canEtbBusIndex`, `canEtbTps1RawMin`/etc.) stay
+  unconditional in `engine_configuration_s` - TS struct layout is shared across all boards, same
+  as `burstKnockEnabled`'s unconditional placement in `config_page_6.txt`; only the logic and UI
+  that act on them are gated.
+
+Key decisions and why:
+- Chose `#if EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB` (compound condition) over nesting a second
+  `#if` inside the existing `EFI_CAN_SUPPORT` block in `can_etb_remote.cpp`/`init_etb_can.cpp` -
+  keeps a single `#else` stub branch instead of three-way nesting, and preserves the existing
+  "stub covers CAN-support-off" comment structure with a one-line tweak.
+- Also gated the TS dialog visibility, not just the C++ behavior - confirmed via
+  `grep -rn "@@if_EFI_"` that no such preprocessor-flag-driven ini gating convention exists
+  (only the separate `ts_show_*` `#define`-driven mechanism does), and per this repo's own
+  documented gotcha ("grep whether any board ever sets that flag true" before gating on a
+  `ts_show_*` default-false flag) confirmed this is a *newly introduced* flag being overridden
+  `true` on exactly the one board that needs it, not a pre-existing flag nobody sets.
+
+Validation:
+- `bash firmware/bin/compile.sh config/boards/fw-custom-paralela-master/meta-info.env -j12` (run
+  from `firmware/`) - clean link, `EFI_EXTERNAL_CAN_ETB=TRUE` path compiles and links successfully
+  (flash 79%, ram0 100%, consistent with pre-existing board budget).
+- Hit the documented "shared `page_N_generated.h` header goes stale after building a different
+  board target" gotcha (`page4_s` static_assert 1268 vs stale 1236) when switching from the
+  paralela build to `unit_tests` (which targets `f407-discovery` by default) - fixed per the
+  documented workaround: `bash firmware/gen_config_board.sh firmware/config/boards/f407-discovery f407-discovery`
+  before rebuilding.
+- `unit_tests/test.sh` (full suite, GCC only per this session's standing instruction to skip
+  `CC=clang` on this dev box) - 1493/1493 passed, confirming the `EFI_EXTERNAL_CAN_ETB=FALSE`
+  (default/unit-test) path compiles and behaves identically to before the feature existed.
+- `grep -c "External CAN ETB" firmware/tunerstudio/generated/rusefi_paralela.ini` -> 3 (dialog
+  fields present) vs `rusefi_f407-discovery.ini` -> 1 (only the harmless, intentionally-ungated
+  `maintainConstantValue` comment survives; no `field =` line for `enableExternalCanEtb`/
+  `canEtbBusIndex` leaked into the non-opted-in board's generated ini).
+
+Open follow-ups: none for this change. Pre-existing open items from the feature's prior entries
+(board-side autotune bench validation, autotune status frame staleness handling) are unaffected.

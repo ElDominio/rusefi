@@ -32,17 +32,25 @@ void grabPedalIsUp() {
 	/**
 	 * search for 'maintainConstantValue' to find how this TS magic works
 	 */
+#if EFI_EXTERNAL_CAN_ETB
 	// External CAN ETB: the pedal is wired to the board, not rusEFI's own ADC - Sensor::getRaw()
 	// on AcceleratorPedalPrimary/Secondary returns the board's raw ADC count in that case
 	// (CanPedalSensor::getRaw(), init_etb_can.cpp), and CanEtbPedalMin routes it into the raw-ADC
 	// calibration fields instead of the local ADC's throttlePedalUpVoltage.
 	TsCalMode mode = engineConfiguration->enableExternalCanEtb ? TsCalMode::CanEtbPedalMin : TsCalMode::PedalMin;
+#else // !EFI_EXTERNAL_CAN_ETB
+	TsCalMode mode = TsCalMode::PedalMin;
+#endif // EFI_EXTERNAL_CAN_ETB
 	tsCalibrationSetData(mode, Sensor::getRaw(SensorType::AcceleratorPedalPrimary), Sensor::getRaw(SensorType::AcceleratorPedalSecondary));
 	onGrabPedal();
 }
 
 void grabPedalIsWideOpen() {
+#if EFI_EXTERNAL_CAN_ETB
 	TsCalMode mode = engineConfiguration->enableExternalCanEtb ? TsCalMode::CanEtbPedalMax : TsCalMode::PedalMax;
+#else // !EFI_EXTERNAL_CAN_ETB
+	TsCalMode mode = TsCalMode::PedalMax;
+#endif // EFI_EXTERNAL_CAN_ETB
 	tsCalibrationSetData(mode, Sensor::getRaw(SensorType::AcceleratorPedalPrimary), Sensor::getRaw(SensorType::AcceleratorPedalSecondary));
 	onGrabPedal();
 }

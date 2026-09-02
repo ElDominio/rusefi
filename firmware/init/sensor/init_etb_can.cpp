@@ -36,7 +36,7 @@
 
 #include "pch.h"
 
-#if EFI_CAN_SUPPORT
+#if EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB
 #include "can_sensor.h"
 #include "can_listener.h"
 #include "can_etb.h"
@@ -277,7 +277,7 @@ void initExternalCanEtbSensors() {
 	registerCanListener(externalEtbAutotuneStatus1Listener);
 	registerCanListener(externalEtbAutotuneStatus2Listener);
 }
-#else // EFI_CAN_SUPPORT
+#else // !(EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB)
 void initExternalCanEtbSensors() {}
 bool getExternalEtbRawTps(uint16_t&, uint16_t&) { return false; }
-#endif // EFI_CAN_SUPPORT
+#endif // EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB

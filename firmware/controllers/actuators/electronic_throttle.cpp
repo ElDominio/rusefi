@@ -194,11 +194,11 @@ bool EtbController::init(dc_function_e function, DcMotor *motor, pid_s *pidParam
 	// the single blended target (idle/traction-control/etc, still fully computed - see
 	// sendExternalEtbTarget()'s comment) that both boards receive identically.
 	bool isExternalCanEtb = false;
-#if !EFI_UNIT_TEST
+#if !EFI_UNIT_TEST && EFI_EXTERNAL_CAN_ETB
 	// Some ETB unit tests construct EtbController directly without an EngineTestHelper, leaving
 	// the global engineConfiguration null - same hazard as the iTermMin/iTermMax read below.
 	isExternalCanEtb = isEtbMode() && engineConfiguration->enableExternalCanEtb;
-#endif // !EFI_UNIT_TEST
+#endif // !EFI_UNIT_TEST && EFI_EXTERNAL_CAN_ETB
 
 	// If we are a throttle, require redundant TPS sensor
 	if (isEtbMode()) {
@@ -739,7 +739,11 @@ bool EtbController::checkStatus() {
 	// outputChannels.etbStatus struct - m_pid never runs for this throttle (see update()'s early
 	// return below), so posting its all-zero state here would stomp that every tick. See
 	// RUSEFI_SIDE_TODO.md #3.1's "confirm this doesn't race" note.
+#if EFI_EXTERNAL_CAN_ETB
 	if (m_function == DC_Throttle1 && !engineConfiguration->enableExternalCanEtb) {
+#else // !EFI_EXTERNAL_CAN_ETB
+	if (m_function == DC_Throttle1) {
+#endif // EFI_EXTERNAL_CAN_ETB
 		m_pid.postState(engine->outputChannels.etbStatus);
 	} else if (m_function == DC_Wastegate) {
 		m_pid.postState(engine->outputChannels.wastegateDcStatus);
@@ -828,9 +832,11 @@ void EtbController::update() {
 	// only reached on a "normal" tick to begin with - EtbImpl::update() (electronic_throttle_impl.h)
 	// already skips calling it while bench-test/autocal own the tick instead, which is what answers
 	// #6's coexistence question: the two mechanisms already can't run at the same time.
+#if EFI_EXTERNAL_CAN_ETB
 	if (isEtbMode() && engineConfiguration->enableExternalCanEtb) {
 		return;
 	}
+#endif // EFI_EXTERNAL_CAN_ETB
 
 	if (!isOk) {
 		// If engine is stopped and so configured, skip the ETB update entirely

@@ -113,6 +113,7 @@ void CanWrite::PeriodicTask(efitick_t) {
 		sendWidebandInfo();
 	}
 
+#if EFI_EXTERNAL_CAN_ETB
 	if (engineConfiguration->enableExternalCanEtb) {
 		// Gains rarely change - re-sent periodically (like wideband's ECU_STATUS) mainly so the
 		// board picks them up after its own reset. Target changes with the pedal, so it gets a
@@ -127,6 +128,7 @@ void CanWrite::PeriodicTask(efitick_t) {
 			sendExternalEtbTarget();
 		}
 	}
+#endif // EFI_EXTERNAL_CAN_ETB
 
 	m_cycleCount++;
 }

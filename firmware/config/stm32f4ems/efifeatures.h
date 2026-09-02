@@ -616,6 +616,11 @@
 #define EFI_CRANKING_NO_SPARK FALSE
 #endif
 
+// External CAN ETB controller (CH32V203-based board, see can_etb.h) - bench experiment, opt-in per board
+#ifndef EFI_EXTERNAL_CAN_ETB
+#define EFI_EXTERNAL_CAN_ETB FALSE
+#endif
+
 // WOT Time Enrichment (richen target AFR after prolonged WOT; needs Engine State Machine at runtime)
 #ifndef EFI_WOT_ENRICHMENT
 #define EFI_WOT_ENRICHMENT FALSE
