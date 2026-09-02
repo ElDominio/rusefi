@@ -43,7 +43,7 @@ static void runKawasakiTest(const char* fileName, bool useCustomGaps, bool expec
 	reader.open(fileName);
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
-	engineConfiguration->alwaysInstantRpm = true;
+	engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
 
 	// 8-1 wheel on the crank; TEST_ENGINE inherits skippedWheelOnCam=true from
 	// setDefaultBaseEngine, so an explicit crank-speed override is required -

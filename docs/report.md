@@ -4228,3 +4228,26 @@ regenerates cleanly with the new field and dropdown.
 Open follow-ups: unchanged from the previous two entries (board-side autotune bench validation,
 autotune status frame staleness handling, `external-etb`'s lack of version control - now addressed
 separately - and the still-unrelated `alwaysInstantRpm` breakage).
+
+## 2026-09-02 - Fix realKawasaki8minus1 test: alwaysInstantRpm -> rpmUpdateMode selector
+
+What was done:
+- `unit_tests/tests/trigger/test_real_kawasaki_8_minus_1.cpp` set
+  `engineConfiguration->alwaysInstantRpm = true`, a boolean field removed on this branch when
+  `rpmUpdateMode_e` (Per-cycle / First Order / Instant) replaced it - see the "Add rpmUpdateMode"
+  commit and the `alwaysInstantRpm` breakage flagged as pre-existing/unrelated in the three
+  external-CAN-ETB entries above. Every other trigger test on this branch already migrated to the
+  new field (`test_real_noisy_trigger.cpp`, `test_real_cranking_miata_na6.cpp`,
+  `real_trigger_helper.h`, etc.); this was the one straggler still on the removed field, so the
+  Kawasaki suite would not compile.
+- Fix: `engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;`, matching the
+  selector value equivalent to the old `alwaysInstantRpm = true` (see `rpm_calculator.cpp`'s
+  `RPM_UPDATE_INSTANT` case, and how the rest of the trigger-test suite already uses this same
+  enum value for the same purpose).
+
+Validation:
+- `unit_tests/test.sh realKawasaki8minus1` - all 12 tests pass (stock-gap sync/no-sync cases and
+  the widened custom-gap cases), same RPM/line expectations as before the field rename.
+
+Open follow-ups: none - this closes out the `alwaysInstantRpm` item repeated across the three
+prior entries in this series.
