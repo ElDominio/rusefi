@@ -2059,9 +2059,6 @@ const ConfigParameter allParameters[] = {
 	{ 0xECA09D1A, // verboseTriggerSynchDetails
 		[]() -> float { return engineConfiguration->verboseTriggerSynchDetails; },
 		[](float value) { engineConfiguration->verboseTriggerSynchDetails = value; } },
-	{ 0xED589111, // boardUseCanTerminator
-		[]() -> float { return engineConfiguration->boardUseCanTerminator; },
-		[](float value) { engineConfiguration->boardUseCanTerminator = value; } },
 	{ 0xED6B9C53, // alternatorControl.dFactor
 		[]() -> float { return engineConfiguration->alternatorControl.dFactor; },
 		[](float value) { engineConfiguration->alternatorControl.dFactor = value; } },

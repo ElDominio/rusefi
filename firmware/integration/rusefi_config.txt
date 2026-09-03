@@ -1420,7 +1420,6 @@ tps_limit_t tps2Max;Fully opened voltage for primary throttle position sensor
 	bit canOpenBLT,"yes","no"; Allow OpenBLT on Primary CAN
 	bit can2OpenBLT,"yes","no"; Allow OpenBLT on Secondary CAN
 	bit injectorFlowAsMassFlow,"grams per second","cc/min";Select whether to configure injector flow in volumetric flow (default, cc/min) or mass flow (g/s).
-	bit boardUseCanTerminator,"yes","no"
 	bit kLineDoHondaSend,"yes","no"
 	bit can1ListenMode,"yes","no";ListenMode is about acknowledging CAN traffic on the protocol level. Different from canWriteEnabled
 	bit can2ListenMode,"yes","no"
@@ -3052,7 +3051,7 @@ end_struct
 #define ts_show_sd_pins true
 #define ts_show_injectionPinMode false
 #define ts_show_ignition true
-#define ts_show_ignitionPinMode true
+#define ts_show_ignitionPinMode false
 #define ts_show_vr_threshold_pins true
 
 

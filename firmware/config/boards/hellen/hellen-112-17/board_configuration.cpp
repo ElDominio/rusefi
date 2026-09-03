@@ -47,7 +47,7 @@ static void hellen112_17_boardConfigOverrides() {
 	setHellenVbatt();
 
 	hellenMegaSdWithAccelerometer();
-	configureHellenCanTerminator();
+	configureHellenCanTerminator(config->boardUseCanTerminator);
 	setHellenCan();
 
 	setDefaultHellenAtPullUps();
@@ -84,6 +84,7 @@ static void hellen112_17_boardDefaultConfiguration() {
 
 	engineConfiguration->canTxPin = Gpio::MM100_CAN_TX;
 	engineConfiguration->canRxPin = Gpio::MM100_CAN_RX;
+	config->boardUseCanTerminator = true;
 
 	engineConfiguration->fuelPumpPin = Gpio::MM100_OUT_PWM5;
 //	engineConfiguration->idle.solenoidPin = Gpio::H144_LS_6;

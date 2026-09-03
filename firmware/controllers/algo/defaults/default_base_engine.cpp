@@ -349,6 +349,7 @@ void setDefaultBaseEngine() {
 
 	engineConfiguration->compressionRatio = 9;
 	engineConfiguration->boardUseCanTerminator = true;
+	engineConfiguration->vssFilterReciprocal = VSS_FILTER_MIN;
 	engineConfiguration->acLowRpmLimit = 500;
 
 	engineConfiguration->mafFilterParameter = 1;
