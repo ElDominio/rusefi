@@ -72,4 +72,43 @@ float TransmissionControllerBase::isShiftCompleted() {
 		return 0;
 	}
 }
+
+void TransmissionControllerBase::updateTccLockup(gear_e gear) {
+	// never lock up mid-shift, below the configured minimum gear (also excludes Reverse/Neutral),
+	// or with the brake pedal pressed
+	if (isShifting || static_cast<int>(gear) < config->tcu_tccMinGear || getBrakePedalState()) {
+		torqueConverterDuty = 0;
+		enginePins.tcuTccOnoffSolenoid.setValue(0);
+		return;
+	}
+
+	auto tps = Sensor::get(SensorType::DriverThrottleIntent);
+	auto vss = Sensor::get(SensorType::VehicleSpeed);
+	if (!tps.Valid || !vss.Valid) {
+		torqueConverterDuty = 0;
+		enginePins.tcuTccOnoffSolenoid.setValue(0);
+		return;
+	}
+
+	if (config->tcu_tccMinClt != 0) {
+		auto clt = Sensor::get(SensorType::Clt);
+		if (!clt.Valid || clt.Value < config->tcu_tccMinClt) {
+			torqueConverterDuty = 0;
+			enginePins.tcuTccOnoffSolenoid.setValue(0);
+			return;
+		}
+	}
+
+	int lockSpeed = interpolate2d(tps.Value, config->tcu_tccTpsBins, config->tcu_tccLockSpeed);
+	int unlockSpeed = interpolate2d(tps.Value, config->tcu_tccTpsBins, config->tcu_tccUnlockSpeed);
+	if (vss.Value > lockSpeed) {
+		// torqueConverterDuty is only used for a gauge -- this is an on/off solenoid, not PWM
+		torqueConverterDuty = 100;
+		enginePins.tcuTccOnoffSolenoid.setValue(1);
+	} else if (vss.Value < unlockSpeed) {
+		torqueConverterDuty = 0;
+		enginePins.tcuTccOnoffSolenoid.setValue(0);
+	}
+	// else: inside the lock/unlock hysteresis band, hold the current solenoid state
+}
 #endif // EFI_TCU

@@ -36,8 +36,8 @@ void Generic4TransmissionController::update(gear_e gear) {
 	}
 
 	// set torque converter and pressure control state
-	setTccState(gear);
-	setPcState(gear);
+	updateTccLockup(gear);
+	setPcState();
 
 	setCurrentGear(gear);
 
@@ -51,86 +51,51 @@ void Generic4TransmissionController::update(gear_e gear) {
 	}
 }
 
-void Generic4TransmissionController::setTccState(gear_e gear) {
-	// disable if shifting
-	if (isShifting) {
-		enginePins.tcuTccOnoffSolenoid.setValue(0);
-		return;
-	}
-
+// Simplified line pressure control: a 3-band driver-demand read on TPS (Low/Mid/High), each
+// with its own duty for cruising vs. shifting -- 6 duties total, the same for every gear.
+// Band transitions use separate rising/falling TPS thresholds (Schmitt trigger) so cruising
+// right at a boundary doesn't chatter the duty between two values.
+void Generic4TransmissionController::setPcState() {
 	auto tps = Sensor::get(SensorType::DriverThrottleIntent);
-	auto vss = Sensor::get(SensorType::VehicleSpeed);
-	if (!tps.Valid || !vss.Valid) {
+	if (!tps.Valid) {
 		return;
 	}
-	// only enable TC in gear 4
-	if (gear == GEAR_4) {
-		int lockSpeed = interpolate2d(tps.Value, config->tcu_tccTpsBins, config->tcu_tccLockSpeed);
-		int unlockSpeed = interpolate2d(tps.Value, config->tcu_tccTpsBins, config->tcu_tccUnlockSpeed);
-		if (vss.Value > lockSpeed) {
-			// torqueConverterDuty is only used for a gauge
-			torqueConverterDuty = 100;
-			enginePins.tcuTccOnoffSolenoid.setValue(1);
-		} else if (vss.Value < unlockSpeed) {
-			torqueConverterDuty = 0;
-			enginePins.tcuTccOnoffSolenoid.setValue(1);
+
+	switch (tcu_pcDemandBand) {
+	case 0: // Low
+		if (tps.Value >= config->tcu_pcLowMidTpsEnter) {
+			tcu_pcDemandBand = 1;
 		}
-	} else {
-		torqueConverterDuty = 0;
-		enginePins.tcuTccOnoffSolenoid.setValue(0);
+		break;
+	case 2: // High
+		if (tps.Value <= config->tcu_pcMidHighTpsExit) {
+			tcu_pcDemandBand = 1;
+		}
+		break;
+	default: // Mid
+		if (tps.Value >= config->tcu_pcMidHighTpsEnter) {
+			tcu_pcDemandBand = 2;
+		} else if (tps.Value <= config->tcu_pcLowMidTpsExit) {
+			tcu_pcDemandBand = 0;
+		}
+		break;
 	}
-}
 
-void Generic4TransmissionController::setPcState(gear_e gear) {
-	uint8_t (*pcts)[TCU_TABLE_WIDTH];
-
-	switch (gear) {
-	case REVERSE:
-		pcts = &config->tcu_pcValsR;
+	uint8_t duty;
+	switch (tcu_pcDemandBand) {
+	case 0:
+		duty = isShifting ? config->tcu_pcLowShiftDuty : config->tcu_pcLowCruiseDuty;
 		break;
-	case NEUTRAL:
-		pcts = &config->tcu_pcValsN;
-		break;
-	case GEAR_1:
-		if (isShifting && shiftingFrom == GEAR_2) {
-			pcts = &config->tcu_pcVals21;
-		} else {
-			pcts = &config->tcu_pcVals1;
-		}
-		break;
-	case GEAR_2:
-		if (isShifting && shiftingFrom == GEAR_1) {
-			pcts = &config->tcu_pcVals12;
-		} else if (isShifting && shiftingFrom == GEAR_3) {
-			pcts = &config->tcu_pcVals32;
-		} else {
-			pcts = &config->tcu_pcVals2;
-		}
-		break;
-	case GEAR_3:
-		if (isShifting && shiftingFrom == GEAR_2) {
-			pcts = &config->tcu_pcVals23;
-		} else if (isShifting && shiftingFrom == GEAR_4) {
-			pcts = &config->tcu_pcVals43;
-		} else {
-			pcts = &config->tcu_pcVals3;
-		}
-		break;
-	case GEAR_4:
-		if (isShifting && shiftingFrom == GEAR_3) {
-			pcts = &config->tcu_pcVals34;
-		} else {
-			pcts = &config->tcu_pcVals4;
-		}
+	case 2:
+		duty = isShifting ? config->tcu_pcHighShiftDuty : config->tcu_pcHighCruiseDuty;
 		break;
 	default:
+		duty = isShifting ? config->tcu_pcMidShiftDuty : config->tcu_pcMidCruiseDuty;
 		break;
 	}
 
-	if (pcts) {
-		pressureControlDuty = interpolate2d(engine->engineState.airflowEstimate, config->tcu_pcAirmassBins, *pcts);
-		pcPwm.setSimplePwmDutyCycle(0.01f * pressureControlDuty);
-	}
+	pressureControlDuty = duty;
+	pcPwm.setSimplePwmDutyCycle(0.01f * duty);
 }
 
 Generic4TransmissionController* getGeneric4TransmissionController() {
@@ -217,111 +182,18 @@ void configureTcu4R70W() {
 	config->tcuSolenoidTable[0][5] = 1;
 	config->tcuSolenoidTable[1][5] = 1;
 
-	// Pressure Control
-	config->tcu_pcAirmassBins[0] = 50.0;
-	config->tcu_pcAirmassBins[1] = 110.0;
-	config->tcu_pcAirmassBins[2] = 220.0;
-	config->tcu_pcAirmassBins[3] = 350.0;
-	config->tcu_pcAirmassBins[4] = 500.0;
-	config->tcu_pcAirmassBins[5] = 750.0;
-	config->tcu_pcAirmassBins[6] = 900.0;
-	config->tcu_pcAirmassBins[7] = 1000.0;
-	config->tcu_pcValsR[0] = 40.0;
-	config->tcu_pcValsR[1] = 35.0;
-	config->tcu_pcValsR[2] = 30.0;
-	config->tcu_pcValsR[3] = 30.0;
-	config->tcu_pcValsR[4] = 30.0;
-	config->tcu_pcValsR[5] = 25.0;
-	config->tcu_pcValsR[6] = 10.0;
-	config->tcu_pcValsR[7] = 10.0;
-	config->tcu_pcValsN[0] = 40.0;
-	config->tcu_pcValsN[1] = 35.0;
-	config->tcu_pcValsN[2] = 30.0;
-	config->tcu_pcValsN[3] = 30.0;
-	config->tcu_pcValsN[4] = 30.0;
-	config->tcu_pcValsN[5] = 25.0;
-	config->tcu_pcValsN[6] = 10.0;
-	config->tcu_pcValsN[7] = 10.0;
-	config->tcu_pcVals1[0] = 40.0;
-	config->tcu_pcVals1[1] = 35.0;
-	config->tcu_pcVals1[2] = 30.0;
-	config->tcu_pcVals1[3] = 30.0;
-	config->tcu_pcVals1[4] = 30.0;
-	config->tcu_pcVals1[5] = 25.0;
-	config->tcu_pcVals1[6] = 10.0;
-	config->tcu_pcVals1[7] = 10.0;
-	config->tcu_pcVals2[0] = 40.0;
-	config->tcu_pcVals2[1] = 35.0;
-	config->tcu_pcVals2[2] = 30.0;
-	config->tcu_pcVals2[3] = 30.0;
-	config->tcu_pcVals2[4] = 30.0;
-	config->tcu_pcVals2[5] = 25.0;
-	config->tcu_pcVals2[6] = 10.0;
-	config->tcu_pcVals2[7] = 10.0;
-	config->tcu_pcVals3[0] = 40.0;
-	config->tcu_pcVals3[1] = 35.0;
-	config->tcu_pcVals3[2] = 30.0;
-	config->tcu_pcVals3[3] = 30.0;
-	config->tcu_pcVals3[4] = 30.0;
-	config->tcu_pcVals3[5] = 25.0;
-	config->tcu_pcVals3[6] = 10.0;
-	config->tcu_pcVals3[7] = 10.0;
-	config->tcu_pcVals4[0] = 40.0;
-	config->tcu_pcVals4[1] = 35.0;
-	config->tcu_pcVals4[2] = 30.0;
-	config->tcu_pcVals4[3] = 30.0;
-	config->tcu_pcVals4[4] = 30.0;
-	config->tcu_pcVals4[5] = 25.0;
-	config->tcu_pcVals4[6] = 10.0;
-	config->tcu_pcVals4[7] = 10.0;
-	config->tcu_pcVals12[0] = 80.0;
-	config->tcu_pcVals12[1] = 60.0;
-	config->tcu_pcVals12[2] = 50.0;
-	config->tcu_pcVals12[3] = 44.0;
-	config->tcu_pcVals12[4] = 40.0;
-	config->tcu_pcVals12[5] = 20.0;
-	config->tcu_pcVals12[6] = 10.0;
-	config->tcu_pcVals12[7] = 10.0;
-	config->tcu_pcVals23[0] = 45.0;
-	config->tcu_pcVals23[1] = 40.0;
-	config->tcu_pcVals23[2] = 35.0;
-	config->tcu_pcVals23[3] = 30.0;
-	config->tcu_pcVals23[4] = 35.0;
-	config->tcu_pcVals23[5] = 15.0;
-	config->tcu_pcVals23[6] = 10.0;
-	config->tcu_pcVals23[7] = 10.0;
-	config->tcu_pcVals34[0] = 35.0;
-	config->tcu_pcVals34[1] = 32.0;
-	config->tcu_pcVals34[2] = 30.0;
-	config->tcu_pcVals34[3] = 38.0;
-	config->tcu_pcVals34[4] = 25.0;
-	config->tcu_pcVals34[5] = 15.0;
-	config->tcu_pcVals34[6] = 10.0;
-	config->tcu_pcVals34[7] = 10.0;
-	config->tcu_pcVals21[0] = 60.0;
-	config->tcu_pcVals21[1] = 55.0;
-	config->tcu_pcVals21[2] = 50.0;
-	config->tcu_pcVals21[3] = 45.0;
-	config->tcu_pcVals21[4] = 40.0;
-	config->tcu_pcVals21[5] = 35.0;
-	config->tcu_pcVals21[6] = 30.0;
-	config->tcu_pcVals21[7] = 30.0;
-	config->tcu_pcVals32[0] = 60.0;
-	config->tcu_pcVals32[1] = 55.0;
-	config->tcu_pcVals32[2] = 50.0;
-	config->tcu_pcVals32[3] = 45.0;
-	config->tcu_pcVals32[4] = 40.0;
-	config->tcu_pcVals32[5] = 35.0;
-	config->tcu_pcVals32[6] = 30.0;
-	config->tcu_pcVals32[7] = 30.0;
-	config->tcu_pcVals43[0] = 60.0;
-	config->tcu_pcVals43[1] = 55.0;
-	config->tcu_pcVals43[2] = 50.0;
-	config->tcu_pcVals43[3] = 45.0;
-	config->tcu_pcVals43[4] = 40.0;
-	config->tcu_pcVals43[5] = 35.0;
-	config->tcu_pcVals43[6] = 30.0;
-	config->tcu_pcVals43[7] = 30.0;
+	// Pressure Control: 3-band TPS demand (Low/Mid/High) x cruise/shift, same for every gear.
+	// Hysteresis on the band thresholds avoids duty chatter at a fixed cruising TPS.
+	config->tcu_pcLowMidTpsEnter = 15;
+	config->tcu_pcLowMidTpsExit = 10;
+	config->tcu_pcMidHighTpsEnter = 55;
+	config->tcu_pcMidHighTpsExit = 48;
+	config->tcu_pcLowCruiseDuty = 30;
+	config->tcu_pcMidCruiseDuty = 40;
+	config->tcu_pcHighCruiseDuty = 60;
+	config->tcu_pcLowShiftDuty = 45;
+	config->tcu_pcMidShiftDuty = 55;
+	config->tcu_pcHighShiftDuty = 80;
 
 	// TCC Control
 	config->tcu_tccTpsBins[0] = 11.0;
@@ -348,6 +220,9 @@ void configureTcu4R70W() {
 	config->tcu_tccUnlockSpeed[5] = 67.0;
 	config->tcu_tccUnlockSpeed[6] = 78.0;
 	config->tcu_tccUnlockSpeed[7] = 93.0;
+	// preserve prior behavior: lock-up only in top gear, no minimum coolant temp gate
+	config->tcu_tccMinGear = GEAR_4;
+	config->tcu_tccMinClt = 0;
 
 	// Shift Config
 	config->tcu_shiftTime = 600.0;

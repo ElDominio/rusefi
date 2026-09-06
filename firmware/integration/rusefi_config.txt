@@ -2371,6 +2371,21 @@ uint8_t[TCU_TABLE_WIDTH] tcu_pcVals43;;"%", 1, 0, 0, 255, 0
 uint8_t[8] tcu_tccTpsBins;;"TPS", 1, 0, 0, 255, 0
 uint8_t[8] tcu_tccLockSpeed;;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
 uint8_t[8] tcu_tccUnlockSpeed;;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
+uint8_t tcu_tccMinGear;Lock-up is only allowed at or above this gear, regardless of the TCC Lock/Unlock curve.;"gear", 1, 0, 0, 4, 0
+int16_t tcu_tccMinClt;Lock-up is inhibited below this coolant temperature, to avoid locking a cold converter. 0 disables the check.;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? 0 : 32}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
+
+// Simplified line pressure control: one duty per (Low/Mid/High driver demand) x (cruising/shifting),
+// applied regardless of gear. Replaces tcu_pcVals*/tcu_pcAirmassBins (kept, unused, for tune compatibility).
+uint8_t tcu_pcLowMidTpsEnter;TPS threshold to move from Low to Mid line pressure demand (rising).;"TPS", 1, 0, 0, 100, 0
+uint8_t tcu_pcLowMidTpsExit;TPS threshold to move from Mid back to Low line pressure demand (falling). Keep at or below the enter threshold to avoid duty chatter.;"TPS", 1, 0, 0, 100, 0
+uint8_t tcu_pcMidHighTpsEnter;TPS threshold to move from Mid to High line pressure demand (rising).;"TPS", 1, 0, 0, 100, 0
+uint8_t tcu_pcMidHighTpsExit;TPS threshold to move from High back to Mid line pressure demand (falling). Keep at or below the enter threshold to avoid duty chatter.;"TPS", 1, 0, 0, 100, 0
+uint8_t tcu_pcLowCruiseDuty;Line pressure solenoid duty at Low driver demand, not shifting.;"%", 1, 0, 0, 100, 0
+uint8_t tcu_pcMidCruiseDuty;Line pressure solenoid duty at Mid driver demand, not shifting.;"%", 1, 0, 0, 100, 0
+uint8_t tcu_pcHighCruiseDuty;Line pressure solenoid duty at High driver demand, not shifting.;"%", 1, 0, 0, 100, 0
+uint8_t tcu_pcLowShiftDuty;Line pressure solenoid duty at Low driver demand, while shifting.;"%", 1, 0, 0, 100, 0
+uint8_t tcu_pcMidShiftDuty;Line pressure solenoid duty at Mid driver demand, while shifting.;"%", 1, 0, 0, 100, 0
+uint8_t tcu_pcHighShiftDuty;Line pressure solenoid duty at High driver demand, while shifting.;"%", 1, 0, 0, 100, 0
 
 uint8_t[8] tcu_32SpeedBins;;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
 uint8_t[8] tcu_32Vals;;"%", 1, 0, 0, 255, 0

@@ -5,6 +5,7 @@ struct_no_prefix tcu_controller_s
 	uint8_t tcu_currentRange;"TCU: Current Range";"", 1, 0, 0, 0, 0
 	int8_t pressureControlDuty;"TCU: EPC Duty";"%",1,0,0,100,0
 	int8_t torqueConverterDuty;"TCU: TC Duty";"%",1,0,0,100,0
+	uint8_t tcu_pcDemandBand;TCU: PC Demand Band\nCurrent line pressure driver-demand band: 0=Low, 1=Mid, 2=High.;"", 1, 0, 0, 2, 0
 	bit isShifting;
 	bit tcu_solenoid1On;TCU: Solenoid 1 On
 	bit tcu_solenoid2On;TCU: Solenoid 2 On

@@ -11,9 +11,7 @@ public:
 		return TransmissionControllerMode::Generic4;
 	}
 private:
-	void setTccState(gear_e gear);
-	void setPcState(gear_e gear);
-	gear_e shiftingFrom;
+	void setPcState();
 };
 
 Generic4TransmissionController* getGeneric4TransmissionController();

@@ -29,9 +29,14 @@ public:
 	}
 protected:
 	gear_e currentGear = NEUTRAL;
+	gear_e shiftingFrom = NEUTRAL;
 	virtual gear_e setCurrentGear(gear_e);
 	void postState();
 	void measureShiftTime(gear_e);
 	float isShiftCompleted();
+	// Simple hysteresis-based torque converter clutch lock-up: TPS-dependent lock/unlock
+	// vehicle speed curve, inhibited while shifting, below the minimum gear/CLT, or with
+	// the brake pedal pressed. Drives enginePins.tcuTccOnoffSolenoid.
+	void updateTccLockup(gear_e gear);
 };
 #endif // EFI_TCU
