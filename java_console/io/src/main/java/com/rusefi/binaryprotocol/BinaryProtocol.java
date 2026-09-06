@@ -239,11 +239,17 @@ public class BinaryProtocol {
             if (!com.rusefi.core.io.BoardCompatibility.isEcuCompatible(bundleTarget, ecuSignature.getBundleTarget())) {
                 UnsupportedEcuInfo unsupported = new UnsupportedEcuInfo(
                     ecuSignature.getBundleTarget(), bundleTarget);
-                linkManager.reportUnsupportedEcu(unsupported);
-                String errorMsg = unsupported.getMessage();
-                log.info(errorMsg);
-                close();
-                return errorMsg;
+                if (!com.rusefi.core.io.ForcedEcuOverride.isForced(linkManager.getLastTriedPort())) {
+                    linkManager.reportUnsupportedEcu(unsupported);
+                    String errorMsg = unsupported.getMessage();
+                    log.info(errorMsg);
+                    close();
+                    return errorMsg;
+                }
+                // User explicitly forced this port past the compatibility gate ("I know what I'm doing").
+                // Fall through and connect using the ECU's OWN signature/.ini below, so current settings
+                // can still be read and migrated even though this bundle would otherwise refuse the target.
+                log.info("FORCED CONNECTION despite unsupported ECU: " + unsupported.getMessage());
             }
         }
         if (ecuSignature != null) {

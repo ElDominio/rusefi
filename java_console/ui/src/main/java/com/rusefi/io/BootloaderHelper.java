@@ -40,25 +40,57 @@ public class BootloaderHelper {
                     String message = String.format("You have \"%s\" controller does not look right to program it with \"%s\"", ecuTarget, fileSystemBundleTarget);
                     log.info(message);
 
-                    SwingUtilities.invokeLater(() -> {
-                        JOptionPane.showMessageDialog(parent, message);
-                        // in case of mismatched bundle type we are supposed do close connection
-                        // and properly handle the case of user hitting "Update Firmware" again
-                        // closing connection is a mess on Windows so it's simpler to just exit
-                        new Thread(() -> {
-                            // let's have a delay and separate thread to address
-                            // "wrong bundle" warning text sometimes not visible #3267
-                            sleep(5 * SECOND);
-                            System.exit(-5);
-                        }).start();
-                    });
+                    if (confirmFlashAnyway(parent, ecuTarget, fileSystemBundleTarget)) {
+                        log.info("FORCED: proceeding to program \"" + ecuTarget + "\" with \"" + fileSystemBundleTarget + "\" firmware (user override).");
+                        // fall through to sendBootloaderRebootCommand() below, same as the ownBoard/compatible case
+                    } else {
+                        SwingUtilities.invokeLater(() -> {
+                            JOptionPane.showMessageDialog(parent, message);
+                            // in case of mismatched bundle type we are supposed do close connection
+                            // and properly handle the case of user hitting "Update Firmware" again
+                            // closing connection is a mess on Windows so it's simpler to just exit
+                            new Thread(() -> {
+                                // let's have a delay and separate thread to address
+                                // "wrong bundle" warning text sometimes not visible #3267
+                                sleep(5 * SECOND);
+                                System.exit(-5);
+                            }).start();
+                        });
 
-                    return false;
+                        return false;
+                    }
                 }
             }
         }
 
         BootloaderCommsHelper.sendBootloaderRebootCommand(stream, callbacks, command);
         return true;
+    }
+
+    /**
+     * Fail-safe-but-escapable version of the board-mismatch block above: lets a user who knows what
+     * they're doing (e.g. migrating an ECU from a since-renamed/split bundle target, such as a plain
+     * "paralela" board being moved onto a "paralela_f427" bundle) proceed anyway instead of getting
+     * the app killed. Blocks the calling thread for the answer; fails closed (no flash) if interrupted.
+     */
+    private static boolean confirmFlashAnyway(JComponent parent, String ecuTarget, String fileSystemBundleTarget) {
+        String message = String.format(
+            "DANGER: connected controller identifies as \"%s\", but this bundle programs \"%s\".\n\n" +
+                "This is almost certainly the WRONG firmware for this board and could brick it.\n\n" +
+                "Flash \"%s\" firmware anyway?", ecuTarget, fileSystemBundleTarget, fileSystemBundleTarget);
+        final boolean[] confirmed = {false};
+        Runnable ask = () -> confirmed[0] = JOptionPane.showConfirmDialog(
+            parent, message, "Firmware / board mismatch", JOptionPane.OK_CANCEL_OPTION, JOptionPane.ERROR_MESSAGE) == JOptionPane.OK_OPTION;
+        try {
+            if (SwingUtilities.isEventDispatchThread()) {
+                ask.run();
+            } else {
+                SwingUtilities.invokeAndWait(ask);
+            }
+        } catch (Exception e) {
+            log.warn("confirmFlashAnyway interrupted, treating as cancel: " + e);
+            return false;
+        }
+        return confirmed[0];
     }
 }

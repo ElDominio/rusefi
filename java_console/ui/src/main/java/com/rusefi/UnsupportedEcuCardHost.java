@@ -1,6 +1,7 @@
 package com.rusefi;
 
 import com.rusefi.core.RusEfiSignature;
+import com.rusefi.core.io.ForcedEcuOverride;
 import com.rusefi.core.io.UnsupportedEcuInfo;
 import com.rusefi.io.LinkManager;
 import com.rusefi.io.tcp.TcpConnector;
@@ -40,6 +41,7 @@ public final class UnsupportedEcuCardHost implements LinkManager.EcuCompatibilit
     private final JTextArea detectedPorts = new JTextArea();
     private final JLabel bundleTarget = new JLabel();
     private final JButton downloadButton = new JButton("Download compatible bundle");
+    private final JButton forceConnectButton = new JButton("I know what I'm doing - connect anyway");
     private final Map<String, Blocker> blockers = new HashMap<>();
     private final Map<String, String> compatibleIdentities = new HashMap<>();
     private final Set<String> presentPorts = new HashSet<>();
@@ -132,6 +134,24 @@ public final class UnsupportedEcuCardHost implements LinkManager.EcuCompatibilit
         }
     }
 
+    /**
+     * "I know what I'm doing": marks every currently-blocked port as force-allowed
+     * ({@link ForcedEcuOverride}) and kicks the scanner to re-probe them immediately. The re-probe goes
+     * through the same {@code BinaryProtocol.connectAndReadConfiguration} path, which - once forced - uses
+     * the ECU's own reported signature to fetch its .ini rather than this bundle's, so the port comes back
+     * as a normal, connectable ECU carrying its own current settings.
+     */
+    private void forceConnectBlockedPorts() {
+        List<String> ports;
+        synchronized (this) {
+            ports = new ArrayList<>(blockers.keySet());
+        }
+        for (String port : ports) {
+            ForcedEcuOverride.force(port);
+            portScanner.invalidatePort(port);
+        }
+    }
+
     private void onHardwareChanged(AvailableHardware hardware) {
         Map<String, PortResult> ports = new HashMap<>();
         for (PortResult port : hardware.getKnownPorts()) {
@@ -141,8 +161,14 @@ public final class UnsupportedEcuCardHost implements LinkManager.EcuCompatibilit
         synchronized (this) {
             presentPorts.clear();
             presentPorts.addAll(ports.keySet());
-            blockers.entrySet().removeIf(entry -> !ports.containsKey(entry.getKey())
-                && !(entry.getValue().typed && LinkManager.isSpecialNotSerial(entry.getKey())));
+            blockers.entrySet().removeIf(entry -> {
+                boolean vanished = !ports.containsKey(entry.getKey())
+                    && !(entry.getValue().typed && LinkManager.isSpecialNotSerial(entry.getKey()));
+                if (vanished) {
+                    ForcedEcuOverride.clear(entry.getKey());
+                }
+                return vanished;
+            });
             compatibleIdentities.keySet().removeIf(port -> !ports.containsKey(port));
             for (PortResult port : ports.values()) {
                 Blocker current = blockers.get(port.port);
@@ -325,9 +351,21 @@ public final class UnsupportedEcuCardHost implements LinkManager.EcuCompatibilit
             }
         });
         card.add(downloadButton);
+        card.add(Box.createVerticalStrut(10));
+
+        forceConnectButton.putClientProperty("JButton.buttonType", "roundRect");
+        forceConnectButton.setFont(forceConnectButton.getFont().deriveFont(Font.BOLD));
+        forceConnectButton.setMargin(new Insets(10, 20, 10, 20));
+        forceConnectButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        forceConnectButton.setToolTipText(
+            "Connects using the definition the ECU itself reports, so you can read and migrate its " +
+                "current settings. This bundle's own safety check is skipped - flashing new firmware is " +
+                "still on you to get right.");
+        forceConnectButton.addActionListener(e -> forceConnectBlockedPorts());
+        card.add(forceConnectButton);
         card.add(Box.createVerticalStrut(16));
 
-        JLabel instruction = new JLabel("Disconnect every unsupported ECU to continue.");
+        JLabel instruction = new JLabel("Disconnect every unsupported ECU, or force a connection above, to continue.");
         instruction.setForeground(muted);
         instruction.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.add(instruction);
