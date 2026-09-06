@@ -494,6 +494,16 @@ static SensorType luaGaugeTypes[] = {
   SensorType::LuaGauge8
   };
 
+// No external-CAN-ETB special case here on purpose. Since TPS1/TPSB and the pedal became real
+// "virtual channels" (init_tps.cpp's TpsConfig::isVirtual), those sensors are registered and fed
+// volts by EtbCanRawListener (init_etb_can.cpp) exactly as an AdcSubscription would feed a physical
+// pin, so Sensor::getRaw() already returns the right volts in CAN mode - the same call, for the
+// same reason, as for a wired sensor. Tps2Primary/Secondary stay unregistered in CAN mode (no
+// per-throttle CAN addressing exists), and Sensor::getRaw() returns 0 for an unregistered type.
+//
+// The removed CAN branch here pre-dated that refactor and had gone wrong with it: it still applied
+// a raw-count-to-volts conversion to the pedal channels, which by then were already volts, scaling
+// the "Raw PPS" gauges to ~0. It also cited a CanPedalSensor that no longer exists.
 static void updateRawSensors() {
 	engine->outputChannels.rawTps1Primary = Sensor::getRaw(SensorType::Tps1Primary);
 	engine->outputChannels.rawTps1Secondary = Sensor::getRaw(SensorType::Tps1Secondary);

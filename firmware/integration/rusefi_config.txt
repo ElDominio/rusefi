@@ -1051,21 +1051,13 @@ custom uart_device_e 1 bits, U08, @OFFSET@, [0:1], "Off", "UART1", "UART2", "UAR
 	tps_limit_t tps1SecondaryMax;Fully opened voltage for secondary throttle position sensor
 	uint16_t startCrankingDuration;Maximum time to crank starter when start/stop button is pressed;"Seconds", 1, 0, 0, 30, 0
 
-	! External CAN ETB (enableExternalCanEtb): raw ADC (0-4095) calibration endpoints for the
-	! board's TPS1/TPSB and PEDAL1/PEDAL2 channels. Persisted here (unlike the board's own
-	! calibration, which does not survive a board reset) so they can be re-sent as ETB_CAL_TPS/
-	! ETB_CAL_PEDAL after any reset - board or rusEFI. TPS values come from the auto-calibrate
-	! sweep (doAutocalExternalCan); pedal values come from the "Grab Pedal Up/WOT" buttons
-	! (grabPedalIsUp/grabPedalIsWideOpen, tps.cpp) same as local pedal calibration, just written
-	! here instead of throttlePedalUpVoltage/WOTVoltage when enableExternalCanEtb is set.
-	uint16_t canEtbTps1RawMin;;"", 1, 0, 0, 4095, 0
-	uint16_t canEtbTps1RawMax;;"", 1, 0, 0, 4095, 0
-	uint16_t canEtbTpsBRawMin;;"", 1, 0, 0, 4095, 0
-	uint16_t canEtbTpsBRawMax;;"", 1, 0, 0, 4095, 0
-	uint16_t canEtbPedal1RawMin;;"", 1, 0, 0, 4095, 0
-	uint16_t canEtbPedal1RawMax;;"", 1, 0, 0, 4095, 0
-	uint16_t canEtbPedal2RawMin;;"", 1, 0, 0, 4095, 0
-	uint16_t canEtbPedal2RawMax;;"", 1, 0, 0, 4095, 0
+	! External CAN ETB (enableExternalCanEtb): neither TPS1/TPSB nor the pedal have dedicated raw
+	! calibration fields here - both reuse the same volts-typed fields a physically-wired sensor
+	! would use (tpsMin/tpsMax/tps1SecondaryMin/tps1SecondaryMax above for TPS1/TPSB;
+	! throttlePedalUpVoltage/WOTVoltage/SecondaryUpVoltage/SecondaryWOTVoltage for the pedal),
+	! converted to the board's raw ADC counts only at the CAN TX boundary
+	! (can_etb_remote.cpp's sendExternalEtbCalibration(), can_etb.h's
+	! CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS). See init_tps.cpp's "virtual channel" support.
 
 	Gpio triggerErrorPin;This pin is used for debugging - snap a logic analyzer on it and see if it's ever high
 	pin_output_mode_e triggerErrorPinMode;

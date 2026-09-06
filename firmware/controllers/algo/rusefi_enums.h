@@ -953,11 +953,6 @@ enum class TsCalMode : uint8_t {
 	PedalMax = 13,
 	EwgPosMax = 14,
 	EwgPosMin = 15,
-	// External CAN ETB (enableExternalCanEtb): raw ADC pedal calibration, see can_etb.h and
-	// grabPedalIsUp()/grabPedalIsWideOpen() (tps.cpp) - same buttons as PedalMin/PedalMax above,
-	// different destination field (canEtbPedal1/2RawMin/Max instead of throttlePedalUp/WOTVoltage).
-	CanEtbPedalMin = 16,
-	CanEtbPedalMax = 17,
 };
 
 enum class GearControllerMode : uint8_t {

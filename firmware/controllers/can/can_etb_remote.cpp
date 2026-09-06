@@ -3,7 +3,7 @@
  *
  * The "remote ETB" side of the external CH32V203 ETB controller integration (see can_etb.h and
  * external-etb/RUSEFI_SIDE_TODO.md #3.1/#3.2). Two independent mechanisms live here, both gated by
- * engineConfiguration->enableExternalCanEtb:
+ * isExternalCanEtbEnabled() (can_etb.h):
  *
  *  - #3.1 normal closed-loop operation: sendExternalEtbGains()/sendExternalEtbTarget(), called
  *    periodically from can_tx.cpp's CanWrite::PeriodicTask(). Reads gains from
@@ -32,6 +32,7 @@
 #if EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB
 #include "can_msg_tx.h"
 #include "electronic_throttle.h"
+#include "tps.h"
 
 size_t getExternalEtbBus() {
 	return (size_t)engineConfiguration->canEtbBusIndex;
@@ -59,16 +60,30 @@ struct EtbCanCalFrame {
 	uint16_t min2;
 	uint16_t max2;
 };
+struct EtbCanLimitsFrame {
+	int16_t iTermMin;
+	int16_t iTermMax;
+	int16_t minValue;
+	int16_t maxValue;
+};
+struct EtbCanBiasFrame {
+	int16_t binA;
+	int16_t valueA;
+	int16_t binB;
+	int16_t valueB;
+};
 
 static_assert(sizeof(EtbCanGains1Frame) == 8);
 static_assert(sizeof(EtbCanGains2Frame) == 8);
 static_assert(sizeof(EtbCanTargetFrame) == 8);
 static_assert(sizeof(EtbCanCalFrame) == 8);
+static_assert(sizeof(EtbCanLimitsFrame) == 8);
+static_assert(sizeof(EtbCanBiasFrame) == 8);
 
 CanDcMotor externalEtbCanMotor;
 
 void CanDcMotor::sendTarget() {
-	CanTxTyped<EtbCanTargetFrame> m(CanCategory::ETB, CAN_ID_ETB_TARGET, false, getExternalEtbBus());
+	CanTxTyped<EtbCanTargetFrame> m(CanCategory::ETB, CAN_ID_ETB_TARGET, true, getExternalEtbBus());
 	m->targetPosition = 0; // unused when mode == OpenLoop
 	m->benchDutyRaw = (int16_t)(m_duty * 10000.0f);
 	m->mode = (uint8_t)EtbCanMode::OpenLoop;
@@ -94,14 +109,46 @@ void CanDcMotor::disable(const char* /*msg*/) {
 
 void sendExternalEtbGains() {
 	{
-		CanTxTyped<EtbCanGains1Frame> m(CanCategory::ETB, CAN_ID_ETB_GAINS_1, false, getExternalEtbBus());
+		CanTxTyped<EtbCanGains1Frame> m(CanCategory::ETB, CAN_ID_ETB_GAINS_1, true, getExternalEtbBus());
 		m->pFactor = engineConfiguration->etb.pFactor;
 		m->iFactor = engineConfiguration->etb.iFactor;
 	}
 	{
-		CanTxTyped<EtbCanGains2Frame> m(CanCategory::ETB, CAN_ID_ETB_GAINS_2, false, getExternalEtbBus());
+		CanTxTyped<EtbCanGains2Frame> m(CanCategory::ETB, CAN_ID_ETB_GAINS_2, true, getExternalEtbBus());
 		m->dFactor = engineConfiguration->etb.dFactor;
 		m->offset = engineConfiguration->etb.offset;
+	}
+}
+
+// iTerm/output limits (RUSEFI_SIDE_TODO.md/can_etb.h's ETB_LIMITS) - the board hardcodes both to
+// its own PID's output clamp until this arrives (electronic_throttle_impl.h's "just PID" gap #2).
+// engineConfiguration->etb.minValue/maxValue already default to the same +-100 the board hardcodes,
+// but etb_iTermMin/etb_iTermMax default to a much tighter +-30 - this is the one that actually
+// changes behavior once transmitted.
+void sendExternalEtbLimits() {
+	CanTxTyped<EtbCanLimitsFrame> m(CanCategory::ETB, CAN_ID_ETB_LIMITS, true, getExternalEtbBus());
+	m->iTermMin = (int16_t)(engineConfiguration->etb_iTermMin * 100.0f);
+	m->iTermMax = (int16_t)(engineConfiguration->etb_iTermMax * 100.0f);
+	m->minValue = (int16_t)(engineConfiguration->etb.minValue * 100.0f);
+	m->maxValue = (int16_t)(engineConfiguration->etb.maxValue * 100.0f);
+}
+
+// Feedforward/bias curve (can_etb.h's ETB_BIAS_1..4) - mirrors EtbController::getOpenLoop()'s
+// interpolate2d(target, etbBiasBins, etbBiasValues) onto the board, which was previously running
+// PID alone with no feedforward at all (electronic_throttle_impl.h's "dead ETB actuator-page
+// controls" gap #1 in docs/external-etb-can-followups.md).
+void sendExternalEtbBiasCurve() {
+	static_assert(ETB_BIAS_CURVE_LENGTH == 8, "ETB_BIAS_1..4 assumes exactly 8 points, 2 per frame");
+
+	uint32_t frameIds[4] = { CAN_ID_ETB_BIAS_1, CAN_ID_ETB_BIAS_2, CAN_ID_ETB_BIAS_3, CAN_ID_ETB_BIAS_4 };
+	for (int frame = 0; frame < 4; frame++) {
+		int a = frame * 2;
+		int b = a + 1;
+		CanTxTyped<EtbCanBiasFrame> m(CanCategory::ETB, frameIds[frame], true, getExternalEtbBus());
+		m->binA = (int16_t)(config->etbBiasBins[a] * 100.0f);
+		m->valueA = (int16_t)(config->etbBiasValues[a] * 100.0f);
+		m->binB = (int16_t)(config->etbBiasBins[b] * 100.0f);
+		m->valueB = (int16_t)(config->etbBiasValues[b] * 100.0f);
 	}
 }
 
@@ -149,7 +196,7 @@ void sendExternalEtbTarget() {
 	// EtbCanMode::Autotune's comment (can_etb.h) - board-side not yet implemented.
 	bool autotuneRequested = engine->etbAutoTune && Sensor::getOrZero(SensorType::Rpm) == 0;
 
-	CanTxTyped<EtbCanTargetFrame> m(CanCategory::ETB, CAN_ID_ETB_TARGET, false, getExternalEtbBus());
+	CanTxTyped<EtbCanTargetFrame> m(CanCategory::ETB, CAN_ID_ETB_TARGET, true, getExternalEtbBus());
 	m->targetPosition = target.Value;
 	m->benchDutyRaw = 0; // unused when mode == Normal or Autotune
 	m->mode = (uint8_t)(autotuneRequested ? EtbCanMode::Autotune : EtbCanMode::Normal);
@@ -157,7 +204,7 @@ void sendExternalEtbTarget() {
 }
 
 void sendExternalEtbCalTps(uint16_t rawMin1, uint16_t rawMax1, uint16_t rawMin2, uint16_t rawMax2) {
-	CanTxTyped<EtbCanCalFrame> m(CanCategory::ETB, CAN_ID_ETB_CAL_TPS, false, getExternalEtbBus());
+	CanTxTyped<EtbCanCalFrame> m(CanCategory::ETB, CAN_ID_ETB_CAL_TPS, true, getExternalEtbBus());
 	m->min1 = rawMin1;
 	m->max1 = rawMax1;
 	m->min2 = rawMin2;
@@ -165,25 +212,65 @@ void sendExternalEtbCalTps(uint16_t rawMin1, uint16_t rawMax1, uint16_t rawMin2,
 }
 
 void sendExternalEtbCalPedal(uint16_t rawMin1, uint16_t rawMax1, uint16_t rawMin2, uint16_t rawMax2) {
-	CanTxTyped<EtbCanCalFrame> m(CanCategory::ETB, CAN_ID_ETB_CAL_PEDAL, false, getExternalEtbBus());
+	CanTxTyped<EtbCanCalFrame> m(CanCategory::ETB, CAN_ID_ETB_CAL_PEDAL, true, getExternalEtbBus());
 	m->min1 = rawMin1;
 	m->max1 = rawMax1;
 	m->min2 = rawMin2;
 	m->max2 = rawMax2;
 }
 
+// engineConfiguration->tpsMin/tpsMax/tps1SecondaryMin/tps1SecondaryMax are the same fields a
+// physically-wired TPS1/TPSB calibration would use (see init_tps.cpp's "virtual channel" support) -
+// converted to the board's raw ADC counts here, at the CAN TX boundary, using its known fixed
+// 5V/4095-count scale (can_etb.h's CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS/MAX_COUNT). There is no
+// separate canEtbTps1RawMin-style persisted field anymore - these are the single source of truth,
+// same as a real pin, whether set manually in TunerStudio or by doAutocalExternalCan()'s sweep
+// (electronic_throttle_impl.h).
+//
+// tps_limit_t (tps.h) is a plain int16_t packed at TPS_TS_CONVERSION counts/volt, NOT already
+// volts and NOT the board's own ADC scale - divide by TPS_TS_CONVERSION first to get real volts,
+// exactly like LinearSensorUnit's LinearFunc (divideInput=TPS_TS_CONVERSION) already does when
+// unpacking the same fields for the local calibration curve.
+static float tpsPackedToVolts(int16_t packed) {
+	return packed / TPS_TS_CONVERSION;
+}
+
+static uint16_t voltsToCanEtbBoardRaw(float volts) {
+	float raw = volts / CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS * CAN_ETB_BOARD_ADC_MAX_COUNT;
+	return (uint16_t)clampF(0, raw, CAN_ETB_BOARD_ADC_MAX_COUNT);
+}
+
 void sendExternalEtbCalibration() {
-	sendExternalEtbCalTps(engineConfiguration->canEtbTps1RawMin, engineConfiguration->canEtbTps1RawMax,
-		engineConfiguration->canEtbTpsBRawMin, engineConfiguration->canEtbTpsBRawMax);
-	sendExternalEtbCalPedal(engineConfiguration->canEtbPedal1RawMin, engineConfiguration->canEtbPedal1RawMax,
-		engineConfiguration->canEtbPedal2RawMin, engineConfiguration->canEtbPedal2RawMax);
+	// tpsMin/tpsMax etc default to 0, so before calibration has ever happened this forwards a
+	// degenerate rawMax<=rawMin span - the board's raw_to_percent() (can_bus.c) deliberately
+	// guards that by reporting a flat 0% rather than a fabricated identity-scaled guess, so
+	// TPS1/TPSB correctly read 0% until real calibration exists. That's intentional, not a bug: an
+	// uncalibrated percent would look plausible while being mechanically meaningless. Use the
+	// "Raw TPS"/"Raw Pedal" V gauges (status_loop.cpp's updateRawSensors(), sourced from ETB_RAW
+	// directly, independent of calibration) to verify sensor wiring/movement before calibrating -
+	// see docs/report.md.
+	sendExternalEtbCalTps(
+		voltsToCanEtbBoardRaw(tpsPackedToVolts(engineConfiguration->tpsMin)),
+		voltsToCanEtbBoardRaw(tpsPackedToVolts(engineConfiguration->tpsMax)),
+		voltsToCanEtbBoardRaw(tpsPackedToVolts(engineConfiguration->tps1SecondaryMin)),
+		voltsToCanEtbBoardRaw(tpsPackedToVolts(engineConfiguration->tps1SecondaryMax)));
+
+	// throttlePedalUpVoltage/WOTVoltage/SecondaryUpVoltage/SecondaryWOTVoltage are plain floats
+	// (already real volts, unlike tps_limit_t - no unpacking needed) - the same fields a
+	// physically-wired pedal calibration would use (init_tps.cpp's "virtual channel" support).
+	sendExternalEtbCalPedal(
+		voltsToCanEtbBoardRaw(engineConfiguration->throttlePedalUpVoltage),
+		voltsToCanEtbBoardRaw(engineConfiguration->throttlePedalWOTVoltage),
+		voltsToCanEtbBoardRaw(engineConfiguration->throttlePedalSecondaryUpVoltage),
+		voltsToCanEtbBoardRaw(engineConfiguration->throttlePedalSecondaryWOTVoltage));
 }
 
 #else // !(EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB)
 
 // Stubs so electronic_throttle.cpp/.h don't need their own EFI_CAN_SUPPORT/EFI_EXTERNAL_CAN_ETB
-// guards - the board config that leaves enableExternalCanEtb reachable without this feature
-// compiled in is a config error, not something these no-ops need to detect themselves.
+// guards. Nothing here is reachable in this build anyway: isExternalCanEtbEnabled() (can_etb.h)
+// folds the feature flag in, so the config bit reads as false and every caller short-circuits
+// before it gets this far.
 CanDcMotor externalEtbCanMotor;
 size_t getExternalEtbBus() { return 0; }
 bool CanDcMotor::set(float) { return false; }
@@ -192,6 +279,8 @@ void CanDcMotor::disable(const char*) {}
 void CanDcMotor::sendTarget() {}
 void sendExternalEtbGains() {}
 void sendExternalEtbTarget() {}
+void sendExternalEtbLimits() {}
+void sendExternalEtbBiasCurve() {}
 void sendExternalEtbCalTps(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void sendExternalEtbCalPedal(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void sendExternalEtbCalibration() {}

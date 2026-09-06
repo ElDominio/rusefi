@@ -93,6 +93,13 @@ public:
 	// public, but that was only reachable through the concrete type, not this interface.
 	expected<percent_t> getSetpoint() override = 0;
 
+	// Setter for the board's own reported feedforward term (ETB_FEEDFORWARD, can_etb.h) - the
+	// board is the authority on what it actually applied (its own etbBiasBins/Values lookup, which
+	// may lag rusEFI's if a curve change hasn't landed yet), so this is populated from that
+	// telemetry rather than rusEFI recomputing interpolate2d() locally and guessing. No-op default
+	// for any non-EtbController IEtbController implementer (mirrors setLuaAdjustment's shape).
+	virtual void setFeedForward(percent_t /*feedForward*/) {}
+
 	// True while autocal or bench-test owns the motor directly instead of the normal closed-loop
 	// tick (EtbImpl::update() skips TBase::update() during this time - see electronic_throttle_impl.h).
 	// Lets the external CAN ETB's periodic remote-target component (#3.1) stay off the wire while

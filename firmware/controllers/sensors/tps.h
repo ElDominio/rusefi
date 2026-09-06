@@ -31,6 +31,17 @@ void grapTps1PrimaryIsClosed();
 void grapTps1PrimaryIsOpen();
 void grabPedalIsWideOpen();
 
+// External CAN ETB support (init_tps.cpp): feeds TPS1/TPSB volts into the same calibration curve
+// (tpsMin/tpsMax/tps1SecondaryMin/tps1SecondaryMax) a physically-wired TPS1/TPSB would use - see
+// can_etb.h's CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS for the raw-ADC-counts-to-volts conversion the
+// caller (init_etb_can.cpp) applies before calling this.
+void postExternalCanEtbRawTps(float tps1Volts, float tpsBVolts, efitick_t nowNt);
+
+// Same as postExternalCanEtbRawTps() above, for the pedal - also wired to the board (not rusEFI's
+// own ADC) under external CAN ETB mode. Feeds throttlePedalUpVoltage/WOTVoltage/
+// SecondaryUpVoltage/SecondaryWOTVoltage's calibration curve.
+void postExternalCanEtbRawPedal(float pedal1Volts, float pedal2Volts, efitick_t nowNt);
+
 #if EFI_SENT_SUPPORT
 
 struct SentTps : public StoredValueSensor {

@@ -2,21 +2,47 @@
  * @file init_etb_can.cpp
  *
  * Wires up RX for the external CH32V203 ETB controller (see ../../controllers/can/can_etb.h and
- * external-etb/RUSEFI_SIDE_TODO.md #3.1, #7 steps 2-3). Gated by
- * engineConfiguration->enableExternalCanEtb:
- *  - SensorType::Tps1/Tps2 <- ETB_STATUS's TPS1/TPSB, via CanSensor<> (step 2)
+ * external-etb/RUSEFI_SIDE_TODO.md #3.1, #7 steps 2-3). Gated by isExternalCanEtbEnabled()
+ * (can_etb.h):
+ *  - SensorType::Tps1/Tps1Secondary <- ETB_RAW's raw TPS1/TPSB, converted to volts (the board's
+ *    fixed 5V/4095-count ADC scale, CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS in can_etb.h) and fed into
+ *    the SAME calibration curve (tpsMin/tpsMax/tps1SecondaryMin/tps1SecondaryMax) and
+ *    RedundantPair/RedundantSensor plausibility logic a physically-wired TPS1/TPSB would use -
+ *    see init_tps.cpp's "virtual channel" support (TpsConfig::isVirtual) and
+ *    postExternalCanEtbRawTps() (tps.h), called from EtbCanRawListener below. This board behaves,
+ *    from rusEFI's perspective, exactly like a real ADC pin whose voltage happens to arrive over
+ *    CAN instead of a wire - NOT registered as SensorType::Tps2, which means "throttle body 2"
+ *    elsewhere (functionToTpsSensor(DC_Throttle2), init_tps.cpp's local RedundantPair tps2), not
+ *    "this throttle's secondary channel" (that's SensorType::Tps1Secondary, exactly what TPSB is).
+ *    ETB_STATUS's own pre-scaled TPS1/TPSB percent fields are no longer consumed rusEFI-side -
+ *    the board still computes and sends them (needed for its own local PID's target tracking,
+ *    see ETB_CAL_TPS below), but rusEFI now independently re-derives percent from ETB_RAW instead
+ *    of trusting the board's copy, same as any other redundant TPS pair.
  *  - outputChannels.etbStatus.{iTerm,dTerm} <- ETB_PID_STATUS, via a plain CanListener (step 3)
- *  - outputChannels.etbStatus.output <- ETB_STATUS's actualDuty, via a plain CanListener (step 3)
+ *  - outputChannels.etbStatus.output AND outputChannels.etb1DutyCycle <- ETB_STATUS's actualDuty,
+ *    via a plain CanListener (step 3) - the latter is the plain "ETB: Duty" gauge, which
+ *    EtbController::setOutput() would normally populate but never runs for CAN mode
+ *  - outputChannels.canEtbStatus <- ETB_STATUS's status byte (EtbCanStatus/etb_status_t: Fault/
+ *    Disabled/Normal/OpenLoop/Autotune), via the same listener as the duty above - the one piece of
+ *    telemetry that actually explains a stuck-at-zero duty (board-side fault or CAN staleness
+ *    failsafe vs. genuinely computing zero output), previously decoded nowhere on the rusEFI side
+ *    despite being on the wire (docs/external-etb-can-followups.md's wire-protocol-gaps section)
+ *  - electronic_throttle_s::etbFeedForward (etb1etbFeedForward gauge) <- ETB_FEEDFORWARD, via
+ *    IEtbController::setFeedForward() - the board's own applied feedforward, not a local
+ *    recompute (docs/external-etb-can-followups.md)
  *  - getExternalEtbRawTps() <- ETB_RAW's raw TPS1/TPSB, for the auto-calibrate sweep (step 5/6,
- *    see electronic_throttle_impl.h's doAutocalExternalCan())
- *  - SensorType::AcceleratorPedalPrimary/Secondary <- ETB_RAW's raw PEDAL1/PEDAL2, scaled by
- *    engineConfiguration->canEtbPedal1/2RawMin/Max, via CanPedalSensor. The pedal is wired to the
- *    CH32 board in this design (external-etb/CH32V203_ETB_CONTROLLER.md - PA2/PA3), not rusEFI's
- *    own ADC, and unlike TPS there is no pre-calibrated-percent frame for it (can_bus.h has no
- *    pedal equivalent of ETB_STATUS) - so rusEFI has to compute percent itself from raw + its own
- *    calibration, the same way the board computes TPS1/TPSB percent from raw + ETB_CAL_TPS.
- *    Feeds the existing SensorType::AcceleratorPedalUnfiltered/AcceleratorPedal pipeline
- *    (init_tps.cpp's RedundantSensor + ppsFilterSensor) unchanged once registered here.
+ *    see electronic_throttle_impl.h's doAutocalExternalCan()) - same raw values also drive the
+ *    SensorType::Tps1/Tps1Secondary feed above, from the same decodeFrame() call.
+ *  - SensorType::AcceleratorPedalPrimary/Secondary <- ETB_RAW's raw PEDAL1/PEDAL2, converted to
+ *    volts (same board ADC scale as TPS1/TPSB) and fed into the pedal's own "virtual channel"
+ *    (init_tps.cpp's pedal RedundantPair, postExternalCanEtbRawPedal() in tps.h) - same treatment
+ *    as TPS1/TPSB above, and for the same reason: the pedal is wired to the CH32 board in this
+ *    design (external-etb/CH32V203_ETB_CONTROLLER.md - PA2/PA3), not rusEFI's own ADC. This
+ *    reuses throttlePedalUpVoltage/WOTVoltage/SecondaryUpVoltage/SecondaryWOTVoltage - the same
+ *    calibration fields and "Grab Idle/Up"/"Grab WOT/Down" buttons (grabPedalIsUp()/
+ *    grabPedalIsWideOpen(), tps.cpp) a physically-wired pedal uses - rather than a separate
+ *    raw-ADC-only calibration path, and gets AcceleratorPedalUnfiltered/AcceleratorPedal
+ *    (ppsFilterSensor) and the RedundantPair mismatch check for free, same as TPS1/TPSB.
  *  - ETB_AUTOTUNE_STATUS_1/2 -> tsCalibrationSetData(TsCalMode::EtbKp/Ki/Kd, ...), the exact same
  *    mechanism/UI (Start/Stop ETB PID Autotune buttons) the local relay-autotune already uses
  *    (electronic_throttle.cpp's getClosedLoopAutotune()) - NOT YET IMPLEMENTED on the board side,
@@ -37,89 +63,15 @@
 #include "pch.h"
 
 #if EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB
-#include "can_sensor.h"
 #include "can_listener.h"
+#include "electronic_throttle.h"
 #include "can_etb.h"
-#include "redundant_sensor.h"
 #include "tunerstudio_calibration_channel.h"
+#include "tps.h"
 
 // Board reports telemetry at 10Hz (external-etb/CH32V203_ETB_CONTROLLER.md #0) - allow a couple of
 // missed frames before the sensor is considered stale, same margin as AemXSeriesLambda's wideband.
 static constexpr efidur_t etbCanSensorTimeout = MS2NT(3 * 100);
-
-static CanSensor<int16_t, PACK_MULT_PERCENT> externalEtbTps1Sensor(
-	CAN_ID_ETB_STATUS, ETB_STATUS_OFFSET_TPS1, SensorType::Tps1, etbCanSensorTimeout);
-
-static CanSensor<int16_t, PACK_MULT_PERCENT> externalEtbTps2Sensor(
-	CAN_ID_ETB_STATUS, ETB_STATUS_OFFSET_TPSB, SensorType::Tps2, etbCanSensorTimeout);
-
-// ETB_RAW (0x302)'s PEDAL1/PEDAL2 -> percent, scaled by the "grab" calibration
-// (canEtbPedal1/2RawMin/Max, see grabPedalIsUp()/grabPedalIsWideOpen() in tps.cpp). Not a plain
-// CanSensor<>: that template assumes the wire value already IS the scaled reading, but here the
-// wire only carries raw ADC and the scale (calibration) is rusEFI-side config, not fixed - so this
-// does the linear scaling itself in decodeFrame(), like a tiny CanSensor + FunctionalSensor rolled
-// into one. getRaw() returns the untouched ADC count for grabPedalIsUp()/WideOpen() to read.
-class CanPedalSensor : public CanSensorBase {
-public:
-	CanPedalSensor(uint8_t rawOffset, bool isSecondaryChannel, SensorType type)
-		: CanSensorBase(CAN_ID_ETB_RAW, type, etbCanSensorTimeout)
-		, m_rawOffset(rawOffset)
-		, m_isSecondaryChannel(isSecondaryChannel)
-	{
-	}
-
-	float getRaw() const override {
-		return m_rawValue;
-	}
-
-	bool hasRaw() const override {
-		return true;
-	}
-
-	void decodeFrame(const CANRxFrame& frame, efitick_t nowNt) override {
-		uint16_t raw;
-		memcpy(&raw, &frame.data8[m_rawOffset], sizeof(raw));
-		m_rawValue = raw;
-
-		uint16_t rawMin = m_isSecondaryChannel
-			? engineConfiguration->canEtbPedal2RawMin : engineConfiguration->canEtbPedal1RawMin;
-		uint16_t rawMax = m_isSecondaryChannel
-			? engineConfiguration->canEtbPedal2RawMax : engineConfiguration->canEtbPedal1RawMax;
-
-		// Not yet calibrated (both fields still 0, or a nonsensical min>=max) - leave the value
-		// invalid (times out) rather than report a meaningless percent. getSanitizedPedal()
-		// (electronic_throttle.cpp) already treats an invalid pedal as 0% (closed/idle), which is
-		// the safe direction to fail in for an uncalibrated pedal.
-		if (rawMax <= rawMin) {
-			return;
-		}
-
-		float percent = 100.0f * (raw - (float)rawMin) / (rawMax - rawMin);
-		setValidValue(clampPercentValue(percent), nowNt);
-	}
-
-private:
-	const uint8_t m_rawOffset;
-	const bool m_isSecondaryChannel;
-	float m_rawValue = 0;
-};
-
-static CanPedalSensor externalEtbPedal1Sensor(
-	ETB_RAW_OFFSET_PEDAL1, false, SensorType::AcceleratorPedalPrimary);
-
-static CanPedalSensor externalEtbPedal2Sensor(
-	ETB_RAW_OFFSET_PEDAL2, true, SensorType::AcceleratorPedalSecondary);
-
-// Combines the two into AcceleratorPedalUnfiltered, same as RedundantPair does for the local ADC
-// pedal in init_tps.cpp - init_tps.cpp's own pedal.init() never registers this SensorType when
-// throttlePedalPositionAdcChannel is left unconfigured (matching the "leave local channels
-// unconfigured" convention this file's header already documents for TPS), so it's free here.
-// initTps()'s ppsFilterSensor (unconditional, feeds SensorType::AcceleratorPedal with the usual
-// ppsExpAverage smoothing) picks this up automatically - no further wiring needed.
-static RedundantSensor externalEtbPedalUnfiltered(
-	SensorType::AcceleratorPedalUnfiltered,
-	SensorType::AcceleratorPedalPrimary,
-	SensorType::AcceleratorPedalSecondary);
 
 // PID autotune status (NOT YET IMPLEMENTED on the board - see can_etb.h's EtbCanMode::Autotune).
 // STATUS_1 (pFactor, iFactor) and STATUS_2 (dFactor) are expected back-to-back, so STATUS_2's
@@ -171,7 +123,7 @@ private:
 
 static EtbCanAutotuneStatus2Listener externalEtbAutotuneStatus2Listener;
 
-// Duty portion of ETB_STATUS (0x300) -> outputChannels.etbStatus.output. Separate listener from
+// Duty portion of ETB_STATUS (CAN_ETB_BASE_ID+0) -> outputChannels.etbStatus.output. Separate listener from
 // the TPS CanSensors above: multiple CanListeners can share one CAN ID (serviceCanSubscribers()
 // in can_rx.cpp walks the whole list per frame), each just reads a different byte range.
 class EtbCanDutyListener : public CanListener {
@@ -186,14 +138,51 @@ public:
 #if EFI_TUNER_STUDIO
 		// outputChannels.etbStatus.output is in the same percent space Pid::postState() uses
 		// locally (ETB_PERCENT_TO_DUTY's inverse: percent = duty * 100).
-		engine->outputChannels.etbStatus.output = duty * 100.0f;
+		float dutyPercent = duty * 100.0f;
+		engine->outputChannels.etbStatus.output = dutyPercent;
+
+		// etb1DutyCycle (the plain "ETB: Duty" gauge, etbDutyCycleGauge in gauge_declarations.ini)
+		// is a separate field only ever written by EtbController::setOutput() - a path CAN mode's
+		// update() early-returns before reaching (docs/external-etb-can-followups.md's "dead/stale
+		// telemetry" table). Mirror it here too, same value/units, so the gauge isn't stuck at 0.
+		// No per-throttle guard needed: this protocol has no per-throttle addressing yet (one CAN
+		// ETB board = "throttle 1"), same assumption checkStatus()'s postState() call already makes.
+		engine->outputChannels.etb1DutyCycle = dutyPercent;
+
+		// Board's own status byte (Fault/Disabled/Normal/OpenLoop/Autotune) - the only way to tell
+		// from TunerStudio *why* duty/feedforward read zero: genuinely computed zero output (Normal)
+		// vs. the board's h-bridge being forced off (Fault, or Disabled from ETB_TARGET going stale -
+		// failsafe.h's 200ms watchdog). Raw enum value, same convention as wideband_state_s's
+		// stateCode - no TS combo lookup wired up, just the number.
+		engine->outputChannels.canEtbStatus = frame.data8[ETB_STATUS_OFFSET_STATUS];
 #endif // EFI_TUNER_STUDIO
 	}
 };
 
 static EtbCanDutyListener externalEtbDutyListener;
 
-// ETB_PID_STATUS (0x301) -> outputChannels.etbStatus.{iTerm,dTerm}
+// ETB_FEEDFORWARD (CAN_ETB_BASE_ID+15) -> electronic_throttle_s::etbFeedForward (etb1etbFeedForward gauge),
+// via IEtbController::setFeedForward() - the board reports what it actually applied each tick
+// rather than rusEFI recomputing interpolate2d() locally, since the board is the authority on
+// what it actually used (docs/external-etb-can-followups.md). Throttle-1-only, same "no per-
+// throttle addressing yet" assumption checkStatus()'s postState() call already makes.
+class EtbCanFeedForwardListener : public CanListener {
+public:
+	EtbCanFeedForwardListener() : CanListener(CAN_ID_ETB_FEEDFORWARD) {}
+
+	void decodeFrame(const CANRxFrame& frame, efitick_t /*nowNt*/) override {
+		const auto feedForwardRaw = reinterpret_cast<const scaled_channel<int16_t, 100>*>(
+			&frame.data8[ETB_FEEDFORWARD_OFFSET_VALUE]);
+
+		if (auto controller = engine->etbControllers[0]) {
+			controller->setFeedForward(*feedForwardRaw);
+		}
+	}
+};
+
+static EtbCanFeedForwardListener externalEtbFeedForwardListener;
+
+// ETB_PID_STATUS (CAN_ETB_BASE_ID+1) -> outputChannels.etbStatus.{iTerm,dTerm}
 class EtbCanPidStatusListener : public CanListener {
 public:
 	EtbCanPidStatusListener() : CanListener(CAN_ID_ETB_PID_STATUS) {}
@@ -213,16 +202,22 @@ public:
 
 static EtbCanPidStatusListener externalEtbPidStatusListener;
 
-// ETB_RAW (0x302) -> latest raw TPS1/TPSB, for the auto-calibrate sweep only (step 5/6). Not a
-// CanSensor/SensorType: these raw counts aren't a value anything else should consume, and there's
-// no natural SensorType for them - a plain latched struct plus an accessor keeps this internal to
-// the one caller that needs it (doAutocalExternalCan()).
+// ETB_RAW (CAN_ETB_BASE_ID+2) -> latest raw TPS1/TPSB, for the auto-calibrate sweep only (step
+// 5/6, getExternalEtbRawTps()). Not a CanSensor/SensorType itself - these are pre-conversion raw
+// counts, kept only for the sweep's own endpoint-detection math. The SAME raw values also drive
+// SensorType::Tps1/Tps1Secondary, via postExternalCanEtbRawTps() below - see this file's header.
 struct EtbCanRawTps {
 	uint16_t tps1 = 0;
 	uint16_t tpsB = 0;
 	efitick_t lastUpdate = 0;
 };
 static EtbCanRawTps externalEtbRawTps;
+
+// raw-ADC-counts-to-volts conversion shared by TPS1/TPSB and PEDAL1/PEDAL2 below - all four are
+// the same board ADC (CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS/MAX_COUNT, can_etb.h).
+static float boardRawToVolts(uint16_t raw) {
+	return raw / CAN_ETB_BOARD_ADC_MAX_COUNT * CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS;
+}
 
 class EtbCanRawListener : public CanListener {
 public:
@@ -232,6 +227,16 @@ public:
 		memcpy(&externalEtbRawTps.tps1, &frame.data8[ETB_RAW_OFFSET_TPS1], sizeof(uint16_t));
 		memcpy(&externalEtbRawTps.tpsB, &frame.data8[ETB_RAW_OFFSET_TPSB], sizeof(uint16_t));
 		externalEtbRawTps.lastUpdate = nowNt;
+
+		// Feed rusEFI's own TPS1/TPSB calibration curve, exactly as a physical ADC pin would -
+		// see init_tps.cpp's "virtual channel" support and this file's header comment.
+		postExternalCanEtbRawTps(boardRawToVolts(externalEtbRawTps.tps1), boardRawToVolts(externalEtbRawTps.tpsB), nowNt);
+
+		// Same treatment for the pedal - also wired to the board, not rusEFI's own ADC.
+		uint16_t rawPedal1, rawPedal2;
+		memcpy(&rawPedal1, &frame.data8[ETB_RAW_OFFSET_PEDAL1], sizeof(uint16_t));
+		memcpy(&rawPedal2, &frame.data8[ETB_RAW_OFFSET_PEDAL2], sizeof(uint16_t));
+		postExternalCanEtbRawPedal(boardRawToVolts(rawPedal1), boardRawToVolts(rawPedal2), nowNt);
 	}
 };
 
@@ -249,7 +254,7 @@ bool getExternalEtbRawTps(uint16_t& tps1, uint16_t& tpsB) {
 }
 
 void initExternalCanEtbSensors() {
-	if (!engineConfiguration->enableExternalCanEtb) {
+	if (!isExternalCanEtbEnabled()) {
 		return;
 	}
 
@@ -261,18 +266,10 @@ void initExternalCanEtbSensors() {
 		return;
 	}
 
-	registerCanSensor(externalEtbTps1Sensor);
-	registerCanSensor(externalEtbTps2Sensor);
 	registerCanListener(externalEtbDutyListener);
 	registerCanListener(externalEtbPidStatusListener);
 	registerCanListener(externalEtbRawListener);
-
-	registerCanSensor(externalEtbPedal1Sensor);
-	registerCanSensor(externalEtbPedal2Sensor);
-	// Same tolerance the local ADC pedal's RedundantPair uses (init_tps.cpp) - not pedal-specific,
-	// every redundant pair in this codebase shares this one config value.
-	externalEtbPedalUnfiltered.configure(engineConfiguration->etbSplit, /*ignoreSecondSensor*/false);
-	externalEtbPedalUnfiltered.Register();
+	registerCanListener(externalEtbFeedForwardListener);
 
 	registerCanListener(externalEtbAutotuneStatus1Listener);
 	registerCanListener(externalEtbAutotuneStatus2Listener);

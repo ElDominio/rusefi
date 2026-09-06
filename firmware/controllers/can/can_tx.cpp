@@ -114,12 +114,16 @@ void CanWrite::PeriodicTask(efitick_t) {
 	}
 
 #if EFI_EXTERNAL_CAN_ETB
-	if (engineConfiguration->enableExternalCanEtb) {
+	if (isExternalCanEtbEnabled()) {
 		// Gains rarely change - re-sent periodically (like wideband's ECU_STATUS) mainly so the
 		// board picks them up after its own reset. Target changes with the pedal, so it gets a
 		// much tighter interval - see RUSEFI_SIDE_TODO.md #3.1.
 		if (cycle.isInterval(CI::_250ms)) {
 			sendExternalEtbGains();
+			// iTerm/output limits and the feedforward/bias curve both rarely change too, and the
+			// board forgets them on its own reset - same reasoning as gains/calibration.
+			sendExternalEtbLimits();
+			sendExternalEtbBiasCurve();
 			// Calibration changes rarely (only on auto-calibrate or a pedal "grab" + Burn) but
 			// needs the same periodic resend as gains: the board forgets it on its own reset.
 			sendExternalEtbCalibration();

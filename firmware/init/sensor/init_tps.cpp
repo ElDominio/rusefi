@@ -7,6 +7,7 @@
 #include "proxy_sensor.h"
 #include "linear_func.h"
 #include "tps.h"
+#include "can_etb.h"
 #include "auto_generated_sensor.h"
 #include "defaults.h"
 #include "board_overrides.h"
@@ -17,6 +18,11 @@ struct TpsConfig {
 	float open;
 	float min;
 	float max;
+	// True for a "virtual" channel fed by postRawValue() from somewhere other than a physical ADC
+	// pin (currently: the external CAN ETB board's TPS1/TPSB telemetry, see can_etb.h). Lets
+	// LinearSensorUnit build the same calibration curve and register the same sensor a physical
+	// pin would, while skipping the AdcSubscription hookup there's no real channel for.
+	bool isVirtual = false;
 };
 
 std::optional<setup_custom_get_float_type> custom_board_getFuncPairAllowedSplit;
@@ -49,7 +55,19 @@ public:
 			return false;
 		}
 
-		adc = AdcSubscription::SubscribeSensor(m_sens, cfg.channel, /*lowpassCutoffHz*/ 200);
+		// A virtual channel has no physical ADC to subscribe to - its raw value arrives via an
+		// external postRawValue() call instead (see LinearSensorUnit::postRawValue() below).
+		if (!cfg.isVirtual) {
+			adc = AdcSubscription::SubscribeSensor(m_sens, cfg.channel, /*lowpassCutoffHz*/ 200);
+		} else {
+			// The constructor's MS2NT(10) timeout assumes a physical ADC pin, refreshed every
+			// conversion (sub-millisecond). A CAN-fed virtual channel only updates as fast as the
+			// board transmits (external CAN ETB: 10Hz/100ms, see main.c's TELEMETRY_DIVIDER) - at
+			// a 10ms timeout the sensor reads as timed-out ~90% of the time, which RedundantSensor
+			// then reports as an inconsistent/invalid TPS. Give it headroom for that period plus
+			// jitter, matching init_etb_can.cpp's etbCanSensorTimeout margin (3x the CAN period).
+			m_sens.setTimeout(300);
+		}
 
 		return m_sens.Register();
 	}
@@ -66,10 +84,16 @@ public:
 		return m_sens.getSensorName();
 	}
 
+	// Feeds a raw value (volts) into this sensor's calibration curve from a virtual channel,
+	// exactly as AdcSubscription would for a physical one - see TpsConfig::isVirtual.
+	void postRawValue(float volts, efitick_t nowNt) {
+		m_sens.postRawValue(volts, nowNt);
+	}
+
 private:
 	bool configure(const TpsConfig& cfg) {
-		// Only configure if we have a channel
-		if (!isAdcChannelValid(cfg.channel)) {
+		// Only configure if we have a channel, or this is a virtual (CAN-fed) one
+		if (!isAdcChannelValid(cfg.channel) && !cfg.isVirtual) {
 #if EFI_UNIT_TEST
 			printf("Configured NO hardware %s\n", name());
 #endif
@@ -135,7 +159,8 @@ public:
 		if (!allowIdenticalSensors) {
 			// Check that the primary and secondary aren't too close together - if so, the user may have done
 			// an unsafe thing where they wired a single sensor to both inputs. Don't do that!
-			bool hasBothSensors = isAdcChannelValid(primary.channel) && isAdcChannelValid(secondary.channel);
+			bool hasBothSensors = (isAdcChannelValid(primary.channel) || primary.isVirtual)
+				&& (isAdcChannelValid(secondary.channel) || secondary.isVirtual);
 			bool tooCloseClosed = std::abs(primary.closed - secondary.closed) < 0.2f;
 			bool tooCloseOpen = std::abs(primary.open - secondary.open) < 0.2f;
 
@@ -185,6 +210,12 @@ public:
 	void updateUnfilteredRawValues() {
 		engine->outputChannels.rawRawPpsPrimary = m_pri.adc == nullptr ? 0 : m_pri.adc->sensorVolts;
 		engine->outputChannels.rawRawPpsSecondary = m_sec.adc == nullptr ? 0 : m_sec.adc->sensorVolts;
+	}
+
+	// Feeds both halves of a virtual (CAN-fed) redundant pair - see TpsConfig::isVirtual.
+	void postRawValues(float priVolts, float secVolts, efitick_t nowNt) {
+		m_pri.postRawValue(priVolts, nowNt);
+		m_sec.postRawValue(secVolts, nowNt);
 	}
 
 private:
@@ -253,6 +284,12 @@ void initTps() {
 		} else
 #endif
 		{
+			// Under external CAN ETB mode, TPS1/TPSB are "virtual" channels: no local ADC pin
+			// (tps1_1AdcChannel/tps1_2AdcChannel stay unconfigured, see init_etb_can.cpp's file
+			// header), fed instead by postExternalCanEtbRawTps() below from the board's ETB_RAW
+			// telemetry. Same calibration curve (tpsMin/tpsMax/tps1SecondaryMin/Max), same
+			// RedundantPair fault detection, as a physically-wired TPS1/TPSB would get.
+			bool tps1IsVirtual = isExternalCanEtbEnabled();
 			analogTps1.init(
 					isFordTps,
 					&fordTps1,
@@ -261,12 +298,14 @@ void initTps() {
 					 (float)engineConfiguration->tpsMin,
 					 (float)engineConfiguration->tpsMax,
 					 minTpsPps,
-					 maxTpsPps},
+					 maxTpsPps,
+					 tps1IsVirtual},
 					{engineConfiguration->tps1_2AdcChannel,
 					 (float)engineConfiguration->tps1SecondaryMin,
 					 (float)engineConfiguration->tps1SecondaryMax,
 					 minTpsPps,
-					 maxTpsPps});
+					 maxTpsPps,
+					 tps1IsVirtual});
 		}
 
 		tps2.init(
@@ -290,7 +329,10 @@ void initTps() {
 			ppsSecondaryMaximum = 20;
 		}
 
-		// Pedal sensors
+		// Pedal sensors - under external CAN ETB mode, the pedal is wired to the board (not
+		// rusEFI's own ADC) too, so it's a "virtual channel" exactly like TPS1/TPSB above: no local
+		// ADC pin, fed instead by postExternalCanEtbRawPedal() from the board's ETB_RAW telemetry.
+		bool pedalIsVirtual = isExternalCanEtbEnabled();
 		pedal.init(
 				isFordPps,
 				&fordPps,
@@ -299,12 +341,14 @@ void initTps() {
 				 engineConfiguration->throttlePedalUpVoltage,
 				 engineConfiguration->throttlePedalWOTVoltage,
 				 minTpsPps,
-				 maxTpsPps},
+				 maxTpsPps,
+				 pedalIsVirtual},
 				{engineConfiguration->throttlePedalPositionSecondAdcChannel,
 				 engineConfiguration->throttlePedalSecondaryUpVoltage,
 				 engineConfiguration->throttlePedalSecondaryWOTVoltage,
 				 minTpsPps,
-				 maxTpsPps},
+				 maxTpsPps,
+				 pedalIsVirtual},
 				engineConfiguration->allowIdenticalPps);
 		ppsFilterSensor.setProxiedSensor(SensorType::AcceleratorPedalUnfiltered);
 		ppsFilterSensor.setConverter([](SensorResult arg) {
@@ -357,4 +401,21 @@ void deinitTps() {
 
 	wastegate.deinit();
 	idlePos.deinit();
+}
+
+// Feeds TPS1/TPSB volts (converted by the caller from the external CAN ETB board's raw ADC
+// telemetry - see can_etb.h's CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS) into the same calibration curve
+// a physically-wired TPS1/TPSB would use. Declared in tps.h; called from init_etb_can.cpp's
+// EtbCanRawListener whenever a fresh ETB_RAW frame arrives. No-op (harmlessly updates an
+// unregistered sensor nobody reads) unless initTps() configured analogTps1 as virtual, which only
+// happens when isExternalCanEtbEnabled() (can_etb.h) is true - the same condition that gates
+// registration of the CAN listener that calls this in the first place.
+void postExternalCanEtbRawTps(float tps1Volts, float tpsBVolts, efitick_t nowNt) {
+	analogTps1.postRawValues(tps1Volts, tpsBVolts, nowNt);
+}
+
+// Same idea as postExternalCanEtbRawTps(), for the pedal (also wired to the board, see
+// init_etb_can.cpp's EtbCanRawListener). No-op unless initTps() configured pedal as virtual.
+void postExternalCanEtbRawPedal(float pedal1Volts, float pedal2Volts, efitick_t nowNt) {
+	pedal.postRawValues(pedal1Volts, pedal2Volts, nowNt);
 }

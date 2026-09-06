@@ -287,6 +287,11 @@ int16_t rpmAcceleration;dRPM;"RPM acceleration/Rate of Change/ROC",1, 0, 0, 5, 2
 	uint16_t canWriteOk;@@GAUGE_NAME_CAN_WRITE_OK@@;"", 1, 0, 0, 64000, 0
 	uint16_t canWriteNotOk;@@GAUGE_NAME_CAN_WRITE_ERR@@;"", 1, 0, 0, 64000, 0
 
+! External CAN ETB board's own reported status (can_etb.h's EtbCanStatus / the board's etb_status_t):
+! 0=Fault, 1=Disabled(no live command/stale), 2=Normal(closed loop), 3=OpenLoop(bench/autocal), 4=Autotune.
+! Stays at 0 (Fault) until the first ETB_STATUS frame ever arrives - see init_etb_can.cpp's EtbCanDutyListener.
+	uint8_t canEtbStatus;CAN: ETB status;"", 1, 0, 0, 4, 0
+
     uint32_t triggerPrimaryFall;;"", 1, 0, 0, 10000, 3
     uint32_t triggerPrimaryRise;;"", 1, 0, 0, 10000, 3
     uint32_t triggerSecondaryFall;;"", 1, 0, 0, 10000, 3

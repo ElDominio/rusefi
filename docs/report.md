@@ -4320,3 +4320,394 @@ Validation:
 
 Open follow-ups: none for this change. Pre-existing open items from the feature's prior entries
 (board-side autotune bench validation, autotune status frame staleness handling) are unaffected.
+
+## 2026-09-03 - Java console: "I know what I'm doing" override for the Unsupported ECU block
+
+What was done:
+- Added a force-connect override so the console's hard "Unsupported ECU" block
+  (`UnsupportedEcuCardHost`, the full-window "CONNECTION BLOCKED" card) is no longer a dead end
+  when the connected ECU reports a bundle target this bundle's `board_compatibility` policy
+  doesn't allow - e.g. an ECU still running plain `paralela` firmware from before the
+  `paralela`/`paralela_f427` split, talking to a bundle now scoped to `paralela_f427`.
+- New `com.rusefi.core.io.ForcedEcuOverride` (shared_io): a small static, session-lifetime
+  `Set<String>` of force-allowed ports. Static because the background port scanner
+  (`EcuHardwareProbes.inspectRunningEcu` -> `BinaryProtocolExecutor.execute`) opens a fresh,
+  throwaway `LinkManager` on every probe cycle, so a per-instance flag on `LinkManager` would not
+  have survived between probes; a global-by-port registry keeps the scanner and the real "Connect"
+  LinkManager in agreement.
+- `BinaryProtocol.connectAndReadConfiguration`'s existing `BoardCompatibility.isEcuCompatible`
+  gate now checks `ForcedEcuOverride.isForced(linkManager.getLastTriedPort())` before closing the
+  connection and reporting `UnsupportedEcuInfo`. When forced it logs and falls through to the
+  existing code path unchanged - which already resolves the `.ini` from the ECU's OWN reported
+  signature (`iniFileProvider.provide(signature)`, independent of the bundle's own signature), so
+  the console connects using the ECU's real current definition and can read/migrate its settings.
+  This is the single choke point both the port scanner and the real connect flow go through, so
+  one change covers both.
+- `UnsupportedEcuCardHost`: added a second button ("I know what I'm doing - connect anyway") next
+  to "Download compatible bundle" on the blocking card. It force-allows every currently-blocked
+  port and calls the existing `portScanner.invalidatePort(port)` (the same mechanism
+  `onUnsupportedEcu` already uses for watchdog reconnects) so the scanner re-probes immediately;
+  with the gate bypassed the re-probe now classifies the port as a normal `Ecu`, clearing the
+  blocker and restoring the normal console UI so the user can press Connect as usual.
+  `onHardwareChanged` also clears a port's forced flag once it actually disappears from the
+  hardware list, so a stale override can't silently apply to some unrelated future device on the
+  same OS port name.
+- Bumped `UiVersion.CONSOLE_VERSION` to 20260903 per the Java-change convention.
+- Deliberately left firmware flashing alone: `MaintenanceUtil.confirmFirmwareMatchesBoard` already
+  gates a file/board target mismatch with a modal "DANGER... Flash anyway?" confirm (not a hard
+  block), so "flash whatever firmware I want" was already possible once the board's real target is
+  known via `ConnectedEcuTarget` - which the forced-connect path already populates via the
+  unchanged `linkManager.getConnectedEcuTarget().set(ecuSignature.getBundleTarget())` call.
+
+Validation:
+- `./gradlew :shared_io:compileJava :ecu_io:compileJava :ui:compileJava` - compiles clean (only
+  pre-existing, unrelated deprecation warnings).
+- `./gradlew :shared_io:test :ecu_io:test --tests "com.rusefi.io.LinkManagerCompatibilityListenerTest" --tests "com.rusefi.core.io.*"` - pass.
+- `./gradlew :ui:test --tests "com.rusefi.UnsupportedEcuCardHostTest"` - pass (BUILD SUCCESSFUL).
+- Not tested against real hardware this session (no ECU attached) - the override's effect on the
+  actual "paralela" migration scenario should still be verified on real hardware before relying on
+  it for a live upgrade.
+
+Open follow-ups:
+- Consider a persistent, visible indicator (status bar or similar) that a live session is running
+  in forced/override mode, beyond the one-time log line - out of scope for this pass but would
+  reduce the risk of the user forgetting they bypassed the safety gate.
+
+### Follow-up same day: "Update Firmware" hit a SECOND, separate mismatch gate that killed the app
+
+The connect-time override above does not touch "Update Firmware" - rebooting a running ECU into
+its bootloader (DFU/OpenBLT) goes through a completely different, harder gate:
+`BootloaderHelper.sendBootloaderRebootCommand` (`java_console/ui/src/main/java/com/rusefi/io/BootloaderHelper.java`).
+On a target mismatch not covered by `board_compatibility`, this one didn't just block - it showed
+"You have "X" controller does not look right to program it with "Y"" and then unconditionally
+killed the whole JVM (`System.exit(-5)` on a 5s-delayed background thread, so the message dialog
+has time to render - see the #3267 comment). This is a separate, harder-line gate than
+`MaintenanceUtil.confirmFirmwareMatchesBoard` (the modal "Flash anyway?" gate at the actual
+bin-write step, downstream in `DfuFlasher.executeDFU`/`ProgramSelector`) - hit first, and fatal
+where the other is just a confirm.
+
+What was done:
+- Added `BootloaderHelper.confirmFlashAnyway(parent, ecuTarget, fileSystemBundleTarget)`: same
+  blocking-modal-confirm shape as `MaintenanceUtil`'s existing `confirmOnEdt` (handles being called
+  either on or off the EDT via `invokeAndWait`, fails closed on interrupt). On mismatch,
+  `sendBootloaderRebootCommand` now asks first; OK falls through to the normal
+  `BootloaderCommsHelper.sendBootloaderRebootCommand(...)` + `return true` path (same as the
+  already-compatible-board branch), Cancel preserves the exact prior behavior (message dialog, then
+  the delayed `System.exit(-5)`).
+- Net effect for the `paralela` -> `paralela_f427` migration: reboot-to-bootloader now asks once,
+  the actual flash step (`MaintenanceUtil.confirmFirmwareMatchesBoard`) asks again right before
+  writing - two independent confirms survive, neither silently bypassed, but the process no longer
+  self-terminates on a deliberate cross-target upgrade.
+- Did not touch the `ownBoard`/`BoardCompatibility.matchesCompatibility` branches above it (exact
+  match, `_QC_` hack, universal-bundle allowlist) - only the previously-unconditional-kill `else`
+  arm changed.
+
+Validation:
+- `./gradlew :ui:compileJava` - compiles clean.
+- `./gradlew :ui:test` - full suite passes (no existing test exercised `BootloaderHelper`
+  specifically - grepped for it, none found).
+- Not exercised against real DFU/OpenBLT hardware this session.
+
+## 2026-09-03 - External CAN ETB: feedforward curve + real iTerm/output limits, board-side D-term noise fix
+
+Context: the external CAN ETB board (external-etb, CH32V203) works in the car but "PID feels
+horrible". Comparing the board's `pid.c`/`main.c` against rusEFI's own `Pid`/`EtbController`
+(`firmware/util/math/efi_pid.cpp`, `electronic_throttle.cpp`) confirmed the core PID formula was
+already an intentional clone (parallel form, iTerm clamped, output clamped -
+`CH32V203_ETB_CONTROLLER.md` §5.1 says so explicitly). The actual gap was what rusEFI computes
+around that formula and never transmits, tracked as open in
+`docs/external-etb-can-followups.md`'s "dead ETB actuator-page controls" table: the feedforward/
+bias curve and the real iTerm clamp. Separately (not from that doc - found this session rereading
+`main.c`/`adc.c`), the board's PID differentiated the raw, unfiltered single-tick ADC sample for
+its dTerm instead of the already-present `adc_read_filtered()` EMA - a second, independent
+contributor to duty jitter/PID "feel".
+
+What was done - new CAN wire protocol (both `rusefi` and `external-etb` repos, kept in sync by
+hand per `can_etb.h`'s existing convention, base ID `0x300` unchanged):
+- `ETB_LIMITS` (`0x303`, rusEFI -> CH32): `i16` iTermMin/iTermMax/minValue/maxValue, x100. Scaled
+  int like the telemetry frames (not float32 like gains) - small bounded percent values, no
+  precision lost, and it's a settled/small format either way.
+- `ETB_BIAS_1..4` (`0x30B`-`0x30E`, rusEFI -> CH32): the 8-point `etbBiasBins`/`etbBiasValues`
+  feedforward curve, 2 points/frame (`i16` bin + `i16` value, x100 each) so it fits 4 frames
+  instead of 8. Both sent on the same 250ms periodic-resend cadence as
+  `sendExternalEtbGains()`/`sendExternalEtbCalibration()` (`can_tx.cpp`) - rarely change, board
+  forgets everything on its own reset, same reasoning already documented there.
+
+rusEFI side (`firmware/controllers/can/`):
+- `can_etb.h` - new frame IDs + byte-offset doc comments, `sendExternalEtbLimits()`/
+  `sendExternalEtbBiasCurve()` declarations.
+- `can_etb_remote.cpp` - `EtbCanLimitsFrame`/`EtbCanBiasFrame` wire structs
+  (`static_assert(sizeof(...) == 8)` like the existing ones); `sendExternalEtbLimits()` reads
+  `engineConfiguration->etb_iTermMin/Max` and `engineConfiguration->etb.minValue/maxValue`;
+  `sendExternalEtbBiasCurve()` reads `config->etbBiasBins/etbBiasValues` (`ETB_BIAS_CURVE_LENGTH`
+  from `rusefi_config.txt`) and sends the 4 frames in a loop; no-op stubs added to the
+  `#else` branch matching the existing pattern.
+- `can_tx.cpp` - both called inside the existing `CI::_250ms` block next to
+  `sendExternalEtbGains()`.
+
+external-etb board side (`firmware/src/`):
+- `pid.h`/`pid.c` - `pid_gains_t` gained separate `iTermMin`/`iTermMax` fields; the iTerm clamp in
+  `pid_get_output()` now uses those instead of `gains->minValue/maxValue` (which stays the output
+  clamp only) - same two-clamp split rusEFI's `Pid` class uses.
+- `can_bus.h`/`.c` - new `CAN_ID_ETB_LIMITS`/`CAN_ID_ETB_BIAS_1..4` IDs, `ETB_BIAS_CURVE_LENGTH=8`
+  (name matches rusEFI's constant), `biasBins[8]`/`biasValues[8]` added to `can_command_state_t`
+  (zero-initialized by `can_command_state_init_defaults()` - flat 0 = no feedforward, safe neutral
+  default until rusEFI's first send). `handle_frame()` unpacks `ETB_LIMITS` and the 4 `ETB_BIAS_N`
+  frames (new `unpack_bias_pair()` helper for the latter, mirroring the existing `bytes_to_float()`
+  pattern).
+- New `feedforward.h`/`feedforward.c` - minimal port of rusEFI's `interpolate2d()` (linear
+  interpolation, clamped at the table endpoints), added to `Makefile`'s `ADDITIONAL_C_FILES`.
+- `main.c`: boot defaults seed `iTermMin`/`iTermMax` to rusEFI's own default (+-30, not the
+  wide-open +-100 output range) so behavior before the first `ETB_LIMITS` frame is sane; the
+  `NORMAL`-mode branch of `control_tick()` now computes `feedforward_get(...)` against
+  `targetPosition` and adds it to `pid_get_output()`'s result unclamped, mirroring rusEFI's own
+  `ClosedLoopController::update()` (`openLoopResult.Value + closedLoopResult.Value`, no additional
+  clamp at that layer - `hbridge_set()` already clamps final duty magnitude to 1.0, so this stays
+  safe). D-term noise fix: `raw_to_percent()`'s first parameter changed `uint16_t` -> `float`
+  (kept in float end-to-end rather than truncating to int, so filtering isn't wasted), and the
+  PID's `tps1Pct` input (also the value reported in `ETB_STATUS` telemetry) now comes from
+  `adc_read_filtered(ADC_CH_TPS1)` instead of the raw per-tick sample - `ETB_RAW`'s calibration-
+  sweep telemetry still uses the raw, unfiltered `rawTps1`, deliberately untouched. `adc.h`'s
+  stale header comment (previously said `adc_read_filtered()` should only be called from the 10Hz
+  telemetry tick) updated to reflect the new 100Hz control-tick caller.
+- `CH32V203_ETB_CONTROLLER.md` - §5.1 and §5.5 updated to describe the feedforward curve, the
+  iTerm/output limits split, and the filtered-ADC PID input.
+
+Docs: `docs/external-etb-can-followups.md`'s dead-controls table - struck through the PID
+min/max, iTermMin/iTermMax, and ETB Bias Table rows as done; left Jam Detection open
+(out of scope for this pass) and added a note about the D-term filtering fix.
+
+Key decisions and why:
+- Scaled int16 (x100) for `ETB_LIMITS`/`ETB_BIAS_*` rather than float32 like the gains frames -
+  these are small, bounded percent values (+-30 or +-100 range), so no precision is lost, and it
+  keeps the 8-point bias curve to 4 frames instead of 8 (gains stayed float32 originally because
+  packing 2 infrequent values isn't worth it - a different tradeoff than an 8-point table).
+- Left the board's `AUTOTUNE` branch (`main.c`) NOT calling feedforward, matching the pre-existing
+  documented asymmetry in `CH32V203_ETB_CONTROLLER.md` §5.5 ("this board's autotune has no
+  feedforward term, since that tune-specific table isn't sent over CAN") - out of scope for this
+  pass, which was about `NORMAL`-mode PID feel specifically.
+- Did not touch Jam Detection (the remaining dead-controls row) - it's a diagnostic/safety-net
+  gap, not a duty-computation gap, so unrelated to the "PID feels bad" symptom this pass targets.
+
+Validation:
+- `external-etb/firmware/src`: `make build` (ch32fun's compile-only target) - clean build,
+  8356 B flash / 368 B RAM (32 KB/10 KB budget), no warnings.
+- `bash firmware/bin/compile.sh config/boards/fw-custom-paralela-master/meta-info.env -j12` (the
+  only board with `EFI_EXTERNAL_CAN_ETB=TRUE`) - clean link, flash 79.35% (consistent with prior
+  budget for this board).
+- `unit_tests/test.sh` (GCC) - full suite, 1493/1493 passed.
+- Not hardware-testable this session (no bench/car access) - the feedforward/iTerm-clamp behavior
+  change needs a real bench/car re-check before being trusted; in particular the bias curve is
+  all-zero by default, so a user needs to actually populate `etbBiasBins`/`etbBiasValues` (Auto
+  Calibrate doesn't do this) for the feedforward half of this fix to have any effect at all.
+
+Open follow-ups:
+- Jam Detection (dead-controls table's remaining row) - still open, needs the hide-in-TS vs.
+  extend-the-wire-protocol decision from `docs/external-etb-can-followups.md`.
+- Dead/stale telemetry section of the same doc (`etb1validPlantPosition`, `checkJam()`
+  wiring, `ETB: Duty` gauge mirror) - unaffected by this change, still open.
+- Board-side autotune bench validation and the autotune-status-frame-staleness handling noted in
+  `external-etb/rusefi/RUSEFI_SIDE_TODO.md` - unaffected, still open.
+
+## 2026-09-03 - External CAN ETB: "ETB: Duty" gauge stuck at 0
+
+User report: `etbDutyCycleGauge` (`etb1DutyCycle`) always reads 0 in TunerStudio under CAN ETB
+mode - this was the first still-open row of `docs/external-etb-can-followups.md`'s "dead/stale
+telemetry" table, confirmed by re-reading the code rather than just trusting the doc.
+
+Root cause: `etb1DutyCycle` is only ever written by `EtbController::setOutput()`
+(`electronic_throttle.cpp`), which `EtbController::update()` never reaches for a CAN-mode throttle
+(`update()` early-returns before calling `ClosedLoopController::update()` -> `setOutput()`, per
+`RUSEFI_SIDE_TODO.md` #1/#3.1's design). The board's real duty *was* already arriving over CAN and
+being decoded - `EtbCanDutyListener` (`init_etb_can.cpp`, listening on `ETB_STATUS`/`0x300`) has
+decoded it into `outputChannels.etbStatus.output` since this feature's original bring-up session -
+but nothing mirrored that into the separate `etb1DutyCycle` field the plain gauge actually reads.
+
+Fix: `EtbCanDutyListener::decodeFrame()` now also writes the same `dutyPercent` value into
+`engine->outputChannels.etb1DutyCycle`, right next to the existing `etbStatus.output` write - same
+units (percent, -100..100), same source frame, one extra line. No per-throttle guard needed: this
+protocol has no per-throttle addressing yet (one CAN ETB board = "throttle 1"), same assumption
+`checkStatus()`'s `postState()` call already makes.
+
+Also updated the followups doc's `etb1etbFeedForward` row: its "N/A, feedforward doesn't apply
+once the board computes duty" rationale predates this session's earlier `ETB_BIAS_1..4` change (see
+the entry above) - the board now does compute a feedforward term, so that row is stale but not yet
+actionable (would need a new telemetry field). Left open, out of scope here.
+
+Validation:
+- `bash firmware/bin/compile.sh config/boards/fw-custom-paralela-master/meta-info.env -j12` - clean
+  link (flash 79.35%, +32 bytes over the previous entry's build, consistent with one new field
+  write).
+- Not hardware-testable this session (no bench/car access) - needs a real CAN ETB session to
+  confirm the gauge now tracks actual duty.
+
+Open follow-ups: the rest of the dead/stale telemetry table (`etb1validPlantPosition`,
+`checkJam()` wiring) - unaffected, still open. (`etb1etbFeedForward` closed in the follow-up
+entry below.)
+
+## 2026-09-03 - External CAN ETB: "etb1etbFeedForward" gauge, board-reported not locally recomputed
+
+Follow-up to the duty-gauge fix above. First pass at closing the remaining
+`docs/external-etb-can-followups.md` row (`etb1etbFeedForward`) called
+`IEtbController::getOpenLoop()` from `sendExternalEtbTarget()` to recompute
+`interpolate2d(target, etbBiasBins, etbBiasValues)` locally on the rusEFI side, purely to backfill
+the stale gauge. User pushback: rusEFI shouldn't locally re-derive a value that's the board's job
+now that it computes its own feedforward + PID sum (last session's `ETB_BIAS_1..4` addition) - a
+local guess could silently disagree with what the board actually used, e.g. for one periodic-
+resend interval after a curve edit, or if the board's own copy is stale for any other reason.
+Reverted that approach (the `getOpenLoop()` re-declaration in `electronic_throttle.h` and the call
+in `can_etb_remote.cpp`) in favor of a real wire round-trip.
+
+What was done instead - new CAN wire protocol addition, both repos:
+- `ETB_FEEDFORWARD` (`0x30F`, CH32 -> rusEFI): `i16` feedforward term actually applied this tick
+  (x100, %), 4 reserved bytes, status, tx sequence - 0 outside `NORMAL` mode. Sent on the same
+  10Hz telemetry cadence as `ETB_STATUS`/`ETB_PID_STATUS`/`ETB_RAW`.
+
+Board side (`external-etb/firmware/src/`):
+- `can_bus.h`/`.c` - new `CAN_ID_ETB_FEEDFORWARD` ID + `can_tx_feedforward()`.
+- `main.c` - hoisted the `ffPct` local (previously scoped inside the `NORMAL`-mode branch) to the
+  same scope as `dutyFraction`, defaulting to 0 so it stays 0 outside `NORMAL` mode; telemetry
+  block now calls `can_tx_feedforward(ffPct, status, s_txSeq)` unconditionally alongside the
+  existing three sends.
+- `CH32V203_ETB_CONTROLLER.md` - §5.1/§5.5 updated to describe the new frame and why it's a
+  round-trip rather than a local recompute.
+
+rusEFI side (`firmware/controllers/`):
+- `actuators/electronic_throttle.h` - `IEtbController` gained `virtual void
+  setFeedForward(percent_t) {}` (no-op default), same shape as the existing
+  `setIdlePosition`/`setWastegatePosition`/`setLuaAdjustment` setters - external code holding only
+  an `IEtbController*` needed a way to write `etbFeedForward` (an `electronic_throttle_s` member,
+  not reachable through that interface) without exposing `getOpenLoop()` itself, which computes
+  more than just this one field and getSetpoint()'s existing "expose vs duplicate" precedent didn't
+  fit (the whole point here was NOT recomputing).
+- `actuators/electronic_throttle.cpp`/`electronic_throttle_impl.h` - `EtbController::setFeedForward()`
+  override, one line (`etbFeedForward = feedForward;`).
+- `can/can_etb.h` - `CAN_ID_ETB_FEEDFORWARD` + byte-offset macros.
+- `init/sensor/init_etb_can.cpp` - new `EtbCanFeedForwardListener` (mirrors the existing
+  `EtbCanDutyListener` shape), registered alongside the other CAN ETB listeners; added
+  `#include "electronic_throttle.h"` (needed for the complete `IEtbController` type - it's only
+  forward-declared via `engine.h`/pch.h, calling a method through the pointer needs the full
+  definition).
+
+Key decision and why: this is the opposite of the duty-gauge fix's "N/A, feedforward is inherently
+local" note being closed - rather than treat "the board is now the source of truth" as a reason to
+duplicate its computation, it's a reason to ask it what it computed. Same principle as why
+`ETB_STATUS`'s actualDuty is decoded rather than rusEFI computing duty from gains itself.
+
+Validation:
+- `external-etb/firmware/src`: `make build` - clean, 8404 B flash / 368 B RAM (+48 B flash over
+  the previous entry).
+- Hit the documented "shared `page_N_generated.h` header goes stale after building a different
+  board target" gotcha (unit_tests' prior run targeted `f407-discovery`) - fixed per the
+  documented workaround, `bash firmware/gen_config_board.sh firmware/config/boards/
+  fw-custom-paralela-master paralela` (note: the board directory's short name is `paralela`, not
+  the directory name `fw-custom-paralela-master` - confirmed from the `rusefi_generated_paralela.h`
+  filename the build itself references) before rebuilding.
+- `bash firmware/bin/compile.sh config/boards/fw-custom-paralela-master/meta-info.env -j12` -
+  clean link, flash 79.37%.
+- Regenerated `f407-discovery`'s config the same way before `unit_tests/test.sh` (GCC) - full
+  suite, 1493/1493 passed.
+- Not hardware-testable this session (no bench/car access).
+
+Open follow-ups: `etb1validPlantPosition` and `checkJam()` wiring remain the only open rows in
+`docs/external-etb-can-followups.md`'s dead/stale telemetry table.
+
+## 2026-09-05 - External CAN ETB: moved wire protocol off standard-ID 0x300 onto a private extended ID block
+
+Renumbered the whole external CAN ETB protocol (both repos) from standard/11-bit IDs at
+`0x300-0x30F` to extended/29-bit IDs at `0x790000 + 0..15`. This was a documented open item in
+three places (`can_etb.h`'s file-header NOTE, `CH32V203_ETB_CONTROLLER.md` §5.5's heading, and
+`RUSEFI_SIDE_TODO.md` §5 item 1), all flagging `0x300` as an unconfirmed placeholder - and it
+turned out to already collide with in-tree DBC decoding: `firmware/controllers/can/can_dash.cpp`
+claims `0x300` (`CAN_MAZDA_RX_STEERING_WARNING`) and `0x308` (`W202_STAT_1`) for real vehicles.
+Rather than hunt for one specific standard ID confirmed free on every bus this board might share,
+moved to a private extended block - same convention rusEFI already uses for its own protocols
+(`BENCH_TEST_BASE_ADDRESS 0x770000`, `GDI4_BASE_ADDRESS 0xBB20`, both `can_common.h`).
+
+Why this is a clean move, not a protocol redesign: `CanListener::acceptFrame()`/`CanSensor`'s
+match is `CAN_ID(frame) == m_id` (`can.h`'s `CAN_ID()` macro resolves to `CAN_EID`/`CAN_SID`
+depending on the frame's `IDE` bit) - purely a numeric-ID compare, agnostic to standard vs.
+extended framing. So the RX side (`init_etb_can.cpp`'s `CanSensor`/`CanListener` instances) needed
+zero code changes, only the `CAN_ID_ETB_*` values change underneath them via `can_etb.h`'s
+`CAN_ETB_BASE_ID`. `CanTxMessage`/`CanTxTyped` already had first-class extended-ID support
+(`isExtended` constructor param, used elsewhere for `CanCategory::BENCH_TEST`) - just flipped
+`false` -> `true` at all 8 `can_etb_remote.cpp` callsites.
+
+Board side (`external-etb/firmware/src/`) needed one real logic change, not just a define: the
+STM32-style bxCAN peripheral's `can_tx_frame()` was hardcoded to standard-ID framing
+(`(stdId << 21) & CAN_TXMI0R_STID`, no `IDE` bit). Rewrote it to build extended-ID mailbox writes
+instead: `(extId << 3) & CAN_TXMI0R_EXID) | CAN_TXMI0R_IDE`. The RX path (`can_poll_rx()`) already
+branched on the incoming frame's `IDE` bit and extracted `EXID` correctly when set - that code
+predates this change and needed no fix, it was just never exercised by extended frames before.
+The accept-all hardware filter (mask 0, mask mode) is IDE-agnostic too, so no filter change needed.
+
+Files changed:
+- rusEFI: `can_etb.h` (`CAN_ETB_BASE_ID`, file-header NOTE, byte-layout comments), `can_etb_remote.cpp`
+  (8x `isExtended` flag flip), `init_etb_can.cpp` (comment-only, symbolic ID references).
+- external-etb: `can_bus.h` (`CAN_ETB_BASE_ID`, header doc), `can_bus.c` (`can_tx_frame()` rewritten
+  for extended framing, filter-setup comment), `CH32V203_ETB_CONTROLLER.md` §5.5 + the §11 open-item
+  list (marked resolved), `rusefi/RUSEFI_SIDE_TODO.md` §0's recap table + §5 item 1 (marked resolved).
+
+Validation: temporarily flipped `unit_tests/efifeatures.h`'s `EFI_EXTERNAL_CAN_ETB` to `TRUE` (it's
+normally `FALSE` there, off by default) to compile `can_etb_remote.cpp`/`init_etb_can.cpp` under
+the unit-test build - clean build, ETB-related tests pass, then reverted the flag back to `FALSE`
+(confirmed via `git status` that file is unmodified in the final tree). Did not build the actual
+`fw-custom-paralela-master` board (its `compile_firmware.sh` assumes a different checkout layout,
+`cd ext/rusefi/firmware/`, not reproducible from this working tree) or the CH32 board firmware -
+not hardware-testable this session (no bench/car access, no CH32 toolchain invoked).
+
+Open follow-up: the accept-all CAN filter on the board is still unnarrowed (intentional - see the
+updated comment in `can_bus.c`); could be tightened to the actual `CAN_ETB_BASE_ID` range in
+hardware if bus load ever justifies it, but that's a separate optimization, not required by this
+change.
+
+## 2026-09-05 - External CAN ETB: diagnosed a "base duty table not followed" report, added `canEtbStatus`
+
+What was done:
+- User reported the CAN ETB board wasn't following the ETB bias/base-duty table
+  (`external-etb/etbasedutyno.msq`/`etbbasedutyno.msl`), pointing at a bench capture where they'd
+  deliberately zeroed `etb_pFactor/iFactor/dFactor/offset` to isolate the feedforward curve
+  (`etbBiasBins`/`etbBiasValues`, flat 30.0 across all 8 bins in that tune).
+- Read the log: over the full ~0.85s capture, `etb1ETB: final target` sits flat at 20.65% against a
+  flat ~6.7% `TPS`, while `ETB: Duty`, `etb1etbFeedForward`, and `etbStatus_{p,i,d}Term` are *all*
+  exactly 0.000 for every row - not just missing the feedforward term, no output at all. `CAN: Rx`/
+  `CAN: Tx OK` counters are both actively incrementing (bus is alive), `etb1etbErrorCode` stays 0
+  (`EtbStatus::None` - rusEFI's own ETB module sees no fault), and `etb1state` stays pinned at 11
+  (`EtbState::SuccessfulInit`) - confirmed that's expected/dead under CAN mode by design
+  (`EtbController::update()` early-returns before `ClosedLoopController::update()`/`setOutput()`,
+  the only place `state` ever changes past init - `electronic_throttle.cpp`), not evidence of a bug.
+- With PID gains at zero, a flat-30 bias curve, and a live nonzero target, the board's `main.c`
+  Normal branch (`ffPct = feedforward_get(...); ... dutyFraction = (ffPct + pidPct) / 100.0f;`)
+  should read ~30% duty regardless of PID. Reading exactly 0 for both terms points at the board not
+  being in Normal mode at all (Fault, or Disabled from `ETB_TARGET` going stale under its own 200ms
+  failsafe watchdog) rather than a feedforward-curve-specific bug - but confirmed the one byte that
+  would prove this (`ETB_STATUS_OFFSET_STATUS`, on the wire in the same frame as the duty telemetry)
+  was defined (`can_etb.h`) but read nowhere on the rusEFI side - a real, pre-existing blind spot,
+  already flagged (but not yet fixed) in `docs/external-etb-can-followups.md`'s wire-protocol-gaps
+  section from the 2026-09-03 session.
+- Fixed the blind spot: added `EtbCanStatus::Autotune = 4` (`can_etb.h`, was missing despite the
+  board's `etb_status_t` having it since the autotune-status frames were added), a new `canEtbStatus`
+  output channel (`output_channels.txt`, placed next to the existing `canWriteOk`/`canWriteNotOk` CAN
+  gauges per the user's ask), and one new line in the existing `EtbCanDutyListener::decodeFrame()`
+  (`init_etb_can.cpp`) to decode `frame.data8[ETB_STATUS_OFFSET_STATUS]` into it - same `ETB_STATUS`
+  frame the duty gauge already reads, no new CAN traffic, no new listener. Raw enum value only, no TS
+  combo-box lookup wired up (matches `wideband_state_s.stateCode`'s existing convention).
+- Did NOT change the feedforward/PID/bias-curve logic itself on either side - nothing examined
+  contradicts that path (confirmed already fixed 2026-09-03: `sendExternalEtbBiasCurve()` transmits
+  all 8 points every 250ms, board's `feedforward.c`/`main.c` interpolates and sums with PID). The
+  actual root cause of the zero-duty bench capture is still open pending a fresh capture with
+  `canEtbStatus` logged - couldn't conclude further without knowing which status the board was
+  actually reporting during that specific window.
+
+Validation: firmware build for `fw-custom-paralela-master`
+(`config/boards/fw-custom-paralela-master/meta-info-paralela-f427.env`, `EFI_EXTERNAL_CAN_ETB=TRUE`)
+via `bash bin/compile.sh` from `firmware/` - links clean (had to `rm build/pch/pch.h.gch` first; the
+precompiled header was stale relative to the just-regenerated `output_channels_generated.h` and
+produced a spurious "`output_channels_s` has no member `canEtbStatus`" error that a normal object
+rebuild didn't clear - not a `make clean`-worthy staleness, just the one `.gch`). Full unit test suite
+also run (default `EFI_EXTERNAL_CAN_ETB=FALSE`): 1493/1493 pass.
+
+Open follow-up: ask the user for a fresh bench capture with `canEtbStatus` logged to actually
+identify why duty was 0 in the original capture (Fault vs Disabled vs something in the Normal path
+computing zero unexpectedly) - this session only added the visibility, didn't diagnose the original
+zero-duty capture to a root cause.

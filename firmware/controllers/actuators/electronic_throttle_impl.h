@@ -16,6 +16,7 @@
 #include "electronic_throttle_generated.h"
 #include "tunerstudio_calibration_channel.h"
 #include "can_etb.h"
+#include "tps.h"
 
 /**
  * Hard code ETB update speed.
@@ -31,6 +32,7 @@ public:
 	bool init(dc_function_e function, DcMotor *motor, pid_s *pidParameters, const ValueProvider3D* pedalMap) override;
 	void setIdlePosition(percent_t pos) override;
 	void setWastegatePosition(percent_t pos) override;
+	void setFeedForward(percent_t feedForward) override;
 	void reset(const char *reason) override;
 
 	// Update the controller's state: read sensors, send output, etc
@@ -203,6 +205,21 @@ public:
 				}
 				m_benchTestActive = false;
 				efiPrintf("ETB bench test done");
+			} else if (isExternalCanEtbEnabled()) {
+				// Re-send every tick (500Hz, ETB_LOOP_FREQUENCY), not just once at start: the
+				// external CAN ETB board (RUSEFI_SIDE_TODO.md #3.2) disables its own motor if
+				// ETB_TARGET goes stale for >200ms (failsafe.h) - a single set() at the top of a
+				// 300ms window leaves the last ~100ms undriven. See the same fix in
+				// doAutocalExternalCan() below.
+				//
+				// Only for the CAN path: a local h-bridge just holds its PWM duty, so re-sending
+				// buys it nothing, and this keeps the local bench test byte-for-byte the upstream
+				// one-shot behaviour rather than making every board carry a remote board's
+				// watchdog workaround.
+				auto motor = TBase::getMotor();
+				if (motor) {
+					motor->set(0.5f);
+				}
 			}
 		} else if (m_autocalPhase != ACPhase::Stopped) {
 			ACPhase nextPhase = doAutocal(m_autocalPhase);
@@ -275,6 +292,14 @@ public:
 			motor->enable();
 			return ACPhase::Open;
 		case ACPhase::Open:
+			// Re-send every tick, not just once at the Start->Open transition: the board disables
+			// its own h-bridge if ETB_TARGET goes stale for >200ms (failsafe.h), but this phase's
+			// dwell is 1000ms - a single set() left the throttle undriven (and likely springing back
+			// toward closed) for the last ~800ms of the "Open" sweep, so the raw TPS captured below
+			// was never actually the wide-open endpoint. This is the actual cause of autocal failing
+			// to open the throttle / failing the swing-size check, even though bench test's shorter
+			// 300ms window mostly got away with it.
+			motor->set(0.5f);
 			if (m_autocalTimer.hasElapsedMs(1000)) {
 				uint16_t tps1, tpsB;
 				if (getExternalEtbRawTps(tps1, tpsB)) {
@@ -288,6 +313,9 @@ public:
 			}
 			break;
 		case ACPhase::Close:
+			// Same reasoning as ACPhase::Open above - keep the board's staleness watchdog satisfied
+			// for the full 1000ms Close dwell.
+			motor->set(-0.5f);
 			if (m_autocalTimer.hasElapsedMs(1000)) {
 				uint16_t tps1, tpsB;
 				if (getExternalEtbRawTps(tps1, tpsB)) {
@@ -309,15 +337,31 @@ public:
 				// across its own reset (can_command_state_init_defaults() re-defaults it every
 				// boot, external-etb/firmware/src/main.c), so this needs to survive here and get
 				// re-sent periodically (can_tx.cpp's sendExternalEtbCalibration()) for that case.
-				engineConfiguration->canEtbTps1RawMin = (uint16_t)m_primaryMin;
-				engineConfiguration->canEtbTps1RawMax = (uint16_t)m_primaryMax;
-				engineConfiguration->canEtbTpsBRawMin = (uint16_t)m_secondaryMin;
-				engineConfiguration->canEtbTpsBRawMax = (uint16_t)m_secondaryMax;
+				//
+				// Persisted as volts, not raw counts: tpsMin/tpsMax/tps1SecondaryMin/
+				// tps1SecondaryMax are the same fields a physically-wired TPS1/TPSB calibration
+				// would use (init_tps.cpp's "virtual channel" support) - converting the raw sweep
+				// endpoints back to volts here keeps this the single persisted representation,
+				// same as a real pin, whether set by this sweep or typed manually in TunerStudio.
+				//
+				// tps_limit_t (tps.h) is a plain int16_t packed at TPS_TS_CONVERSION counts/volt -
+				// NOT a self-scaling type - every other writer of these fields (grabTPSIsClosed(),
+				// the local doAutocal() above) goes through convertVoltageTo10bitADC() for exactly
+				// this reason; assigning a raw volts float here would silently truncate/corrupt it.
+				float tps1MinVolts = m_primaryMin / CAN_ETB_BOARD_ADC_MAX_COUNT * CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS;
+				float tps1MaxVolts = m_primaryMax / CAN_ETB_BOARD_ADC_MAX_COUNT * CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS;
+				float tpsBMinVolts = m_secondaryMin / CAN_ETB_BOARD_ADC_MAX_COUNT * CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS;
+				float tpsBMaxVolts = m_secondaryMax / CAN_ETB_BOARD_ADC_MAX_COUNT * CAN_ETB_BOARD_ADC_FULL_SCALE_VOLTS;
+
+				engineConfiguration->tpsMin = convertVoltageTo10bitADC(tps1MinVolts);
+				engineConfiguration->tpsMax = convertVoltageTo10bitADC(tps1MaxVolts);
+				engineConfiguration->tps1SecondaryMin = convertVoltageTo10bitADC(tpsBMinVolts);
+				engineConfiguration->tps1SecondaryMax = convertVoltageTo10bitADC(tpsBMaxVolts);
 
 				sendExternalEtbCalTps((uint16_t)m_primaryMin, (uint16_t)m_primaryMax,
 					(uint16_t)m_secondaryMin, (uint16_t)m_secondaryMax);
-				efiPrintf("External CAN ETB auto calibrate done: TPS1 raw %.0f..%.0f, TPSB raw %.0f..%.0f",
-					m_primaryMin, m_primaryMax, m_secondaryMin, m_secondaryMax);
+				efiPrintf("External CAN ETB auto calibrate done: TPS1 %.2fV..%.2fV, TPSB %.2fV..%.2fV",
+					tps1MinVolts, tps1MaxVolts, tpsBMinVolts, tpsBMaxVolts);
 				return ACPhase::Stopped;
 			}
 			break;
@@ -331,7 +375,7 @@ public:
 
 	ACPhase doAutocal(ACPhase phase) {
 #if EFI_EXTERNAL_CAN_ETB
-		if (TBase::isEtbMode() && engineConfiguration->enableExternalCanEtb) {
+		if (TBase::isEtbMode() && isExternalCanEtbEnabled()) {
 			return doAutocalExternalCan(phase);
 		}
 #endif // EFI_EXTERNAL_CAN_ETB
