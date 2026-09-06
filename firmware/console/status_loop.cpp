@@ -568,7 +568,13 @@ static void updatePressures() {
 
 static void updateMiscSensors() {
 	engine->outputChannels.VBatt = Sensor::getOrZero(SensorType::BatteryVoltage);
-	engine->outputChannels.VIgn = Sensor::getOrZero(SensorType::IgnKeyVoltage);
+	// Mirror isIgnVoltage()'s (ignition_controller.cpp) own fallback: boards with no separate
+	// ignition-relay sense circuit (e.g. paralela) never register SensorType::IgnKeyVoltage, so
+	// this gauge would otherwise sit at a flat 0 forever even though hasIgnitionVoltage is
+	// correctly true off battery voltage under the hood - show what's actually being used.
+	engine->outputChannels.VIgn = Sensor::hasSensor(SensorType::IgnKeyVoltage)
+		? Sensor::getOrZero(SensorType::IgnKeyVoltage)
+		: Sensor::getOrZero(SensorType::BatteryVoltage);
 
 	engine->outputChannels.idlePositionSensor = Sensor::getOrZero(SensorType::IdlePosition);
 
