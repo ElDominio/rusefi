@@ -377,8 +377,13 @@ void initTps() {
 				 maxTpsPps});
 	}
 
-	// Route the pedal or TPS to driverIntent as appropriate
-	if (isAdcChannelValid(engineConfiguration->throttlePedalPositionAdcChannel)) {
+	// Route the pedal or TPS to driverIntent as appropriate. Under external CAN ETB mode the
+	// pedal is a virtual channel (no local ADC pin, see the pedalIsVirtual block above), so
+	// isAdcChannelValid() alone would wrongly fall through to TPS as driver intent even though
+	// a real pedal is being fed via CAN -- that made the idle controller's TPS-based
+	// idlePidDeactivationTpsThreshold check see the ETB's own idle-driven position swings
+	// instead of the (flat) pedal, self-oscillating the idle position during crank-to-idle taper.
+	if (isExternalCanEtbEnabled() || isAdcChannelValid(engineConfiguration->throttlePedalPositionAdcChannel)) {
 		driverIntent.setProxiedSensor(SensorType::AcceleratorPedal);
 	} else {
 		driverIntent.setProxiedSensor(SensorType::Tps1);
