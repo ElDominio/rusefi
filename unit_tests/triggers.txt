@@ -6603,3 +6603,32 @@ event 2 0 0 230.000000 1.277778
 event 3 0 1 361.000000 nan
 event 4 0 0 540.000000 1.347826
 event 5 0 1 581.000000 nan
+TRIGGERTYPE 99 12 TT_6G72_CRANK 0.00
+knownOperationMode=true
+operationMode=FOUR_STROKE_THREE_TIMES_CRANK_SENSOR
+crankBased=true
+hasSecondChannel=false
+isSecondWheelCam=false
+cycleDuration=120
+gapsCount=2
+syncEdge=Rise
+isSynchronizationNeeded=true
+useOnlyPrimaryForSync=true
+shapeWithoutTdc=true
+gapFrom.0=0.500000
+gapTo.0=1.400000
+gapFrom.1=0.500000
+gapTo.1=1.400000
+# end of meta section
+event 0 0 1 0.000000 1.000000
+event 1 0 0 60.000000 nan
+event 2 0 1 120.000000 nan
+event 3 0 0 180.000000 nan
+event 4 0 1 240.000000 nan
+event 5 0 0 300.000000 nan
+event 6 0 1 360.000000 nan
+event 7 0 0 420.000000 nan
+event 8 0 1 480.000000 nan
+event 9 0 0 540.000000 nan
+event 10 0 1 600.000000 nan
+event 11 0 0 660.000000 nan

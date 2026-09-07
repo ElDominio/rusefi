@@ -54,8 +54,10 @@ public:
 	 * this method is about detecting of exact engine phase with 720 degree precision usually based on cam wheel decoding
 	 * not to be confused with a totally different trigger _wheel_ sync which could be either crank wheel sync or cam wheel sync
 	 */
-	angle_t syncEnginePhaseAndReport(int divider, int remainder);
+	angle_t syncEnginePhaseAndReport(int divider, int remainder, bool isProvisional = false);
 	void handleShaftSignal(trigger_event_e signal, efitick_t timestamp);
+	// VVT_MITSUBISHI_6G72_BETA fast-sync path - see trigger_central.cpp for details.
+	void tryMitsu6g72BetaFastSync(efitick_t nowNt);
 	int getHwEventCounter(int index) const;
 	void resetCounters();
 	void validateCamVvtCounters();
@@ -172,6 +174,12 @@ public:
 #if EFI_SHAFT_POSITION_INPUT
 	PrimaryTriggerDecoder triggerState;
 #endif //EFI_SHAFT_POSITION_INPUT
+
+	// VVT_MITSUBISHI_6G72_BETA fast-sync: rolling window of the cam level sampled at the last
+	// few crank FALL edges, used to guess engine phase faster than the normal cam gap-decoder.
+	// See docs/mitsubishi-6g72-fast-crank-cam-sync.md
+	uint8_t mitsu6g72BetaFallSamples[3] = {0, 0, 0};
+	uint8_t mitsu6g72BetaFallSampleCount = 0;
 
 	TriggerWaveform triggerShape;
 

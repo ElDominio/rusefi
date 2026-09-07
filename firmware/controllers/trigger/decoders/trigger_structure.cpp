@@ -800,6 +800,10 @@ void TriggerWaveform::initializeTriggerWaveform(operation_mode_e triggerOperatio
 		configure12ToothCrank(this);
 		break;
 
+	case trigger_type_e::TT_6G72_CRANK:
+		configure6G72Crank(this);
+		break;
+
 	case trigger_type_e::TT_ARCTIC_CAT:
 	  configureArcticCat(this);
 	  break;

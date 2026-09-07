@@ -38,3 +38,7 @@ void configure6ToothCrank(TriggerWaveform*);
 
 // TT_12_TOOTH_CRANK
 void configure12ToothCrank(TriggerWaveform*);
+
+// TT_6G72_CRANK: same physical wheel as TT_3_TOOTH_CRANK, both edges counted.
+// See docs/mitsubishi-6g72-fast-crank-cam-sync.md
+void configure6G72Crank(TriggerWaveform*);

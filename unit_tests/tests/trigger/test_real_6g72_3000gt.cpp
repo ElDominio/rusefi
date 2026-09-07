@@ -88,7 +88,7 @@ TEST(real6g72, data2) {
 }
 */
 
-void generateLog(const char* filename) {
+void generateLog(const char* filename, trigger_type_e crankTriggerType = trigger_type_e::TT_3_TOOTH_CRANK) {
     CsvReader reader(/*triggerCount*/ 1, /* vvtCount */ 1);
 
     reader.open(filename, NORMAL_ORDER, NORMAL_ORDER);
@@ -97,7 +97,7 @@ void generateLog(const char* filename) {
 //    setVerboseTrigger(true);
 
     engineConfiguration->vvtMode[0] = vvt_mode_e::VVT_MITSUBISHI_6G72;
-    eth.setTriggerType(trigger_type_e::TT_3_TOOTH_CRANK);
+    eth.setTriggerType(crankTriggerType);
 
     engineConfiguration->globalTriggerAngleOffset = 125;
     engineConfiguration->isFasterEngineSpinUpEnabled = true;
@@ -135,4 +135,72 @@ TEST(real6g72, sync_3000gt_crank_cam_cranking_2) {
 
 TEST(real6g72, sync_3000gt_crank_cam_cranking_idle) {
     generateLog("tests/trigger/resources/3000gt_crank_cam_cranking_idle.csv");
+}
+
+// Sanity check for TT_6G72_CRANK (SyncEdge::Rise variant of TT_3_TOOTH_CRANK, both edges
+// reach the decoder for finer angle/RPM tracking) against real captures, paired with the
+// existing, unmodified TT_VVT_MITSU_6G72 cam decoder. See docs/mitsubishi-6g72-fast-crank-cam-sync.md
+TEST(real6g72, sync_3000gt_cranking_rusefi_6g72CrankType) {
+    generateLog("tests/trigger/resources/3000gt_cranking_rusefi.csv", trigger_type_e::TT_6G72_CRANK);
+}
+
+TEST(real6g72, sync_3000gt_crank_cam_cranking_idle_6g72CrankType) {
+    generateLog("tests/trigger/resources/3000gt_crank_cam_cranking_idle.csv", trigger_type_e::TT_6G72_CRANK);
+}
+
+// VVT_MITSUBISHI_6G72_BETA: checks that the fast crank-edge/cam-level path reaches
+// hasProvisionalPhase() no later than (and typically before) the existing slow gap-decoder
+// reaches the confirmed hasSynchronizedPhase(), and that the slow decoder still eventually
+// confirms (i.e. the fast path never blocks or breaks the existing confirmation path).
+// See docs/mitsubishi-6g72-fast-crank-cam-sync.md
+static void checkBetaProvisionalTiming(const char* filename) {
+    CsvReader reader(/*triggerCount*/ 1, /* vvtCount */ 1);
+    reader.open(filename, NORMAL_ORDER, NORMAL_ORDER);
+
+    EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+    engineConfiguration->vvtMode[0] = vvt_mode_e::VVT_MITSUBISHI_6G72_BETA;
+    eth.setTriggerType(trigger_type_e::TT_6G72_CRANK);
+
+    engineConfiguration->globalTriggerAngleOffset = 125;
+    engineConfiguration->isFasterEngineSpinUpEnabled = true;
+    engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
+    engineConfiguration->isPhaseSyncRequiredForIgnition = true;
+
+    int n = 0;
+    int provisionalAt = -1;
+    int confirmedAt = -1;
+    while (reader.haveMore()) {
+        reader.processLine(&eth);
+        auto& triggerState = engine->triggerCentral.triggerState;
+        if (provisionalAt < 0 && triggerState.hasProvisionalPhase()) {
+            provisionalAt = n;
+        }
+        if (confirmedAt < 0 && triggerState.hasSynchronizedPhase()) {
+            confirmedAt = n;
+        }
+        n++;
+    }
+
+    printf("%s: provisionalAt=%d confirmedAt=%d\n", filename, provisionalAt, confirmedAt);
+
+    ASSERT_NE(confirmedAt, -1) << "slow decoder never confirmed - regression";
+    ASSERT_NE(provisionalAt, -1) << "fast path never provisionally synced";
+    ASSERT_LE(provisionalAt, confirmedAt) << "fast path should never be slower than the slow decoder";
+}
+
+TEST(real6g72, beta_cranking_rusefi) {
+    checkBetaProvisionalTiming("tests/trigger/resources/3000gt_cranking_rusefi.csv");
+}
+TEST(real6g72, beta_cranking_rusefi_2) {
+    checkBetaProvisionalTiming("tests/trigger/resources/3000gt_cranking_rusefi_2.csv");
+}
+TEST(real6g72, beta_crank_cam_cranking) {
+    checkBetaProvisionalTiming("tests/trigger/resources/3000gt_crank_cam_cranking.csv");
+}
+TEST(real6g72, beta_crank_cam_cranking_2) {
+    checkBetaProvisionalTiming("tests/trigger/resources/3000gt_crank_cam_cranking_2.csv");
+}
+TEST(real6g72, beta_crank_cam_cranking_idle) {
+    checkBetaProvisionalTiming("tests/trigger/resources/3000gt_crank_cam_cranking_idle.csv");
 }

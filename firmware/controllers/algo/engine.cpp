@@ -115,6 +115,10 @@ trigger_type_e getVvtTriggerType(vvt_mode_e vvtMode) {
 	case VVT_MITSUBISHI_3A92:
 		return trigger_type_e::TT_VVT_MITSUBISHI_3A92;
 	case VVT_MITSUBISHI_6G72:
+	case VVT_MITSUBISHI_6G72_BETA:
+	    // Beta mode reuses the exact same cam waveform/gap-decoder - it only adds an additional,
+	    // faster crank-edge/cam-level fast-path (TriggerCentral::handleShaftSignal()), the slow
+	    // decoder still runs unmodified. See docs/mitsubishi-6g72-fast-crank-cam-sync.md
 	    return trigger_type_e::TT_VVT_MITSU_6G72;
 	case VVT_HONDA_CBR_600:
 	    return trigger_type_e::TT_HONDA_CBR_600;

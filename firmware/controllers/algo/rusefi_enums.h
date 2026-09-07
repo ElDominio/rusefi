@@ -146,6 +146,10 @@ typedef enum  __attribute__ ((__packed__)) {
 
   VVT_CUSTOM_5 = 34,
 
+  // Same physical cam waveform as VVT_MITSUBISHI_6G72, plus a faster crank-edge/cam-level
+  // fast-sync path. See docs/mitsubishi-6g72-fast-crank-cam-sync.md
+  VVT_MITSUBISHI_6G72_BETA = 35,
+
 } vvt_mode_e;
 
 typedef enum __attribute__ ((__packed__)) {

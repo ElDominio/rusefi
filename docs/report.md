@@ -4711,3 +4711,92 @@ Open follow-up: ask the user for a fresh bench capture with `canEtbStatus` logge
 identify why duty was 0 in the original capture (Fault vs Disabled vs something in the Normal path
 computing zero unexpectedly) - this session only added the visibility, didn't diagnose the original
 zero-duty capture to a root cause.
+
+## 2026-09-07 - Mitsubishi 6G72 fast crank+cam sync: TT_6G72_CRANK + VVT_MITSUBISHI_6G72_BETA
+
+Investigated whether the 6G72 (3000GT/GTO/VR-4 V6) trigger pair - `TT_3_TOOTH_CRANK` crank +
+`TT_VVT_MITSU_6G72` cam - can resolve full crank phase faster than the current ~720 degree
+(2 crank revolution) worst case, which is how long it takes the cam's own unique 5-gap-ratio
+waveform to complete one full cycle. Full write-up, real-capture analysis, and open follow-ups:
+`docs/mitsubishi-6g72-fast-crank-cam-sync.md`.
+
+Idea (borrowed from Speeduino's 4G63/6G72 decoder, itself just a reference file during this
+investigation, not something ported wholesale - rusEFI's generic gap-ratio `TriggerDecoder`
+architecture doesn't share Speeduino's per-trigger hand-rolled state machine style): sample the
+cam pin's raw digital level at crank edges instead of waiting for the cam's own gap pattern to
+complete. Real logged 6G72 crank+cam captures already in the repo
+(`unit_tests/tests/trigger/resources/3000gt_*.csv`) confirmed the cam level at 3 consecutive
+crank FALL edges uniquely identifies engine phase in the overwhelming majority of cases, in as
+little as 120-360 degrees.
+
+Implemented as two new, separate, opt-in trigger types - the existing `TT_3_TOOTH_CRANK` /
+`TT_VVT_MITSU_6G72` pair is completely untouched and stays the default:
+
+- `trigger_type_e::TT_6G72_CRANK = 99` (`engine_types.h`, `TT_UNUSED` bumped to 100) -
+  `configure6G72Crank()` (`trigger_universal.cpp/h`), wired into the shape-builder switch
+  (`trigger_structure.cpp`), TS label "6G72 Crank" (`rusefi_config.txt`). Same physical 3-tooth
+  wheel as `TT_3_TOOTH_CRANK`, but `SyncEdge::Rise` (not `Both` - `Both` was tried first and
+  found broken, see the doc's "Next steps" for the trace-based diagnosis: on this perfectly
+  symmetric wheel every edge trivially passes the gap-ratio window, so `Both` makes every edge
+  resync-eligible and the decoder never advances past index 0). `Rise` gives 6 edges/rev for
+  angle/RPM tracking while keeping only rising edges resync-eligible, matching the original
+  `RiseOnly` cadence. Validated against all 5 real captures: identical first-RPM value and line
+  index to `TT_3_TOOTH_CRANK` on the same files - no regression.
+- `vvt_mode_e::VVT_MITSUBISHI_6G72_BETA = 35` (`rusefi_enums.h`) - maps to the same, unmodified
+  `TT_VVT_MITSU_6G72` cam waveform (`engine.cpp`) and the same `remainder=0`
+  (`trigger_central.cpp`'s `adjustCrankPhase()`) as the non-beta mode; the slow gap-decoder runs
+  completely unchanged. The fast path lives entirely in
+  `TriggerCentral::tryMitsu6g72BetaFastSync()`, called from `handleShaftSignal()` on every crank
+  FALL edge: maintains a 3-sample rolling window of the cam level
+  (`mitsu6g72BetaFallSamples[3]`), matches it against the 6 canonical rotations of the derived
+  table `remainder 0..5 -> cam level {0,1,0,1,1,0}`, and on a single clean match calls
+  `syncEnginePhaseAndReport(crankDivider, remainder, isProvisional=true)`. Gated on
+  `trigger.type == TT_6G72_CRANK`, `vvtMode[engineSyncCam] == VVT_MITSUBISHI_6G72_BETA`, and
+  `!hasProvisionalPhase()` (don't re-guess once any phase info exists). Does not touch
+  `TriggerWaveform`/`TriggerDecoderBase`'s gap-matching engine at all.
+
+New weaker phase-confidence tier so the fast path's guess can't promote to sequential mode on
+its own: `TriggerDecoderBase::syncEnginePhase()` (`trigger_decoder.cpp/h`) gained an
+`isProvisional` parameter (default false, zero behavior change for every existing caller) - true
+sets `m_hasProvisionalPhase` instead of `m_hasSynchronizedPhase`. `hasProvisionalPhase()` returns
+`m_hasSynchronizedPhase || m_hasProvisionalPhase`. `TriggerCentral::syncEnginePhaseAndReport()`
+passes the same parameter through. `limp_manager.cpp`'s `noFiringUntilVvtSync()` now allows
+firing on a symmetric crank once `hasProvisionalPhase()` is true (a residual 360-degree phase
+error is harmless because `getCurrentIgnitionMode()` already force-downgrades to wasted-spark/
+batch whenever the stronger `hasSynchronizedPhase()` isn't set yet, regardless of configured
+ignition mode) - `getCurrentIgnitionMode()` itself is untouched, still keyed off the strict flag,
+so a provisional-only guess never unlocks sequential mode.
+
+Measured speedup (`unit_tests/tests/trigger/test_real_6g72_3000gt.cpp`, `real6g72.beta_*`,
+comparing CSV line index where `hasProvisionalPhase()` vs. `hasSynchronizedPhase()` first
+becomes true):
+
+| file | provisional at | confirmed at | speedup |
+| --- | --- | --- | --- |
+| 3000gt_cranking_rusefi.csv | 24 | 38 | ~1.6x |
+| 3000gt_cranking_rusefi_2.csv | 24 | 38 | ~1.6x |
+| 3000gt_crank_cam_cranking.csv | 24 | 75 | ~3.1x |
+| 3000gt_crank_cam_cranking_2.csv | 28 | 39 | ~1.4x |
+| 3000gt_crank_cam_cranking_idle.csv | 72 | 107 | ~1.5x |
+
+Known residual risk, found via the same investigation's temporary instrumentation (removed
+afterward): the existing, already-shipping `TT_VVT_MITSU_6G72` slow decoder itself locks onto
+the wrong (but structurally identical) cam pulse - exactly 360 degrees out of phase - on its very
+first sync attempt in 2 of the 5 real cranking captures, and never self-corrects for the rest of
+either file. This is a pre-existing property of the current production decoder, unrelated to
+this branch's changes, and affects any board running the existing `TT_3_TOOTH_CRANK` +
+`VVT_MITSUBISHI_6G72` pair today - not fixed here, flagged as a possible follow-up issue. It only
+matters for the 2 affected files' final sequential-mode phase; wasted-spark firing is
+360-degree-error tolerant and unaffected either way.
+
+Validation: full unit test suite 1501/1501 pass (1496 baseline + 5 new `beta_*` tests). Not
+built for any firmware board this session (pure trigger-decoder/limp-manager logic).
+
+Open follow-ups (tracked in the doc):
+- No unit test yet explicitly exercises "fast path matches wrong/ambiguous data and is safely
+  rejected" - every existing test still passes unmodified and `isProvisional` defaults false for
+  every pre-existing caller, but that's indirect coverage only.
+- Zero real hardware validation - everything above is real *logged* data replayed through unit
+  tests, not a live ECU.
+- Whether the pre-existing 360-degree-wrong slow-decoder lock (found via this investigation,
+  present in current production `TT_VVT_MITSU_6G72`) deserves its own follow-up issue/fix.

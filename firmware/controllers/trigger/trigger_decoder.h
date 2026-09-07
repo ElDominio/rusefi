@@ -235,18 +235,33 @@ public:
 	void resetHasFullSync() {
 		// If this trigger doesn't need disambiguation, we already have phase sync
 		m_hasSynchronizedPhase = !m_needsDisambiguation;
+		m_hasProvisionalPhase = false;
 	}
 
 	/**
 	  * returns zero if we were lucky to have correct engine phase, otherwise angle of engine phase correction which was applied.
+	  *
+	  * @param isProvisional set by a fast, unconfirmed phase guess (e.g. VVT_MITSUBISHI_6G72_BETA's
+	  * crank-edge/cam-level disambiguation): shifts synchronizationCounter the same as a normal call,
+	  * but only sets m_hasProvisionalPhase, not the stronger m_hasSynchronizedPhase - good enough to
+	  * allow wasted-spark/batch firing (a 360-degree residual error is harmless there) but not to
+	  * promote to sequential mode. A later confirmed call (isProvisional=false, from the real
+	  * gap-decoder) always upgrades to m_hasSynchronizedPhase, correcting the counter further if the
+	  * provisional guess turns out to have been the wrong one.
 	  */
-	angle_t syncEnginePhase(int divider, int remainder, angle_t engineCycle);
+	angle_t syncEnginePhase(int divider, int remainder, angle_t engineCycle, bool isProvisional = false);
 
 	// Returns true if syncEnginePhase has been called,
 	// i.e. if we have enough VVT information to have full sync on
 	// an indeterminate crank pattern
 	bool hasSynchronizedPhase() const {
 		return m_hasSynchronizedPhase;
+	}
+
+	// True if either a confirmed or a provisional phase guess has been established - good enough
+	// to allow wasted-spark/batch firing on a symmetric crank, not strong enough for sequential mode.
+	bool hasProvisionalPhase() const {
+		return m_hasSynchronizedPhase || m_hasProvisionalPhase;
 	}
 
 	void setNeedsDisambiguation(bool needsDisambiguation) {
@@ -281,6 +296,9 @@ private:
 	 * crank sync point is found - see resetHasFullSync().
 	 */
 	bool m_needsDisambiguation = false;
+
+	// See hasProvisionalPhase() / syncEnginePhase()'s isProvisional parameter.
+	bool m_hasProvisionalPhase = false;
 };
 
 class VvtTriggerDecoder : public TriggerDecoderBase {

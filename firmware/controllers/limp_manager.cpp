@@ -53,6 +53,15 @@ static bool noFiringUntilVvtSync() {
 		operationMode == FOUR_STROKE_SIX_TIMES_CRANK_SENSOR ||
 		operationMode == FOUR_STROKE_TWELVE_TIMES_CRANK_SENSOR;
   if (result) {
+    // A provisional (fast, unconfirmed) phase guess - see TriggerDecoderBase::hasProvisionalPhase() -
+    // is good enough to allow firing here: a residual 360-degree error only ever produces a
+    // wasted-spark-safe pairing (getCurrentIgnitionMode() forces wasted/batch mode whenever
+    // hasSynchronizedPhase() is not yet true, regardless of configured ignitionMode), never a
+    // genuinely wrong crank angle. The stronger hasSynchronizedPhase(), required for sequential
+    // mode, is untouched and still only set by a confirmed (non-provisional) cam sync.
+    if (engine->triggerCentral.triggerState.hasProvisionalPhase()) {
+      return false;
+    }
     float rpm = Sensor::getOrZero(SensorType::Rpm);
     if (rpm > 200) { // only showing warning above specific RPM to reduce confusion
 	    warningTsReport(ObdCode::CUSTOM_SYMMETRICAL_CRANK, "Not firing until we get cam sync");

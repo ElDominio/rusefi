@@ -136,11 +136,11 @@ static bool vvtWithRealDecoder(vvt_mode_e vvtMode) {
 			&& vvtMode != VVT_SINGLE_TOOTH;
 }
 
-angle_t TriggerCentral::syncEnginePhaseAndReport(int divider, int remainder) {
+angle_t TriggerCentral::syncEnginePhaseAndReport(int divider, int remainder, bool isProvisional) {
 	angle_t engineCycle = getEngineCycle(getEngineRotationState()->getOperationMode());
 
 	int oldSyncCounter = triggerState.getSynchronizationCounter();
-	angle_t totalShift = triggerState.syncEnginePhase(divider, remainder, engineCycle);
+	angle_t totalShift = triggerState.syncEnginePhase(divider, remainder, engineCycle, isProvisional);
 	if (totalShift != 0) {
 		int newSyncCounter = triggerState.getSynchronizationCounter();
 		int indexOffset = (newSyncCounter - oldSyncCounter) * triggerShape.getSize();
@@ -221,6 +221,7 @@ static angle_t adjustCrankPhase(int camIndex) {
 	case VVT_MITSUBISHI_4G69:
 	case VVT_MITSUBISHI_3A92:
 	case VVT_MITSUBISHI_6G72:
+	case VVT_MITSUBISHI_6G72_BETA:
 	case VVT_CHRYSLER_PHASER:
 	case VVT_HONDA_K_EXHAUST:
 	case VVT_HONDA_CBR_600:
@@ -245,6 +246,84 @@ static angle_t adjustCrankPhase(int camIndex) {
 		return 0;
 	}
 	return 0;
+}
+
+/**
+ * VVT_MITSUBISHI_6G72_BETA fast-sync: the cam level sampled at 3 consecutive crank FALL edges
+ * (TT_6G72_CRANK) uniquely identifies engine phase (remainder 0..5 of crankDivider=6) almost
+ * always in under one full crank revolution, vs. the ~720 degrees the normal cam gap-decoder
+ * needs. Table and derivation: docs/mitsubishi-6g72-fast-crank-cam-sync.md. This intentionally
+ * does not touch the generic TriggerWaveform/TriggerDecoderBase gap-matching engine - the normal
+ * gap-decoder for VVT_MITSUBISHI_6G72_BETA is unmodified and still runs in parallel, and is the
+ * only thing that can set the strong hasSynchronizedPhase() (see syncEnginePhase's isProvisional
+ * parameter) - this fast path only ever sets the weaker hasProvisionalPhase(), sufficient to
+ * unblock wasted-spark/batch firing (limp_manager.cpp's noFiringUntilVvtSync()) but not sequential.
+ */
+static const uint8_t mitsu6g72BetaCamLevelAtRemainder[6] = {0, 1, 0, 1, 1, 0};
+
+// Returns the remainder (0..5) implied by 3 consecutive fall-edge cam-level samples (oldest to
+// newest), or -1 if they don't cleanly match exactly one of the 6 possible rotations.
+static int matchMitsu6g72BetaPattern(const uint8_t samples[3]) {
+	int matchedRemainder = -1;
+	for (int k = 0; k < 6; k++) {
+		bool ok = true;
+		for (int i = 0; i < 3; i++) {
+			if (mitsu6g72BetaCamLevelAtRemainder[(k + i) % 6] != samples[i]) {
+				ok = false;
+				break;
+			}
+		}
+		if (ok) {
+			if (matchedRemainder != -1) {
+				// Ambiguous match (matched more than one rotation) - should not happen given the
+				// table above is pairwise-distinct at length 3, but reject rather than guess.
+				return -1;
+			}
+			// samples[2] (the newest sample, just observed) is at remainder (k+2) % 6
+			matchedRemainder = (k + 2) % 6;
+		}
+	}
+	return matchedRemainder;
+}
+
+static bool getVvtChannelLevel(int index) {
+	switch (index) {
+	case 0: return engine->outputChannels.vvtChannel1;
+	case 1: return engine->outputChannels.vvtChannel2;
+	case 2: return engine->outputChannels.vvtChannel3;
+	default: return engine->outputChannels.vvtChannel4;
+	}
+}
+
+void TriggerCentral::tryMitsu6g72BetaFastSync(efitick_t nowNt) {
+	UNUSED(nowNt);
+	if (engineConfiguration->trigger.type != trigger_type_e::TT_6G72_CRANK) {
+		return;
+	}
+	int camIndex = engineConfiguration->engineSyncCam;
+	if (engineConfiguration->vvtMode[camIndex] != VVT_MITSUBISHI_6G72_BETA) {
+		return;
+	}
+	if (triggerState.hasProvisionalPhase()) {
+		// Already have a guess (or the real decoder already confirmed) - don't re-guess.
+		return;
+	}
+
+	mitsu6g72BetaFallSamples[0] = mitsu6g72BetaFallSamples[1];
+	mitsu6g72BetaFallSamples[1] = mitsu6g72BetaFallSamples[2];
+	mitsu6g72BetaFallSamples[2] = getVvtChannelLevel(camIndex) ? 1 : 0;
+	if (mitsu6g72BetaFallSampleCount < 3) {
+		mitsu6g72BetaFallSampleCount++;
+		return;
+	}
+
+	int remainder = matchMitsu6g72BetaPattern(mitsu6g72BetaFallSamples);
+	if (remainder < 0) {
+		return;
+	}
+
+	int crankDivider = getCrankDivider(triggerShape.getWheelOperationMode());
+	syncEnginePhaseAndReport(crankDivider, remainder, /*isProvisional*/ true);
 }
 
 /**
@@ -937,6 +1016,10 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 		int crankDivider = getCrankDivider(triggerShape.getWheelOperationMode());
 		int crankInternalIndex = triggerState.getSynchronizationCounter() % crankDivider;
 		int triggerIndexForListeners = decodeResult.Value.CurrentIndex + (crankInternalIndex * triggerShape.getSize());
+
+		if (signal == SHAFT_PRIMARY_FALLING) {
+			tryMitsu6g72BetaFastSync(timestamp);
+		}
 
 		reportEventToWaveChart(signal, triggerIndexForListeners, triggerShape.useOnlyRisingEdges);
 

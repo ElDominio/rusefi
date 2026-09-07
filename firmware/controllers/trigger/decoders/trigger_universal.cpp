@@ -185,6 +185,20 @@ void configure3ToothCrank(TriggerWaveform* s) {
   commonSymmetrical(s, 3, 0.5, 1.4);
 }
 
+// Same physical 3-tooth wheel as configure3ToothCrank() (Mitsubishi 6G72), but counts both
+// edges instead of rising-only, giving 6 evenly-spaced sample points per crank revolution
+// instead of 3. This is a prerequisite for a faster crank-edge/cam-level disambiguation path;
+// see docs/mitsubishi-6g72-fast-crank-cam-sync.md for the real-capture analysis behind it.
+void configure6G72Crank(TriggerWaveform* s) {
+	// SyncEdge::Rise (not Both!): both edges still reach the decoder for angle/RPM
+	// tracking, but only RISE edges are eligible to re-trigger the sync-point check.
+	// With Both, every single edge trivially passes this wheel's (perfectly symmetric)
+	// gap-ratio window, so the decoder resyncs on every edge instead of ever advancing
+	// past index 0 - confirmed via Triggers/AllTriggersFixture self-consistency test.
+	s->initialize(FOUR_STROKE_THREE_TIMES_CRANK_SENSOR, SyncEdge::Rise);
+  commonSymmetrical(s, 3, 0.5, 1.4);
+}
+
 void configure6ToothCrank(TriggerWaveform* s) {
 	s->initialize(FOUR_STROKE_SIX_TIMES_CRANK_SENSOR, SyncEdge::RiseOnly);
   commonSymmetrical(s, 6, 0.7, 1.4);

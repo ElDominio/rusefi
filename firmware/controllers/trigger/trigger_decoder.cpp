@@ -265,7 +265,7 @@ int TriggerDecoderBase::getCurrentIndex() const {
 	return currentCycle.current_index;
 }
 
-angle_t PrimaryTriggerDecoder::syncEnginePhase(int divider, int remainder, angle_t engineCycle) {
+angle_t PrimaryTriggerDecoder::syncEnginePhase(int divider, int remainder, angle_t engineCycle, bool isProvisional) {
 	efiAssert(ObdCode::OBD_PCM_Processor_Fault, divider > 1, "syncEnginePhase divider", false);
 	efiAssert(ObdCode::OBD_PCM_Processor_Fault, remainder < divider, "syncEnginePhase remainder", false);
 	angle_t totalShift = 0;
@@ -279,8 +279,14 @@ angle_t PrimaryTriggerDecoder::syncEnginePhase(int divider, int remainder, angle
 		totalShift += engineCycle / divider;
 	}
 
-	// Allow injection/ignition to happen, we've now fully sync'd the crank based on new cam information
-	m_hasSynchronizedPhase = true;
+	if (isProvisional) {
+		// Not confirmed yet - good enough for wasted-spark/batch firing (see hasProvisionalPhase()),
+		// not for sequential mode. A later confirmed call still upgrades to m_hasSynchronizedPhase.
+		m_hasProvisionalPhase = true;
+	} else {
+		// Allow injection/ignition to happen, we've now fully sync'd the crank based on new cam information
+		m_hasSynchronizedPhase = true;
+	}
 
 	if (totalShift > 0) {
 		m_phaseAdjustment = totalShift;
