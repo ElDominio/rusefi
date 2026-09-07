@@ -152,6 +152,85 @@ void initialize36_2_1_1(TriggerWaveform *s) {
   s->setTriggerSynchronizationGap3(2, 0.8, 1.2);
 }
 
+// EXPERIMENTAL - see the TT_36_2_1_1_V2 comment in engine_types.h and
+// TriggerDecoderBase::isSyncPoint()'s special case for this trigger type.
+//
+// Same physical wheel geometry as initialize36_2_1_1() above (this function intentionally
+// duplicates that geometry rather than sharing it, so nothing here can ever accidentally change
+// the untouched, already-shipped TT_36_2_1_1 decoder). What's different is entirely in how sync
+// is detected: instead of classifying gaps by matching a fixed absolute tooth-duration-ratio
+// window (which real captures show does not generalize across capture sessions - see
+// docs/report.md 2026-09-07), the actual sync decision is a small custom state machine in
+// TriggerDecoderBase::isSyncPoint(), keyed off this trigger type, using a rolling per-tooth
+// baseline instead of fixed windows.
+//
+// setTriggerSynchronizationGap3() below is NOT used for gap classification here - the custom
+// isSyncPoint() branch bypasses the generic gapTrackingLength loop entirely for this trigger
+// type. It's called only for its side effect of growing triggerShape.gapTrackingLength, which
+// controls how many historical tooth durations TriggerDecoderBase::toothDurations[] keeps
+// shifted in - the custom logic reads that history to compute its rolling baseline. NAN means
+// "don't use this slot for the generic ratio check" (same convention TriggerWaveform::initialize()
+// uses for its own default gap slots).
+void initialize36_2_1_1_v2(TriggerWaveform *s) {
+	s->initialize(FOUR_STROKE_CRANK_SENSOR, SyncEdge::RiseOnly);
+	s->tdcPosition = 90;
+
+  const float WIDE_TOOTH_WIDTH  = 8.5;
+  const float WIDE_TOOTH_OFFSET = 6.5;
+  const float TOOTH_WIDTH = 5.0;
+  const float GAP_WIDTH   = 5.0;
+
+  float offset = WIDE_TOOTH_WIDTH;
+
+  // First tooth after the gap is wide
+  // we can't have an event at 0, so we wrap the first rise event around to the end of the cycle
+  s->addEvent360(offset, TriggerValue::FALL);
+  offset += GAP_WIDTH;
+
+  // Then we have 10 regular teeth
+  for (int i = 0; i < 10; i++) {
+    s->addEvent360(offset, TriggerValue::RISE);
+    s->addEvent360(offset + TOOTH_WIDTH, TriggerValue::FALL);
+    offset += TOOTH_WIDTH + GAP_WIDTH;
+  }
+
+  // Then a gap followed by a wide tooth
+  offset += WIDE_TOOTH_OFFSET;
+  s->addEvent360(offset, TriggerValue::RISE);
+  offset += WIDE_TOOTH_WIDTH;
+  s->addEvent360(offset, TriggerValue::FALL);
+  offset += GAP_WIDTH;
+
+  for (int i = 0; i < 10; i++) {
+    s->addEvent360(offset, TriggerValue::RISE);
+    s->addEvent360(offset + TOOTH_WIDTH, TriggerValue::FALL);
+    offset += TOOTH_WIDTH + GAP_WIDTH;
+  }
+
+  // Then another gap followed by a wide tooth
+  offset += WIDE_TOOTH_OFFSET;
+  s->addEvent360(offset, TriggerValue::RISE);
+  offset += WIDE_TOOTH_WIDTH;
+  s->addEvent360(offset, TriggerValue::FALL);
+  offset += GAP_WIDTH;
+
+  for (int i = 0; i < 9; i++) {
+    s->addEvent360(offset, TriggerValue::RISE);
+    s->addEvent360(offset + TOOTH_WIDTH, TriggerValue::FALL);
+    offset += TOOTH_WIDTH + GAP_WIDTH;
+  }
+
+  offset += TOOTH_WIDTH + GAP_WIDTH + WIDE_TOOTH_OFFSET; // gap before the last tooth
+  // Finally, the last tooth is wide and we wrap it around to the beginning of the cycle
+  // offset should be exactly 360 at this point
+  s->addEvent360(offset, TriggerValue::RISE);
+
+  // Grow gapTrackingLength to 9 purely so toothDurations[1..8] stay populated - see the
+  // function-level comment above. The window itself is never consulted for this trigger type;
+  // (NAN, 100000) matches TriggerWaveform::initialize()'s own "don't use this gap" convention.
+  s->setTriggerSynchronizationGap3(8, NAN, 100000);
+}
+
 // Mitsubishi 4B11
 // https://wiki.rusefi.com/All-Supported-Triggers#36-2-1
 void initialize36_2_1(TriggerWaveform *s) {

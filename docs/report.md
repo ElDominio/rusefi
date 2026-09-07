@@ -4800,3 +4800,174 @@ Open follow-ups (tracked in the doc):
   tests, not a live ECU.
 - Whether the pre-existing 360-degree-wrong slow-decoder lock (found via this investigation,
   present in current production `TT_VVT_MITSU_6G72`) deserves its own follow-up issue/fix.
+
+## 2026-09-07 - TT_36_2_1_1 (6G75 36-2-1-1 crank) sync redesign attempt - partial fix
+
+Investigated a user-supplied `6g75stuff/` folder (reverse-engineered Megasquirt-3 1.6.2 6G75
+decoder, `ms3_ign_6g75.c` + `6G75_TRIGGER_DECODER.md`) as a possible fix source for the
+already-tracked, already-broken `TT_36_2_1_1` decoder (`initialize36_2_1_1()` in
+`trigger_mitsubishi.cpp`, issue #8827, see [[project_6g75_trigger_sync_issue]]). Conclusion: the
+MS3 C code does not port - rusEFI's architecture routes every trigger (Mitsubishi included)
+through one generic gap-ratio `TriggerDecoder`, whereas MS3 hand-rolls a bespoke state machine
+per trigger type directly in the tach ISR. The one transferable idea (disambiguate which gap you
+hit by counting teeth to the next gap, rather than classifying gap amplitude) doesn't survive
+contact with the real capture data either, since the two 20 deg single-tooth gaps aren't reliably
+detectable as elevated ratios at all on real hardware (masked by sensor ringing) - MS3's scheme
+needs a detectable event at all three gap locations, which the real signal doesn't provide.
+
+Used the existing brute-force tooling (`test_trigger_sequence_finder.cpp`,
+`TEST(trigger, finderRealData)`) against both real captures
+(`6g75-without-spark-crank.csv`, `6g75-withsparkplugs-cranking.csv`) to redesign the sync
+classifier itself:
+- Replaced the old 3-position gap-ratio sequence (`setTriggerSynchronizationGap3(0/1/2, ...)`,
+  which assumed all three physical gaps are separately classifiable and never found a single
+  matching real-data candidate) with a 2-position sequence keying off the one gap that's
+  actually visible (the 30 deg double-missing-tooth gap, real ratio ~2.1-3.1) plus the short
+  tooth immediately following it (ratio ~0.41-0.61) - the cross-validated unique survivor from
+  `crossValidateGapsFromCleanCsv()`.
+- A single-position version (gap only, no following-tooth check) was tried first and rejected:
+  it does find sync, but cranking-noise ratios elsewhere in the noisy capture also land in the
+  gap window, causing repeated spurious resyncs (`tooManyTeethCounter` regressed from 2 to 374).
+  The 2-position version is far more selective.
+
+Result on the two available real captures:
+- `6g75-without-spark-crank.csv` (cleaner): now decodes correctly and continuously - resyncs
+  every revolution, smooth per-tooth instant-RPM trace through the whole file. Genuine fix.
+- `6g75-withsparkplugs-cranking.csv` (spark-plug EMI on the sensor line): still does not
+  maintain sync - finds the window once, then never matches again for the rest of the file,
+  ending at `lastSyncLossReason=TooManyTeeth`, RPM=0, warnings
+  `[CUSTOM_OUT_OF_ORDER_COIL, CUSTOM_PRIMARY_TOO_MANY_TEETH, CUSTOM_PRIMARY_NOT_ENOUGH_TEETH]`.
+  This is a *safer* failure than before (old code never truly synced here either, but kept
+  reporting a plausible-looking 166.9 RPM with coil-overcharge warnings while blindly wrapping
+  the tooth index) but is not a fix for this specific noisy capture. Pinned the new values as
+  the current known-imperfect state in `test_real_6g75.cpp`, with a comment pointing at what
+  would need to improve it further (more real captures, or a tooth-count-based resync fallback
+  similar in spirit to the MS3 approach).
+
+Validation: `unit_tests/test.sh real6g75` and `unit_tests/test.sh trigger` pass; full
+`unit_tests/test.sh` suite (1496/1496) passes. Not built for any firmware board this session
+(pure trigger-decoder logic, no board-specific code touched). `-j12` intermittently triggered a
+`cc1plus` internal-compiler-error segfault on this machine during this session (plenty of free
+RAM at the time) - `-j4` was reliable; worth a retry at `-j12` before assuming it's a permanent
+local toolchain issue.
+
+Open follow-up: get the user's read on whether to keep this partial fix, keep tuning
+(more captures needed - only two exist in-repo), or pursue a structurally different approach
+(tooth-count confirmation layered on top of gap detection) for the EMI-noisy case. Also affects
+`setMitsubishi3A92()` (`config/engines/mitsubishi_3A92.cpp`), which reuses `TT_36_2_1_1` for an
+unrelated 3-cylinder engine sharing the same wheel shape - not independently re-validated against
+real 3A92 hardware/captures this session.
+
+**2026-09-07 follow-up - reverted, redirected to a separate new trigger type.** User supplied two
+more real captures (`6g75stuff/nofuel.csv`, `6g75stuff/yesfuel.csv` - dense per-sample logic
+export, no `Time[s]` column, crank channel only in `yesfuel.csv`). Checking the above fix's
+2-position window against `yesfuel.csv` (pure ratio math, no code/test changes) showed it does
+NOT generalize: real gap ratio there sits around 1.8-2.0, versus 2.1-3.1 in the two older
+captures the window was tuned on, so the fix only matched one event in the whole file. Gap
+*amplitude* is evidently not a portable constant across capture sessions. Also checked
+`nofuel.csv`'s second channel as a possible cam reference for an MS3-style phase-disambiguation
+trick - it's not usable, its edges start ~37k samples before the crank channel's first edge and
+have erratic sub-10-sample spacing, i.e. a floating/noisy pin, not a cam trace.
+
+Per user direction: reverted `trigger_mitsubishi.cpp` and `test_real_6g75.cpp` to their original
+(pre-session) state via `git checkout` - `TT_36_2_1_1` is untouched again, matching what's on
+disk before this session. Any further decoder work is to land as a **new, separate trigger
+type**, not a modification of `initialize36_2_1_1()`, so the existing (broken but known-quantity)
+decoder isn't put at risk. Next step agreed with the user: sketch a design for that new trigger
+using the MS3-inspired strategy - loose relative "candidate" detection instead of a fixed
+absolute ratio window, plus tooth-count-based position confirmation instead of amplitude
+classification - before writing any code. See chat session for the sketch; nothing implemented
+yet as of this entry.
+
+**2026-09-07 follow-up 2 - implemented as a new, separate trigger type: `TT_36_2_1_1_V2`.**
+After the design sketch was validated against all four real captures in a standalone Python
+simulation (candidate+tooth-count-confirmation, then a "coast through one missed detection"
+refinement - see chat session for that analysis), built it as real firmware:
+
+- New enum `trigger_type_e::TT_36_2_1_1_V2 = 100` (`engine_types.h`, bumped `TT_UNUSED` to 101)
+  and matching `.ini` string `"36-2-1-1 v2 EXPERIMENTAL"` (`rusefi_config.txt`
+  `trigger_type_e_enum`). `TT_36_2_1_1` (index 71) is untouched.
+- `initialize36_2_1_1_v2()` (`trigger_mitsubishi.cpp`) - deliberately duplicates
+  `initialize36_2_1_1()`'s physical tooth-angle geometry verbatim (same 10-teeth/gap/10-teeth/
+  gap/9-teeth/gap wheel layout) rather than sharing it, so nothing here can ever change the
+  original decoder. The only thing it does differently is grow `gapTrackingLength` to 9 (via
+  `setTriggerSynchronizationGap3(8, NAN, 100000)`) so `toothDurations[1..8]` stay populated as
+  history - the actual sync decision doesn't use the generic gap-ratio classifier at all.
+- The actual algorithm lives in a new special case in `TriggerDecoderBase::isSyncPoint()`
+  (`trigger_decoder.cpp`), following the existing Miata-NB special-case precedent in that same
+  function. Two new `mutable` state fields on `TriggerDecoderBase`
+  (`mitsu6g75v2_lastCandidateIndex`, `mitsu6g75v2_coastCount`, reset in `resetState()`) - `const`
+  on `isSyncPoint()` is preserved (matches the existing Miata NB special case's constness) since
+  these are "logically const" bookkeeping the way `toothDurations[]` already is.
+  - Rolling baseline: median of `toothDurations[1..8]` (manual insertion sort, no `<algorithm>`,
+    no heap - fine for firmware). Median tolerates the 1-2 outliers a gap and its following short
+    tooth occasionally contribute to that window.
+  - HUNTING (`!getShaftSynchronized()`): flag `ratio > 1.8` as a candidate; only confirm sync once
+    a *previous* candidate was seen at very close to 64 index-units earlier (`current_index`
+    advances 2 per tooth on this RiseOnly wheel - confirmed empirically via
+    `setVerboseTrigger(true)` trace, not just derived on paper - so 64 index-units = 32 real
+    teeth = one crank revolution, +/-2 tooth tolerance).
+  - LOCKED: only look for corroboration (`ratio > 1.2`, deliberately weaker than the hunting
+    threshold) in a narrow window around where `current_index` predicts the gap should be. If
+    nothing shows up in that window at all, coast through it once (trust the tooth count,
+    `MITSU_36211_V2_MAX_COAST = 1`) before giving up and falling back to the framework's normal
+    too-many/not-enough-teeth handling - which still independently double-checks the real edge
+    count against the waveform's expected count (`getEventCountersError()`), so a coast can't
+    paper over an actual missing/extra physical edge, only a weak-amplitude gap.
+- Constants (1.8 hunt threshold, 1.2 weak threshold, 32-tooth spacing, tolerance 2, coast budget
+  1, baseline window 8) match what the offline Python simulation validated - not independently
+  re-tuned in C++, though the real decoder's results don't match the Python numbers exactly since
+  the generic framework's own event-count safety net interacts with this custom logic in ways the
+  simplified simulation didn't model.
+- Two more real captures the user supplied mid-session (`6g75stuff/nofuel.csv`,
+  `6g75stuff/yesfuel.csv` - dense per-sample logic exports, no timestamp column) were converted to
+  the sparse `Time[s], Channel 0` CSV format the test harness expects
+  (`unit_tests/tests/trigger/resources/6g75-nofuel-raw-idx.csv` /
+  `6g75-yesfuel-raw-idx.csv`, raw sample index as pseudo-time) and added as new test resources.
+  **Trap hit and fixed**: without a `timestampScale`, the reader interprets raw sample indices as
+  literal seconds (tens of thousands of "seconds" between edges), overflowing internal tick
+  handling and producing all-zero tooth durations - fixed with
+  `reader.timestampScale = 1.0 / 20000.0` (20kHz, matching the sample rate confirmed for an
+  earlier same-named nofuel/yesfuel pair investigated on 2026-08-03 - see that entry above;
+  unconfirmed for this specific pair, so RPM in these two tests is illustrative, not exact).
+
+Results (`unit_tests/tests/trigger/test_real_6g75_v2.cpp`, all four pinned as current observed
+state, not claimed-correct):
+
+| Capture | tooManyTeethCounter | warnings | RPM |
+| --- | --- | --- | --- |
+| without-spark-crank (clean) | 97 | 3 (coil overcharge 2/3/4) | 164.2 |
+| withsparkplugs-cranking (noisy) | 77 | 1 (not enough teeth) | 61.2 |
+| nofuel (new, 20kHz assumed) | 139 | 2 (out-of-order coil, not enough teeth) | 61.7 |
+| yesfuel (new, 20kHz assumed, THE problem capture) | 146 | 3 (out-of-order coil, not/too-many teeth) | 116.5 |
+
+All four now produce a plausible, non-zero, comparatively stable RPM - notably including
+`yesfuel.csv`, which the original `TT_36_2_1_1` decoder and the earlier reverted fixed-window
+attempt both failed on outright (RPM 0, or a confident-looking wrong number riding on blind index
+wrapping). Traced via `setVerboseTrigger(true)` for `withoutSparkPlugs`/`yesfuel`: the decoder
+locks once during real replay and then holds lock (with reconfirms and at least one observed
+coast) through most of the file, only losing lock intermittently in what earlier investigation
+already identified as inherently hard sections (the tapering-RPM-down cranking tail). Not claiming
+this is "fixed" - `tooManyTeethCounter` in the 77-146 range is still far from zero, and this has
+zero hardware validation - but it is a substantial, measurable improvement over every prior
+attempt on the hardest capture, achieved without touching `TT_36_2_1_1` at all.
+
+Validation: `unit_tests/test.sh trigger` and `unit_tests/test.sh real6g75v2` pass; full
+`unit_tests/test.sh` suite passes at 1506/1506 (was 1502 before this session's new tests were
+added - the jump from 1496 to 1502 earlier came from a pre-existing all-trigger-types enumeration
+test picking up the new enum value automatically, not from tests added this session). Not built
+for any firmware board this session. New files staged (`git add`) per repo convention:
+`unit_tests/tests/trigger/test_real_6g75_v2.cpp` and the two new `resources/*-raw-idx.csv` files.
+
+Open follow-ups:
+- Zero hardware validation - this is offline capture replay only.
+- The `MITSU_36211_V2_*` constants are carried over from the Python prototype, not independently
+  tuned against the real C++ decoder's actual behavior (which differs from the simplified
+  simulation due to the generic framework's own event-count checks) - there may be headroom to
+  improve the tooManyTeethCounter numbers with further tuning.
+- 20kHz sample rate for `nofuel-raw-idx.csv`/`yesfuel-raw-idx.csv` is assumed, not confirmed, for
+  this specific capture pair - ask the user for their logic analyzer's actual rate if precise RPM
+  ever matters for these two.
+- `setMitsubishi3A92()` (`config/engines/mitsubishi_3A92.cpp`) still points at the untouched
+  `TT_36_2_1_1`, not the new trigger - no action needed unless someone wants to experiment with
+  it there too.

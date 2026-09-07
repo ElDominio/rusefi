@@ -60,6 +60,8 @@ static const std::unordered_set<std::string>& getLogDisabledTests() {
 		"real6g72.sync_3000gt_crank_cam_cranking_idle",
 		"real6g75.withoutSparkPlugs",
 		"real6g75.realWithSparkPlugs",
+		"real6g75v2.nofuel",
+		"real6g75v2.yesfuel",
 		"fordCoyote.intakeCam",
 		"fordCoyote.exhaustCam",
 		"fordCoyote.exhaustCamInverted",

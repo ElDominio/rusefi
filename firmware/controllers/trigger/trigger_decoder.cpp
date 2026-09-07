@@ -104,6 +104,9 @@ void TriggerDecoderBase::resetState() {
 	triggerSyncGapRatio = 0;
 	triggerStateIndex = 0;
 
+	mitsu6g75v2_lastCandidateIndex = -1;
+	mitsu6g75v2_coastCount = 0;
+
 	call_board_override(custom_board_TriggerResetState);
 }
 
@@ -758,6 +761,120 @@ bool TriggerDecoderBase::isSyncPoint(const TriggerWaveform& triggerShape, trigge
 		// If both teeth are in the range of possibility, return whether this gap is
 		// shorter than the last or not.  If it is, this is the sync point.
 		return triggerSyncGapRatio < secondGap;
+	}
+
+	// EXPERIMENTAL - see the TT_36_2_1_1_V2 comment in engine_types.h and
+	// trigger_mitsubishi.cpp's initialize36_2_1_1_v2(). Real 6G75 cranking captures show the
+	// gap's amplitude is not a portable constant across capture sessions (see docs/report.md
+	// 2026-09-07), so this does NOT classify sync by matching a fixed absolute tooth-duration-
+	// ratio window like the generic loop below. Instead:
+	//  - HUNTING (not yet synchronized): flag any tooth whose duration is a loose multiple of
+	//    a rolling baseline as a "candidate", then only accept it as the real sync point once a
+	//    PREVIOUS candidate was seen at very close to the expected tooth-count spacing. Position
+	//    (tooth count), not amplitude, is what actually confirms identity here.
+	//  - LOCKED (already synchronized): don't keep hunting continuously - only look for
+	//    corroboration in a narrow window around where the gap tooth is expected (predicted
+	//    purely from tooth count since the last confirmed sync). If nothing even weakly
+	//    elevated shows up there, coast through it (trust the tooth count) for up to
+	//    MITSU_36211_V2_MAX_COAST revolutions in a row before giving up and falling back to the
+	//    normal too-many/not-enough-teeth handling in the caller.
+	if (triggerType == trigger_type_e::TT_36_2_1_1_V2) {
+		// This wheel is 32 physical teeth/gaps per crank revolution; RiseOnly + only-rising-
+		// edge-for-trigger counting means current_index advances by MITSU_36211_V2_INDEX_PER_TOOTH
+		// per tooth (calibrated empirically against initialize36_2_1_1_v2()'s waveform, which
+		// reuses initialize36_2_1_1()'s geometry unchanged - see test_real_6g75_v2.cpp).
+		constexpr int MITSU_36211_V2_INDEX_PER_TOOTH = 2;
+		constexpr int MITSU_36211_V2_TEETH_PER_REV = 32;
+		constexpr int MITSU_36211_V2_EXPECTED_SPACING = MITSU_36211_V2_TEETH_PER_REV * MITSU_36211_V2_INDEX_PER_TOOTH;
+		constexpr int MITSU_36211_V2_TOLERANCE = 2 * MITSU_36211_V2_INDEX_PER_TOOTH;
+		constexpr float MITSU_36211_V2_HUNT_THRESHOLD = 1.8f;
+		constexpr float MITSU_36211_V2_WEAK_THRESHOLD = 1.2f;
+		constexpr int MITSU_36211_V2_MAX_COAST = 1;
+		constexpr int MITSU_36211_V2_BASELINE_COUNT = 8;
+
+		// Rolling baseline: median of the last MITSU_36211_V2_BASELINE_COUNT tooth durations
+		// (toothDurations[1..N], NOT including the current/latest tooth at [0]). A gap or the
+		// short tooth right after one occasionally lands in this window, but the median is
+		// robust to the 1-2 outliers that causes out of 8 samples. Small manual insertion sort -
+		// no heap, no <algorithm>, fine for firmware; initialize36_2_1_1_v2() grows
+		// triggerShape.gapTrackingLength to keep toothDurations[1..8] populated for this.
+		uint32_t sorted[MITSU_36211_V2_BASELINE_COUNT];
+		for (int i = 0; i < MITSU_36211_V2_BASELINE_COUNT; i++) {
+			uint32_t v = toothDurations[i + 1];
+			int j = i;
+			while (j > 0 && sorted[j - 1] > v) {
+				sorted[j] = sorted[j - 1];
+				j--;
+			}
+			sorted[j] = v;
+		}
+		uint32_t baseline = sorted[MITSU_36211_V2_BASELINE_COUNT / 2];
+		float ratio = (baseline > 0) ? ((float)toothDurations[0] / baseline) : 0;
+
+#if EFI_UNIT_TEST
+		if (printTriggerTrace) {
+			printf("36211v2 index=%d cur=%u baseline=%u ratio=%.2f synced=%d lastCand=%d coast=%d\r\n",
+				currentCycle.current_index, toothDurations[0], baseline, ratio,
+				getShaftSynchronized(), mitsu6g75v2_lastCandidateIndex, mitsu6g75v2_coastCount);
+		}
+#endif
+
+		if (!getShaftSynchronized()) {
+			// HUNTING
+			bool isCandidate = ratio > MITSU_36211_V2_HUNT_THRESHOLD;
+			if (!isCandidate) {
+				return false;
+			}
+
+			bool confirmed = false;
+			if (mitsu6g75v2_lastCandidateIndex >= 0) {
+				int spacing = (int)currentCycle.current_index - mitsu6g75v2_lastCandidateIndex;
+				int spacingError = spacing - MITSU_36211_V2_EXPECTED_SPACING;
+				if (spacingError < 0) {
+					spacingError = -spacingError;
+				}
+				confirmed = spacingError <= MITSU_36211_V2_TOLERANCE;
+			}
+#if EFI_UNIT_TEST
+			if (printTriggerTrace) {
+				printf("36211v2 candidate at index=%d prevCand=%d confirmed=%d\r\n",
+					currentCycle.current_index, mitsu6g75v2_lastCandidateIndex, confirmed);
+			}
+#endif
+			mitsu6g75v2_lastCandidateIndex = (int)currentCycle.current_index;
+			if (confirmed) {
+				mitsu6g75v2_coastCount = 0;
+			}
+			return confirmed;
+		}
+
+		// LOCKED - only even consider this tooth if we're near where the gap should be, based
+		// purely on tooth count since the last confirmed sync (current_index resets to 0 on
+		// every accepted sync point, see onShaftSynchronization()/resetCurrentCycleState()).
+		int distanceToExpected = MITSU_36211_V2_EXPECTED_SPACING - (int)currentCycle.current_index;
+		if (distanceToExpected > MITSU_36211_V2_TOLERANCE) {
+			// not there yet, keep waiting
+			return false;
+		}
+
+		if (ratio > MITSU_36211_V2_WEAK_THRESHOLD) {
+			// weak corroboration at the expected position - reconfirmed normally
+			mitsu6g75v2_coastCount = 0;
+			return true;
+		}
+
+		if (distanceToExpected < -MITSU_36211_V2_TOLERANCE) {
+			// window closed with no corroboration at all this revolution - coast (trust the
+			// tooth count) up to MITSU_36211_V2_MAX_COAST times in a row, then give up.
+			if (mitsu6g75v2_coastCount < MITSU_36211_V2_MAX_COAST) {
+				mitsu6g75v2_coastCount++;
+				return true;
+			}
+			return false;
+		}
+
+		// still inside the window, no corroboration yet - keep waiting
+		return false;
 	}
 
 	for (int i = 0; i < triggerShape.gapTrackingLength; i++) {

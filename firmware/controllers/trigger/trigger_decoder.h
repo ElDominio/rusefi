@@ -213,6 +213,22 @@ private:
 
 	bool isFirstEvent;
 
+	// EXPERIMENTAL - state for the TT_36_2_1_1_V2 special case in isSyncPoint() only, see
+	// trigger_mitsubishi.cpp's initialize36_2_1_1_v2() and the TT_36_2_1_1_V2 comment in
+	// engine_types.h. Not read or written by any other trigger type. `mutable` because
+	// isSyncPoint() is logically const (a pure classification of "was that tooth the sync
+	// point") but this trigger's classification needs to remember bookkeeping across calls -
+	// same as toothDurations[] already does for the generic gap-ratio classifier, just not
+	// shift-registered automatically since it isn't per-tooth history.
+	//
+	// Hunting phase: current_index (which free-runs, uncapped, while unsynchronized) at the
+	// last tooth that looked like a candidate gap. -1 means "no candidate seen yet".
+	mutable int mitsu6g75v2_lastCandidateIndex = -1;
+	// Locked phase: how many revolutions in a row we've accepted the expected gap tooth purely
+	// by tooth count, with no corroborating amplitude bump at all (see MITSU_36211_V2_MAX_COAST
+	// in trigger_decoder.cpp). Reset to 0 on every revolution that DOES get a corroborating bump.
+	mutable int mitsu6g75v2_coastCount = 0;
+
 	Timer m_timeSinceDecodeError;
 };
 

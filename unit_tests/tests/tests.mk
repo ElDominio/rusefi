@@ -31,6 +31,7 @@ TESTS_SRC_CPP = \
 	tests/trigger/test_real_4g93.cpp \
 	tests/trigger/test_real_6g72_3000gt.cpp \
 	tests/trigger/test_real_6g75.cpp \
+	tests/trigger/test_real_6g75_v2.cpp \
 	tests/trigger/test_real_ford_coyote.cpp \
 	tests/trigger/test_real_volkswagen.cpp \
 	tests/trigger/test_real_renix_44_2_2.cpp \

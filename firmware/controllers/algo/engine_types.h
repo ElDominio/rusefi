@@ -272,6 +272,19 @@ enum class trigger_type_e : uint32_t {
 	// a faster crank+cam disambiguation path. See docs/mitsubishi-6g72-fast-crank-cam-sync.md
 	TT_6G72_CRANK = 99,
 
+	// EXPERIMENTAL - Mitsubishi 6G75 36-2-1-1 crank, same physical wheel as TT_36_2_1_1 but a
+	// different sync algorithm (see the special case in TriggerDecoderBase::isSyncPoint()):
+	// real captures show only the 30 deg double-missing-tooth gap is reliably visible (the two
+	// 20 deg single-missing-tooth gaps get masked by sensor ringing), and even that gap's
+	// amplitude is not a portable constant across capture sessions/hardware. Instead of a fixed
+	// absolute gap-ratio window (what TT_36_2_1_1 does, tracked broken as GitHub #8827), this
+	// uses a loose relative "candidate" threshold against a rolling tooth-duration baseline,
+	// confirmed by tooth-count spacing (one gap every ~32 teeth) rather than amplitude, and
+	// coasts through up to one missed detection per revolution once locked. TT_36_2_1_1 is left
+	// untouched - this is a separate, still-experimental trigger type pending more real-world
+	// validation. See docs/report.md 2026-09-07 entries and GitHub issue #8827.
+	TT_36_2_1_1_V2 = 100,
+
 	// TL,DR https://github.com/rusefi/rusefi/commit/523805138589585cc8889d6afd9305d120180902 example of new trigger commit
 	//
 	// before you add a new trigger: did you have a chance to capture digital signal with a logic analyzer?
@@ -283,7 +296,7 @@ enum class trigger_type_e : uint32_t {
 	//
 	// Another point: once you add a new trigger, run get_trigger_images.bat which would run rusefi_test.exe from unit_tests
 	//
-	TT_UNUSED = 100, // this is used if we want to iterate over all trigger types
+	TT_UNUSED = 101, // this is used if we want to iterate over all trigger types
 };
 
 typedef enum {

@@ -16,6 +16,7 @@ void initializeMitsubishi4gSymmetricalCrank(TriggerWaveform *s);
 void configureFordAspireTriggerWaveform(TriggerWaveform * s);
 
 void initialize36_2_1_1(TriggerWaveform *s);
+void initialize36_2_1_1_v2(TriggerWaveform *s);
 void initialize36_2_1(TriggerWaveform *s);
 
 void initializeVvt6G72(TriggerWaveform *s);

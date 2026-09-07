@@ -651,6 +651,10 @@ void TriggerWaveform::initializeTriggerWaveform(operation_mode_e triggerOperatio
 	    initialize36_2_1_1(this);
 	    break;
 
+	case trigger_type_e::TT_36_2_1_1_V2:
+	    initialize36_2_1_1_v2(this);
+	    break;
+
 	case trigger_type_e::TT_36_2_1:
 	    initialize36_2_1(this);
 	    break;

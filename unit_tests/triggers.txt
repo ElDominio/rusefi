@@ -6632,3 +6632,162 @@ event 8 0 1 480.000000 nan
 event 9 0 0 540.000000 nan
 event 10 0 1 600.000000 nan
 event 11 0 0 660.000000 nan
+TRIGGERTYPE 100 128 TT_36_2_1_1_V2 90.00
+knownOperationMode=true
+operationMode=FOUR_STROKE_CRANK_SENSOR
+crankBased=true
+hasSecondChannel=false
+isSecondWheelCam=false
+cycleDuration=360
+gapsCount=9
+syncEdge=RiseOnly
+isSynchronizationNeeded=true
+useOnlyPrimaryForSync=false
+shapeWithoutTdc=false
+gapFrom.0=1.500000
+gapTo.0=2.500000
+gapFrom.1=nan
+gapTo.1=100000.000000
+gapFrom.2=nan
+gapTo.2=100000.000000
+gapFrom.3=nan
+gapTo.3=100000.000000
+gapFrom.4=nan
+gapTo.4=100000.000000
+gapFrom.5=nan
+gapTo.5=100000.000000
+gapFrom.6=nan
+gapTo.6=100000.000000
+gapFrom.7=nan
+gapTo.7=100000.000000
+gapFrom.8=nan
+gapTo.8=100000.000000
+# end of meta section
+event 0 0 1 0.000000 2.650000
+event 1 0 0 0.000000 nan
+event 2 0 1 13.500000 0.509434
+event 3 0 0 13.500000 nan
+event 4 0 1 23.500000 0.740741
+event 5 0 0 23.500000 nan
+event 6 0 1 33.500000 1.000000
+event 7 0 0 33.500000 nan
+event 8 0 1 43.500000 1.000000
+event 9 0 0 43.500000 nan
+event 10 0 1 53.500000 1.000000
+event 11 0 0 53.500000 nan
+event 12 0 1 63.500000 1.000000
+event 13 0 0 63.500000 nan
+event 14 0 1 73.500000 1.000000
+event 15 0 0 73.500000 nan
+event 16 0 1 83.500000 1.000000
+event 17 0 0 83.500000 nan
+event 18 0 1 93.500000 1.000000
+event 19 0 0 93.500000 nan
+event 20 0 1 103.500000 1.000000
+event 21 0 0 103.500000 nan
+event 22 0 1 120.000000 1.650000
+event 23 0 0 120.000000 nan
+event 24 0 1 133.500000 0.818182
+event 25 0 0 133.500000 nan
+event 26 0 1 143.500000 0.740741
+event 27 0 0 143.500000 nan
+event 28 0 1 153.500000 1.000000
+event 29 0 0 153.500000 nan
+event 30 0 1 163.500000 1.000000
+event 31 0 0 163.500000 nan
+event 32 0 1 173.500000 1.000000
+event 33 0 0 173.500000 nan
+event 34 0 1 183.500000 1.000000
+event 35 0 0 183.500000 nan
+event 36 0 1 193.500000 1.000000
+event 37 0 0 193.500000 nan
+event 38 0 1 203.500000 1.000000
+event 39 0 0 203.500000 nan
+event 40 0 1 213.500000 1.000000
+event 41 0 0 213.500000 nan
+event 42 0 1 223.500000 1.000000
+event 43 0 0 223.500000 nan
+event 44 0 1 240.000000 1.650000
+event 45 0 0 240.000000 nan
+event 46 0 1 253.500000 0.818182
+event 47 0 0 253.500000 nan
+event 48 0 1 263.500000 0.740741
+event 49 0 0 263.500000 nan
+event 50 0 1 273.500000 1.000000
+event 51 0 0 273.500000 nan
+event 52 0 1 283.500000 1.000000
+event 53 0 0 283.500000 nan
+event 54 0 1 293.500000 1.000000
+event 55 0 0 293.500000 nan
+event 56 0 1 303.500000 1.000000
+event 57 0 0 303.500000 nan
+event 58 0 1 313.500000 1.000000
+event 59 0 0 313.500000 nan
+event 60 0 1 323.500000 1.000000
+event 61 0 0 323.500000 nan
+event 62 0 1 333.500000 1.000000
+event 63 0 0 333.500000 nan
+event 64 0 1 360.000000 nan
+event 65 0 0 360.000000 nan
+event 66 0 1 373.500000 nan
+event 67 0 0 373.500000 nan
+event 68 0 1 383.500000 nan
+event 69 0 0 383.500000 nan
+event 70 0 1 393.500000 nan
+event 71 0 0 393.500000 nan
+event 72 0 1 403.500000 nan
+event 73 0 0 403.500000 nan
+event 74 0 1 413.500000 nan
+event 75 0 0 413.500000 nan
+event 76 0 1 423.500000 nan
+event 77 0 0 423.500000 nan
+event 78 0 1 433.500000 nan
+event 79 0 0 433.500000 nan
+event 80 0 1 443.500000 nan
+event 81 0 0 443.500000 nan
+event 82 0 1 453.500000 nan
+event 83 0 0 453.500000 nan
+event 84 0 1 463.500000 nan
+event 85 0 0 463.500000 nan
+event 86 0 1 480.000000 nan
+event 87 0 0 480.000000 nan
+event 88 0 1 493.500000 nan
+event 89 0 0 493.500000 nan
+event 90 0 1 503.500000 nan
+event 91 0 0 503.500000 nan
+event 92 0 1 513.500000 nan
+event 93 0 0 513.500000 nan
+event 94 0 1 523.500000 nan
+event 95 0 0 523.500000 nan
+event 96 0 1 533.500000 nan
+event 97 0 0 533.500000 nan
+event 98 0 1 543.500000 nan
+event 99 0 0 543.500000 nan
+event 100 0 1 553.500000 nan
+event 101 0 0 553.500000 nan
+event 102 0 1 563.500000 nan
+event 103 0 0 563.500000 nan
+event 104 0 1 573.500000 nan
+event 105 0 0 573.500000 nan
+event 106 0 1 583.500000 nan
+event 107 0 0 583.500000 nan
+event 108 0 1 600.000000 nan
+event 109 0 0 600.000000 nan
+event 110 0 1 613.500000 nan
+event 111 0 0 613.500000 nan
+event 112 0 1 623.500000 nan
+event 113 0 0 623.500000 nan
+event 114 0 1 633.500000 nan
+event 115 0 0 633.500000 nan
+event 116 0 1 643.500000 nan
+event 117 0 0 643.500000 nan
+event 118 0 1 653.500000 nan
+event 119 0 0 653.500000 nan
+event 120 0 1 663.500000 nan
+event 121 0 0 663.500000 nan
+event 122 0 1 673.500000 nan
+event 123 0 0 673.500000 nan
+event 124 0 1 683.500000 nan
+event 125 0 0 683.500000 nan
+event 126 0 1 693.500000 nan
+event 127 0 0 693.500000 nan
