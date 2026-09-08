@@ -2730,6 +2730,7 @@ bit wizardCltSensor,"yes","no"
 bit wizardTps,"yes","no"
 bit wizardIgnitionOutputs,"yes","no"
 bit wizardInjectorOutputs,"yes","no"
+bit wizardVeTable,"yes","no"
 
 split_lines@@BOARD_CONFIG_FROM_FILE@@
 
