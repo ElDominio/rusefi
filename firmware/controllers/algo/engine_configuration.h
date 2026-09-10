@@ -102,3 +102,6 @@ int getBoardMetaOutputsCount();
 int getBoardMetaLowSideOutputsCount();
 Gpio* getBoardMetaOutputs();
 int getBoardMetaDcOutputsCount();
+
+// TODO: find better place?
+i2c_config_s *getI2cCfg(i2c_bus_e device);
