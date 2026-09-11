@@ -10,6 +10,7 @@
 
 #include "tc_4.h"
 #include "table_helper.h"
+#include "gear_detector.h"
 
 #if EFI_TCU
 Generic4TransmissionController generic4TransmissionController;
@@ -37,6 +38,10 @@ void Generic4TransmissionController::update(gear_e gear) {
 		shiftingFrom = getCurrentGear();
 		isShifting = true;
 		measureShiftTime(gear);
+
+		// A trim learned for the outgoing gear's clutch isn't meaningful for the next one's.
+		m_pcSlipTrim = 0;
+		m_pcSlipCleanTimer.reset();
 	}
 
 	// set torque converter and pressure control state
@@ -55,9 +60,10 @@ void Generic4TransmissionController::update(gear_e gear) {
 	}
 }
 
-// Line pressure control: a 2D table of RPM x driver demand (TPS) gives a base duty, then three
+// Line pressure control: a 2D table of RPM x driver demand (TPS) gives a base duty, then four
 // signed modifiers are added on top: a shift adder while a shift is in progress, the TCC lock-up
-// adder, and a per-gear adder indexed by desired gear.
+// adder, a per-gear adder indexed by desired gear, and the slip-based closed-loop trim (see
+// updateSlipTrim()).
 void Generic4TransmissionController::setPcState(gear_e desiredGear) {
 	auto tps = Sensor::get(SensorType::DriverThrottleIntent);
 	auto rpm = Sensor::get(SensorType::Rpm);
@@ -81,6 +87,9 @@ void Generic4TransmissionController::setPcState(gear_e desiredGear) {
 		targetDuty += config->tcu_pcGearAdderDuty[gearIndex];
 	}
 
+	updateSlipTrim();
+	targetDuty += m_pcSlipTrim;
+
 	targetDuty = clampF(0, targetDuty, 100);
 
 	// Slew the output toward targetDuty at tcu_pcRampTimeMs (time to cross the full 0-100% range)
@@ -100,6 +109,59 @@ void Generic4TransmissionController::setPcState(gear_e desiredGear) {
 
 	pressureControlDuty = static_cast<int8_t>(m_pcDutyRamped + 0.5f);
 	pcPwm.setSimplePwmDutyCycle(0.01f * m_pcDutyRamped);
+}
+
+// Closed-loop trim on top of the table+adders above, driven by Gear Setup's Slip Detection.
+// There is no line pressure sensor, so this cannot be a PID against a setpoint -- it's a
+// threshold-triggered accumulator: raise (fast, proportional to how far over) while slip exceeds
+// Max Allowed Slip, decay (slow, fixed step) once slip has stayed clean for Decay Hold Time,
+// otherwise hold. m_pcSlipTrim only ever moves in whichever sign tcu_pcSlipCorrectionGain is
+// calibrated to (the direction that raises pressure on this EPC solenoid) and decay only ever
+// pulls it back toward 0, never past -- so this can only ever push pressure higher than the base
+// table+adders already call for, never lower. Reset to 0 on every commanded shift (see update())
+// and every key-on; not persisted, not indexed by gear/RPM/TPS -- a single accumulator, like
+// simple (non-region) short term fuel trim.
+void Generic4TransmissionController::updateSlipTrim() {
+	if (config->tcu_pcSlipCorrectionGain == 0) {
+		// feature disabled (default)
+		return;
+	}
+
+	if (isShifting) {
+		// Slip during a shift is the shift itself, not a fault -- hold whatever the trim already
+		// is (it was zeroed when this shift was commanded) until the shift completes.
+		return;
+	}
+
+	auto gearDetector = engine->module<GearDetector>();
+	if (!gearDetector->isSlipValid()) {
+		// Can't tell right now (Slip Detection disabled, neutral, non-OSS speed source, below
+		// transmissionSlipMinVss, or an invalid RPM source sensor) -- hold, don't accumulate or
+		// decay on a reading we don't trust.
+		tcu_pcSlipTrimDuty = static_cast<int8_t>(m_pcSlipTrim);
+		return;
+	}
+
+	float excess = gearDetector->getSlipPercent() - config->tcu_pcSlipMaxAllowedPercent;
+
+	if (excess > 0) {
+		m_pcSlipCleanTimer.reset();
+
+		float step = config->tcu_pcSlipCorrectionGain * excess;
+		step = clampF(-config->tcu_pcSlipCorrectionStepMax, step, config->tcu_pcSlipCorrectionStepMax);
+		m_pcSlipTrim += step;
+	} else if (m_pcSlipCleanTimer.hasElapsedMs(config->tcu_pcSlipDecayHoldMs)) {
+		float decayStep = config->tcu_pcSlipDecayStepDuty;
+		if (m_pcSlipTrim > 0) {
+			m_pcSlipTrim = maxF(0, m_pcSlipTrim - decayStep);
+		} else if (m_pcSlipTrim < 0) {
+			m_pcSlipTrim = minF(0, m_pcSlipTrim + decayStep);
+		}
+	}
+
+	m_pcSlipTrim = clampF(-config->tcu_pcSlipTrimMaxDuty, m_pcSlipTrim, config->tcu_pcSlipTrimMaxDuty);
+
+	tcu_pcSlipTrimDuty = static_cast<int8_t>(m_pcSlipTrim);
 }
 
 Generic4TransmissionController* getGeneric4TransmissionController() {

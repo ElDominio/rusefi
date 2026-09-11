@@ -154,6 +154,13 @@ bool applyDefaultsOrFixAfterBurn(const engine_configuration_s* previousConfigura
     changed = true;
   }
 
+  if (engineConfiguration->transmissionSlipMinVss == 0) {
+    // 0 would disable the near-stop validity floor entirely (see GearDetector::computeSlip()),
+    // re-introducing a div/0-adjacent unstable ratio right at the condition it exists to guard.
+    engineConfiguration->transmissionSlipMinVss = 5;
+    changed = true;
+  }
+
   // Transmission Settings no longer exposes Gear Controller / Transmission Controller
   // dropdowns (nor the Button Shift / range-selector dialogs those other modes need to
   // function), so Automatic + Generic4 is the only mode combination reachable through the UI

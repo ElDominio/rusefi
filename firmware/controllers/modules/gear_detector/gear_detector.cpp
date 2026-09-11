@@ -83,6 +83,7 @@ void GearDetector::onSlowCallback() {
 			m_gearboxRatio = 0;
 			m_currentGear  = 0;
 			m_slipPercent  = 0;
+			m_slipValid    = false;
 			return;
 		}
 	}
@@ -92,7 +93,7 @@ void GearDetector::onSlowCallback() {
 
 	m_currentGear = determineGearFromRatio(ratio);
 
-	m_slipPercent = computeSlipPercent();
+	computeSlip();
 }
 
 size_t GearDetector::determineGearFromRatio(float ratio) const {
@@ -190,9 +191,16 @@ float GearDetector::getSlipPercent() const {
 	return m_slipPercent;
 }
 
-float GearDetector::computeSlipPercent() const {
+bool GearDetector::isSlipValid() const {
+	return m_slipValid;
+}
+
+void GearDetector::computeSlip() {
+	m_slipPercent = 0;
+	m_slipValid = false;
+
 	if (!engineConfiguration->transmissionSlipDetectionEnabled || m_currentGear == 0) {
-		return 0;
+		return;
 	}
 
 	// Only trustworthy when the driveshaft speed reference is a real Output Shaft Speed
@@ -203,7 +211,15 @@ float GearDetector::computeSlipPercent() const {
 	bool speedSourceIsOss = engineConfiguration->gearDetectionUseOutputShaftSpeed
 			|| getCustomPage()->mainSpeedSensorSource == main_speed_sensor_source_e::OutputShaftSpeed;
 	if (!speedSourceIsOss) {
-		return 0;
+		return;
+	}
+
+	// Below this speed the driveshaft-RPM ratio math is unstable (near-0 denominator), same
+	// class of issue as getDriveshaftRpm()'s hardcoded <3kph floor on the wheel-speed path, but
+	// user-configurable here since the OSS-direct path has no such floor of its own.
+	auto vss = Sensor::get(SensorType::VehicleSpeed);
+	if (!vss.Valid || vss.Value < engineConfiguration->transmissionSlipMinVss) {
+		return;
 	}
 
 	auto rpmSourceType = engineConfiguration->transmissionSlipRpmSourceIsInputShaftSpeed
@@ -212,16 +228,17 @@ float GearDetector::computeSlipPercent() const {
 
 	auto actualRpm = Sensor::get(rpmSourceType);
 	if (!actualRpm.Valid) {
-		return 0;
+		return;
 	}
 
 	// Ideal (no-slip) RPM for the Detected Gear given the current driveshaft speed.
 	float expectedRpm = getRpmInGear(m_currentGear);
 	if (expectedRpm <= 0) {
-		return 0;
+		return;
 	}
 
-	return 100.0f * (actualRpm.Value / expectedRpm - 1.0f);
+	m_slipPercent = 100.0f * (actualRpm.Value / expectedRpm - 1.0f);
+	m_slipValid = true;
 }
 
 SensorResult GearDetector::get() const {
@@ -232,5 +249,5 @@ void GearDetector::showInfo(const char* sensorName) const {
 	efiPrintf("Sensor \"%s\" is gear detector.", sensorName);
 	efiPrintf("    Gearbox ratio: %.3f", m_gearboxRatio);
 	efiPrintf("    Detected gear: %d", m_currentGear);
-	efiPrintf("    Slip: %.1f%%", m_slipPercent);
+	efiPrintf("    Slip: %.1f%% (%s)", m_slipPercent, m_slipValid ? "valid" : "invalid");
 }
