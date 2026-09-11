@@ -1,8 +1,11 @@
 # Mitsubishi 6G72 Fast Crank+Cam Sync (investigation / proposal)
 
-Status: **investigation complete, no firmware code written yet.** This document
-records the findings that motivate the work and the proposed design, so the
-implementation can start from settled ground instead of re-deriving it.
+Status: **implemented for one specific vehicle** (the author's 1995 3000GT VR-4,
+board `paralela-f427`). `TT_6G72_CRANK` + `VVT_MITSUBISHI_6G72_BETA` are real,
+working code, with the fast-path table calibrated and verified against that
+car's own logic-analyzer capture. See "Per-vehicle calibration" below before
+reusing this on any other 6G72 vehicle - the table is **not** a universal
+constant, by design.
 
 ## Problem
 
@@ -416,11 +419,193 @@ known-good fallback.
       pre-existing caller of `syncEnginePhase`/`syncEnginePhaseAndReport`), but
       no test explicitly exercises "fast path matches wrong/ambiguous data and
       is safely rejected" - worth adding before this leaves Beta.
-- [ ] Real hardware validation on an actual 6G72 vehicle (cranking on a bench
-      or a car) - everything above is real *logged* data replayed through unit
-      tests, not a live ECU. Recommended before relying on this for actual
-      starts, per the residual 360-degree-lock risk noted above.
+- [x] Real hardware validation on an actual 6G72 vehicle. Done twice:
+      (1) `oldtrigger.msl`/`newtrigger.msl` - back-to-back bench cranks on the
+      target car comparing `TT_3_TOOTH_CRANK`/`VVT_MITSUBISHI_6G72` vs
+      `TT_6G72_CRANK`/`VVT_MITSUBISHI_6G72_BETA` - clean catch/rev in both, zero
+      trigger/ordering errors, new config caught ~0.24s sooner.
+      (2) A dedicated logic-analyzer capture of just this car's crank+cam pair
+      (`3000gt/3000gt.logicdata`, exported to
+      `unit_tests/tests/trigger/resources/3000gt_alphaspeedpr_car.csv`), used
+      to derive and verify this car's actual fast-path table - see "Per-vehicle
+      calibration" below.
 - [ ] Consider whether the pre-existing "slow decoder can lock 360 degrees
       wrong with no self-correction" bug (found via this investigation's
       instrumentation, present in current production `TT_VVT_MITSU_6G72`,
       unrelated to this branch) deserves its own follow-up issue/fix.
+
+## Per-vehicle calibration (important correction)
+
+The table above (`remainder 0..5 -> cam level`) was originally derived by
+*trusting* the existing slow decoder's own convergence as ground truth,
+cross-checked across the 5 reference files. That trust was misplaced in a
+specific way, uncovered while investigating a rise+fall extension:
+
+**The bug in the original derivation.** Each reference capture file actually
+contains multiple separate cranking attempts concatenated together (the
+`synchronizationCounter` visibly resets and restarts partway through - one
+file has 7 distinct segments). The original analysis applied one global
+correction to an entire file, silently mixing data from independent cam locks.
+Once properly segmented (14 independent segments across the 5 files, each
+with its own fresh ground truth), only 5 of 14 landed on what looked like a
+consistent alignment - the rest looked like arbitrary noise.
+
+**Establishing real, decoder-independent ground truth.** Rather than keep
+trusting the slow decoder's convergence, the cam wheel has a real, physical,
+asymmetric feature: of its 4 HIGH pulses per cam revolution, one is
+measurably wider than the other three (confirmed at ~120-124 degrees crank
+vs ~48-72 degrees for the narrow three, once real hardware is measured
+directly - notably *not* the 105/60/60/60 split implied by
+`initializeVvt6G72`'s `addEvent360` comments, which turned out to be
+approximate reference geometry, not a hardware-calibrated constant; the real
+gap-ratio decoder was tuned against measured ratios, not those absolute
+angles). Measuring real pulse width directly - independent of any ECU
+decoder, using only local crank-tooth timing for degree calibration and a
+running-median filter to reject sensor noise/bounce - gives an unambiguous,
+single, per-tooth anchor with no trust assumption involved.
+
+Applied to all 5 reference files plus a fresh capture from this specific car
+(`3000gt/3000gt.logicdata` / `3000gt_alphaspeedpr_car.csv`), every one of
+those 6 sources turned out to be **perfectly internally self-consistent**
+(14-55 independent wide-pulse occurrences per file, zero disagreement within
+a file) - the earlier "noisy/unreliable" read was entirely an artifact of
+inadequate noise filtering in the analysis script, not a real decoder or
+signal reliability problem. But the 6 sources land on **4 different absolute
+alignments** relative to each other.
+
+**Why alignment differs between vehicles/sessions even with no distributor.**
+This car (a 1995 3000GT VR-4) has no distributor - the crank and cam trigger
+wheels are bolted directly to their shafts. That rules out "distributor
+clocking" as the explanation. The real variable is almost certainly the
+camshaft's **timing-chain clocking** - which chain tooth the cam sprocket is
+installed on is a real, per-engine assembly choice, independent of the sensor
+wheel's own (fixed) keying to the camshaft. This is a normal source of
+engine-to-engine variance, not a defect - it is exactly the kind of thing the
+slow gap-decoder exists to resolve at runtime by observing the cam's own
+unique pattern, rather than assuming a fixed constant.
+
+**Consequence: no static table is universal.** `mitsu6g72BetaCamLevelAtRemainder`
+in `trigger_central.cpp` is calibrated specifically to this vehicle's current
+timing-chain clocking, derived from its own verified capture
+(`3000gt_alphaspeedpr_car.csv`, `real6g72.beta_alphaspeedpr_car` test). Every
+remainder position in that capture showed 100% consistency (14/14 or 15/15,
+zero exceptions) across both rise and fall edges for the entire reliable
+window - the cleanest result of the whole investigation, and strong
+confirmation the underlying mechanism is sound once correctly calibrated.
+This table **must be re-derived** (same wide-pulse measurement method) before
+reuse on any other 6G72 vehicle, or on this one after its timing chain is
+serviced. The other 4 reference files remain in the test suite purely as
+general timing/robustness smoke tests (`real6g72.beta_cranking_rusefi` etc.)
+- not phase-correctness checks, since the matching algorithm's *activation
+timing* is invariant to which rotation of a valid table is used (only the
+reported remainder shifts), so those tests still pass but are not expected to
+report a phase-correct remainder for their own (different) vehicles.
+
+Measured on this car's own capture (raw CSV row index, before the noise-floor
+correction described in "Hybrid single/double-edge upgrade" below):
+`hasProvisionalPhase()` at row 670 vs `hasSynchronizedPhase()` (slow decoder)
+at row 773 - the fast path still won, on real, previously-unseen hardware
+data from the actual target vehicle. This specific row-based comparison was
+later found to be measuring noise-driven activity, not clean cranking data -
+see below for the corrected, real-time-based numbers.
+
+## Hybrid single/double-edge upgrade (cam level + elapsed time)
+
+The original 3-consecutive-fall-sample matcher (`matchMitsu6g72BetaPattern()`,
+binary cam level only) was replaced with a hybrid approach that also measures
+**continuous elapsed time since the last real cam edge**, not just level. A
+single binary sample can only ever produce 2 outcomes, so it can never fully
+distinguish 6 positions (pigeonhole) - but a continuous value carries far more
+information, and combined with level it resolves this car's calibrated table
+in 1-2 samples instead of always 3:
+
+- **Single sample** (level + elapsed) uniquely resolves remainders 0 and 3
+  immediately - their elapsed-time signatures (measured directly from this
+  car's capture) are cleanly separated from everything else (~91 and ~23
+  degrees respectively, vs. the other candidates' clusters).
+- The remaining 4 positions collapse into two 2-way-ambiguous pairs (1&4,
+  2&5) whose *own* elapsed values are too close to tell apart (1&4 differ by
+  only ~0.3 degrees - a real, repeatable feature of this cam wheel, not
+  measurement noise). Both pairs are exactly 3 apart (half of `crankDivider`=6,
+  the 360-degree/wasted-spark-safe twin relationship already relied on
+  elsewhere in this design), so even a wrong tiebreak only ever produces the
+  already-tolerated 360-degree error, never a genuinely wrong phase.
+- The tiebreak uses the *next* fall sample: for the 2&5 pair, the next
+  sample's level alone already disambiguates (remainder 3 is level 0,
+  remainder 0 is level 1) - robust, no reliance on close values. For the 1&4
+  pair, both candidates' next sample is level 0 too, so the tiebreak falls
+  back to nearest-neighbor elapsed-time matching (89.7 vs 88.4 degrees) - the
+  one place this design leans on a real but narrow margin.
+
+Implementation: `Mitsu6g72BetaSignature` table + `Mitsu6g72BetaPendingPair`
+state machine in `trigger_central.cpp`/`trigger_central.h`. Elapsed degrees
+are computed as `(nowNt - lastCamEdgeTime) * 60 / toothDurations[0]` -
+`toothDurations[0]` (the most recent crank edge-to-edge tick duration) serves
+as the local degrees-per-tick reference, avoiding any RPM assumption.
+
+### A real noise-floor bug found (and fixed) while validating this on real hardware
+
+Replaying the untrimmed `3000gt_alphaspeedpr_car.csv` (which still contains
+the probe-connect/disconnect noise bursts before ~2s and after ~11s - see
+"Real-data validation") through the new hybrid path initially looked like a
+*regression* compared to the old discrete matcher (commit at CSV row 742 vs.
+670 previously). Chasing that down surfaced something more important than the
+regression itself:
+
+- **Row index is not a reliable proxy for real elapsed time** on this capture.
+  The noisy pre-2s window packs a huge number of CSV rows into a very short
+  real-time span (severe crank-sensor ringing, sub-microsecond intervals),
+  while the clean [2s, 11s] window has comparatively few rows (real teeth are
+  tens of milliseconds apart). Row 670 (the original "670 vs 773, looks
+  great" result reported earlier in this doc) turned out to correspond to
+  real time **t=1.44s** - still deep inside the noise burst, not clean data.
+  The apparent "regression" to row 742/746 was two different noise-driven
+  flukes landing at two different noisy timestamps, not a real quality
+  difference between the two algorithm versions.
+- **The actual bug this exposed**: `toothDurations[0]` (the crank's own most
+  recent edge-to-edge tick duration) could be corrupted by a noise glitch to
+  an implausibly tiny value (confirmed: ~40 microseconds, i.e. >10,000 RPM
+  equivalent on this 6-edge/rev wheel - physically impossible), and since
+  `elapsedDeg` divides by this value, a noise-corrupted denominator produces
+  a wildly inflated ratio that can still accidentally pass the classification
+  thresholds. Fixed with a plausibility guard: reject any sample where
+  `toothDurations[0] < MS2NT(1)` (under 1ms, portable via the existing
+  `MS2NT` macro rather than a hardcoded tick count) before trusting the
+  elapsed-time math - matches the reasoning already used for the raw
+  Python-side analysis scripts earlier in this investigation, now applied in
+  the actual firmware path.
+- **Corrected, real-time-based result** (`checkBetaProvisionalTiming` now
+  prints and cross-checks elapsed seconds, not just row index, precisely so
+  this can't silently regress unnoticed again): on this car's own capture,
+  `hasProvisionalPhase()` at **t=2.031s** vs `hasSynchronizedPhase()` (slow
+  decoder) at **t=2.880s** - a genuine ~0.85s head start using plausibly-real
+  data, immediately at the boundary of the confirmed-clean window rather than
+  inside the noise burst. Full unit suite: 1507/1507 passing.
+
+**Lesson for any future work on this fast path**: always cross-check a
+timing-improvement claim against real elapsed seconds, not just a row/sample
+index, whenever the capture being replayed has a non-uniform noise profile -
+a row-index comparison can look like a clear win or a clear regression while
+actually measuring nothing but which noise burst got lucky first.
+
+## Older CAS-equipped 3000GTs (not yet supported, note for future generalization)
+
+This vehicle (1995 3000GT VR-4) has separate crank and cam trigger wheels
+bolted directly to their shafts - no distributor. Earlier 3000GTs instead use
+a combined CAS (Crank Angle Sensor) unit, functionally similar to a
+distributor, where **both the crank and cam patterns are optical slots cut
+into the same single disc**. Per the owner (2026-09-08): this makes it
+physically impossible for the two patterns to become unphased relative to
+each other - unlike the separate-wheel VR-4 design, there is no independent
+timing-chain clocking choice between crank and cam signal on a CAS unit,
+since both come from one disc on one shaft.
+
+The other known difference between the two designs is edge polarity: the CAS
+uses an optical sensor reading slots cut into the disc, while this VR-4's
+wheels use Hall-effect sensors reading physical teeth - the two sensing
+methods are believed to produce inverted edge senses relative to each other.
+This has not been derived or validated against a real CAS capture; if this
+fast-sync approach is ever extended to a CAS-equipped 3000GT, treat it as a
+distinct hardware variant requiring its own capture-derived table (per "no
+static table is universal" above), not a polarity-flip of the existing
+VR-4-derived one.

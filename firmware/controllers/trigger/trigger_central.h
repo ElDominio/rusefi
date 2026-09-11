@@ -27,6 +27,14 @@
 class Engine;
 typedef void (*ShaftPositionListener)(trigger_event_e signal, uint32_t index, efitick_t edgeTimestamp);
 
+// VVT_MITSUBISHI_6G72_BETA fast-sync state machine - see TriggerCentral::tryMitsu6g72BetaFastSync()
+// in trigger_central.cpp and docs/mitsubishi-6g72-fast-crank-cam-sync.md.
+enum class Mitsu6g72BetaPendingPair : uint8_t {
+	None,   // no ambiguous match pending - next sample starts fresh
+	R1_R4,  // first sample matched the {remainder 1, remainder 4} pair - waiting for a tiebreaker
+	R2_R5,  // first sample matched the {remainder 2, remainder 5} pair - waiting for a tiebreaker
+};
+
 #define HAVE_CAM_INPUT() (isBrainPinValid(engineConfiguration->camInputs[0]))
 
 class TriggerNoiseFilter {
@@ -175,11 +183,11 @@ public:
 	PrimaryTriggerDecoder triggerState;
 #endif //EFI_SHAFT_POSITION_INPUT
 
-	// VVT_MITSUBISHI_6G72_BETA fast-sync: rolling window of the cam level sampled at the last
-	// few crank FALL edges, used to guess engine phase faster than the normal cam gap-decoder.
-	// See docs/mitsubishi-6g72-fast-crank-cam-sync.md
-	uint8_t mitsu6g72BetaFallSamples[3] = {0, 0, 0};
-	uint8_t mitsu6g72BetaFallSampleCount = 0;
+	// VVT_MITSUBISHI_6G72_BETA fast-sync: cam level + continuous elapsed-time-since-last-cam-edge
+	// sampled at crank FALL edges, used to guess engine phase faster than the normal cam
+	// gap-decoder. See docs/mitsubishi-6g72-fast-crank-cam-sync.md
+	efitick_t mitsu6g72BetaLastCamEdgeTime = 0;
+	Mitsu6g72BetaPendingPair mitsu6g72BetaPendingPair = Mitsu6g72BetaPendingPair::None;
 
 	TriggerWaveform triggerShape;
 

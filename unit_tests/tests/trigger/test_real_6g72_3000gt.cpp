@@ -152,8 +152,21 @@ TEST(real6g72, sync_3000gt_crank_cam_cranking_idle_6g72CrankType) {
 // hasProvisionalPhase() no later than (and typically before) the existing slow gap-decoder
 // reaches the confirmed hasSynchronizedPhase(), and that the slow decoder still eventually
 // confirms (i.e. the fast path never blocks or breaks the existing confirmation path).
+//
+// mitsu6g72BetaCamLevelAtRemainder (trigger_central.cpp) is calibrated to one specific vehicle
+// (see beta_alphaspeedpr_car below and the design doc) - the 4 reference-only files below are
+// from other, unrelated 6G72 installs and are kept purely as general timing/robustness smoke
+// tests (does the fast path activate promptly and never hang/crash on real noisy data), NOT as
+// phase-correctness checks: the matching logic tries all 6 rotations of the table, so its
+// activation TIMING is invariant to which rotation is used, but the specific remainder it
+// reports for these other vehicles is not expected to be correct.
 // See docs/mitsubishi-6g72-fast-crank-cam-sync.md
 static void checkBetaProvisionalTiming(const char* filename) {
+    // Some real captures (long and/or noisy - e.g. the probe-connect/disconnect transients in
+    // 3000gt_alphaspeedpr_car.csv) generate enough per-tooth log output to exceed the 16MB
+    // per-test log cap; disable logging for this replay, matching test_real_bmw_e90_cam.cpp.
+    ScopedUnitTestCreateLogs logDisabler(false);
+
     CsvReader reader(/*triggerCount*/ 1, /* vvtCount */ 1);
     reader.open(filename, NORMAL_ORDER, NORMAL_ORDER);
 
@@ -166,23 +179,32 @@ static void checkBetaProvisionalTiming(const char* filename) {
     engineConfiguration->isFasterEngineSpinUpEnabled = true;
     engineConfiguration->rpmUpdateMode = rpmUpdateMode_e::RPM_UPDATE_INSTANT;
     engineConfiguration->isPhaseSyncRequiredForIgnition = true;
+    engineConfiguration->useNoiselessTriggerDecoder = true;
 
     int n = 0;
     int provisionalAt = -1;
     int confirmedAt = -1;
+    float provisionalAtSec = -1;
+    float confirmedAtSec = -1;
     while (reader.haveMore()) {
         reader.processLine(&eth);
         auto& triggerState = engine->triggerCentral.triggerState;
         if (provisionalAt < 0 && triggerState.hasProvisionalPhase()) {
             provisionalAt = n;
+            provisionalAtSec = NT2USF(getTimeNowNt()) / 1e6f;
         }
         if (confirmedAt < 0 && triggerState.hasSynchronizedPhase()) {
             confirmedAt = n;
+            confirmedAtSec = NT2USF(getTimeNowNt()) / 1e6f;
         }
         n++;
     }
 
-    printf("%s: provisionalAt=%d confirmedAt=%d\n", filename, provisionalAt, confirmedAt);
+    // Row index alone is misleading for real captures with a noisy stretch (many rows packed
+    // into a short, unreliable span of real time, e.g. probe-connect noise) followed by a clean
+    // stretch (few rows per second of real, reliable cranking) - report real elapsed seconds too.
+    printf("%s: provisionalAt=%d (%.3fs) confirmedAt=%d (%.3fs)\n",
+            filename, provisionalAt, provisionalAtSec, confirmedAt, confirmedAtSec);
 
     ASSERT_NE(confirmedAt, -1) << "slow decoder never confirmed - regression";
     ASSERT_NE(provisionalAt, -1) << "fast path never provisionally synced";
@@ -203,4 +225,11 @@ TEST(real6g72, beta_crank_cam_cranking_2) {
 }
 TEST(real6g72, beta_crank_cam_cranking_idle) {
     checkBetaProvisionalTiming("tests/trigger/resources/3000gt_crank_cam_cranking_idle.csv");
+}
+
+// Real logic-analyzer capture from the actual target vehicle (see
+// docs/mitsubishi-6g72-fast-crank-cam-sync.md - the fast-path table is calibrated specifically
+// to this car's timing-chain clocking, verified via direct cam-pulse-width measurement).
+TEST(real6g72, beta_alphaspeedpr_car) {
+    checkBetaProvisionalTiming("tests/trigger/resources/3000gt_alphaspeedpr_car.csv");
 }

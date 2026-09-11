@@ -249,42 +249,51 @@ static angle_t adjustCrankPhase(int camIndex) {
 }
 
 /**
- * VVT_MITSUBISHI_6G72_BETA fast-sync: the cam level sampled at 3 consecutive crank FALL edges
- * (TT_6G72_CRANK) uniquely identifies engine phase (remainder 0..5 of crankDivider=6) almost
- * always in under one full crank revolution, vs. the ~720 degrees the normal cam gap-decoder
- * needs. Table and derivation: docs/mitsubishi-6g72-fast-crank-cam-sync.md. This intentionally
+ * VVT_MITSUBISHI_6G72_BETA fast-sync: cam LEVEL plus continuous ELAPSED TIME since the last real
+ * cam edge, sampled at crank FALL edges (TT_6G72_CRANK), identifies engine phase (remainder 0..5
+ * of crankDivider=6) in 1-2 samples in the common case, vs. the ~720 degrees the normal cam
+ * gap-decoder needs. Derivation: docs/mitsubishi-6g72-fast-crank-cam-sync.md. This intentionally
  * does not touch the generic TriggerWaveform/TriggerDecoderBase gap-matching engine - the normal
  * gap-decoder for VVT_MITSUBISHI_6G72_BETA is unmodified and still runs in parallel, and is the
  * only thing that can set the strong hasSynchronizedPhase() (see syncEnginePhase's isProvisional
  * parameter) - this fast path only ever sets the weaker hasProvisionalPhase(), sufficient to
  * unblock wasted-spark/batch firing (limp_manager.cpp's noFiringUntilVvtSync()) but not sequential.
+ *
+ * A single (level, elapsedDeg) sample only fully resolves 2 of the 6 remainders (0 and 3) for this
+ * vehicle - the rest collapse into two 2-way-ambiguous pairs (1&4, 2&5) whose own elapsed values
+ * are too close together to tell apart directly (1&4 differ by only ~0.3 degrees - a real,
+ * repeatable feature of this cam wheel, not measurement noise). Both ambiguous pairs are exactly
+ * 3 apart (half of crankDivider=6, i.e. the 360-degree/wasted-spark-safe twin of each other), so a
+ * wrong tiebreak still only ever produces the already-tolerated 360-degree error. The tiebreak
+ * itself uses the NEXT fall sample: for the 1&4 pair the next sample's cam level is identical
+ * (both land on remainder 2 or 5, both level 0) so elapsed-time nearest-neighbor is used; for the
+ * 2&5 pair the next sample's level alone already disambiguates (remainder 3 is level 0, remainder
+ * 0 is level 1), which is used directly since it doesn't depend on close elapsed values at all.
+ *
+ * IMPORTANT - all of these numbers are calibrated to ONE specific vehicle, not a universal 6G72
+ * constant. There is no distributor on a 3000GT VR-4 (crank and cam wheels are bolted directly to
+ * their shafts), but the camshaft's timing-chain clocking is still an install-specific variable -
+ * which chain tooth the cam sprocket goes on is a real assembly choice, not fixed by the wheel
+ * geometry. Verified directly against 5 real capture files (unrelated to this vehicle) plus this
+ * vehicle's own logic-analyzer capture (unit_tests/tests/trigger/resources/3000gt_alphaspeedpr_car.csv):
+ * every one of those 6 sources is internally perfectly self-consistent (measuring the cam
+ * waveform's one distinctly-wide pulse against crank tooth position, independent of any ECU
+ * decoder), but the 6 sources land on 4 different absolute alignments between each other. These
+ * values are this specific car's (see the design doc for the derivation method) - if this is ever
+ * reused on a different 6G72 vehicle (or this one after the timing chain is serviced), it MUST be
+ * re-derived from that vehicle's own capture, not assumed to carry over.
  */
-static const uint8_t mitsu6g72BetaCamLevelAtRemainder[6] = {0, 1, 0, 1, 1, 0};
-
-// Returns the remainder (0..5) implied by 3 consecutive fall-edge cam-level samples (oldest to
-// newest), or -1 if they don't cleanly match exactly one of the 6 possible rotations.
-static int matchMitsu6g72BetaPattern(const uint8_t samples[3]) {
-	int matchedRemainder = -1;
-	for (int k = 0; k < 6; k++) {
-		bool ok = true;
-		for (int i = 0; i < 3; i++) {
-			if (mitsu6g72BetaCamLevelAtRemainder[(k + i) % 6] != samples[i]) {
-				ok = false;
-				break;
-			}
-		}
-		if (ok) {
-			if (matchedRemainder != -1) {
-				// Ambiguous match (matched more than one rotation) - should not happen given the
-				// table above is pairwise-distinct at length 3, but reject rather than guess.
-				return -1;
-			}
-			// samples[2] (the newest sample, just observed) is at remainder (k+2) % 6
-			matchedRemainder = (k + 2) % 6;
-		}
-	}
-	return matchedRemainder;
-}
+struct Mitsu6g72BetaSignature {
+	uint8_t level;
+	float elapsedDeg;
+};
+// remainder 0..5 -> (cam level, elapsed degrees since the last real cam edge) at a crank FALL edge
+static const Mitsu6g72BetaSignature mitsu6g72BetaFallSignature[6] = {
+	{1, 91.2f}, {1, 23.7f}, {0, 89.7f}, {0, 22.8f}, {1, 23.4f}, {0, 88.4f}
+};
+// Midpoint between the "short" (~23 degree) and "long" (~90 degree) elapsed clusters - both
+// clusters are >20 degrees away from this threshold, so it's not sensitive to exact placement.
+static constexpr float MITSU_6G72_BETA_ELAPSED_THRESHOLD_DEG = 55.0f;
 
 static bool getVvtChannelLevel(int index) {
 	switch (index) {
@@ -296,7 +305,6 @@ static bool getVvtChannelLevel(int index) {
 }
 
 void TriggerCentral::tryMitsu6g72BetaFastSync(efitick_t nowNt) {
-	UNUSED(nowNt);
 	if (engineConfiguration->trigger.type != trigger_type_e::TT_6G72_CRANK) {
 		return;
 	}
@@ -308,22 +316,58 @@ void TriggerCentral::tryMitsu6g72BetaFastSync(efitick_t nowNt) {
 		// Already have a guess (or the real decoder already confirmed) - don't re-guess.
 		return;
 	}
-
-	mitsu6g72BetaFallSamples[0] = mitsu6g72BetaFallSamples[1];
-	mitsu6g72BetaFallSamples[1] = mitsu6g72BetaFallSamples[2];
-	mitsu6g72BetaFallSamples[2] = getVvtChannelLevel(camIndex) ? 1 : 0;
-	if (mitsu6g72BetaFallSampleCount < 3) {
-		mitsu6g72BetaFallSampleCount++;
+	if (mitsu6g72BetaLastCamEdgeTime == 0 || triggerState.toothDurations[0] == 0) {
+		// No real cam edge observed yet, or no valid recent crank period to calibrate against.
+		mitsu6g72BetaPendingPair = Mitsu6g72BetaPendingPair::None;
+		return;
+	}
+	if (triggerState.toothDurations[0] < MS2NT(1)) {
+		// Implausibly short crank tooth period (>10,000 RPM equivalent on this 6-edge/rev wheel) -
+		// sensor noise/bounce, not a real edge (confirmed on real hardware: a probe-connect noise
+		// burst produced a garbage ~40us "tooth" here, which without this guard corrupts the
+		// elapsedDeg ratio below into a nonsense value that can still accidentally pass the
+		// classification thresholds). Skip this sample without disturbing any pending tiebreak -
+		// don't throw away a legitimate first sample over one noisy follow-up.
 		return;
 	}
 
-	int remainder = matchMitsu6g72BetaPattern(mitsu6g72BetaFallSamples);
-	if (remainder < 0) {
-		return;
-	}
+	uint8_t level = getVvtChannelLevel(camIndex) ? 1 : 0;
+	float elapsedDeg = (float)(nowNt - mitsu6g72BetaLastCamEdgeTime) * 60.0f / (float)triggerState.toothDurations[0];
 
 	int crankDivider = getCrankDivider(triggerShape.getWheelOperationMode());
-	syncEnginePhaseAndReport(crankDivider, remainder, /*isProvisional*/ true);
+
+	switch (mitsu6g72BetaPendingPair) {
+	case Mitsu6g72BetaPendingPair::None:
+		if (level == 1) {
+			if (elapsedDeg > MITSU_6G72_BETA_ELAPSED_THRESHOLD_DEG) {
+				syncEnginePhaseAndReport(crankDivider, 0, /*isProvisional*/ true);
+			} else {
+				mitsu6g72BetaPendingPair = Mitsu6g72BetaPendingPair::R1_R4;
+			}
+		} else {
+			if (elapsedDeg < MITSU_6G72_BETA_ELAPSED_THRESHOLD_DEG) {
+				syncEnginePhaseAndReport(crankDivider, 3, /*isProvisional*/ true);
+			} else {
+				mitsu6g72BetaPendingPair = Mitsu6g72BetaPendingPair::R2_R5;
+			}
+		}
+		break;
+	case Mitsu6g72BetaPendingPair::R1_R4: {
+		// Both candidates' next sample is level 0 - break the tie on elapsed time alone.
+		bool isRemainder2 = fabsf(elapsedDeg - mitsu6g72BetaFallSignature[2].elapsedDeg)
+				< fabsf(elapsedDeg - mitsu6g72BetaFallSignature[5].elapsedDeg);
+		syncEnginePhaseAndReport(crankDivider, isRemainder2 ? 2 : 5, /*isProvisional*/ true);
+		mitsu6g72BetaPendingPair = Mitsu6g72BetaPendingPair::None;
+		break;
+	}
+	case Mitsu6g72BetaPendingPair::R2_R5: {
+		// Candidates' next sample levels differ (remainder 3 is level 0, remainder 0 is level 1) -
+		// the level alone already disambiguates, no need to rely on close elapsed values.
+		syncEnginePhaseAndReport(crankDivider, level == 0 ? 3 : 0, /*isProvisional*/ true);
+		mitsu6g72BetaPendingPair = Mitsu6g72BetaPendingPair::None;
+		break;
+	}
+	}
 }
 
 /**
@@ -437,6 +481,12 @@ void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 	    engine->outputChannels.vvtChannel3 = front == TriggerValue::RISE;
 	} else if (index == 3) {
 	    engine->outputChannels.vvtChannel4 = front == TriggerValue::RISE;
+	}
+
+	if (index == engineConfiguration->engineSyncCam) {
+		// VVT_MITSUBISHI_6G72_BETA fast-sync: latch the timestamp of every real cam edge on the
+		// sync cam, used to measure elapsed-time-since-last-cam-edge at crank edges.
+		tc->mitsu6g72BetaLastCamEdgeTime = nowNt;
 	}
 
 	int bankIndex = BANK_BY_INDEX(index);
