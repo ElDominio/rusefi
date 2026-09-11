@@ -104,14 +104,13 @@ TEST(Actuators, Fan) {
 }
 
 // Helper: configure fan 1 for PWM mode with a linear 80-110°C → 0-100% curve.
-// min/max 0-100%, no AC adder, no soft-start unless overridden by caller.
+// min/max 0-100%, no soft-start unless overridden by caller.
 static void setupFan1Pwm(EngineTestHelper& /*eth*/) {
 	engineConfiguration->fan1PwmEnabled = true;
 	setLinearCurve(engineConfiguration->fan1TempBins, 80, 110);
 	setLinearCurve(engineConfiguration->fan1PwmValues, 0, 100);
 	engineConfiguration->fan1MinPwm = 0;
 	engineConfiguration->fan1MaxPwm = 100;
-	engineConfiguration->fan1AcAdder = 0;
 	engineConfiguration->fan1SoftStartSec = 0.0f;
 }
 
@@ -158,47 +157,197 @@ TEST(Actuators, FanPwm_CurveInterpolation) {
 	EXPECT_EQ(false, enginePins.fanRelay.getLogicValue());
 }
 
-TEST(Actuators, FanPwm_MinMaxClamp) {
+TEST(Actuators, FanPwm_MinMaxAsOffAndFullDuty) {
+	// fan1MinPwm/fan1MaxPwm are the duty cycles meaning "off" (0% demand) and "full speed"
+	// (100% demand); the demand curve is interpolated between them, not clamped against them.
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	MockAcOff mockAc;
 	engine->module<AcController>().set(&mockAc);
 	setupFan1Pwm(eth);
 
-	// With minPwm=30, a cold temperature (curve→0%) should be clamped up to 30%
+	// Cold -> fan disabled -> output at the "off" duty, 30%
 	engineConfiguration->fan1MinPwm = 30;
 	Sensor::setMockValue(SensorType::Clt, 75);
 	updateFans();
 	EXPECT_NEAR(30.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
 
-	// With maxPwm=60, a hot temperature (curve→100%) should be clamped down to 60%
+	// Hot -> fan enabled, curve saturated at 100% demand -> output at the "full speed" duty, 60%
 	engineConfiguration->fan1MaxPwm = 60;
 	Sensor::setMockValue(SensorType::Clt, 115);
 	updateFans();
 	EXPECT_NEAR(60.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
 }
 
-TEST(Actuators, FanPwm_AcAdder) {
+TEST(Actuators, FanPwm_InvertedRange) {
+	// Hardware that drives the fan through an inverted PWM path (e.g. NPN transistor + pull-up):
+	// a high duty cycle keeps the fan off, a low duty cycle drives it at full speed. fan1MinPwm
+	// (the "off" duty) can be set higher than fan1MaxPwm (the "full speed" duty) to describe this.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	MockAcOff mockAc;
+	engine->module<AcController>().set(&mockAc);
+	setupFan1Pwm(eth);
+	engineConfiguration->fan1MinPwm = 90;
+	engineConfiguration->fan1MaxPwm = 10;
+
+	// Fan should be off (cold) -> duty at the "off" level, 90%
+	Sensor::setMockValue(SensorType::Clt, 75);
+	updateFans();
+	EXPECT_NEAR(90.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+
+	// Fan should be full speed (hot) -> duty at the "full" level, 10%
+	Sensor::setMockValue(SensorType::Clt, 115);
+	updateFans();
+	EXPECT_NEAR(10.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+
+	// Midpoint of the curve (~95C, ~50% demand) -> duty halfway between 90 and 10, i.e. 50%
+	Sensor::setMockValue(SensorType::Clt, 95);
+	updateFans();
+	EXPECT_NEAR(50.0f, engine->module<FanControl1>()->pwmAppliedPwm, 2.0f);
+}
+
+TEST(Actuators, FanPwm_DisableGatesUseOffDuty) {
+	// Cranking/disable-when-stopped/disable-at-speed (isHardInhibited(), shared with the relay
+	// path) still force PWM mode to the curve's lowest-bin ("off") demand, regardless of what the
+	// curve says for the current temperature.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	MockAcOff mockAc;
+	engine->module<AcController>().set(&mockAc);
+	setupFan1Pwm(eth);
+	engineConfiguration->fan1MinPwm = 15;
+	engineConfiguration->fan1MaxPwm = 100;
+
+	// Hot enough that the curve alone would call for full speed
+	Sensor::setMockValue(SensorType::Clt, 115);
+	updateFans();
+	EXPECT_NEAR(100.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+
+	// Cranking inhibits the fan even in PWM mode -> output drops to the "off" duty (15%), not 0%
+	engine->rpmCalculator.setRpmValue(100);
+	updateFans();
+	EXPECT_NEAR(15.0f, engine->module<FanControl1>()->pwmAppliedPwm, 0.01f);
+
+	// Running again, still hot -> back to full speed
+	engine->rpmCalculator.setRpmValue(1000);
+	updateFans();
+	EXPECT_NEAR(100.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+
+	// disableFan1WhenStopped also inhibits PWM mode now
+	engineConfiguration->disableFan1WhenStopped = true;
+	engine->rpmCalculator.setRpmValue(0);
+	updateFans();
+	EXPECT_NEAR(15.0f, engine->module<FanControl1>()->pwmAppliedPwm, 0.01f);
+}
+
+TEST(Actuators, FanPwm_IgnoresOnOffTemperature) {
+	// PWM mode has no separate on/off temperature threshold - the curve is the sole source of
+	// truth. Deliberately set fanOnTemperature/fanOffTemperature to values that would force the
+	// fan off under the old (relay-style) logic, and confirm PWM output tracks the curve anyway.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	MockAcOff mockAc;
+	engine->module<AcController>().set(&mockAc);
+	setupFan1Pwm(eth);
+	engineConfiguration->fanOnTemperature = 200;
+	engineConfiguration->fanOffTemperature = 190;
+
+	// Well below fanOffTemperature (190) - old logic would call this "cold" -> off. New logic:
+	// just reads the curve, which says ~50% at 95C.
+	Sensor::setMockValue(SensorType::Clt, 95);
+	updateFans();
+	EXPECT_NEAR(50.0f, engine->module<FanControl1>()->pwmAppliedPwm, 2.0f);
+}
+
+TEST(Actuators, FanPwm_CurveEndpointsAreOffAndFull) {
+	// The curve's own lowest/highest bin values - not a hardcoded 0/100 - are used as the "off"
+	// and "full speed" demand for CLT-broken and hard-inhibited (e.g. cranking) cases. Use a curve
+	// whose endpoints are NOT 0/100 to prove this isn't coincidental.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	MockAcOff mockAc;
+	engine->module<AcController>().set(&mockAc);
+	setupFan1Pwm(eth);
+	setLinearCurve(engineConfiguration->fan1PwmValues, 20, 80); // lowest bin=20%, highest bin=80%
+	engineConfiguration->fan1MinPwm = 0;
+	engineConfiguration->fan1MaxPwm = 100;
+
+	// Below the curve's range -> clamped to the lowest bin's value, 20%, not 0%.
+	Sensor::setMockValue(SensorType::Clt, 50);
+	updateFans();
+	EXPECT_NEAR(20.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+
+	// Above the curve's range -> clamped to the highest bin's value, 80%, not 100%.
+	Sensor::setMockValue(SensorType::Clt, 200);
+	updateFans();
+	EXPECT_NEAR(80.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+
+	// Broken CLT -> fail safe at the highest bin's value, 80%, not 100%.
+	Sensor::setInvalidMockValue(SensorType::Clt);
+	updateFans();
+	EXPECT_NEAR(80.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+
+	// Cranking (hard-inhibited) -> lowest bin's value, 20%, not 0%.
+	Sensor::setMockValue(SensorType::Clt, 200);
+	engine->rpmCalculator.setRpmValue(100);
+	updateFans();
+	EXPECT_NEAR(20.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+}
+
+TEST(Actuators, FanPwm_AcRelayForcesMaxSpeed) {
+	// Relay mode: the condenser needs full airflow whenever the compressor relay is engaged, so
+	// PWM mode should just run flat out - no adder, no partial ramp.
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	MockAcOff mockAcOff;
 	MockAcOn mockAcOn;
 	engine->module<AcController>().set(&mockAcOff);
 	setupFan1Pwm(eth);
-	engineConfiguration->fan1AcAdder = 20;
+	engineConfiguration->fan1MinPwm = 10; // "off" duty, to prove AC-on isn't just landing on 0
+	getCustomPage()->fan1AcMode = fan_ac_mode_e::Relay;
 
-	// At 80°C curve gives 0%; AC off → target 0%, clamped to min 0%
-	Sensor::setMockValue(SensorType::Clt, 80);
+	// Cool engine, AC off -> curve says 0% -> disabled (cold) -> "off" duty
+	Sensor::setMockValue(SensorType::Clt, 75);
 	updateFans();
-	EXPECT_NEAR(0.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+	EXPECT_NEAR(10.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
 
-	// AC on → 0% + 20 adder = 20%
+	// Still cool, but AC compressor engages -> fan must jump straight to 100%, not a partial adder
 	engine->module<AcController>().set(&mockAcOn);
 	updateFans();
-	EXPECT_NEAR(20.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+	EXPECT_NEAR(100.0f, engine->module<FanControl1>()->pwmAppliedPwm, 0.01f);
 
-	// AC adder is clamped by maxPwm: hot temp (100%) + 20 adder = 120% → clamped to 100%
-	Sensor::setMockValue(SensorType::Clt, 115);
+	// AC off again -> back to curve-driven (still cold -> "off" duty)
+	engine->module<AcController>().set(&mockAcOff);
 	updateFans();
-	EXPECT_NEAR(100.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+	EXPECT_NEAR(10.0f, engine->module<FanControl1>()->pwmAppliedPwm, 1.0f);
+}
+
+TEST(Actuators, FanPwm_AcPressureProportional) {
+	// Pressure mode: demand ramps from 0% at the Off threshold to 100% at the On threshold, and
+	// is never lower than what the temperature curve alone would call for.
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	MockAcOff mockAc;
+	engine->module<AcController>().set(&mockAc);
+	setupFan1Pwm(eth);
+
+	// Keep the temperature curve out of it: cold engine, unreachable on/off thresholds
+	engineConfiguration->fanOnTemperature = 200;
+	engineConfiguration->fanOffTemperature = 190;
+	Sensor::setMockValue(SensorType::Clt, 75);
+
+	getCustomPage()->fan1AcMode = fan_ac_mode_e::Pressure;
+	getCustomPage()->fan1AcPressureOn = 1400;
+	getCustomPage()->fan1AcPressureOff = 1100;
+
+	// At/above the On threshold -> full speed
+	Sensor::setMockValue(SensorType::AcPressure, 1500);
+	updateFans();
+	EXPECT_NEAR(100.0f, engine->module<FanControl1>()->pwmAppliedPwm, 0.01f);
+
+	// Halfway between Off (1100) and On (1400) -> ~50%
+	Sensor::setMockValue(SensorType::AcPressure, 1250);
+	updateFans();
+	EXPECT_NEAR(50.0f, engine->module<FanControl1>()->pwmAppliedPwm, 2.0f);
+
+	// Below the Off threshold -> pressure demand is 0, curve alone (cold) also says 0 -> "off" duty
+	Sensor::setMockValue(SensorType::AcPressure, 1000);
+	updateFans();
+	EXPECT_NEAR(0.0f, engine->module<FanControl1>()->pwmAppliedPwm, 0.01f);
 }
 
 TEST(Actuators, FanPwm_InvalidClt) {

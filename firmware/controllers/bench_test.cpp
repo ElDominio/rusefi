@@ -59,6 +59,7 @@ void setOutputOnTheBenchTestForUnitTest(OutputPin* output) {
 
 #include "flash_main.h"
 #include "bench_test.h"
+#include "fan_control.h"
 #include "main_trigger_callback.h"
 #include "periodic_thread_controller.h"
 #include "electronic_throttle.h"
@@ -932,6 +933,7 @@ void initBenchTest() {
 	addConsoleAction(CMD_FAN_BENCH, fanBench);
 	addConsoleAction(CMD_FAN2_BENCH, fan2Bench);
 	addConsoleActionF("fanbench2", fanBenchExt);
+	addConsoleAction("fan_pwm_reinit", debugReinitFanPwm);
 
 	addConsoleAction("mainrelaybench", mainRelayBench);
 

@@ -24,8 +24,16 @@ struct FanController : public EngineModule, public fan_control_s {
 	void onSlowCallback() override;
 	void setDefaultConfiguration() override;
 
+	// Console-callable hook (see "fan_pwm_reinit" in bench_test.cpp): force PWM re-init on demand,
+	// e.g. after a live frequency/pin change, without waiting for a reboot.
+	void debugForceInitPwm() {
+		m_pwmInitialized = false;
+		initPwm();
+	}
+
 private:
 	bool getState(bool acActive, bool lastState);
+	bool isHardInhibited();
 	void initPwm();
 	void onSlowCallbackPwm(bool acActive);
 
@@ -35,7 +43,10 @@ private:
 
 	SimplePwm m_pwm;
 	bool m_pwmInitialized = false;
-	float m_currentPwm = 0.0f;
+	// Slew-limited speed demand, 0..100 (0 = off, 100 = full speed). Slewing happens in demand
+	// space rather than raw duty so soft-start behaves the same whether fan1MinPwm/fan1MaxPwm
+	// describe a "normal" (min < max) or hardware-inverted (min > max) PWM signal.
+	float m_currentDemand = 0.0f;
 
 protected:
 	virtual OutputPin& getPin() = 0;
@@ -53,7 +64,6 @@ protected:
 	virtual float computeCurvePwm(float tempC) const = 0;
 	virtual float getMinPwm() const = 0;
 	virtual float getMaxPwm() const = 0;
-	virtual float getPwmAcAdder() const = 0;
 	virtual float getSoftStartSec() const = 0;
 
 #if EFI_AC_PRESSURE_FAN
@@ -113,10 +123,6 @@ struct FanControl1 : public FanController {
 
 	float getMaxPwm() const override {
 		return engineConfiguration->fan1MaxPwm;
-	}
-
-	float getPwmAcAdder() const override {
-		return engineConfiguration->fan1AcAdder;
 	}
 
 	float getSoftStartSec() const override {
@@ -187,10 +193,6 @@ struct FanControl2 : public FanController {
 		return engineConfiguration->fan2MaxPwm;
 	}
 
-	float getPwmAcAdder() const override {
-		return engineConfiguration->fan2AcAdder;
-	}
-
 	float getSoftStartSec() const override {
 		return engineConfiguration->fan2SoftStartSec;
 	}
@@ -205,3 +207,7 @@ struct FanControl2 : public FanController {
 	}
 #endif
 };
+
+// Console-callable diagnostic: force both fan controllers to (re)run their PWM init, bypassing
+// the normal onSlowCallback()-driven lazy init.
+void debugReinitFanPwm();

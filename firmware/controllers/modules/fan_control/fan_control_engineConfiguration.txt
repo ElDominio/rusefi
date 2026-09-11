@@ -1,12 +1,12 @@
 output_pin_e fanPin
 pin_output_mode_e fanPinMode
-int16_t fanOnTemperature;Cooling fan turn-on temperature threshold, in Celsius;"SPECIAL_CASE_TEMPERATURE", 1, 0, -40, @@CLT_UPPER_LIMIT@@, 0
-int16_t fanOffTemperature;Cooling fan turn-off temperature threshold, in Celsius;"SPECIAL_CASE_TEMPERATURE", 1, 0, -40, @@CLT_UPPER_LIMIT@@, 0
+int16_t fanOnTemperature;Cooling fan turn-on temperature threshold, in Celsius. Only used by the on/off relay path - ignored when PWM mode is enabled, which uses the PWM curve's own bins instead.;"SPECIAL_CASE_TEMPERATURE", 1, 0, -40, @@CLT_UPPER_LIMIT@@, 0
+int16_t fanOffTemperature;Cooling fan turn-off temperature threshold, in Celsius. Only used by the on/off relay path - ignored when PWM mode is enabled, which uses the PWM curve's own bins instead.;"SPECIAL_CASE_TEMPERATURE", 1, 0, -40, @@CLT_UPPER_LIMIT@@, 0
 
 output_pin_e fan2Pin
 pin_output_mode_e fan2PinMode
-int16_t fan2OnTemperature;Cooling fan turn-on temperature threshold, in Celsius;"SPECIAL_CASE_TEMPERATURE", 1, 0, -40, @@CLT_UPPER_LIMIT@@, 0
-int16_t fan2OffTemperature;Cooling fan turn-off temperature threshold, in Celsius;"SPECIAL_CASE_TEMPERATURE", 1, 0, -40, @@CLT_UPPER_LIMIT@@, 0
+int16_t fan2OnTemperature;Cooling fan turn-on temperature threshold, in Celsius. Only used by the on/off relay path - ignored when PWM mode is enabled, which uses the PWM curve's own bins instead.;"SPECIAL_CASE_TEMPERATURE", 1, 0, -40, @@CLT_UPPER_LIMIT@@, 0
+int16_t fan2OffTemperature;Cooling fan turn-off temperature threshold, in Celsius. Only used by the on/off relay path - ignored when PWM mode is enabled, which uses the PWM curve's own bins instead.;"SPECIAL_CASE_TEMPERATURE", 1, 0, -40, @@CLT_UPPER_LIMIT@@, 0
 
 int8_t disableFan1AtSpeed
 int8_t disableFan2AtSpeed
@@ -28,12 +28,10 @@ uint8_t[FAN_PWM_CURVE_SIZE] fan1PwmValues;Fan 1 PWM curve output values;"%", 1, 
 int16_t[FAN_PWM_CURVE_SIZE] fan2TempBins;Fan 2 PWM curve temperature bins;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -40 : -40}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
 uint8_t[FAN_PWM_CURVE_SIZE] fan2PwmValues;Fan 2 PWM curve output values;"%", 1, 0, 0, 100, 0
 
-uint8_t fan1MinPwm;Minimum PWM output clamp (Fan 1);"%", 1, 0, 0, 100, 0
-uint8_t fan1MaxPwm;Maximum PWM output clamp (Fan 1);"%", 1, 0, 0, 100, 0
-uint8_t fan2MinPwm;Minimum PWM output clamp (Fan 2);"%", 1, 0, 0, 100, 0
-uint8_t fan2MaxPwm;Maximum PWM output clamp (Fan 2);"%", 1, 0, 0, 100, 0
-uint8_t fan1AcAdder;PWM adder when AC compressor is active (Fan 1);"%", 1, 0, 0, 100, 0
-uint8_t fan2AcAdder;PWM adder when AC compressor is active (Fan 2);"%", 1, 0, 0, 100, 0
+uint8_t fan1MinPwm;PWM duty cycle meaning "fan off" (0% demand). May be greater than Maximum PWM to describe hardware that drives the fan with an inverted PWM signal (e.g. NPN transistor + pull-up: high duty = off, low duty = full speed) (Fan 1);"%", 1, 0, 0, 100, 0
+uint8_t fan1MaxPwm;PWM duty cycle meaning "fan full speed" (100% demand) (Fan 1);"%", 1, 0, 0, 100, 0
+uint8_t fan2MinPwm;PWM duty cycle meaning "fan off" (0% demand). May be greater than Maximum PWM to describe hardware that drives the fan with an inverted PWM signal (e.g. NPN transistor + pull-up: high duty = off, low duty = full speed) (Fan 2);"%", 1, 0, 0, 100, 0
+uint8_t fan2MaxPwm;PWM duty cycle meaning "fan full speed" (100% demand) (Fan 2);"%", 1, 0, 0, 100, 0
 
 float fan1SoftStartSec;Soft-start ramp time – how long to ramp from 0 to target PWM (Fan 1);"s", 1, 0, 0, 30, 1
 float fan2SoftStartSec;Soft-start ramp time – how long to ramp from 0 to target PWM (Fan 2);"s", 1, 0, 0, 30, 1

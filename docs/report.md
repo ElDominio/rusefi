@@ -4971,3 +4971,59 @@ Open follow-ups:
 - `setMitsubishi3A92()` (`config/engines/mitsubishi_3A92.cpp`) still points at the untouched
   `TT_36_2_1_1`, not the new trigger - no action needed unless someone wants to experiment with
   it there too.
+## 2026-09-08 - Fan control: shared inhibit gate, demand-space soft-start, inverted-PWM support
+
+Reworked `FanController` (`firmware/controllers/modules/fan_control/fan_control.cpp/.h`), committed
+now as part of a later catch-up pass (no report entry was written at the time).
+
+### Shared inhibit logic
+
+Extracted the cranking/not-running/too-fast/board-status checks that the on/off relay path
+(`getState()`) already had into a new `isHardInhibited()`, now also called from the PWM path
+(`onSlowCallbackPwm()`). Previously the PWM path only checked `!clt` (broken sensor) and never the
+other four conditions, so a PWM fan could keep spinning while cranking or while stopped-and-inhibited
+even though the relay variant of the same board would have shut it off. Both paths now agree.
+
+### PWM output rework
+
+- Soft-start/slew now happens in **demand space** (0-100%, `m_currentDemand`), not raw PWM duty.
+  `fan1MinPwm`/`fan1MaxPwm` map demand -> duty via linear interpolation
+  (`minPwm + (demand/100) * (maxPwm - minPwm)`), which also makes `min > max` a valid, supported way
+  to describe hardware that drives the fan through an inverting stage (NPN transistor + pull-up:
+  high duty = off, low duty = full speed). Changed the defaults accordingly:
+  `fan1MinPwm`/`fan2MinPwm` 20 -> 0 (0% demand now literally means 0% duty for the common
+  non-inverted case, instead of an arbitrary 20% floor).
+- Removed `fan1AcAdder`/`fan2AcAdder` entirely. A/C-Relay mode now commands 100% demand directly
+  (`computeCurvePwm(1000.0f)`, reusing the curve's own out-of-range clamping as a "full speed"
+  accessor) instead of adding a small offset on top of the temperature curve - the condenser needs
+  full airflow whenever the compressor relay is engaged, no reason to ramp it.
+- `EFI_AC_PRESSURE_FAN` mode now ramps demand from 0% at the Off pressure threshold to 100% at the
+  On threshold and takes `maxF(curveDemand, pressureDemand)` - pressure can only push the fan faster
+  than the temperature curve already wants, never slower.
+- `initPwm()` now guards a zero/invalid PWM frequency: below 1 Hz (e.g. stale tune data after a
+  config layout change, or a bad manual edit) it logs a warning and falls back to 250 Hz instead of
+  silently marking itself initialized and permanently freezing the output pin at its resting level.
+- Fields renamed for clarity: `pwmCurvePwm`/`pwmTargetPwm` -> `fanSpeedTarget`/`fanSpeedApplied`
+  (0-100% demand before/after soft-start ramping); `pwmAppliedPwm` now holds the actual post-min/max
+  PWM duty. New TS quick-gauges for all three per fan (`gauge_declarations.ini`, "Debug" category).
+- New console-callable `debugReinitFanPwm()` (registered as `fan_pwm_reinit`): forces both fan
+  controllers to re-run `initPwm()` (clearing `m_pwmInitialized`) without a reboot, for testing a
+  live frequency/pin change.
+
+### Compatibility
+
+`fan1AcAdder`/`fan2AcAdder` removal and the `fan1MinPwm`/`fan2MinPwm` default change are config
+field/behavior changes but did not require a `FLASH_DATA_VERSION` bump on their own - they landed
+alongside other already-bumped config-layout work in the same uncommitted window (see TCU entries
+this session).
+
+### Validation
+
+Unit tests (`unit_tests/tests/actuators/test_fan_control.cpp`) updated for the demand-space
+soft-start and the shared inhibit gate. Full suite run as part of this catch-up commit pass -
+passing.
+
+### Open follow-ups
+
+None known.
+
