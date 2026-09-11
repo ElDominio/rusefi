@@ -8,6 +8,7 @@
 
 #include "pch.h"
 #include "gear_detector.h"
+#include "custom_page.h"
 
 static constexpr float geometricMean(float x, float y) {
 	return sqrtf(x * y);
@@ -81,6 +82,7 @@ void GearDetector::onSlowCallback() {
 		if ((hasClutchDown && clutchDown) || (hasClutchUp && !clutchUp)) {
 			m_gearboxRatio = 0;
 			m_currentGear  = 0;
+			m_slipPercent  = 0;
 			return;
 		}
 	}
@@ -89,6 +91,8 @@ void GearDetector::onSlowCallback() {
 	m_gearboxRatio = ratio;
 
 	m_currentGear = determineGearFromRatio(ratio);
+
+	m_slipPercent = computeSlipPercent();
 }
 
 size_t GearDetector::determineGearFromRatio(float ratio) const {
@@ -182,6 +186,44 @@ float GearDetector::getGearboxRatio() const {
 	return m_gearboxRatio;
 }
 
+float GearDetector::getSlipPercent() const {
+	return m_slipPercent;
+}
+
+float GearDetector::computeSlipPercent() const {
+	if (!engineConfiguration->transmissionSlipDetectionEnabled || m_currentGear == 0) {
+		return 0;
+	}
+
+	// Only trustworthy when the driveshaft speed reference is a real Output Shaft Speed
+	// sensor, not a wheel-speed-derived estimate -- tire slip would otherwise be
+	// indistinguishable from driveline slip. True whether Gear Setup itself reads OSS
+	// directly, or Main Vehicle Speed is fed by an OSS-sourced Main Speed Sensor (Vehicle
+	// Information page).
+	bool speedSourceIsOss = engineConfiguration->gearDetectionUseOutputShaftSpeed
+			|| getCustomPage()->mainSpeedSensorSource == main_speed_sensor_source_e::OutputShaftSpeed;
+	if (!speedSourceIsOss) {
+		return 0;
+	}
+
+	auto rpmSourceType = engineConfiguration->transmissionSlipRpmSourceIsInputShaftSpeed
+			? SensorType::InputShaftSpeed
+			: SensorType::Rpm;
+
+	auto actualRpm = Sensor::get(rpmSourceType);
+	if (!actualRpm.Valid) {
+		return 0;
+	}
+
+	// Ideal (no-slip) RPM for the Detected Gear given the current driveshaft speed.
+	float expectedRpm = getRpmInGear(m_currentGear);
+	if (expectedRpm <= 0) {
+		return 0;
+	}
+
+	return 100.0f * (actualRpm.Value / expectedRpm - 1.0f);
+}
+
 SensorResult GearDetector::get() const {
 	return m_currentGear;
 }
@@ -190,4 +232,5 @@ void GearDetector::showInfo(const char* sensorName) const {
 	efiPrintf("Sensor \"%s\" is gear detector.", sensorName);
 	efiPrintf("    Gearbox ratio: %.3f", m_gearboxRatio);
 	efiPrintf("    Detected gear: %d", m_currentGear);
+	efiPrintf("    Slip: %.1f%%", m_slipPercent);
 }

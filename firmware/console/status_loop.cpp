@@ -479,6 +479,7 @@ static void updateVehicleSpeed() {
 #ifdef MODULE_GEAR_DETECTOR
 	engine->outputChannels.speedToRpmRatio = engine->module<GearDetector>()->getGearboxRatio();
 	engine->outputChannels.detectedGear = Sensor::getOrZero(SensorType::DetectedGear);
+	engine->outputChannels.transmissionSlipPercent = engine->module<GearDetector>()->getSlipPercent();
 #endif
 #endif /* EFI_VEHICLE_SPEED */
 }
