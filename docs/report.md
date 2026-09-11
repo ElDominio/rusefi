@@ -4971,61 +4971,373 @@ Open follow-ups:
 - `setMitsubishi3A92()` (`config/engines/mitsubishi_3A92.cpp`) still points at the untouched
   `TT_36_2_1_1`, not the new trigger - no action needed unless someone wants to experiment with
   it there too.
-## 2026-09-08 - Fan control: shared inhibit gate, demand-space soft-start, inverted-PWM support
 
-Reworked `FanController` (`firmware/controllers/modules/fan_control/fan_control.cpp/.h`), committed
-now as part of a later catch-up pass (no report entry was written at the time).
+**2026-09-07 follow-up 3 - user bench-tested `TT_36_2_1_1_V2` on real hardware: "started and
+ran," but still saw occasional sync errors crank-only/with-old-cam.** Cam PHASE resolution
+(`TT_VVT_MITSUBISHI_6G75` + `adjustCrankPhase()`, 360-vs-720 disambiguation, untouched this
+session) was independently confirmed working correctly by the user, unrelated to anything built
+here.
 
-### Shared inhibit logic
+Investigated whether cam DATA could also help crank sync reliability (a different problem: this
+session's decoder holding lock, not phase). Checked Channel 1 in the two original captures
+(`6g75-without-spark-crank.csv` / `6g75-withsparkplugs-cranking.csv`) - unlike `6g75stuff/
+nofuel.csv`'s Channel 1 (confirmed noise/floating pin), these are real cam data: starts just
+after crank (not ~37k samples before, like the noise case), and bucketed per crank revolution
+gives a clean alternating 4/3 pulse-count pattern (matching the *shape* of MS3's 2-vs-1
+half-cycle-disambiguation idea, though this wheel's actual numbers differ and its role here is
+unconfirmed). More importantly: precise phase analysis (bisecting cam pulse timestamps against
+crank tooth boundaries) found the crank's gap occurs **exactly 3 teeth after the most recent cam
+pulse**, 100% consistent across all 13 real gap events in both files - a whole-tooth-count
+relationship independent of crank amplitude entirely. Confirmed via re-reading `ms3_ign_6g75.c`
+that MS3 has NO precedent for this specific use of cam data - MS3's `trig2cnt` only counts total
+pulses across a full crank revolution for 360-vs-720 phase disambiguation (the same job rusEFI's
+existing `TT_VVT_MITSUBISHI_6G75` already does), never checks cam-to-gap tooth-count offset. Also
+confirmed `TriggerCentral` (`trigger_central.cpp`) already sees both crank (`handleShaftSignal`)
+and cam (`hwHandleVvtCamSignal`/`handleVvtCamSignal`) edges, and that raw cam edge counting
+(`vvtEventRiseCounter[camIndex]++`) happens unconditionally, before the `!triggerState.
+getShaftSynchronized()` gate that blocks the *full* VVT decoder from running pre-crank-sync - so
+a raw-counter-based cross-check could in principle work even during crank hunting. **Not
+implemented** - user decided current crank-only reliability is "somewhat good" and didn't want to
+add this complexity given cam phase already works; captured here only as a validated-but-unused
+finding in case sync reliability becomes a problem again later. If revisited, the "3 teeth"
+figure is empirical from 13 revolutions off one engine/one wiring setup - not a spec value, and
+unconfirmed as a general 6G75 mechanical constant.
 
-Extracted the cranking/not-running/too-fast/board-status checks that the on/off relay path
-(`getState()`) already had into a new `isHardInhibited()`, now also called from the PWM path
-(`onSlowCallbackPwm()`). Previously the PWM path only checked `!clt` (broken sensor) and never the
-other four conditions, so a PWM fan could keep spinning while cranking or while stopped-and-inhibited
-even though the relay variant of the same board would have shut it off. Both paths now agree.
+**2026-09-07 follow-up 4 - added a hybrid "graduate to the old decoder after 100 stable
+crank revolutions above cranking RPM" mode, per user request**, so `TT_36_2_1_1_V2`'s custom
+logic only has to do the part it's actually built/tested for (cranking acquisition), handing off
+to the old, unmodified, presumably-fine-at-running-RPM `TT_36_2_1_1` fixed-window logic for
+sustained running - falling straight back to the custom logic any time sync is actually lost.
+Chose NOT to implement this as literal runtime `trigger_type_e` switching (heavier, likely needs
+a hardware stop/restart cycle) - instead, since `initialize36_2_1_1_v2()` already duplicates
+`TT_36_2_1_1`'s exact waveform geometry, added its exact three tuned gap windows to the V2
+waveform too (indices 0-2, previously only index 8 was used, for baseline-history length) and
+made the GRADUATED case in `isSyncPoint()` skip the custom logic entirely and fall through to the
+same generic `gapTrackingLength` loop every other trigger type already uses - reusing the
+original's tested logic byte-for-byte rather than reimplementing it.
 
-### PWM output rework
+Mechanics (`trigger_decoder.h`/`.cpp`):
+- New `mutable int mitsu6g75v2_stableRevolutionCount`, reset to 0 unconditionally at the top of
+  the HUNTING branch (not just via `resetState()` - confirmed by reading the code that 3 of the
+  4 sync-loss call sites don't call `resetState()`, so relying on that alone would have left this
+  counter stale across a "soft" sync loss). Only increments on a successful LOCKED-phase
+  reconfirm/coast, and only when `Sensor::getOrZero(SensorType::Rpm) >
+  engineConfiguration->cranking.rpm` (default 550) - per user's explicit answer, revolutions
+  spent at/below cranking RPM neither advance nor reset it, only an actual sync loss resets it.
+- `MITSU_36211_V2_STABLE_REVOLUTIONS_REQUIRED = 100`. Once reached (and still synchronized), the
+  custom hunt/lock/coast code doesn't run at all for that tooth - falls through past its own `if`
+  block to the pre-existing generic loop, fed the copied `initialize36_2_1_1_v2()` windows.
+- Added `setMitsu6g75v2StableRevolutionCountForUnitTest()` (`#if EFI_UNIT_TEST` seam) since
+  simulating 100+ real revolutions tooth-by-tooth in a test is impractical.
 
-- Soft-start/slew now happens in **demand space** (0-100%, `m_currentDemand`), not raw PWM duty.
-  `fan1MinPwm`/`fan1MaxPwm` map demand -> duty via linear interpolation
-  (`minPwm + (demand/100) * (maxPwm - minPwm)`), which also makes `min > max` a valid, supported way
-  to describe hardware that drives the fan through an inverting stage (NPN transistor + pull-up:
-  high duty = off, low duty = full speed). Changed the defaults accordingly:
-  `fan1MinPwm`/`fan2MinPwm` 20 -> 0 (0% demand now literally means 0% duty for the common
-  non-inverted case, instead of an arbitrary 20% floor).
-- Removed `fan1AcAdder`/`fan2AcAdder` entirely. A/C-Relay mode now commands 100% demand directly
-  (`computeCurvePwm(1000.0f)`, reusing the curve's own out-of-range clamping as a "full speed"
-  accessor) instead of adding a small offset on top of the temperature curve - the condenser needs
-  full airflow whenever the compressor relay is engaged, no reason to ramp it.
-- `EFI_AC_PRESSURE_FAN` mode now ramps demand from 0% at the Off pressure threshold to 100% at the
-  On threshold and takes `maxF(curveDemand, pressureDemand)` - pressure can only push the fan faster
-  than the temperature curve already wants, never slower.
-- `initPwm()` now guards a zero/invalid PWM frequency: below 1 Hz (e.g. stale tune data after a
-  config layout change, or a bad manual edit) it logs a warning and falls back to 250 Hz instead of
-  silently marking itself initialized and permanently freezing the output pin at its resting level.
-- Fields renamed for clarity: `pwmCurvePwm`/`pwmTargetPwm` -> `fanSpeedTarget`/`fanSpeedApplied`
-  (0-100% demand before/after soft-start ramping); `pwmAppliedPwm` now holds the actual post-min/max
-  PWM duty. New TS quick-gauges for all three per fan (`gauge_declarations.ini`, "Debug" category).
-- New console-callable `debugReinitFanPwm()` (registered as `fan_pwm_reinit`): forces both fan
-  controllers to re-run `initPwm()` (clearing `m_pwmInitialized`) without a reboot, for testing a
-  live frequency/pin change.
+**Known limitation, flagged but not fixed**: the custom logic declares its sync point ON the gap
+tooth itself (checking the current tooth's own elevated ratio), while the old decoder's 3-window
+check declares sync ONE TOOTH AFTER the gap (a lookback over the short recovery tooth, the gap,
+and the tooth before that). These two conventions anchor "index 0" to physically different teeth,
+11.25 degrees apart. At the moment of graduation (and at any future re-hunt-then-regraduate
+cycle), there is likely a one-tooth phase discontinuity for a single revolution before the old
+logic's own anchor re-stabilizes things. Not resolved this session - would need the custom LOCKED
+logic's anchor point shifted to match the old convention (checking the gap on the *previous*
+tooth's ratio rather than the current one), which would require re-deriving and re-validating the
+window/tolerance constants against all 4 real captures again. Whether an ~11 degree, single-
+revolution, once-per-run blip actually matters in practice is unconfirmed - flagged for the user
+to weigh in on before treating this as done.
 
-### Compatibility
+Validation: new `unit_tests/tests/trigger/test_36211_v2_graduation.cpp` (2 tests, hand-driving
+the decoder via `EngineTestHelper::fireRise()` since no real capture is remotely 100 revolutions
+long) proves the actual behavioral difference - a deliberately weak gap tooth (ratio 1.5: below
+the old decoder's 1.7 lower bound, above the custom logic's 1.2 coast-eligible threshold) survives
+via coast when not graduated, and correctly drops sync once graduated (forced via the unit-test
+seam). Iterating on this test caught a real bug in the test itself, not the production code: the
+first draft's synthetic revolution included an extra "moderate" decoy tooth (mimicking the real
+wheel's other masked gaps) that accidentally cleared the weak-corroboration threshold early and
+shifted the lock anchor - simplified to one clean gap per revolution once identified. Full
+`unit_tests/test.sh` suite passes at 1509/1509. `real6g75v2` (4 tests, all real-capture-based)
+unaffected, as expected - none of those captures are anywhere near 100 revolutions long.
 
-`fan1AcAdder`/`fan2AcAdder` removal and the `fan1MinPwm`/`fan2MinPwm` default change are config
-field/behavior changes but did not require a `FLASH_DATA_VERSION` bump on their own - they landed
-alongside other already-bumped config-layout work in the same uncommitted window (see TCU entries
-this session).
+**2026-09-08 - fixed the one-tooth anchor misalignment flagged as a known limitation above,
+confirmed real by the user on hardware** (they'd already found they needed a different trigger
+angle offset value between the two decoders, ~-340 vs ~-350 - matching the ~11.25 degree/one-tooth
+prediction almost exactly). User asked whether the OLD decoder could instead be shifted to match
+the NEW one, rather than the other way around - explained why that direction doesn't work: the
+old decoder's 3-position window is fundamentally a *retrospective* check (it confirms a gap only
+by seeing the short recovery tooth that follows it, using a lookback over gap + recovery + one
+more), so it cannot fire earlier without losing that confirmation entirely and becoming a
+different, unvalidated decision rule - defeating the whole point of reusing tested logic
+unchanged for the GRADUATED case. Shifted the custom logic instead.
 
-### Validation
+Change (`trigger_decoder.cpp`'s `TT_36_2_1_1_V2` case in `isSyncPoint()`,
+`trigger_mitsubishi.cpp`'s `initialize36_2_1_1_v2()`): the custom hunt/lock/coast logic now reads
+`toothDurations[1]` (the tooth immediately before the current one, i.e. the candidate gap) instead
+of `toothDurations[0]` (the current tooth), while `current_index` bookkeeping stays exactly as-is
+- since the sync point is now declared on the tooth AFTER the gap (the "recovery" tooth), this
+lines up with the exact tooth the old decoder's own 3-position window already anchors on. The
+rolling baseline now excludes both the current tooth [0] and the candidate gap [1], computed from
+[2..9] instead of [1..8], to avoid the gap skewing its own baseline (waveform's
+`gapTrackingLength` bump moved from index 8 to index 9 to keep that populated). None of
+`MITSU_36211_V2_EXPECTED_SPACING`/`_TOLERANCE`/the two ratio thresholds needed to change - they're
+all relative quantities (tooth-count spacing, duration ratios) that don't depend on which specific
+tooth is used as the reference point.
 
-Unit tests (`unit_tests/tests/actuators/test_fan_control.cpp`) updated for the demand-space
-soft-start and the shared inhibit gate. Full suite run as part of this catch-up commit pass -
-passing.
+Practical effect: a single trigger-angle-offset tune value should now be correct in both the
+custom-logic and GRADUATED (old-logic) states, with no discontinuity at the handoff - the
+misalignment this session found and fixed. Not yet re-verified on hardware that the offset value
+is now in fact identical between `TT_36_2_1_1` and `TT_36_2_1_1_V2` - only reasoned through and
+confirmed via the unit tests below; ask the user to check on the bench.
 
-### Open follow-ups
+Validation: re-ran `test_36211_v2_graduation.cpp` - one of its two tests needed a real fix, not
+just a re-pin: `rejectsWeakGapOnceGraduated` was asserting `getShaftSynchronized()` immediately
+after the weak tooth, but a single rejected tooth doesn't instantly drop sync (the framework only
+revokes it once `current_index` runs past the wheel size looking for a valid sync point) - added
+~40 more normal teeth after the weak gap so the actual desync has time to occur; confirmed the old
+windows genuinely reject the weak tooth (`isSynchronizationPoint=0` against 0.3-0.6/1.7-3.6/
+0.8-1.2 in the trace) before that. Re-pinned all four `test_real_6g75_v2.cpp` values against the
+shifted anchor (RPM changed slightly on 3 of 4 files, warning counts mostly dropped from 2-3 down
+to 1 on two of them - not interpreted as better or worse, just different, since there's still no
+hardware ground truth for these captures). Full `unit_tests/test.sh` suite passes at 1509/1509.
 
-None known.
+## 2026-09-08 - Reverted TT_36_2_1_1_V2's "graduate to old decoder after 100 stable
+revolutions" mode - bench-tested by user, loses sync and stalls the engine
+
+The "graduate to `TT_36_2_1_1`'s fixed-window logic after 100 stable revolutions above cranking
+RPM" mode added earlier the same session (see the 2026-09-07 follow-up 4 and 2026-09-08 anchor-
+alignment entries above) was bench-tested on the user's hardware. Result: once
+`mitsu6g75v2_stableRevolutionCount` reaches the threshold and the code falls through to the old
+decoder's fixed 1.7-3.6 gap-ratio window, the engine loses sync and dies - the old window is
+measurably tighter than what the custom hunt/lock/coast logic tolerates (exactly what
+`test_36211_v2_graduation.cpp`'s `rejectsWeakGapOnceGraduated` predicted synthetically: a gap
+ratio of 1.5, which the custom logic coasts through fine, is rejected outright by the old
+decoder's >=1.7 lower bound). The "presumably-fine-at-running-RPM" assumption behind the whole
+feature did not hold on this vehicle.
+
+Reverted per user request:
+- `trigger_decoder.h`/`.cpp`: removed `mitsu6g75v2_stableRevolutionCount`, the
+  `setMitsu6g75v2StableRevolutionCountForUnitTest()` test seam, the `MITSU_36211_V2_
+  STABLE_REVOLUTIONS_REQUIRED` constant, the GRADUATED branch/fallthrough in `isSyncPoint()`,
+  and the `aboveCrankingRpm` bookkeeping. `TT_36_2_1_1_V2` now runs its own hunt/lock/coast logic
+  unconditionally, forever, same as originally committed in `4beccd0cdb`.
+- Deleted `unit_tests/tests/trigger/test_36211_v2_graduation.cpp` and its `tests.mk` entry.
+
+Initially kept the 2026-09-08 anchor-point shift (declaring sync on the tooth AFTER the gap
+instead of the gap tooth itself) since it wasn't implicated in the failure - but the user then
+asked to revert everything to the known-good point instead. Went further: `git restore`d
+`trigger_decoder.cpp`, `trigger_decoder.h`, `trigger_mitsubishi.cpp`, `test_real_6g75_v2.cpp`,
+and `unit_tests/triggers.txt` to their exact `4beccd0cdb` content (the anchor shift was only in
+this session's uncommitted work, never committed, so this fully removes it too). Net effect: all
+six files listed above are now byte-identical to `4beccd0cdb` - the original, user-bench-tested
+"started and ran" state, with the gap-tooth anchor convention and no graduation logic at all.
+
+Validation: `unit_tests/test.sh` full suite (blocked mid-run by an unrelated stale shared
+`page_4_generated.h` - see "Generated configuration layout" in CLAUDE.md - fixed via
+`bash firmware/gen_config_board.sh firmware/config/boards/f407-discovery f407-discovery`; not
+yet re-confirmed green after the full revert). Not re-tested on hardware this session - next
+real validation is the user's own bench/road test of the reverted decoder.
+
+## 2026-09-08 (continued) - Added VVT_MITSUBISHI_6G75_BETA: cam-edge-count phase sync,
+bypassing the broken amplitude cam decoder entirely
+
+Follow-up to the revert above. On the reverted (known-good) `TT_36_2_1_1_V2` crank decoder, user
+bench-tested with `VVT_MITSUBISHI_6G75` cam sync enabled (log: `6g75stuff/runningnewtrigger.msl`)
+and hit a second, independent failure: cam decode goes wrong first (`VVT: bank 1 intake` jumps to
+nonsensical values, `CUSTOM_CAM_TOO_MANY_TEETH` fires), and ~500ms later the crank decoder itself
+starts erroring and the engine stalls. Root-caused via column-by-column log analysis: the crank
+trigger stayed error-free for the full ~15s before the incident (rules out the crank revert as
+cause) - `initializeMitsubishi6G75Cam()`'s 7-tooth cam wheel decode uses the same
+amplitude/gap-ratio classification (`setTriggerSynchronizationGap(2.66)`) that was already proven
+unreliable for the crank wheel on this hardware (masking/EMI ringing).
+
+Checked the reverse-engineered MS3 6G75 decoder (`6g75stuff/ms3_ign_6g75.c`) for its cam
+approach: it does NOT decode the cam wheel's own gap pattern at all - it counts raw cam pulses
+(`trig2cnt`) during a fixed 10-crank-tooth window after its own crank sync point (1 pulse = one
+crank revolution's phase, 2 pulses = the other). Cross-checked against 6G72 beta's own evolution
+(already committed/in-progress this session in `trigger_central.cpp`): that logic has moved
+through ratio/pattern-match -> elapsed-time-based -> now a pure level/order "straddle" check with
+"no timing/RPM-dependent math at all" - the same direction MS3 takes for 6G75. Conclusion: MS3's
+count-based (not amplitude-based) approach is the right lesson for this hardware family, not a
+fallback.
+
+Re-derived the actual window from `unit_tests/tests/trigger/resources/6g75-without-spark-crank.csv`
+(both channels) rather than porting MS3's window directly: counting real cam RISE edges between
+consecutive crank sync points (one full crank revolution, using TT_36_2_1_1_V2's own trusted
+revolution boundary - no need for a separate mid-revolution checkpoint like MS3's tooth-10) gives
+a **perfectly clean alternating 3,4,3,4,3,4,3 pattern across all 7 revolutions** in the capture -
+expected, since the 7-tooth cam wheel averages 3.5 edges/crank-revolution, so a clean signal can
+never land anywhere else.
+
+Implementation (per user's explicit design choices this session):
+- New `VVT_MITSUBISHI_6G75_BETA` (`rusefi_enums.h` = 36, `rusefi_config.txt`'s `vvt_mode_e_enum`
+  dropdown string).
+- Added to `vvtWithRealDecoder()`'s exclusion list (`trigger_central.cpp`) - the broken amplitude
+  decoder **never runs** for this mode at all (user's explicit choice: fully separate path, not a
+  parallel/provisional-only addition like 6G72 beta, specifically to stop the spurious
+  `CUSTOM_CAM_TOO_MANY_TEETH` warnings and garbage angle writes).
+- New `TriggerCentral::mitsu6g75BetaObserveCamEdge()` (increments a counter, hooked into
+  `handleVvtCamSignal()` for every real rise edge on the sync cam) and
+  `TriggerCentral::tryMitsu6g75BetaSync()` (hooked into `handleShaftSignal()` exactly at
+  `CurrentIndex == 0` - reads+resets the count for the revolution that just ended, classifies
+  3->remainder 0 / 4->remainder 1, calls `syncEnginePhaseAndReport(2, remainder,
+  isProvisional=false)` - user explicitly chose STRONG/full sequential sync, since this mode has
+  no old decoder underneath to fall back to for sequential firing).
+- `engine.cpp`'s `getVvtTriggerType()` maps the new mode to `TT_HALF_MOON` (placeholder, never
+  actually decoded); `adjustCrankPhase()` gets an explicit no-op case (phase is resolved once per
+  revolution by `tryMitsu6g75BetaSync()`, not per-cam-edge here - reusing the generic
+  fixed-remainder pattern the other non-real-decoder modes use would be wrong for this mode's
+  count-based disambiguation).
+- New test `unit_tests/tests/trigger/test_real_6g75_beta_cam.cpp`, replaying the real capture with
+  both channels fed: asserts full `hasSynchronizedPhase()` is reached via the count path, and that
+  the old amplitude decoder never runs/never syncs.
+
+Bug caught by the existing suite, not by the new test: `tryMitsu6g75BetaSync()` initially indexed
+`vvtMode[]` (sized `[CAMS_PER_BANK]` = 2) directly with the raw global `engineSyncCam`, instead of
+`CAM_BY_INDEX(engineSyncCam)` like every other call site - `engineSyncCam` is a global index
+spanning both banks (0..3), not a per-bank one. `realCrankingVQ40.normalCrankingSyncCam2` (UBSan
+build, `engineSyncCam=2`) caught the out-of-bounds read immediately. Fixed; full suite re-run
+1508/1508 green afterward.
+
+**Flagged, deliberately NOT resolved this session**: which count (3 or 4) maps to which crank
+revolution (remainder 0 vs 1) is UNVERIFIED - the capture confirms the counting mechanism itself
+is clean and repeatable, but carries no TDC/cylinder-1 ground truth to fix the polarity. Getting
+this backwards means a confident, silently-wrong 360-degree phase error under full (non-
+provisional) sync - a real hazard for sequential injection/ignition, not just a wasted-spark
+inconvenience, since (per user's choice) there is no old decoder underneath to catch a wrong
+guess. Verification recipe left in the code comment above `mitsu6g75BetaObserveCamEdge()`: log a
+run with the OLD `VVT_MITSUBISHI_6G75` mode while its amplitude decoder is locked and reporting a
+plausible position, note which count (3 or 4) was accumulating in that same window, set
+`MITSU_6G75_BETA_REMAINDER_FOR_COUNT_A`/`_B` in `tryMitsu6g75BetaSync()` to match. Not done - no
+bench access to a period where the old decoder locks correctly on this vehicle.
+
+Bench-tested by user same session (`6g75stuff/howcamlooksnow.msl`, built on this exact code):
+engine runs, RPM stable ~690-720, zero trigger errors, coil states show individual per-cylinder
+firing consistent with sequential operation - so BETA's sync mechanism itself is confirmed working
+end-to-end on real hardware, not just in the offline capture replay. `VVT: bank 1 intake` jumps
+between ~7 different values every cam revolution (matches the 7 physical teeth) - traced to
+`handleVvtCamSignal()`'s per-edge `vvtPosition` write never being gated for BETA (the "only write
+on the sync tooth" early-return is keyed off `isVvtWithRealDecoder`, which is false for BETA, so
+every real edge - not just one per cycle - overwrites the gauge with that edge's own crank angle).
+Confirmed cosmetic only: sync/injection timing is governed entirely by the separate per-revolution
+edge-count path, unaffected by this. **User explicitly decided not to fix this** ("if not
+critical, no code changes are needed") - left as-is; a future session gating the vvtPosition write
+the same way `isVvtWithRealDecoder` modes are gated would fix the display if it's ever worth doing.
+
+## 2026-09-08 (continued) - Design doc: LLM control tab for the Java console (no code yet)
+
+Unrelated investigation, same session: user asked whether Claude Code could connect to a real
+ECU via the console for hardware testing. Answer: not in this session (no `mcp__ecu__*`/
+`mcp__can__*` tools wired in), but rusEFI already ships `java_console/mcp_ecu`'s `EcuMcpServer`
+for exactly this - a standalone JVM speaking MCP (JSON-RPC 2.0) over stdio, with its own
+`LinkManager`, so it cannot attach to a console session a human already has open (two processes
+would fight over one serial port).
+
+User then asked for feasibility (explicitly: discussion only, no changes) of building this
+capability directly into the Swing console instead, with a human-gated enable/disable so a human
+operator can hand control to an LLM without giving up the ability to take it back. Talked through
+the design over several turns and converged on:
+
+- Bridge lives *inside* the console process, reusing `uiContext.getLinkManager()` (already the
+  single `LinkManager` per process) rather than opening a second connection - `LinkManager.submit
+  (Runnable)` already serializes all wire access onto one executor, so GUI clicks and LLM-issued
+  commands interleave safely with no new locking needed.
+- No MCP dependency required for a Claude Code agent specifically (it already has a shell tool) -
+  a loopback-only local socket with a simple JSON protocol is sufficient; MCP is a discovery
+  convention for generic MCP clients, not a hard requirement.
+- New "LLM" tab (structurally like `SlcanTab`) with three independent, escalating toggles rather
+  than one on/off bit: (1) read-only, (2) + Lua write (`set_lua`/`get_lua`/`lua_reset`), (3) +
+  everything (`send_command`/`reboot`/`reboot_to_blt`, and any future write tools). Each stage
+  maps cleanly onto `EcuMcpServer`'s existing tool boundaries.
+- User's explicit call: **no automatic RPM/engine-running interlock** on top of stage 3 - the
+  three-stage climb is itself the informed-consent chain; an automatic override on top of an
+  explicit chain the operator already climbed was rejected as redundant. (A non-blocking
+  "flag stage-3 commands sent while RPM > 0 more prominently in the log" idea was raised as a
+  possible future addition, not committed to.)
+- Separate one-click kill switch (drops straight to fully off, not a step-down through stages).
+- All three stages reset to off on every console launch - nothing persists across restarts.
+- Audit log: `~/.rusEFI/LLM_logs/` (matches the existing `RUSEFI_SETTINGS_FOLDER = ~/.rusEFI/`
+  convention in `FileUtil.java`, not the launch-directory-relative `FileLogger.DIR = "logs/"`),
+  folder created lazily on first toggle, one file per session, logging both commands/results and
+  stage-transition events, no auto-retention.
+
+Wrote up the full design in `docs/llm-console-control.md` (status: design only, explicitly not
+implemented - no console/bridge code was touched this session). Open follow-ups left in the doc:
+stage 3 "everything" currently only reaches `send_command`/`reboot`/`reboot_to_blt` since no
+tune/calibration-write tools exist yet in `EcuMcpServer`; local bridge wire format unspecified;
+whether `set_lua`'s current atomic write+burn+luareset should split into a human-confirmed apply
+step was raised but not decided.
+
+## 2026-09-08 (continued) - Investigation: forcing DFU mode without a working console connection
+
+User asked whether the ECU can be pushed into DFU when the TunerStudio/rusEFI console can't
+connect at all (dead COM port / USB enumeration issue, not a handshake problem). Traced the
+code path, no changes made.
+
+Found an independent CAN-based backdoor that bypasses the console binary protocol entirely:
+`processCanEcuControl()` (`firmware/controllers/bench_test.cpp`) is called unconditionally from
+`can_rx.cpp` for every received frame and matches extended CAN ID `0x77000C`
+(`bench_test_packet_ids_e::ECU_CAN_BUS_USER_CONTROL`, base `BENCH_TEST_BASE_ADDRESS 0x770000`).
+Sending data `66 00 BA 00 00 00` (byte0 = `BENCH_HEADER` 0x66, bytes2-3 LSB16 = subsystem
+`JUMP_DFU_COMMAND` 0xBA, bytes4-5 = unused index) routes through `executeTSCommand()` into
+`case JUMP_DFU_COMMAND: jump_to_bootloader()` - the same call the console's own "reboot to DFU"
+menu item makes. Requires only a CAN transceiver on the bus (PCAN-View/SavvyCAN/python-can, etc)
+- no TS session, no working serial link. Gated on `EFI_CAN_SUPPORT` + `EFI_DFU_JUMP` (both
+default-on) and requires the app firmware to still be alive and servicing CAN RX; a fully
+hung/bricked ECU won't respond. Noted `mcp_can`'s `CanSnifferMcp` is read-only sniffing and can't
+send this frame itself.
+
+Universal hardware fallback (works even with dead firmware): hold `BOOT0` high and power-cycle -
+forces the STM32 ROM bootloader unconditionally, independent of the application. Pin/pad location
+is board-specific.
+
+Follow-up: user asked for the same thing over plain serial (no CAN hardware needed). Found it's
+reachable via the raw TS binary protocol without a full console session: opcode `TS_IO_TEST_COMMAND`
+('Z', `firmware/console/binary/tunerstudio.cpp` `handleCrcCommand`) takes a big-endian
+`u16 subsystem + u16 index` payload and calls the identical `executeTSCommand()` the CAN path
+uses. Packets are stateless - no prior TS_HELLO/handshake required. Verified the wire framing
+against `TsChannelBase::crcAndWriteBuffer`/`writePacketHeader` (2-byte BE length of
+command+payload, then command+payload, then 4-byte BE CRC32) and confirmed `crc32()`
+(`firmware/libfirmware/util/src/crc.cpp`) is bit-identical to zlib/`binascii.crc32` (same table,
+init/final XOR 0xFFFFFFFF) - computed the literal bytes for JUMP_DFU_COMMAND (subsystem 0x00BA,
+index 0) with Python's `zlib.crc32`: `00 05 5A 00 BA 00 00 7C 48 5B B1`, writable straight to the
+serial/USB-CDC device node with a few lines of pyserial. Same firmware-must-be-alive caveat as
+the CAN route; doesn't help if the port can't even enumerate at the OS/driver level (BOOT0
+hardware fallback is the only option there).
+
+## 2026-09-08 (continued) - Refreshed root `rusefi_lua.txt` Lua scripting reference
+
+User asked to update the root-level `rusefi_lua.txt` (a Lua-Scripting wiki page mirror with a
+maintained "Updates Since This Reference Was Captured" diff section plus two verbatim generated
+dumps - the `SensorType` enum and the `getOutputValueByHash` switch) with the latest Lua-visible
+API surface. No firmware/tooling code changed - documentation only.
+
+Method: diffed `firmware/controllers/lua/lua_hooks.cpp`, `lua_hooks_util.cpp`,
+`firmware/controllers/sensors/sensor_type.h`, and
+`firmware/controllers/lua/generated/output_lookup_generated.cpp` against `upstream/master`
+(fetched fresh), then separately diffed the doc's two embedded raw dumps against the actual
+current working-tree source files to find drift since the previous 2026-08-17 refresh, rather
+than re-deriving the whole history from git log.
+
+Findings applied to `rusefi_lua.txt`:
+- New hook `setLaunchRpm(rpm)` (EFI_LAUNCH_CONTROL) - sets `engineConfiguration->launchRpm`,
+  clamped 0..20000.
+- Removed hook `setParkNeutral(value)` (commit f2df9ae9e2) - park/neutral idle offset is now a
+  UI-configurable setting (`idleParkNeutralOffset`) instead of Lua-only activation.
+- `sensor_type.h` and the `SensorType` enum dump were already byte-identical to source (only new
+  sensors already documented); no changes needed there.
+- `output_lookup_generated.cpp` dump had drifted in 7 spots since 2026-08-17: `vssEdgeCounter`
+  removed (Wheel Speed Sensors v5 deleted legacy VSS), `fan1/fan2 pwmCurvePwm/pwmTargetPwm`
+  renamed to `fanSpeedTarget/fanSpeedApplied` (fan_control.cpp's slew-limited speed-demand
+  rework), and five channels added: `canEtbStatus` (External CAN ETB status gauge),
+  `dtAutotuneActive` (base rusEFI, unrelated to AlphaX), and
+  `trg/vvt{1,2}{i,e}lastSyncLossReason` (5 channels - primary trigger + 4 VVT cam channels,
+  from the 6G72/6G75 fast crank+cam sync work, values 0=None/1=Timeout/2=MissingTooth/
+  3=ExtraTooth/4=TooManyTeeth per `trigger_state.txt`). Applied each as a targeted edit at its
+  exact source location so the dump stays a byte-for-byte mirror of the generated file (verified
+  with `diff` after editing - both dumps now match their source files exactly, module doc's dump
+  dropping the file's single trailing blank line).
+- Bumped the refresh header to 2026-09-08 / branch `6g72-fast-crank-cam-sync`.
+
+Validation: `diff` of both embedded dumps against the live generated source files - clean.
+`../rusefi_documentation` sibling checkout not present on this machine, so the wiki
+`Lua-Scripting.md` page itself was not touched (per CLAUDE.md, only edited when that checkout is
+available). No open follow-ups.
 
 ## 2026-09-10 - TCU: line pressure shift-duty debounce fix + TCC lock-up gauge and pressure adder
 
@@ -5266,6 +5578,202 @@ None - folded the "shared, not board-suffixed generated header" gotcha for
 existing `page_5_generated.h` note in the same session, so the next person hitting this doesn't
 have to re-derive the fix from scratch.
 
+## 2026-09-10 (continued) - Alternator PID: clamp final duty to >=0, investigated status gauge and control gating
+
+### What was done
+
+Investigated three questions about `AlternatorController` (`firmware/controllers/actuators/
+alternator_controller.cpp`), which follows the standard `ClosedLoopController<float, percent_t>`
+pattern (open loop base duty + closed loop PID correction, summed by the base template's
+`getOutput()` with no clamping of its own):
+
+- **Negative final duty was possible and unclamped.** `setOutput()` assigned
+  `outputChannels.alternatorOutputDuty = outputValue.Value` and fed it straight into
+  `SimplePwm::setSimplePwmDutyCycle()` without clamping. That PWM layer does clamp internally to
+  [0, 1], but only *after* a negative value had already been latched into the TS-visible
+  `alternatorOutputDuty` gauge, and it fires a `CUSTOM_DUTY_TOO_LOW` warning every single cycle the
+  condition holds (spammy under normal operation, not just as a one-off fault). Negative combined
+  duty is easy to hit legitimately: `pid_s`'s default `minValue`/`maxValue` are both 0, so with a
+  nonzero `offset` (used as feedforward), `getClosedLoop()`'s `pidOutput - offset` can go negative
+  by design (letting the PID pull duty *down* below the open-loop base), and if the open-loop base
+  duty is small (table mode with a low RPM/voltage cell, or single-value mode with a small offset),
+  the sum can go below zero. Fixed by clamping in `setOutput()` with the existing
+  `clampPercentValue()` macro (`efilib.h`, `clampF(0, x, 100)` - same idiom already used by
+  `electronic_throttle.cpp`, `boost_control.cpp`, `idle_thread.cpp`) before both the gauge
+  assignment and the PWM call, so the logged/gauge duty always matches what's actually driven and
+  the per-cycle warning stops firing under normal negative-correction operation.
+- **`alternatorStatus_output` (`pid_status_s.output`, via `Pid::postState()`) is NOT the final
+  applied duty.** It is the raw closed-loop PID term only (`Pid::getOutput()`'s
+  `pTerm+iTerm+dTerm+offset`, clamped to the PID's own tunable `minValue`/`maxValue`), captured
+  *before* `getClosedLoop()` subtracts `alternatorControl.offset` back out (done there specifically
+  so the offset isn't double-fed between open-loop and closed-loop paths). It also excludes the
+  open-loop base duty (table or single-value) and the AC-button duty adder entirely. The actual
+  final duty applied to the alternator PWM pin and reported for diagnostics is
+  `outputChannels.alternatorOutputDuty`, set in `setOutput()` = open loop + closed loop, now
+  clamped as above.
+- **No post-start dead zone or extra gating exists beyond the documented cranking cutoff.**
+  `getSetpoint()` only disables alternator control while `!isAlternatorControlEnabled` or RPM is at
+  or below `cranking.rpm` (i.e. still cranking) - there is no additional timer, warm-up delay, or
+  "post-start" hold-off anywhere in `AlternatorController`/`initAlternatorCtrl()`. The only other
+  duty-shaping behavior is `SimplePwm`'s generic near-0%/near-100% snap-to-constant-level behavior
+  (`ZERO_PWM_THRESHOLD`/`FULL_PWM_THRESHOLD`, 1%/99%) shared by every `SimplePwm` consumer - not
+  alternator-specific and not a control dead zone, just a PWM-generation implementation detail.
+
+### Decision: left `alternatorControl.minValue`'s TunerStudio range as-is (-30000..30000)
+
+Considered restricting the "Min" field in the alternator PID dialog so a negative minimum can't
+even be typed in TunerStudio. Not straightforward: `alternatorControl` is declared via the shared
+`pid_s` struct (`rusefi_config.txt`), which is also used by `etb`, `boostPid`, `idleRpmPid`,
+`idleTimingPid`, `etbWastegatePid`, `fuelPumpControl` - TS ini constants have one range per
+constant name, so tightening `pid_s.minValue`'s range fleet-wide would break dialogs (ETB,
+wastegate DC) that legitimately need a negative minValue for H-bridge reverse-direction duty.
+Giving just `alternatorControl` its own range would mean pulling it out of `pid_s` into bespoke
+fields (precedent: `ghostCamTimingPid_minValue`/`_maxValue` in `config_page_6.txt`, ranged -30..0)
+and adapting `AlternatorController` to build a runtime shadow `pid_s` for the `Pid` class (which
+requires a `pid_s*`) - a real refactor touching config codegen and every board's generated `.ini`.
+Given the `setOutput()` clamp above already guarantees the final duty can't go negative regardless
+of what `minValue` is tuned to, user chose to leave the TS field alone (recommended option) rather
+than take on that refactor for what would now be a cosmetic-only restriction.
+
+### Validation
+
+New test `Alternator.setOutputClampsNegativeDuty`: calls `setOutput(-5.0f)` directly and asserts
+`outputChannels.alternatorOutputDuty == 0`. Full `Alternator`/`AlternatorVoltageTargetSetPointTest`
+suites: `./test.sh Alternator` - 8/8 passed. Full suite also run once during this session
+(`./test.sh`, no filter) - 1517/1517 passed. Did not run `make CC=clang` (standing guidance for
+this dev box). No firmware board build attempted.
+
+### Open follow-ups
+
+None.
+
+## 2026-09-10 (continued) - Speedometer output: investigated correctness, added "Test Speedo" bench test
+
+### Investigation: does the speedometer output function actually work?
+
+Traced `firmware/controllers/gauges/speedometer.cpp` end to end. It is correct and fully wired,
+not dead code:
+
+- Base input is `SensorType::VehicleSpeed` (km/h, the fleet-wide "Main Vehicle Speed" sensor per
+  the Wheel Speed Sensors v5 rework - not raw wheel-speed/RPM/GPS).
+- `freq = (kph / 3600) * speedometerPulsePerKm` -> km/s x pulses/km = Hz. Units check out.
+  `speedometerPulsePerKm` defaults to 2485 (GM GMT800 cluster, `default_base_engine.cpp`).
+- `freq < 1 -> NAN` is not a bug - NAN is the documented "pause this PWM" sentinel shared with the
+  tach and trigger-emulator PWM code (`pwm_generator_logic.cpp`).
+- `initSpeedometer()` runs unconditionally from `engine_controller.cpp` (no `EFI_*` flag; it
+  self-gates on `isBrainPinValid(speedometerOutputPin)`), and `speedoUpdate()` runs from the 200 Hz
+  fast periodic callback - plenty fast to track speed changes. Output is a standard `SimplePwm`,
+  same mechanism used elsewhere (tach, injectors).
+- Only `protorico-econoline` currently assigns a real pin (`Gpio::C6`) - every other board leaves
+  `speedometerOutputPin` unset and the function silently no-ops there. That is by design (opt-in
+  per board), not a defect.
+
+### Added: "Test Speedo" bench test
+
+The speedometer had no bench-test hook at all (confirmed via grep across `bench_test.cpp`,
+`bench_mode_e`, and the TS ini - zero hits). Added one so a bench/wiring test can pulse the output
+at a user-chosen frequency without needing a rolling wheel-speed input.
+
+Constraint that shaped the design: the TS "controller command" protocol (`executeTSCommand`)
+carries only a 16-bit `index`, no float payload - a button press cannot carry the Hz value
+directly. Followed the same pattern already used by `benchTestOnTime`/`benchTestOffTime`/
+`benchTestCount` (HPFP/boost valve bench tests): the parameter is a persisted config field the
+user sets in the dialog before pressing the button.
+
+- `firmware/integration/rusefi_config.txt`: new `speedometerBenchTestFrequency` (uint16, Hz,
+  0-2000) next to `speedometerPulsePerKm`. Rides on today's already-bumped
+  `FLASH_DATA_VERSION 260910` (bumped earlier this session for unrelated TCU work), so no separate
+  bump was needed for this addition.
+- `firmware/controllers/algo/defaults/default_base_engine.cpp`: default `100` Hz.
+- `firmware/controllers/algo/engine_types.h`: appended `BENCH_SPEEDO_TEST` to `bench_mode_e`
+  (append-only - it's a wire enum also consumed by the CAN QC rig and Java console, never
+  renumber existing entries).
+- `firmware/controllers/gauges/speedometer.{h,cpp}`: added `startSpeedoBenchTest(float freqHz)`.
+  Rather than the scheduler-based `pinbench()`/`runBench()` machinery every other bench test uses
+  (built for digital on/off toggling, not applicable here since this is a PWM *frequency*
+  override), reused the ETB bench-test idiom
+  (`electronic_throttle_impl.h`'s `m_benchTestActive`/`m_benchTestTimer`): a `Timer` checked every
+  tick from the existing `speedoUpdate()` fast-callback path. While active it forces
+  `speedoPwm`'s frequency to `speedometerBenchTestFrequency` for a fixed
+  `SPEEDO_BENCH_TEST_DURATION_SEC = 3.0f` window, then falls through to the normal
+  VehicleSpeed-derived calculation again - no scheduler entry, no separate thread.
+- `firmware/controllers/bench_test.cpp`: `speedoBench()` reads the config field and calls
+  `startSpeedoBenchTest()`; wired into `handleBenchCategory()`'s `case BENCH_SPEEDO_TEST:`.
+- `firmware/tunerstudio/tunerstudio.template.ini`: `cmd_test_speedo` command constant (mirrors
+  `cmd_test_boost_valve`'s `@@...@@` token pattern); in the `speedoSettings` dialog, added the
+  "Test frequency" field and a "Test Speedo" `commandButton`, both gated on `speedometerOutputPin`
+  being set (same convention as the existing "Pulse per km" field).
+- `docs/AI/hardware-quality-control.md`: documented `BENCH_SPEEDO_TEST` as the odd one out in the
+  bench-test roster (frequency override + timer, not `pinbench()`).
+
+### Validation
+
+Full unit test suite (`./test.sh`, no filter): 1517/1517 passed, confirming the new config field,
+enum value, and speedometer bench-test logic compile and link cleanly (speedometer.cpp/bench_test.cpp
+are unconditionally compiled, no `EFI_*` gating differences between `EFI_UNIT_TEST` and
+`EFI_PROD_CODE` paths in the touched code). Did not run `make CC=clang` (standing guidance for this
+dev box) or a firmware board build; no hardware bench test performed (no bench hardware in this
+session).
+
+### Open follow-ups
+
+- Not bench-tested on real hardware yet - only build+unit-test verified.
+- Only `protorico-econoline` has a real `speedometerOutputPin`, so the new button is currently
+  reachable only on that board (or the simulator/any board a user wires it on themselves).
+
+## 2026-09-10 (continued) - Alternator PID: `alternatorStatus.output` now the real applied duty, trimmed the status struct
+
+### What was done
+
+Follow-up to the earlier alternator session entry above (final-duty clamp). User pointed out that
+`alternatorStatus_output` being the raw closed-loop PID term instead of the actual pin duty was
+"incredibly misleading," and asked for exactly: one `output` field reflecting the true applied
+duty, plus the three PID terms (P/I/D) - everything else in the status struct dropped unless it's
+actually used elsewhere.
+
+- **`AlternatorController::onFastCallback()`** (`alternator_controller.cpp`) reordered to call
+  `update()` *before* snapshotting PID state (previously `postState()` ran first, so the gauges
+  lagged the just-computed cycle by one). `Pid::postState()` still can't write the trimmed struct
+  directly (it takes a `pid_status_s&`), so it stages into a local `pid_status_s` and copies just
+  `pTerm`/`iTerm`/`dTerm` across; `.output` is now explicitly set to
+  `outputChannels.alternatorOutputDuty` (the real clamped duty from the earlier fix), not
+  `postState()`'s raw `pTerm+iTerm+dTerm+offset` value.
+- **New struct `alternator_pid_status_s`** (`firmware/console/binary/output_channels.txt`, right
+  after the shared `pid_status_s`) with only `pTerm`/`iTerm`/`dTerm`/`output` - `alternatorStatus`
+  now uses this type instead of `pid_status_s`. Checked before doing this that `pid_status_s`'s
+  `.error` and `.resetCounter` fields are genuinely unused for alternator specifically (no C++
+  reader, only a boilerplate quick-gauge entry that every other `pid_status_s` consumer gets
+  identically) - unlike ETB and VVT, which use `.error` as a live curve axis
+  (`tunerstudio.template.ini` `etbErrorGauge`/`vvtStatus1_error`/`vvtStatus2_error`), so those two
+  fields could not simply be deleted from the shared `pid_status_s` type without breaking those
+  dialogs. Introducing a bespoke type scoped to just the alternator was the only way to trim its
+  fields without touching the other five `pid_status_s` consumers (`idleStatus`, `etbStatus`,
+  `boostStatus`, `wastegateDcStatus`, `vvtStatus[]`).
+- Removed the now-orphaned `alternatorStatus_errorGauge`/`alternatorStatus_resetCounterGauge`
+  quick-gauge entries from `firmware/tunerstudio/gauge_declarations.ini`, and the matching
+  `alternatorStatus.error`/`.resetCounter` Lua `getOutput()` lookup entries from the root
+  `rusefi_lua.txt` reference doc (mirrors what `output_lookup_generated.cpp` will produce on next
+  regen - not itself a build output, just a maintained snapshot per the 2026-09-08 entry above).
+- Explicitly **did not** touch `alternatorBaseDuty`/`alternatorOutputDuty`/`alternatorVoltageTarget`
+  (separate top-level output channels, not part of the status struct) - user's request was scoped
+  to the status struct's fields, and `alternatorVoltageTarget` turned out to be load-bearing anyway
+  (live Y-axis cursor value for the "Alternator Base Duty Table" 3D map,
+  `tunerstudio.template.ini:2187`); confirmed via `AskUserQuestion` before ruling that one out.
+
+### Validation
+
+`./test.sh Alternator` - 8/8 passed after the struct change (unit-test build regenerates the
+`firmware/console/binary/generated/` headers from `output_channels.txt` automatically). Did not
+force-regenerate the per-board `firmware/tunerstudio/generated/rusefi_<board>.ini` files (that
+path isn't part of the unit-test build's dependency chain - confirmed `rusefi_f407-discovery.ini`
+still shows the old 6-field layout post-build) - those will pick up the new 4-field struct on the
+next actual firmware board build. Did not run `make CC=clang` (standing guidance for this dev box).
+
+### Open follow-ups
+
+- Per-board `.ini` files need a real firmware build (not just unit tests) to pick up the trimmed
+  `alternatorStatus` struct before anyone tunes against them.
+
 ## 2026-09-11 - TCU: line pressure control redesigned as a 2D RPM x TPS table + adders
 
 Full redo of `Generic4TransmissionController::setPcState()` at the user's request, replacing the
@@ -5363,380 +5871,164 @@ not a new polarity config bit or a duty-inversion code path.
 
 `./test.sh tcu` (GCC/Linux) - 18/18 passed, unchanged from before (comment-only change, confirmed
 the config-definition codegen still parses the reworded `.txt` comments without issue).
-## 2026-09-10 - Wheel Speed Sensors: OSS -> Vehicle Speed now shares driveWheelRevPerKm/finalGearRatio
 
-Committed now as part of a later catch-up pass (no report entry was written at the time). Follow-up
-to the Wheel Speed Sensors v5 rework (2026-08-17 entries above): removed the dedicated
-`ossRevPerKm` field (`page6_s`, added in the v3 revision) and replaced it with the same
-`driveWheelRevPerKm`/`finalGearRatio` fields Gear Setup already exposes.
+## 2026-09-11 (continued) - New board: protorico-grummann (Grumman step van conversion)
 
-### Why
+Added `firmware/config/boards/protorico-grummann/`, a new board directory alongside
+`protorico-econoline` for a different harness on the same physical Hellen 100-pin "mega"
+module (`hellen-common100.mk`, `BOARD_ID_UAEFI_B`, same PWR_EN/VBATT/CAN setup as econoline).
+Requested by the user for a Grumman step van build with single-coil distributor ignition
+instead of econoline's 8-individual-coil Ford Modular V8 setup.
 
-`ossRevPerKm` duplicated information Gear Setup already collects for the opposite conversion
-(`GearDetector::getDriveshaftRpm()` scales VehicleSpeed by `driveWheelRevPerKm x finalGearRatio` to
-get driveshaft RPM). OSS is measured at the transmission output, pre-differential, so going the
-other direction (`OutputShaftSpeed` RPM -> Vehicle Speed) needs the same wheel-revs/km constant
-scaled *up* by the final drive ratio - `revPerKm = driveWheelRevPerKm * finalGearRatio` - rather
-than a second, independently-tuned constant a user could let drift out of sync with Gear Setup's.
+### Pin mapping decisions
 
-### Implementation
+The user described the harness using the module's own silkscreen labels (IGN1-8, INJ1-8,
+OUT_PWM1-8, D1-4, AIN\<n\>) rather than GPIO names. Cross-checked every one against
+`hellen_meta.h` (which documents the AIN/D silkscreen numbers in comments next to each
+`H144_*` macro, e.g. `// IN_MAP1 AIN9 PC0`) and against protorico-econoline's own
+`connectors.yaml`/`board_configuration.cpp` (which already used several of the same physical
+pins - MAP/CLT/IAT/TPS on AIN9/11/14/17, fuel pump on `H_SPI2_MISO`, CEL on OUT_PWM4 - as strong
+cross-confirmation that the silkscreen-label reading was correct) before writing any code:
 
-- `firmware/integration/config_page_6.txt`: removed `ossRevPerKm`.
-- `firmware/init/sensor/init_vehicle_speed_sensor.cpp`: `MainVehicleSpeedSensor`'s
-  `OutputShaftSpeed` branch now computes `revPerKm = engineConfiguration->driveWheelRevPerKm *
-  engineConfiguration->finalGearRatio` instead of reading `getCustomPage()->ossRevPerKm`; the debug
-  print was updated to log both source values.
-- `firmware/tunerstudio/tunerstudio.template.ini`: removed the "Output Shaft Speed Wheel Revs/km"
-  field from the OSS panel; added "Wheel revolutions per kilometer" / "Final drive ratio" fields
-  (`driveWheelRevPerKm`/`finalGearRatio`) to the Chassis Sensors "Main Speed Sensor" section, gated
-  on `mainSpeedSensorSource == 1` (Output Shaft Speed) - Gear Setup only shows these fields when
-  gear detection itself needs them, which is not the case when its own Speed Source is Output Shaft
-  Speed, so Main Speed Sensor needed its own visible copies of the same fields for this path.
-- `unit_tests/tests/sensor/test_wheel_speed_sensors.cpp`: updated
-  `mainSpeedSensorFromOutputShaftSpeed` and the invalid-without-OSS-reading test for the new
-  formula (`driveWheelRevPerKm=169, finalGearRatio=3` in place of `ossRevPerKm=507`).
+- IGN1 (`H144_IGN_1`/PC13): the one coil. IGN2 (PE5): ignition bypass output (Ford TFI-style -
+  no dedicated `engineConfiguration` field exists for this, so it's a named board-meta output
+  only, same treatment econoline gives its EGR/TCI/IMRC pins). IGN3/4/5 (PE4/E3/E2): repurposed
+  as the idle valve's `stepperDirectionPin`/`stepperEnablePin`/`stepperStepPin` - a 2-wire
+  stepper instead of econoline's PWM solenoid, `useStepperIdle = true`.
+- INJ1 (D3): the only injector pin used, `injectionMode = IM_SINGLE_POINT` (fires all
+  injectors together, full-length pulse each cylinder event - confirmed in
+  `fuel_math.cpp`/`InjectionEvent::update()` that this mode always drives slot 0 regardless of
+  `cylindersCount`). INJ3 (A9) repurposed as `acSwitch` (A/C request digital input - the
+  `H144_OUT_IO2` pin is a plain GPIO, not a dedicated low-side driver, so reuse as an input is
+  physically valid). INJ4 (D15) and INJ5 (A8): TCC lockup and EGR solenoid outputs - again no
+  matching dedicated field (rusEFI's TCU only has a PWM line-pressure solenoid, not an on/off
+  lockup relay), so both are board-meta outputs only, same as econoline's own EGR/Torque-Lockup
+  pins.
+- CKP/VSS/Park-Neutral map to `H144_IN_D_1/2/3` (E12/E13/E14) - confirmed because econoline
+  already uses `H144_IN_D_1` for its own crank trigger, and this board has no cam sensor (no
+  cam phase needed by either `IM_ONE_COIL` or `IM_SINGLE_POINT`), freeing `H144_IN_D_2` (cam on
+  econoline) for VSS here. VSS and Park/Neutral have no single obvious `engineConfiguration`
+  field (VSS is one of three interchangeable Wheel-Speed-Sensor slots selected via
+  `mainSpeedSensorSource` in TS; no board hardcodes any of `wheelSpeedFrontPin`/etc. in C++
+  anywhere in the tree) - left as named connector pins only, to be wired up from TunerStudio.
+- CLT is a **real sensor** here (AIN11), unlike econoline's CHT-via-`EFI_CHT_CLT_ESTIMATOR`
+  workaround - `EFI_CHT_CLT_ESTIMATOR` and `custom_page.h`/`cltFromCht` were deliberately not
+  carried over from econoline's `board.mk`/`board_configuration.cpp`.
+- Power steering switch (AIN22/`H144_IN_AUX4_DIGITAL`) - matched to rusEFI's generic
+  `idleUpSwitchPins[]` concept but, like VSS, left as a named connector pin rather than
+  hardcoded to a specific array slot in C++ (no board precedent hardcodes this array either).
+- No knock sensor was mentioned for this build, so (unlike econoline)
+  `EFI_SOFTWARE_KNOCK`/`STM32_ADC_USE_ADC3` were dropped from `board.mk` and no `knock_config.h`
+  was added - confirmed by grep that the majority of boards (80/87) have no `knock_config.h`, so
+  this is the common case, not an oversight.
+- Cylinder count/firing order intentionally left at the generic default (4-cyl, `FO_1_3_4_2`
+  from `default_base_engine.cpp`) rather than guessed - traced `getNumberOfInjections()` and
+  `InjectionEvent::update()` to confirm neither `IM_ONE_COIL` nor `IM_SINGLE_POINT` depend on
+  this value for correct hardware operation (both always target slot 0), so it's safe to leave
+  for the user to set per their actual engine in TunerStudio, same as any new board bring-up.
 
-### protorico-econoline: real hardware now exercises this path
+### Files added
 
-`board_configuration.cpp`: `acRelayPin` (no A/C clutch on this build) freed and reassigned to
-`speedometerOutputPin` (`Gpio::C6`, `H144_OUT_PWM2`) - this is the board referenced as "currently
-assigns a real pin" in the 2026-09-10 Speedometer report entry above. `connectors.yaml` renamed the
-matching TS pin labels ("A/C Clutch" -> "Speedometer Output" on `H144_OUT_PWM2`, "Digital Input 4"
--> "Output Shaft Speed" on `H144_IN_D_4`).
-
-Wiring "Output Shaft Speed" onto an `event_inputs`-class pin surfaced a real bug in the pinout
-codegen: `PinoutLogic.java` folded every `EVENT_INPUTS` pin into the `SWITCH_INPUTS` pin type using
-the *event-input* class's own name list (`classList`) instead of the switch-input type's list
-(`names.get(PinType.SWITCH_INPUTS...)`), so an event-input pin exposed as a `switch_input_pin_e`
-choice (like `outputShaftSpeedSensorPin`) could get the wrong label pool. Fixed to look up and pass
-the correct `switchInputsList`.
-
-### Validation
-
-Full unit test suite passing as part of this catch-up commit pass. No firmware board build
-specifically re-verified in this catch-up pass beyond what the unit-test build's config-generation
-step already confirms.
-
-### Open follow-ups
-
-None known - not yet bench-tested against a real OSS sensor on protorico-econoline hardware.
-
-## 2026-09-10 (continued) - Speedometer output: investigated correctness, added "Test Speedo" bench test
-
-### Investigation: does the speedometer output function actually work?
-
-Traced `firmware/controllers/gauges/speedometer.cpp` end to end. It is correct and fully wired,
-not dead code:
-
-- Base input is `SensorType::VehicleSpeed` (km/h, the fleet-wide "Main Vehicle Speed" sensor per
-  the Wheel Speed Sensors v5 rework - not raw wheel-speed/RPM/GPS).
-- `freq = (kph / 3600) * speedometerPulsePerKm` -> km/s x pulses/km = Hz. Units check out.
-  `speedometerPulsePerKm` defaults to 2485 (GM GMT800 cluster, `default_base_engine.cpp`).
-- `freq < 1 -> NAN` is not a bug - NAN is the documented "pause this PWM" sentinel shared with the
-  tach and trigger-emulator PWM code (`pwm_generator_logic.cpp`).
-- `initSpeedometer()` runs unconditionally from `engine_controller.cpp` (no `EFI_*` flag; it
-  self-gates on `isBrainPinValid(speedometerOutputPin)`), and `speedoUpdate()` runs from the 200 Hz
-  fast periodic callback - plenty fast to track speed changes. Output is a standard `SimplePwm`,
-  same mechanism used elsewhere (tach, injectors).
-- Only `protorico-econoline` currently assigns a real pin (`Gpio::C6`) - every other board leaves
-  `speedometerOutputPin` unset and the function silently no-ops there. That is by design (opt-in
-  per board), not a defect.
-
-### Added: "Test Speedo" bench test
-
-The speedometer had no bench-test hook at all (confirmed via grep across `bench_test.cpp`,
-`bench_mode_e`, and the TS ini - zero hits). Added one so a bench/wiring test can pulse the output
-at a user-chosen frequency without needing a rolling wheel-speed input.
-
-Constraint that shaped the design: the TS "controller command" protocol (`executeTSCommand`)
-carries only a 16-bit `index`, no float payload - a button press cannot carry the Hz value
-directly. Followed the same pattern already used by `benchTestOnTime`/`benchTestOffTime`/
-`benchTestCount` (HPFP/boost valve bench tests): the parameter is a persisted config field the
-user sets in the dialog before pressing the button.
-
-- `firmware/integration/rusefi_config.txt`: new `speedometerBenchTestFrequency` (uint16, Hz,
-  0-2000) next to `speedometerPulsePerKm`. Rides on today's already-bumped
-  `FLASH_DATA_VERSION 260910` (bumped earlier this session for unrelated TCU work), so no separate
-  bump was needed for this addition.
-- `firmware/controllers/algo/defaults/default_base_engine.cpp`: default `100` Hz.
-- `firmware/controllers/algo/engine_types.h`: appended `BENCH_SPEEDO_TEST` to `bench_mode_e`
-  (append-only - it's a wire enum also consumed by the CAN QC rig and Java console, never
-  renumber existing entries).
-- `firmware/controllers/gauges/speedometer.{h,cpp}`: added `startSpeedoBenchTest(float freqHz)`.
-  Rather than the scheduler-based `pinbench()`/`runBench()` machinery every other bench test uses
-  (built for digital on/off toggling, not applicable here since this is a PWM *frequency*
-  override), reused the ETB bench-test idiom
-  (`electronic_throttle_impl.h`'s `m_benchTestActive`/`m_benchTestTimer`): a `Timer` checked every
-  tick from the existing `speedoUpdate()` fast-callback path. While active it forces
-  `speedoPwm`'s frequency to `speedometerBenchTestFrequency` for a fixed
-  `SPEEDO_BENCH_TEST_DURATION_SEC = 3.0f` window, then falls through to the normal
-  VehicleSpeed-derived calculation again - no scheduler entry, no separate thread.
-- `firmware/controllers/bench_test.cpp`: `speedoBench()` reads the config field and calls
-  `startSpeedoBenchTest()`; wired into `handleBenchCategory()`'s `case BENCH_SPEEDO_TEST:`.
-- `firmware/tunerstudio/tunerstudio.template.ini`: `cmd_test_speedo` command constant (mirrors
-  `cmd_test_boost_valve`'s `@@...@@` token pattern); in the `speedoSettings` dialog, added the
-  "Test frequency" field and a "Test Speedo" `commandButton`, both gated on `speedometerOutputPin`
-  being set (same convention as the existing "Pulse per km" field).
-- `docs/AI/hardware-quality-control.md`: documented `BENCH_SPEEDO_TEST` as the odd one out in the
-  bench-test roster (frequency override + timer, not `pinbench()`).
+`board.mk`, `board_configuration.cpp`, `compile_firmware.sh`, `meta-info.env`, `prepend.txt`,
+`readme.md`, `connectors/connectors.yaml` - staged with `git add`. Also ran
+`gen_config_board.sh` once (needed - see the new CLAUDE.md "Bringing up a brand new board
+directory" note) to produce `connectors/generated_board_pin_names.h`,
+`connectors/generated_outputs.h`, `connectors/generated_ts_name_by_pin.cpp`,
+`controllers/generated/{engine_configuration_generated_structures,rusefi_generated}_
+protorico-grummann.h` and `tunerstudio/generated/rusefi_protorico-grummann.ini` - confirmed the
+generated `ts_name_by_pin.cpp` carries the intended human-readable names (e.g. "Vehicle Speed
+Sensor (VSS)", "Idle Stepper Direction") by grepping the output. None of these six generated
+files were staged, per "do not attempt to commit any generated files" - left for the human,
+same as the rest of this branch's already-modified generated files.
 
 ### Validation
 
-Full unit test suite (`./test.sh`, no filter): 1517/1517 passed, confirming the new config field,
-enum value, and speedometer bench-test logic compile and link cleanly (speedometer.cpp/bench_test.cpp
-are unconditionally compiled, no `EFI_*` gating differences between `EFI_UNIT_TEST` and
-`EFI_PROD_CODE` paths in the touched code). Did not run `make CC=clang` (standing guidance for this
-dev box) or a firmware board build; no hardware bench test performed (no bench hardware in this
-session).
+Full firmware build: `bash firmware/bin/compile.sh config/boards/protorico-grummann/meta-info.env
+-j12` - links cleanly (`build/rusefi.elf`/`build/rusefi.bin` produced, flash 72.96%/ram0 100% -
+both normal, see the build-tooling quirks section of CLAUDE.md), no pin-conflict or duplicate-pin
+diagnostics. Re-ran after touching `board_configuration.cpp` to force a clean recompile pass and
+grepped for warnings/errors - none beyond a pre-existing, unrelated `lto-wrapper -Xassembler`
+cosmetic warning that appears on every board build. Did not run unit tests (no shared C++ logic
+was touched, only a new board-specific directory) or `make CC=clang` (standing guidance for this
+dev box).
 
 ### Open follow-ups
 
-- Not bench-tested on real hardware yet - only build+unit-test verified.
-- Only `protorico-econoline` has a real `speedometerOutputPin`, so the new button is currently
-  reachable only on that board (or the simulator/any board a user wires it on themselves).
+- VSS (Wheel Speed Sensors dialog), Park/Neutral switch, power-steering idle-up switch,
+  ignition-bypass output, TCC-lockup output and EGR-solenoid output all need their function
+  assigned from TunerStudio (or driven from Lua) - the pins are named in `connectors.yaml` but
+  intentionally not wired to a specific config field/array slot in C++, see rationale above.
+- Cylinder count, firing order, and trigger wheel type need to be set for the actual engine
+  once it's known - currently generic defaults.
 
-## 2026-09-08 - Reverted TT_36_2_1_1_V2's "graduate to old decoder after 100 stable
-revolutions" mode - bench-tested by user, loses sync and stalls the engine
-
-The "graduate to `TT_36_2_1_1`'s fixed-window logic after 100 stable revolutions above cranking
-RPM" mode added earlier the same session (see the 2026-09-07 follow-up 4 and 2026-09-08 anchor-
-alignment entries above) was bench-tested on the user's hardware. Result: once
-`mitsu6g75v2_stableRevolutionCount` reaches the threshold and the code falls through to the old
-decoder's fixed 1.7-3.6 gap-ratio window, the engine loses sync and dies - the old window is
-measurably tighter than what the custom hunt/lock/coast logic tolerates (exactly what
-`test_36211_v2_graduation.cpp`'s `rejectsWeakGapOnceGraduated` predicted synthetically: a gap
-ratio of 1.5, which the custom logic coasts through fine, is rejected outright by the old
-decoder's >=1.7 lower bound). The "presumably-fine-at-running-RPM" assumption behind the whole
-feature did not hold on this vehicle.
-
-Reverted per user request:
-- `trigger_decoder.h`/`.cpp`: removed `mitsu6g75v2_stableRevolutionCount`, the
-  `setMitsu6g75v2StableRevolutionCountForUnitTest()` test seam, the `MITSU_36211_V2_
-  STABLE_REVOLUTIONS_REQUIRED` constant, the GRADUATED branch/fallthrough in `isSyncPoint()`,
-  and the `aboveCrankingRpm` bookkeeping. `TT_36_2_1_1_V2` now runs its own hunt/lock/coast logic
-  unconditionally, forever, same as originally committed in `4beccd0cdb`.
-- Deleted `unit_tests/tests/trigger/test_36211_v2_graduation.cpp` and its `tests.mk` entry.
-
-Initially kept the 2026-09-08 anchor-point shift (declaring sync on the tooth AFTER the gap
-instead of the gap tooth itself) since it wasn't implicated in the failure - but the user then
-asked to revert everything to the known-good point instead. Went further: `git restore`d
-`trigger_decoder.cpp`, `trigger_decoder.h`, `trigger_mitsubishi.cpp`, `test_real_6g75_v2.cpp`,
-and `unit_tests/triggers.txt` to their exact `4beccd0cdb` content (the anchor shift was only in
-this session's uncommitted work, never committed, so this fully removes it too). Net effect: all
-six files listed above are now byte-identical to `4beccd0cdb` - the original, user-bench-tested
-"started and ran" state, with the gap-tooth anchor convention and no graduation logic at all.
-
-Validation: `unit_tests/test.sh` full suite (blocked mid-run by an unrelated stale shared
-`page_4_generated.h` - see "Generated configuration layout" in CLAUDE.md - fixed via
-`bash firmware/gen_config_board.sh firmware/config/boards/f407-discovery f407-discovery`; not
-yet re-confirmed green after the full revert). Not re-tested on hardware this session - next
-real validation is the user's own bench/road test of the reverted decoder.
-
-## 2026-09-08 (continued) - Added VVT_MITSUBISHI_6G75_BETA: cam-edge-count phase sync,
-bypassing the broken amplitude cam decoder entirely
-
-Follow-up to the revert above. On the reverted (known-good) `TT_36_2_1_1_V2` crank decoder, user
-bench-tested with `VVT_MITSUBISHI_6G75` cam sync enabled (log: `6g75stuff/runningnewtrigger.msl`)
-and hit a second, independent failure: cam decode goes wrong first (`VVT: bank 1 intake` jumps to
-nonsensical values, `CUSTOM_CAM_TOO_MANY_TEETH` fires), and ~500ms later the crank decoder itself
-starts erroring and the engine stalls. Root-caused via column-by-column log analysis: the crank
-trigger stayed error-free for the full ~15s before the incident (rules out the crank revert as
-cause) - `initializeMitsubishi6G75Cam()`'s 7-tooth cam wheel decode uses the same
-amplitude/gap-ratio classification (`setTriggerSynchronizationGap(2.66)`) that was already proven
-unreliable for the crank wheel on this hardware (masking/EMI ringing).
-
-Checked the reverse-engineered MS3 6G75 decoder (`6g75stuff/ms3_ign_6g75.c`) for its cam
-approach: it does NOT decode the cam wheel's own gap pattern at all - it counts raw cam pulses
-(`trig2cnt`) during a fixed 10-crank-tooth window after its own crank sync point (1 pulse = one
-crank revolution's phase, 2 pulses = the other). Cross-checked against 6G72 beta's own evolution
-(already committed/in-progress this session in `trigger_central.cpp`): that logic has moved
-through ratio/pattern-match -> elapsed-time-based -> now a pure level/order "straddle" check with
-"no timing/RPM-dependent math at all" - the same direction MS3 takes for 6G75. Conclusion: MS3's
-count-based (not amplitude-based) approach is the right lesson for this hardware family, not a
-fallback.
-
-Re-derived the actual window from `unit_tests/tests/trigger/resources/6g75-without-spark-crank.csv`
-(both channels) rather than porting MS3's window directly: counting real cam RISE edges between
-consecutive crank sync points (one full crank revolution, using TT_36_2_1_1_V2's own trusted
-revolution boundary - no need for a separate mid-revolution checkpoint like MS3's tooth-10) gives
-a **perfectly clean alternating 3,4,3,4,3,4,3 pattern across all 7 revolutions** in the capture -
-expected, since the 7-tooth cam wheel averages 3.5 edges/crank-revolution, so a clean signal can
-never land anywhere else.
-
-Implementation (per user's explicit design choices this session):
-- New `VVT_MITSUBISHI_6G75_BETA` (`rusefi_enums.h` = 36, `rusefi_config.txt`'s `vvt_mode_e_enum`
-  dropdown string).
-- Added to `vvtWithRealDecoder()`'s exclusion list (`trigger_central.cpp`) - the broken amplitude
-  decoder **never runs** for this mode at all (user's explicit choice: fully separate path, not a
-  parallel/provisional-only addition like 6G72 beta, specifically to stop the spurious
-  `CUSTOM_CAM_TOO_MANY_TEETH` warnings and garbage angle writes).
-- New `TriggerCentral::mitsu6g75BetaObserveCamEdge()` (increments a counter, hooked into
-  `handleVvtCamSignal()` for every real rise edge on the sync cam) and
-  `TriggerCentral::tryMitsu6g75BetaSync()` (hooked into `handleShaftSignal()` exactly at
-  `CurrentIndex == 0` - reads+resets the count for the revolution that just ended, classifies
-  3->remainder 0 / 4->remainder 1, calls `syncEnginePhaseAndReport(2, remainder,
-  isProvisional=false)` - user explicitly chose STRONG/full sequential sync, since this mode has
-  no old decoder underneath to fall back to for sequential firing).
-- `engine.cpp`'s `getVvtTriggerType()` maps the new mode to `TT_HALF_MOON` (placeholder, never
-  actually decoded); `adjustCrankPhase()` gets an explicit no-op case (phase is resolved once per
-  revolution by `tryMitsu6g75BetaSync()`, not per-cam-edge here - reusing the generic
-  fixed-remainder pattern the other non-real-decoder modes use would be wrong for this mode's
-  count-based disambiguation).
-- New test `unit_tests/tests/trigger/test_real_6g75_beta_cam.cpp`, replaying the real capture with
-  both channels fed: asserts full `hasSynchronizedPhase()` is reached via the count path, and that
-  the old amplitude decoder never runs/never syncs.
-
-Bug caught by the existing suite, not by the new test: `tryMitsu6g75BetaSync()` initially indexed
-`vvtMode[]` (sized `[CAMS_PER_BANK]` = 2) directly with the raw global `engineSyncCam`, instead of
-`CAM_BY_INDEX(engineSyncCam)` like every other call site - `engineSyncCam` is a global index
-spanning both banks (0..3), not a per-bank one. `realCrankingVQ40.normalCrankingSyncCam2` (UBSan
-build, `engineSyncCam=2`) caught the out-of-bounds read immediately. Fixed; full suite re-run
-1508/1508 green afterward.
-
-**Flagged, deliberately NOT resolved this session**: which count (3 or 4) maps to which crank
-revolution (remainder 0 vs 1) is UNVERIFIED - the capture confirms the counting mechanism itself
-is clean and repeatable, but carries no TDC/cylinder-1 ground truth to fix the polarity. Getting
-this backwards means a confident, silently-wrong 360-degree phase error under full (non-
-provisional) sync - a real hazard for sequential injection/ignition, not just a wasted-spark
-inconvenience, since (per user's choice) there is no old decoder underneath to catch a wrong
-guess. Verification recipe left in the code comment above `mitsu6g75BetaObserveCamEdge()`: log a
-run with the OLD `VVT_MITSUBISHI_6G75` mode while its amplitude decoder is locked and reporting a
-plausible position, note which count (3 or 4) was accumulating in that same window, set
-`MITSU_6G75_BETA_REMAINDER_FOR_COUNT_A`/`_B` in `tryMitsu6g75BetaSync()` to match. Not done - no
-bench access to a period where the old decoder locks correctly on this vehicle.
-
-Bench-tested by user same session (`6g75stuff/howcamlooksnow.msl`, built on this exact code):
-engine runs, RPM stable ~690-720, zero trigger errors, coil states show individual per-cylinder
-firing consistent with sequential operation - so BETA's sync mechanism itself is confirmed working
-end-to-end on real hardware, not just in the offline capture replay. `VVT: bank 1 intake` jumps
-between ~7 different values every cam revolution (matches the 7 physical teeth) - traced to
-`handleVvtCamSignal()`'s per-edge `vvtPosition` write never being gated for BETA (the "only write
-on the sync tooth" early-return is keyed off `isVvtWithRealDecoder`, which is false for BETA, so
-every real edge - not just one per cycle - overwrites the gauge with that edge's own crank angle).
-Confirmed cosmetic only: sync/injection timing is governed entirely by the separate per-revolution
-edge-count path, unaffected by this. **User explicitly decided not to fix this** ("if not
-critical, no code changes are needed") - left as-is; a future session gating the vvtPosition write
-the same way `isVvtWithRealDecoder` modes are gated would fix the display if it's ever worth doing.
-
-## 2026-09-10 (continued) - Alternator PID: clamp final duty to >=0, investigated status gauge and control gating
+## 2026-09-11 (continued) - Gear Setup: transmission slip detection (Detected Gear vs Speed Source)
 
 ### What was done
 
-Investigated three questions about `AlternatorController` (`firmware/controllers/actuators/
-alternator_controller.cpp`), which follows the standard `ClosedLoopController<float, percent_t>`
-pattern (open loop base duty + closed loop PID correction, summed by the base template's
-`getOutput()` with no clamping of its own):
+Added a driveline slip detector to the existing Gear Setup dialog (`gearDetection` in
+`tunerstudio.template.ini`), reusing `GearDetector`'s existing gear-ratio-detection machinery
+instead of introducing a parallel computation path.
 
-- **Negative final duty was possible and unclamped.** `setOutput()` assigned
-  `outputChannels.alternatorOutputDuty = outputValue.Value` and fed it straight into
-  `SimplePwm::setSimplePwmDutyCycle()` without clamping. That PWM layer does clamp internally to
-  [0, 1], but only *after* a negative value had already been latched into the TS-visible
-  `alternatorOutputDuty` gauge, and it fires a `CUSTOM_DUTY_TOO_LOW` warning every single cycle the
-  condition holds (spammy under normal operation, not just as a one-off fault). Negative combined
-  duty is easy to hit legitimately: `pid_s`'s default `minValue`/`maxValue` are both 0, so with a
-  nonzero `offset` (used as feedforward), `getClosedLoop()`'s `pidOutput - offset` can go negative
-  by design (letting the PID pull duty *down* below the open-loop base), and if the open-loop base
-  duty is small (table mode with a low RPM/voltage cell, or single-value mode with a small offset),
-  the sum can go below zero. Fixed by clamping in `setOutput()` with the existing
-  `clampPercentValue()` macro (`efilib.h`, `clampF(0, x, 100)` - same idiom already used by
-  `electronic_throttle.cpp`, `boost_control.cpp`, `idle_thread.cpp`) before both the gauge
-  assignment and the PWM call, so the logged/gauge duty always matches what's actually driven and
-  the per-cycle warning stops firing under normal negative-correction operation.
-- **`alternatorStatus_output` (`pid_status_s.output`, via `Pid::postState()`) is NOT the final
-  applied duty.** It is the raw closed-loop PID term only (`Pid::getOutput()`'s
-  `pTerm+iTerm+dTerm+offset`, clamped to the PID's own tunable `minValue`/`maxValue`), captured
-  *before* `getClosedLoop()` subtracts `alternatorControl.offset` back out (done there specifically
-  so the offset isn't double-fed between open-loop and closed-loop paths). It also excludes the
-  open-loop base duty (table or single-value) and the AC-button duty adder entirely. The actual
-  final duty applied to the alternator PWM pin and reported for diagnostics is
-  `outputChannels.alternatorOutputDuty`, set in `setOutput()` = open loop + closed loop, now
-  clamped as above.
-- **No post-start dead zone or extra gating exists beyond the documented cranking cutoff.**
-  `getSetpoint()` only disables alternator control while `!isAlternatorControlEnabled` or RPM is at
-  or below `cranking.rpm` (i.e. still cranking) - there is no additional timer, warm-up delay, or
-  "post-start" hold-off anywhere in `AlternatorController`/`initAlternatorCtrl()`. The only other
-  duty-shaping behavior is `SimplePwm`'s generic near-0%/near-100% snap-to-constant-level behavior
-  (`ZERO_PWM_THRESHOLD`/`FULL_PWM_THRESHOLD`, 1%/99%) shared by every `SimplePwm` consumer - not
-  alternator-specific and not a control dead zone, just a PWM-generation implementation detail.
-
-### Decision: left `alternatorControl.minValue`'s TunerStudio range as-is (-30000..30000)
-
-Considered restricting the "Min" field in the alternator PID dialog so a negative minimum can't
-even be typed in TunerStudio. Not straightforward: `alternatorControl` is declared via the shared
-`pid_s` struct (`rusefi_config.txt`), which is also used by `etb`, `boostPid`, `idleRpmPid`,
-`idleTimingPid`, `etbWastegatePid`, `fuelPumpControl` - TS ini constants have one range per
-constant name, so tightening `pid_s.minValue`'s range fleet-wide would break dialogs (ETB,
-wastegate DC) that legitimately need a negative minValue for H-bridge reverse-direction duty.
-Giving just `alternatorControl` its own range would mean pulling it out of `pid_s` into bespoke
-fields (precedent: `ghostCamTimingPid_minValue`/`_maxValue` in `config_page_6.txt`, ranged -30..0)
-and adapting `AlternatorController` to build a runtime shadow `pid_s` for the `Pid` class (which
-requires a `pid_s*`) - a real refactor touching config codegen and every board's generated `.ini`.
-Given the `setOutput()` clamp above already guarantees the final duty can't go negative regardless
-of what `minValue` is tuned to, user chose to leave the TS field alone (recommended option) rather
-than take on that refactor for what would now be a cosmetic-only restriction.
+- Two new bits in `rusefi_config.txt`, reusing previously-reserved `unusedBit_Fancy22`/`23` (no
+  `FLASH_DATA_VERSION` bump needed, same pattern as the existing
+  `gearDetectionUseOutputShaftSpeed`/`gearDetectionRpmSourceIsInputShaftSpeed` bits):
+  - `transmissionSlipDetectionEnabled` - master enable.
+  - `transmissionSlipRpmSourceIsInputShaftSpeed` - "Input Shaft Speed"/"Engine RPM", same label
+    convention as the existing gear-detection RPM source bit, but a separate field: slip
+    detection may want a different reference than whatever gear detection itself uses.
+- `GearDetector::computeSlipPercent()` (`gear_detector.cpp`): `100 * (actualRpm/expectedRpm - 1)`
+  where `expectedRpm = getRpmInGear(m_currentGear)` (already-existing helper: driveshaft RPM x
+  configured ratio for the Detected Gear) and `actualRpm` is Engine RPM or Input Shaft Speed per
+  the new bit. Returns 0 (not a fabricated value) whenever: slip detection is disabled, the
+  Detected Gear is neutral (no defined ratio to slip against), the chosen RPM source sensor is
+  invalid, or the speed-source gate below isn't satisfied. Computed once per `onSlowCallback`
+  alongside the existing ratio/gear computation, and reset to 0 in the clutch-disengaged early
+  return.
+- **Speed-source gate**: per the request, slip is only ever considered valid when the driveshaft
+  speed reference is a *real* Output Shaft Speed sensor, not a wheel-speed-derived estimate
+  (tire slip would otherwise be indistinguishable from driveline slip). This is true two ways,
+  both checked: Gear Setup's own `gearDetectionUseOutputShaftSpeed` bit, OR Gear Setup uses
+  "Main Vehicle Speed" but the Vehicle Information page's `mainSpeedSensorSource` (`config->`,
+  TS page 6) is itself set to Output Shaft Speed - confirmed algebraically equivalent to reading
+  OSS directly: `MainSpeedSensorPassthrough` (`init_vehicle_speed_sensor.cpp`) converts OSS RPM
+  to VehicleSpeed km/h via `driveWheelRevPerKm * finalGearRatio`, and `GearDetector::
+  getDriveshaftRpm()` converts back with the exact same constants, so the round trip is lossless
+  modulo the existing <3kph floor. Needed `#include "custom_page.h"` in `gear_detector.cpp` to
+  reach `getCustomPage()->mainSpeedSensorSource`.
+- New `transmissionSlipPercent` output channel (`output_channels.txt`, signed `int16_t autoscale`
+  since slip can go negative, e.g. engine-braking/overrun), wired in `status_loop.cpp`'s
+  `updateVehicleSpeed()` next to the existing `speedToRpmRatio`/`detectedGear` channels, new
+  `GAUGE_NAME_TRANS_SLIP` define in `rusefi_config_shared.txt`, and a `transmissionSlipGauge`
+  quick-gauge entry under the existing `gaugeCategory = Transmission` block in
+  `gauge_declarations.ini` (-50%..50% range, matching the existing TCU margin gauges' style).
+- Two new dialog fields appended to the end of the `gearDetection` dialog block (after the gear
+  ratio table, since slip detection depends on it being populated): "Slip Detection" gated
+  visible on `{ gearDetectionUseOutputShaftSpeed == 1 || mainSpeedSensorSource == 1 }` (the same
+  OR condition as the runtime gate, so the UI never invites configuring an option that can't
+  produce a real reading), "Slip RPM Source" additionally gated on `{ transmissionSlipDetectionEnabled == 1 }`.
+- Per request, the "Engine RPM" option's field comment explicitly notes that choosing it bakes
+  the configured gear ratio into the reading two ways at once (both options scale by
+  `gearRatio[detectedGear]` to get an expected RPM, but Engine RPM also folds in any upstream
+  torque-converter/clutch slip - normal off-lockup converter slip will read as "slip" here) - so
+  an inaccurate gear ratio table corrupts the reading more perceptibly with this source than
+  with Input Shaft Speed, which isolates gearbox-internal slip only.
 
 ### Validation
 
-New test `Alternator.setOutputClampsNegativeDuty`: calls `setOutput(-5.0f)` directly and asserts
-`outputChannels.alternatorOutputDuty == 0`. Full `Alternator`/`AlternatorVoltageTargetSetPointTest`
-suites: `./test.sh Alternator` - 8/8 passed. Full suite also run once during this session
-(`./test.sh`, no filter) - 1517/1517 passed. Did not run `make CC=clang` (standing guidance for
-this dev box). No firmware board build attempted.
+`unit_tests/./test.sh` (GCC) - full rebuild after `touch rusefi_config.txt` to force config
+regeneration, 1516/1516 tests passed, confirming the new bits/struct fields, the
+`custom_page.h`/`getCustomPage()`/`main_speed_sensor_source_e::OutputShaftSpeed` reference, the
+`SensorType::InputShaftSpeed`/`Rpm` lookups, and the new autoscale output channel field all
+compile and the config/INI/LiveData generators accept the new `.txt`/`.ini` syntax without
+error. Confirmed by grep that the generated headers/inis actually carry the new symbols
+(`engine_configuration_generated_structures_f407-discovery.h`, `data_logs.ini`,
+`live_data_fragments.ini`, `log_fields_generated.h`). Did not run `make CC=clang` (standing
+guidance for this dev box, see CLAUDE.md).
 
 ### Open follow-ups
 
-None.
-
-## 2026-09-10 (continued) - Alternator PID: `alternatorStatus.output` now the real applied duty, trimmed the status struct
-
-### What was done
-
-Follow-up to the earlier alternator session entry above (final-duty clamp). User pointed out that
-`alternatorStatus_output` being the raw closed-loop PID term instead of the actual pin duty was
-"incredibly misleading," and asked for exactly: one `output` field reflecting the true applied
-duty, plus the three PID terms (P/I/D) - everything else in the status struct dropped unless it's
-actually used elsewhere.
-
-- **`AlternatorController::onFastCallback()`** (`alternator_controller.cpp`) reordered to call
-  `update()` *before* snapshotting PID state (previously `postState()` ran first, so the gauges
-  lagged the just-computed cycle by one). `Pid::postState()` still can't write the trimmed struct
-  directly (it takes a `pid_status_s&`), so it stages into a local `pid_status_s` and copies just
-  `pTerm`/`iTerm`/`dTerm` across; `.output` is now explicitly set to
-  `outputChannels.alternatorOutputDuty` (the real clamped duty from the earlier fix), not
-  `postState()`'s raw `pTerm+iTerm+dTerm+offset` value.
-- **New struct `alternator_pid_status_s`** (`firmware/console/binary/output_channels.txt`, right
-  after the shared `pid_status_s`) with only `pTerm`/`iTerm`/`dTerm`/`output` - `alternatorStatus`
-  now uses this type instead of `pid_status_s`. Checked before doing this that `pid_status_s`'s
-  `.error` and `.resetCounter` fields are genuinely unused for alternator specifically (no C++
-  reader, only a boilerplate quick-gauge entry that every other `pid_status_s` consumer gets
-  identically) - unlike ETB and VVT, which use `.error` as a live curve axis
-  (`tunerstudio.template.ini` `etbErrorGauge`/`vvtStatus1_error`/`vvtStatus2_error`), so those two
-  fields could not simply be deleted from the shared `pid_status_s` type without breaking those
-  dialogs. Introducing a bespoke type scoped to just the alternator was the only way to trim its
-  fields without touching the other five `pid_status_s` consumers (`idleStatus`, `etbStatus`,
-  `boostStatus`, `wastegateDcStatus`, `vvtStatus[]`).
-- Removed the now-orphaned `alternatorStatus_errorGauge`/`alternatorStatus_resetCounterGauge`
-  quick-gauge entries from `firmware/tunerstudio/gauge_declarations.ini`, and the matching
-  `alternatorStatus.error`/`.resetCounter` Lua `getOutput()` lookup entries from the root
-  `rusefi_lua.txt` reference doc (mirrors what `output_lookup_generated.cpp` will produce on next
-  regen - not itself a build output, just a maintained snapshot per the 2026-09-08 entry above).
-- Explicitly **did not** touch `alternatorBaseDuty`/`alternatorOutputDuty`/`alternatorVoltageTarget`
-  (separate top-level output channels, not part of the status struct) - user's request was scoped
-  to the status struct's fields, and `alternatorVoltageTarget` turned out to be load-bearing anyway
-  (live Y-axis cursor value for the "Alternator Base Duty Table" 3D map,
-  `tunerstudio.template.ini:2187`); confirmed via `AskUserQuestion` before ruling that one out.
-
-### Validation
-
-`./test.sh Alternator` - 8/8 passed after the struct change (unit-test build regenerates the
-`firmware/console/binary/generated/` headers from `output_channels.txt` automatically). Did not
-force-regenerate the per-board `firmware/tunerstudio/generated/rusefi_<board>.ini` files (that
-path isn't part of the unit-test build's dependency chain - confirmed `rusefi_f407-discovery.ini`
-still shows the old 6-field layout post-build) - those will pick up the new 4-field struct on the
-next actual firmware board build. Did not run `make CC=clang` (standing guidance for this dev box).
-
-### Open follow-ups
-
-- Per-board `.ini` files need a real firmware build (not just unit tests) to pick up the trimmed
-  `alternatorStatus` struct before anyone tunes against them.
-
+- No hardware validation yet - the slip formula and the -50%/50% gauge range are first-pass
+  values, not bench-tested against a real OSS+ISS-equipped transmission.
+- Only a bare percent-deviation number is exposed; no threshold/fault-latching (e.g. into the
+  Limp Mode / Check Engine Triggering point system) was added - left as a follow-up if the user
+  wants slip to actually trigger a warning rather than just be logged/gauged.
