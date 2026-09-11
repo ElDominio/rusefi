@@ -6146,3 +6146,89 @@ guidance for this dev box, see CLAUDE.md).
 - Only a bare percent-deviation number is exposed; no threshold/fault-latching (e.g. into the
   Limp Mode / Check Engine Triggering point system) was added - left as a follow-up if the user
   wants slip to actually trigger a warning rather than just be logged/gauged.
+
+## 2026-09-11 (continued) - TCU: slip-based closed-loop line pressure trim (4R70W, no pressure sensor)
+
+### What was done
+
+Follow-up to the same-day Gear Setup transmission slip detection feature: added a closed-loop
+correction on top of `Generic4TransmissionController`'s existing feedforward line pressure table
+(RPM x TPS + shift/lock-up/gear adders), driven by `GearDetector`'s slip reading. Reached this
+design through several rounds of discussion with the user before implementing (see conversation),
+converging on a shape specifically suited to having **no line pressure sensor** on the target
+hardware (4R70W, EPC solenoid, inverted polarity: less duty = more pressure).
+
+### Why this shape, not a target-slip table
+
+Original ask was a scheduled target-slip 5x5 table (VSS x driver demand -> target slip). Talked
+through why that doesn't fit:
+- No pressure sensor means no plant model - can't run a PID against a setpoint, only react to the
+  sign/magnitude of slip.
+- A friction element should sit at 0% slip in steady engagement; scheduling a persistent nonzero
+  target burns unnecessary heat/wear. "Maximum allowed slip" (a threshold) is the right Z, not a
+  target.
+- User explicitly wants this to work like simple (non-region) Short Term Fuel Trim: start at the
+  base table's duty, accumulate a single correction on top, no per-cell/per-gear learned surface.
+
+Landed on: `GearDetector::isSlipValid()` gates everything (frozen, not decayed, when invalid);
+while `slip > tcu_pcSlipMaxAllowedPercent`, a proportional-to-excess step raises the trim (fast,
+capped by `tcu_pcSlipCorrectionStepMax` so one bad reading can't slam it); once slip has read
+clean for `tcu_pcSlipDecayHoldMs`, a small fixed step (`tcu_pcSlipDecayStepDuty`) relaxes the trim
+back toward 0 (never past it). `tcu_pcSlipCorrectionGain == 0` disables the whole thing (default,
+opt-in). Bounded overall by `tcu_pcSlipTrimMaxDuty`. Resets to 0 on every commanded shift
+(`Generic4TransmissionController::update()`, same spot `isShifting` gets set) and every key-on -
+not persisted, not indexed by gear/RPM/TPS.
+
+### Solenoid polarity
+
+Matched the *existing* convention already in this file (`tcu_pcShiftAdderDuty` et al: "signed, use
+whichever sign raises pressure on your hardware") rather than inventing a new one. All the new
+correction/decay fields follow the same rule; `tcu_pcSlipCorrectionGain`'s sign is what the user
+calibrates for their inverted 4R70W EPC solenoid (less duty = more pressure), and the trim's own
+sign-relative-to-0 (not the raw duty direction) is what stays bounded to "protective only" - decay
+only ever pulls the trim back toward 0, regardless of which physical direction that is on a given
+board, so it can never push pressure below what the base table+adders already call for.
+
+### Implementation
+
+- `firmware/controllers/modules/gear_detector/gear_detector.{h,cpp}`: `computeSlipPercent()`
+  (float-returning) replaced with `computeSlip()` (void, sets `m_slipPercent` + new `m_slipValid`
+  together) + new `bool isSlipValid() const` getter. Added a VSS validity floor:
+  `transmissionSlipMinVss` (new config field, Gear Setup) - this also fixes a latent gap in the
+  same-day slip feature: the OSS-direct driveshaft-RPM path had no near-zero-speed floor at all
+  (unlike the wheel-speed-derived path's hardcoded `<3kph`), so `expectedRpm` could approach 0 and
+  blow up the ratio near a stop. Now gated the same way for both paths.
+- `firmware/controllers/tcu/tc_4.{h,cpp}`: new `updateSlipTrim()` + `m_pcSlipTrim`/
+  `m_pcSlipCleanTimer` members. Called from `setPcState()`, trim added into `targetDuty` before
+  the existing 0-100 clamp. Shift-detection block in `update()` zeroes both on every gear change.
+- `firmware/controllers/tcu/tcu_controller.txt`: new `tcu_pcSlipTrimDuty` debug LiveData field
+  (mirrors `pressureControlDuty`'s pattern) so the trim's current value is independently visible
+  from the resulting post-trim duty.
+- `firmware/integration/rusefi_config.txt`: 7 new fields total (`transmissionSlipMinVss` +
+  6 `tcu_pcSlip*` fields) - genuinely new struct space, not reused reserved bits like the same-day
+  Gear Setup bits were, so `FLASH_DATA_VERSION` bumped 260910 -> 260911.
+  `applyDefaultsOrFixAfterBurn()` migrates `transmissionSlipMinVss` 0 -> 5 (km/h) for existing
+  tunes, since 0 would silently disable the validity floor rather than mean "no floor is safe."
+- `firmware/tunerstudio/tunerstudio.template.ini`: `transmissionSlipMinVss` field added to Gear
+  Setup (same visibility gate as the other slip fields); new `pcSlipTrimPanel` dialog under Line
+  Pressure Control with the 6 new fields plus a reminder that Slip RPM Source must be Input Shaft
+  Speed for this to be meaningful (Engine RPM also carries normal torque-converter slip, which
+  this would misread as a clutch problem).
+- `firmware/tunerstudio/gauge_declarations.ini`: `pcSlipTrimGauge` added under the existing
+  Transmission category.
+
+### Validation
+
+`unit_tests/./test.sh` (GCC) - full rebuild after `touch rusefi_config.txt`, 1516/1516 passing.
+One build error caught and fixed along the way: `engine->module<GearDetector>()` returns a proxy
+type overloading `->`, not a raw pointer - `auto* gearDetector = ...` failed to deduce; fixed to
+plain `auto`. Confirmed by grep that all 7 new config fields, the new debug LiveData field, and
+the new dialog fields/gauge landed in the generated per-board headers/ini
+(`engine_configuration_generated_structures_f407-discovery.h`, `rusefi_f407-discovery.ini`).
+
+### Open follow-ups
+
+- No hardware validation - this is a first-pass control law, not bench-tested on the 4R70W.
+  Default `tcu_pcSlipCorrectionGain = 0` keeps it fully inert until the user opts in.
+- Same caveat as the underlying slip feature: the proportional/decay step sizes, hold time, and
+  trim cap are uncalibrated starting points, not derived from any real clutch capacity data.
