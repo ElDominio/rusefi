@@ -702,7 +702,6 @@ struct_no_prefix page6_s
 	switch_input_pin_e outputShaftSpeedSensorPin;Output Shaft Speed: hardware pulse input pin (e.g. a transmission-mounted hall sensor). Physical Pin mode only.
 	uint8_t outputShaftSpeedSensorTeeth;Output Shaft Speed: number of sensor pulses per output-shaft revolution. Physical Pin mode only.;"", 1, 0, 1, 255, 0
 	uint8_t ossFilterReciprocal;Output Shaft Speed: low-pass filter reciprocal (higher = more filtering, averaged over more teeth). Physical Pin mode only.;"", 1, 0, 3, 200, 0
-	float ossRevPerKm;Output Shaft Speed: wheel revolutions per kilometer, used to convert OSS RPM into Vehicle Speed. Only used when Main Speed Sensor (Setup -> Vehicle Information) is set to Output Shaft Speed.;"revs/km", 1, 0, 100, 1000, 1
 
 	wheel_speed_sensor_mode_e wheelSpeedFrontMode;Front Axle Speed: input mode.
 	switch_input_pin_e wheelSpeedFrontPin;Front Axle Speed: hardware pulse input pin. Physical Pin mode only.

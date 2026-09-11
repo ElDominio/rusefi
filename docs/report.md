@@ -5363,3 +5363,135 @@ not a new polarity config bit or a duty-inversion code path.
 
 `./test.sh tcu` (GCC/Linux) - 18/18 passed, unchanged from before (comment-only change, confirmed
 the config-definition codegen still parses the reworded `.txt` comments without issue).
+## 2026-09-10 - Wheel Speed Sensors: OSS -> Vehicle Speed now shares driveWheelRevPerKm/finalGearRatio
+
+Committed now as part of a later catch-up pass (no report entry was written at the time). Follow-up
+to the Wheel Speed Sensors v5 rework (2026-08-17 entries above): removed the dedicated
+`ossRevPerKm` field (`page6_s`, added in the v3 revision) and replaced it with the same
+`driveWheelRevPerKm`/`finalGearRatio` fields Gear Setup already exposes.
+
+### Why
+
+`ossRevPerKm` duplicated information Gear Setup already collects for the opposite conversion
+(`GearDetector::getDriveshaftRpm()` scales VehicleSpeed by `driveWheelRevPerKm x finalGearRatio` to
+get driveshaft RPM). OSS is measured at the transmission output, pre-differential, so going the
+other direction (`OutputShaftSpeed` RPM -> Vehicle Speed) needs the same wheel-revs/km constant
+scaled *up* by the final drive ratio - `revPerKm = driveWheelRevPerKm * finalGearRatio` - rather
+than a second, independently-tuned constant a user could let drift out of sync with Gear Setup's.
+
+### Implementation
+
+- `firmware/integration/config_page_6.txt`: removed `ossRevPerKm`.
+- `firmware/init/sensor/init_vehicle_speed_sensor.cpp`: `MainVehicleSpeedSensor`'s
+  `OutputShaftSpeed` branch now computes `revPerKm = engineConfiguration->driveWheelRevPerKm *
+  engineConfiguration->finalGearRatio` instead of reading `getCustomPage()->ossRevPerKm`; the debug
+  print was updated to log both source values.
+- `firmware/tunerstudio/tunerstudio.template.ini`: removed the "Output Shaft Speed Wheel Revs/km"
+  field from the OSS panel; added "Wheel revolutions per kilometer" / "Final drive ratio" fields
+  (`driveWheelRevPerKm`/`finalGearRatio`) to the Chassis Sensors "Main Speed Sensor" section, gated
+  on `mainSpeedSensorSource == 1` (Output Shaft Speed) - Gear Setup only shows these fields when
+  gear detection itself needs them, which is not the case when its own Speed Source is Output Shaft
+  Speed, so Main Speed Sensor needed its own visible copies of the same fields for this path.
+- `unit_tests/tests/sensor/test_wheel_speed_sensors.cpp`: updated
+  `mainSpeedSensorFromOutputShaftSpeed` and the invalid-without-OSS-reading test for the new
+  formula (`driveWheelRevPerKm=169, finalGearRatio=3` in place of `ossRevPerKm=507`).
+
+### protorico-econoline: real hardware now exercises this path
+
+`board_configuration.cpp`: `acRelayPin` (no A/C clutch on this build) freed and reassigned to
+`speedometerOutputPin` (`Gpio::C6`, `H144_OUT_PWM2`) - this is the board referenced as "currently
+assigns a real pin" in the 2026-09-10 Speedometer report entry above. `connectors.yaml` renamed the
+matching TS pin labels ("A/C Clutch" -> "Speedometer Output" on `H144_OUT_PWM2`, "Digital Input 4"
+-> "Output Shaft Speed" on `H144_IN_D_4`).
+
+Wiring "Output Shaft Speed" onto an `event_inputs`-class pin surfaced a real bug in the pinout
+codegen: `PinoutLogic.java` folded every `EVENT_INPUTS` pin into the `SWITCH_INPUTS` pin type using
+the *event-input* class's own name list (`classList`) instead of the switch-input type's list
+(`names.get(PinType.SWITCH_INPUTS...)`), so an event-input pin exposed as a `switch_input_pin_e`
+choice (like `outputShaftSpeedSensorPin`) could get the wrong label pool. Fixed to look up and pass
+the correct `switchInputsList`.
+
+### Validation
+
+Full unit test suite passing as part of this catch-up commit pass. No firmware board build
+specifically re-verified in this catch-up pass beyond what the unit-test build's config-generation
+step already confirms.
+
+### Open follow-ups
+
+None known - not yet bench-tested against a real OSS sensor on protorico-econoline hardware.
+
+## 2026-09-10 (continued) - Speedometer output: investigated correctness, added "Test Speedo" bench test
+
+### Investigation: does the speedometer output function actually work?
+
+Traced `firmware/controllers/gauges/speedometer.cpp` end to end. It is correct and fully wired,
+not dead code:
+
+- Base input is `SensorType::VehicleSpeed` (km/h, the fleet-wide "Main Vehicle Speed" sensor per
+  the Wheel Speed Sensors v5 rework - not raw wheel-speed/RPM/GPS).
+- `freq = (kph / 3600) * speedometerPulsePerKm` -> km/s x pulses/km = Hz. Units check out.
+  `speedometerPulsePerKm` defaults to 2485 (GM GMT800 cluster, `default_base_engine.cpp`).
+- `freq < 1 -> NAN` is not a bug - NAN is the documented "pause this PWM" sentinel shared with the
+  tach and trigger-emulator PWM code (`pwm_generator_logic.cpp`).
+- `initSpeedometer()` runs unconditionally from `engine_controller.cpp` (no `EFI_*` flag; it
+  self-gates on `isBrainPinValid(speedometerOutputPin)`), and `speedoUpdate()` runs from the 200 Hz
+  fast periodic callback - plenty fast to track speed changes. Output is a standard `SimplePwm`,
+  same mechanism used elsewhere (tach, injectors).
+- Only `protorico-econoline` currently assigns a real pin (`Gpio::C6`) - every other board leaves
+  `speedometerOutputPin` unset and the function silently no-ops there. That is by design (opt-in
+  per board), not a defect.
+
+### Added: "Test Speedo" bench test
+
+The speedometer had no bench-test hook at all (confirmed via grep across `bench_test.cpp`,
+`bench_mode_e`, and the TS ini - zero hits). Added one so a bench/wiring test can pulse the output
+at a user-chosen frequency without needing a rolling wheel-speed input.
+
+Constraint that shaped the design: the TS "controller command" protocol (`executeTSCommand`)
+carries only a 16-bit `index`, no float payload - a button press cannot carry the Hz value
+directly. Followed the same pattern already used by `benchTestOnTime`/`benchTestOffTime`/
+`benchTestCount` (HPFP/boost valve bench tests): the parameter is a persisted config field the
+user sets in the dialog before pressing the button.
+
+- `firmware/integration/rusefi_config.txt`: new `speedometerBenchTestFrequency` (uint16, Hz,
+  0-2000) next to `speedometerPulsePerKm`. Rides on today's already-bumped
+  `FLASH_DATA_VERSION 260910` (bumped earlier this session for unrelated TCU work), so no separate
+  bump was needed for this addition.
+- `firmware/controllers/algo/defaults/default_base_engine.cpp`: default `100` Hz.
+- `firmware/controllers/algo/engine_types.h`: appended `BENCH_SPEEDO_TEST` to `bench_mode_e`
+  (append-only - it's a wire enum also consumed by the CAN QC rig and Java console, never
+  renumber existing entries).
+- `firmware/controllers/gauges/speedometer.{h,cpp}`: added `startSpeedoBenchTest(float freqHz)`.
+  Rather than the scheduler-based `pinbench()`/`runBench()` machinery every other bench test uses
+  (built for digital on/off toggling, not applicable here since this is a PWM *frequency*
+  override), reused the ETB bench-test idiom
+  (`electronic_throttle_impl.h`'s `m_benchTestActive`/`m_benchTestTimer`): a `Timer` checked every
+  tick from the existing `speedoUpdate()` fast-callback path. While active it forces
+  `speedoPwm`'s frequency to `speedometerBenchTestFrequency` for a fixed
+  `SPEEDO_BENCH_TEST_DURATION_SEC = 3.0f` window, then falls through to the normal
+  VehicleSpeed-derived calculation again - no scheduler entry, no separate thread.
+- `firmware/controllers/bench_test.cpp`: `speedoBench()` reads the config field and calls
+  `startSpeedoBenchTest()`; wired into `handleBenchCategory()`'s `case BENCH_SPEEDO_TEST:`.
+- `firmware/tunerstudio/tunerstudio.template.ini`: `cmd_test_speedo` command constant (mirrors
+  `cmd_test_boost_valve`'s `@@...@@` token pattern); in the `speedoSettings` dialog, added the
+  "Test frequency" field and a "Test Speedo" `commandButton`, both gated on `speedometerOutputPin`
+  being set (same convention as the existing "Pulse per km" field).
+- `docs/AI/hardware-quality-control.md`: documented `BENCH_SPEEDO_TEST` as the odd one out in the
+  bench-test roster (frequency override + timer, not `pinbench()`).
+
+### Validation
+
+Full unit test suite (`./test.sh`, no filter): 1517/1517 passed, confirming the new config field,
+enum value, and speedometer bench-test logic compile and link cleanly (speedometer.cpp/bench_test.cpp
+are unconditionally compiled, no `EFI_*` gating differences between `EFI_UNIT_TEST` and
+`EFI_PROD_CODE` paths in the touched code). Did not run `make CC=clang` (standing guidance for this
+dev box) or a firmware board build; no hardware bench test performed (no bench hardware in this
+session).
+
+### Open follow-ups
+
+- Not bench-tested on real hardware yet - only build+unit-test verified.
+- Only `protorico-econoline` has a real `speedometerOutputPin`, so the new button is currently
+  reachable only on that board (or the simulator/any board a user wires it on themselves).
+

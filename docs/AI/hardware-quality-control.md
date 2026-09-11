@@ -56,6 +56,17 @@ VVT valves 0-3 (`EFI_VVT_PID`), Harley ACR 1/2 (`EFI_HD_ACR`), idle valve
 (`startIdleBench()`, `EFI_IDLE_CONTROL`). `bench_mode_e` in
 `firmware/controllers/algo/engine_types.h` is the wire enum used to select these over CAN.
 
+`BENCH_SPEEDO_TEST` (`speedoBench()` in `bench_test.cpp`, implemented in
+`firmware/controllers/gauges/speedometer.cpp`) is the odd one out: it does not go through
+`pinbench()`/`runBench()` at all, because the speedometer output isn't a digital on/off pulse -
+it's a `SimplePwm` whose *frequency* is normally driven by `SensorType::VehicleSpeed`. The
+"Test Speedo" TS button (`speedoSettings` dialog) instead calls
+`startSpeedoBenchTest(engineConfiguration->speedometerBenchTestFrequency)`, which overrides
+`speedoPwm`'s frequency to the configured `speedometerBenchTestFrequency` (Hz) for a fixed 3 s
+window (`SPEEDO_BENCH_TEST_DURATION_SEC`), checked every tick from `speedoUpdate()`
+(`Engine::periodicFastCallback()`, 200 Hz) via a `Timer`, then reverts to the normal
+VehicleSpeed-derived calculation - no scheduler-based auto-revert like `runBench()` uses.
+
 ### Console commands (registered in `initBenchTest()`)
 
 `fuelpumpbench`, `fuelpumpbench2 <ms>`, `fuelbench <on> <off> <count>`,

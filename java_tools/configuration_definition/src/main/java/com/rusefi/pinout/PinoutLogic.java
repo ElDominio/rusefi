@@ -69,8 +69,11 @@ public class PinoutLogic {
 
             PinType pinType = PinType.find(className);
             addToPinType(boardName, enumsReader, listPin, pinType.getPinType(), id, className, classList);
-            if (pinType == PinType.EVENT_INPUTS)
-                addToPinType(boardName, enumsReader, listPin, PinType.SWITCH_INPUTS.getPinType(), id, className, classList);
+            if (pinType == PinType.EVENT_INPUTS) {
+                // EXTI-capable event-input pins are also valid (curated) options for the slower switch_input_pin_e fields
+                ArrayList<String> switchInputsList = names.get(PinType.SWITCH_INPUTS.name().toLowerCase());
+                addToPinType(boardName, enumsReader, listPin, PinType.SWITCH_INPUTS.getPinType(), id, className, switchInputsList);
+            }
         }
         for (Map.Entry<String, ArrayList<String>> kv : names.entrySet()) {
             PinType namePinType = PinType.find(kv.getKey());

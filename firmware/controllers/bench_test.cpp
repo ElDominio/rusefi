@@ -59,6 +59,7 @@ void setOutputOnTheBenchTestForUnitTest(OutputPin* output) {
 
 #include "flash_main.h"
 #include "bench_test.h"
+#include "speedometer.h"
 #include "fan_control.h"
 #include "main_trigger_callback.h"
 #include "periodic_thread_controller.h"
@@ -320,6 +321,10 @@ void fuelPumpBench() {
 	fuelPumpBenchExt(BENCH_FUEL_PUMP_DURATION);
 }
 
+static void speedoBench() {
+	startSpeedoBenchTest(engineConfiguration->speedometerBenchTestFrequency);
+}
+
 #if EFI_VVT_PID
 static void vvtValveBench(int vvtIndex) {
 	pinbench(BENCH_VVT_DURATION, 100.0, 1, getVvtOutputPin(vvtIndex));
@@ -464,6 +469,9 @@ void handleBenchCategory(uint16_t index) {
 		return;
 	case BENCH_BOOST_VALVE:
 		boostValveBench();
+		return;
+	case BENCH_SPEEDO_TEST:
+		speedoBench();
 		return;
 	case BENCH_FUEL_PUMP:
 		// cmd_test_fuel_pump

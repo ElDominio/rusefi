@@ -131,13 +131,14 @@ static void protorico_econoline_boardDefaultConfiguration() {
 	// Relays and Solenoids
 	engineConfiguration->mainRelayPin = Gpio::Unassigned;
 	engineConfiguration->fuelPumpPin = Gpio::B14;         // H_SPI2_MISO (STM32_FP)
-	engineConfiguration->acRelayPin = Gpio::C6;           // H144_OUT_PWM2 (STM32_AC_CL)
+	engineConfiguration->acRelayPin = Gpio::Unassigned;   // no A/C clutch relay on this build -- PC6/H144_OUT_PWM2 repurposed for speedometer output below
 	engineConfiguration->fanPin = Gpio::Unassigned;
 	engineConfiguration->fan2Pin = Gpio::Unassigned;
 	engineConfiguration->alternatorControlPin = Gpio::Unassigned;
 	engineConfiguration->boostControlPin = Gpio::Unassigned;
 	engineConfiguration->tachOutputPin = Gpio::C7;             // H144_OUT_PWM3 (STM32_TACHO)
 	engineConfiguration->malfunctionIndicatorPin = Gpio::C8; // H144_OUT_PWM4 (STM32_CEL)
+	engineConfiguration->speedometerOutputPin = Gpio::C6;      // H144_OUT_PWM2 (STM32_AC_CL)
 
 	// Idle Valve
 	engineConfiguration->idle.solenoidPin = Gpio::D13;    // H144_OUT_PWM1 (STM32_IDLE)
@@ -190,7 +191,7 @@ static Gpio OUTPUTS[] = {
 	Gpio::B9,  // Coil 7
 	Gpio::E6,  // Coil 8
 	Gpio::B14, // Fuel Pump
-	Gpio::C6,  // A/C Clutch
+	Gpio::C6,  // Speedometer Output
 	Gpio::C8,  // CEL
 	Gpio::D13, // Idle
 	Gpio::C7,  // Tacho

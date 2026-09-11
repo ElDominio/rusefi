@@ -79,7 +79,7 @@ pins:
 
   - meta: H144_IN_D_4
     class: event_inputs
-    ts_name: Digital Input 4
+    ts_name: Output Shaft Speed
 
   - meta: H144_UART8_RX
     class: event_inputs
@@ -131,7 +131,7 @@ pins:
 
   - meta: H144_OUT_PWM2
     class: outputs
-    ts_name: A/C Clutch
+    ts_name: Speedometer Output
 
   - meta: H144_OUT_PWM3
     class: outputs

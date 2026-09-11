@@ -8,7 +8,10 @@
 TEST(WheelSpeedSensors, mainSpeedSensorFromOutputShaftSpeed) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	getCustomPage()->ossRevPerKm = 507.0f;
+	// Same driveWheelRevPerKm/finalGearRatio fields Gear Setup uses; OSS is pre-differential so
+	// the effective revs/km at the output shaft is the wheel constant scaled by the final drive.
+	engineConfiguration->driveWheelRevPerKm = 169.0f;
+	engineConfiguration->finalGearRatio = 3.0f;
 	getCustomPage()->mainSpeedSensorSource = main_speed_sensor_source_e::OutputShaftSpeed;
 	// Sensors are NOT auto-registered by EngineTestHelper (initNewSensors() is compiled out under
 	// EFI_UNIT_TEST so each test can selectively mock) -- register explicitly.
@@ -18,14 +21,15 @@ TEST(WheelSpeedSensors, mainSpeedSensorFromOutputShaftSpeed) {
 
 	auto speed = Sensor::get(SensorType::VehicleSpeed);
 	ASSERT_TRUE(speed.Valid);
-	// speedKmh = ossRpm * 60 / ossRevPerKm = 1000 * 60 / 507
-	EXPECT_NEAR(1000.0f * 60.0f / 507.0f, speed.Value, 1e-2);
+	// speedKmh = ossRpm * 60 / (driveWheelRevPerKm * finalGearRatio) = 1000 * 60 / (169 * 3)
+	EXPECT_NEAR(1000.0f * 60.0f / (169.0f * 3.0f), speed.Value, 1e-2);
 }
 
 TEST(WheelSpeedSensors, mainSpeedSensorFromOutputShaftSpeedInvalidWithoutOssReading) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	getCustomPage()->ossRevPerKm = 507.0f;
+	engineConfiguration->driveWheelRevPerKm = 169.0f;
+	engineConfiguration->finalGearRatio = 3.0f;
 	getCustomPage()->mainSpeedSensorSource = main_speed_sensor_source_e::OutputShaftSpeed;
 	initVehicleSpeedSensor();
 

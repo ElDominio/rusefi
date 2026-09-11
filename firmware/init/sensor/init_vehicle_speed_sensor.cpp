@@ -16,7 +16,11 @@ public:
 			return UnexpectedCode::Unknown;
 		case main_speed_sensor_source_e::OutputShaftSpeed: {
 			auto oss = Sensor::get(SensorType::OutputShaftSpeed);
-			float revPerKm = getCustomPage()->ossRevPerKm;
+			// Same driveWheelRevPerKm/finalGearRatio Gear Setup uses to go the other direction
+			// (VehicleSpeed -> driveshaft RPM, see GearDetector::getDriveshaftRpm()). OSS is
+			// measured at the transmission output (pre-differential), so wheel-level revs/km has
+			// to be scaled up by the final drive ratio to get revs/km at the output shaft.
+			float revPerKm = engineConfiguration->driveWheelRevPerKm * engineConfiguration->finalGearRatio;
 			if (!oss.Valid || revPerKm <= 0) {
 				return UnexpectedCode::Unknown;
 			}
@@ -38,8 +42,8 @@ public:
 		efiPrintf("    Source = %d", (int)source);
 		if (source == main_speed_sensor_source_e::OutputShaftSpeed) {
 			auto oss = Sensor::get(SensorType::OutputShaftSpeed);
-			efiPrintf("    OutputShaftSpeed: %s %.2f rpm, ossRevPerKm=%.1f", oss.Valid ? "valid" : "INVALID",
-					oss.Valid ? oss.Value : 0.0f, getCustomPage()->ossRevPerKm);
+			efiPrintf("    OutputShaftSpeed: %s %.2f rpm, driveWheelRevPerKm=%.1f finalGearRatio=%.2f", oss.Valid ? "valid" : "INVALID",
+					oss.Valid ? oss.Value : 0.0f, engineConfiguration->driveWheelRevPerKm, (float)engineConfiguration->finalGearRatio);
 		}
 	}
 };
