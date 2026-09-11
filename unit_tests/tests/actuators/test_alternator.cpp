@@ -42,6 +42,16 @@ TEST(Alternator, ClosedLoop) {
 	EXPECT_EQ(dut.getClosedLoop(30, 20).value_or(0), 15);
 }
 
+TEST(Alternator, setOutputClampsNegativeDuty) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	AlternatorController dut;
+
+	// Open loop + closed loop can sum negative (e.g. PID pulling down harder than the base duty);
+	// the final duty applied to hardware and reported to TS must never go below zero.
+	dut.setOutput(-5.0f);
+	EXPECT_EQ(engine->outputChannels.alternatorOutputDuty, 0);
+}
+
 TEST(Alternator, openLoopBaseDutyTableMode) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	AlternatorController dut;

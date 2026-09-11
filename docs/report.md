@@ -5618,3 +5618,125 @@ edge-count path, unaffected by this. **User explicitly decided not to fix this**
 critical, no code changes are needed") - left as-is; a future session gating the vvtPosition write
 the same way `isVvtWithRealDecoder` modes are gated would fix the display if it's ever worth doing.
 
+## 2026-09-10 (continued) - Alternator PID: clamp final duty to >=0, investigated status gauge and control gating
+
+### What was done
+
+Investigated three questions about `AlternatorController` (`firmware/controllers/actuators/
+alternator_controller.cpp`), which follows the standard `ClosedLoopController<float, percent_t>`
+pattern (open loop base duty + closed loop PID correction, summed by the base template's
+`getOutput()` with no clamping of its own):
+
+- **Negative final duty was possible and unclamped.** `setOutput()` assigned
+  `outputChannels.alternatorOutputDuty = outputValue.Value` and fed it straight into
+  `SimplePwm::setSimplePwmDutyCycle()` without clamping. That PWM layer does clamp internally to
+  [0, 1], but only *after* a negative value had already been latched into the TS-visible
+  `alternatorOutputDuty` gauge, and it fires a `CUSTOM_DUTY_TOO_LOW` warning every single cycle the
+  condition holds (spammy under normal operation, not just as a one-off fault). Negative combined
+  duty is easy to hit legitimately: `pid_s`'s default `minValue`/`maxValue` are both 0, so with a
+  nonzero `offset` (used as feedforward), `getClosedLoop()`'s `pidOutput - offset` can go negative
+  by design (letting the PID pull duty *down* below the open-loop base), and if the open-loop base
+  duty is small (table mode with a low RPM/voltage cell, or single-value mode with a small offset),
+  the sum can go below zero. Fixed by clamping in `setOutput()` with the existing
+  `clampPercentValue()` macro (`efilib.h`, `clampF(0, x, 100)` - same idiom already used by
+  `electronic_throttle.cpp`, `boost_control.cpp`, `idle_thread.cpp`) before both the gauge
+  assignment and the PWM call, so the logged/gauge duty always matches what's actually driven and
+  the per-cycle warning stops firing under normal negative-correction operation.
+- **`alternatorStatus_output` (`pid_status_s.output`, via `Pid::postState()`) is NOT the final
+  applied duty.** It is the raw closed-loop PID term only (`Pid::getOutput()`'s
+  `pTerm+iTerm+dTerm+offset`, clamped to the PID's own tunable `minValue`/`maxValue`), captured
+  *before* `getClosedLoop()` subtracts `alternatorControl.offset` back out (done there specifically
+  so the offset isn't double-fed between open-loop and closed-loop paths). It also excludes the
+  open-loop base duty (table or single-value) and the AC-button duty adder entirely. The actual
+  final duty applied to the alternator PWM pin and reported for diagnostics is
+  `outputChannels.alternatorOutputDuty`, set in `setOutput()` = open loop + closed loop, now
+  clamped as above.
+- **No post-start dead zone or extra gating exists beyond the documented cranking cutoff.**
+  `getSetpoint()` only disables alternator control while `!isAlternatorControlEnabled` or RPM is at
+  or below `cranking.rpm` (i.e. still cranking) - there is no additional timer, warm-up delay, or
+  "post-start" hold-off anywhere in `AlternatorController`/`initAlternatorCtrl()`. The only other
+  duty-shaping behavior is `SimplePwm`'s generic near-0%/near-100% snap-to-constant-level behavior
+  (`ZERO_PWM_THRESHOLD`/`FULL_PWM_THRESHOLD`, 1%/99%) shared by every `SimplePwm` consumer - not
+  alternator-specific and not a control dead zone, just a PWM-generation implementation detail.
+
+### Decision: left `alternatorControl.minValue`'s TunerStudio range as-is (-30000..30000)
+
+Considered restricting the "Min" field in the alternator PID dialog so a negative minimum can't
+even be typed in TunerStudio. Not straightforward: `alternatorControl` is declared via the shared
+`pid_s` struct (`rusefi_config.txt`), which is also used by `etb`, `boostPid`, `idleRpmPid`,
+`idleTimingPid`, `etbWastegatePid`, `fuelPumpControl` - TS ini constants have one range per
+constant name, so tightening `pid_s.minValue`'s range fleet-wide would break dialogs (ETB,
+wastegate DC) that legitimately need a negative minValue for H-bridge reverse-direction duty.
+Giving just `alternatorControl` its own range would mean pulling it out of `pid_s` into bespoke
+fields (precedent: `ghostCamTimingPid_minValue`/`_maxValue` in `config_page_6.txt`, ranged -30..0)
+and adapting `AlternatorController` to build a runtime shadow `pid_s` for the `Pid` class (which
+requires a `pid_s*`) - a real refactor touching config codegen and every board's generated `.ini`.
+Given the `setOutput()` clamp above already guarantees the final duty can't go negative regardless
+of what `minValue` is tuned to, user chose to leave the TS field alone (recommended option) rather
+than take on that refactor for what would now be a cosmetic-only restriction.
+
+### Validation
+
+New test `Alternator.setOutputClampsNegativeDuty`: calls `setOutput(-5.0f)` directly and asserts
+`outputChannels.alternatorOutputDuty == 0`. Full `Alternator`/`AlternatorVoltageTargetSetPointTest`
+suites: `./test.sh Alternator` - 8/8 passed. Full suite also run once during this session
+(`./test.sh`, no filter) - 1517/1517 passed. Did not run `make CC=clang` (standing guidance for
+this dev box). No firmware board build attempted.
+
+### Open follow-ups
+
+None.
+
+## 2026-09-10 (continued) - Alternator PID: `alternatorStatus.output` now the real applied duty, trimmed the status struct
+
+### What was done
+
+Follow-up to the earlier alternator session entry above (final-duty clamp). User pointed out that
+`alternatorStatus_output` being the raw closed-loop PID term instead of the actual pin duty was
+"incredibly misleading," and asked for exactly: one `output` field reflecting the true applied
+duty, plus the three PID terms (P/I/D) - everything else in the status struct dropped unless it's
+actually used elsewhere.
+
+- **`AlternatorController::onFastCallback()`** (`alternator_controller.cpp`) reordered to call
+  `update()` *before* snapshotting PID state (previously `postState()` ran first, so the gauges
+  lagged the just-computed cycle by one). `Pid::postState()` still can't write the trimmed struct
+  directly (it takes a `pid_status_s&`), so it stages into a local `pid_status_s` and copies just
+  `pTerm`/`iTerm`/`dTerm` across; `.output` is now explicitly set to
+  `outputChannels.alternatorOutputDuty` (the real clamped duty from the earlier fix), not
+  `postState()`'s raw `pTerm+iTerm+dTerm+offset` value.
+- **New struct `alternator_pid_status_s`** (`firmware/console/binary/output_channels.txt`, right
+  after the shared `pid_status_s`) with only `pTerm`/`iTerm`/`dTerm`/`output` - `alternatorStatus`
+  now uses this type instead of `pid_status_s`. Checked before doing this that `pid_status_s`'s
+  `.error` and `.resetCounter` fields are genuinely unused for alternator specifically (no C++
+  reader, only a boilerplate quick-gauge entry that every other `pid_status_s` consumer gets
+  identically) - unlike ETB and VVT, which use `.error` as a live curve axis
+  (`tunerstudio.template.ini` `etbErrorGauge`/`vvtStatus1_error`/`vvtStatus2_error`), so those two
+  fields could not simply be deleted from the shared `pid_status_s` type without breaking those
+  dialogs. Introducing a bespoke type scoped to just the alternator was the only way to trim its
+  fields without touching the other five `pid_status_s` consumers (`idleStatus`, `etbStatus`,
+  `boostStatus`, `wastegateDcStatus`, `vvtStatus[]`).
+- Removed the now-orphaned `alternatorStatus_errorGauge`/`alternatorStatus_resetCounterGauge`
+  quick-gauge entries from `firmware/tunerstudio/gauge_declarations.ini`, and the matching
+  `alternatorStatus.error`/`.resetCounter` Lua `getOutput()` lookup entries from the root
+  `rusefi_lua.txt` reference doc (mirrors what `output_lookup_generated.cpp` will produce on next
+  regen - not itself a build output, just a maintained snapshot per the 2026-09-08 entry above).
+- Explicitly **did not** touch `alternatorBaseDuty`/`alternatorOutputDuty`/`alternatorVoltageTarget`
+  (separate top-level output channels, not part of the status struct) - user's request was scoped
+  to the status struct's fields, and `alternatorVoltageTarget` turned out to be load-bearing anyway
+  (live Y-axis cursor value for the "Alternator Base Duty Table" 3D map,
+  `tunerstudio.template.ini:2187`); confirmed via `AskUserQuestion` before ruling that one out.
+
+### Validation
+
+`./test.sh Alternator` - 8/8 passed after the struct change (unit-test build regenerates the
+`firmware/console/binary/generated/` headers from `output_channels.txt` automatically). Did not
+force-regenerate the per-board `firmware/tunerstudio/generated/rusefi_<board>.ini` files (that
+path isn't part of the unit-test build's dependency chain - confirmed `rusefi_f407-discovery.ini`
+still shows the old 6-field layout post-build) - those will pick up the new 4-field struct on the
+next actual firmware board build. Did not run `make CC=clang` (standing guidance for this dev box).
+
+### Open follow-ups
+
+- Per-board `.ini` files need a real firmware build (not just unit tests) to pick up the trimmed
+  `alternatorStatus` struct before anyone tunes against them.
+

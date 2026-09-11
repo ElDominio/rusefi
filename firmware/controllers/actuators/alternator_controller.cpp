@@ -32,13 +32,24 @@ void AlternatorController::onFastCallback() {
 		return;
 	}
 
-	// this block could be executed even in on/off alternator control mode
-	// but at least we would reflect latest state
-#if EFI_TUNER_STUDIO
-	alternatorPid.postState(engine->outputChannels.alternatorStatus);
-#endif /* EFI_TUNER_STUDIO */
-
 	update();
+
+#if EFI_TUNER_STUDIO
+	// alternatorStatus is the trimmed alternator_pid_status_s (pTerm/iTerm/dTerm/output only), not
+	// pid_status_s, so Pid::postState() can't write it directly - stage into a pid_status_s and
+	// copy over just the terms we keep.
+	pid_status_s pidStatus;
+	alternatorPid.postState(pidStatus);
+	auto& status = engine->outputChannels.alternatorStatus;
+	status.pTerm = pidStatus.pTerm;
+	status.iTerm = pidStatus.iTerm;
+	status.dTerm = pidStatus.dTerm;
+	// postState()'s own .output is the raw closed-loop PID term (pTerm+iTerm+dTerm+offset), which
+	// getClosedLoop() partially un-does (subtracts offset) before summing with the open-loop base
+	// duty. Use the actual duty just applied to the pin instead, so this gauge isn't misleading
+	// about what the alternator is really doing.
+	status.output = engine->outputChannels.alternatorOutputDuty;
+#endif /* EFI_TUNER_STUDIO */
 }
 
 expected<float> AlternatorController::getSetpoint() {
@@ -111,8 +122,13 @@ expected<percent_t> AlternatorController::getClosedLoop(float setpoint, float ob
 
 void AlternatorController::setOutput(expected<percent_t> outputValue) {
 	if (outputValue) {
-		engine->outputChannels.alternatorOutputDuty = outputValue.Value;
-		alternatorControl.setSimplePwmDutyCycle(PERCENT_TO_DUTY(outputValue.Value));
+		// Open loop (base duty + AC adder) plus closed loop correction can add up negative,
+		// e.g. base duty near zero while the PID pulls down hard to correct overvoltage.
+		// Clamp here so the logged/gauge duty matches what's actually driven, instead of
+		// relying on SimplePwm's internal clamp (which also spams a warning every cycle).
+		percent_t clampedDuty = clampPercentValue(outputValue.Value);
+		engine->outputChannels.alternatorOutputDuty = clampedDuty;
+		alternatorControl.setSimplePwmDutyCycle(PERCENT_TO_DUTY(clampedDuty));
 	} else {
 		// Shut off output if not needed
 		engine->outputChannels.alternatorOutputDuty = 0;

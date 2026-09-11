@@ -246,6 +246,15 @@ int16_t rpmAcceleration;dRPM;"RPM acceleration/Rate of Change/ROC",1, 0, 0, 5, 2
 		uint32_t resetCounter;;"", 1, 0, 0, 10000, 0
 	end_struct
 
+	// Trimmed pid_status_s: alternator has no consumer of .error/.resetCounter (unlike ETB/VVT,
+	// which use .error as a live curve axis), so only the PID terms + actual final duty are kept.
+	struct alternator_pid_status_s
+		float pTerm;;"", 1, 0, -50000, 50000, 2
+		int16_t autoscale iTerm;;"", 0.01, 0, -327, 327, 2
+		int16_t autoscale dTerm;;"", 0.01, 0, -327, 327, 2
+		int16_t autoscale output;;"", 0.01, 0, -327, 327, 2
+	end_struct
+
 	int16_t autoscale tps1Split;;"%",{1/@@PACK_MULT_PERCENT@@}, 0, 0, 0, 2
 	int16_t autoscale tps2Split;;"%",{1/@@PACK_MULT_PERCENT@@}, 0, 0, 0, 2
 	int16_t autoscale tps12Split;;"%",{1/@@PACK_MULT_PERCENT@@}, 0, 0, 0, 2
@@ -307,7 +316,7 @@ int16_t rpmAcceleration;dRPM;"RPM acceleration/Rate of Change/ROC",1, 0, 0, 5, 2
 	float alternatorVoltageTarget;;"V", 1, 0, 0, 20, 2
 	float alternatorBaseDuty;Alternator base duty (table);"%", 1, 0, 0, 100, 1
 	float alternatorOutputDuty;Alternator duty (base+PID);"%", 1, 0, 0, 100, 1
-	pid_status_s alternatorStatus
+	alternator_pid_status_s alternatorStatus
 	pid_status_s idleStatus
 	pid_status_s etbStatus
 	pid_status_s boostStatus
