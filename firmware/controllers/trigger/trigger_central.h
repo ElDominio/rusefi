@@ -27,12 +27,17 @@
 class Engine;
 typedef void (*ShaftPositionListener)(trigger_event_e signal, uint32_t index, efitick_t edgeTimestamp);
 
-// VVT_MITSUBISHI_6G72_BETA fast-sync state machine - see TriggerCentral::tryMitsu6g72BetaFastSync()
-// in trigger_central.cpp and docs/mitsubishi-6g72-fast-crank-cam-sync.md.
-enum class Mitsu6g72BetaPendingPair : uint8_t {
-	None,   // no ambiguous match pending - next sample starts fresh
-	R1_R4,  // first sample matched the {remainder 1, remainder 4} pair - waiting for a tiebreaker
-	R2_R5,  // first sample matched the {remainder 2, remainder 5} pair - waiting for a tiebreaker
+// VVT_MITSUBISHI_6G72_BETA fast-sync: one observed edge (crank or cam), used by the
+// "straddle" pattern matcher - see TriggerCentral::mitsu6g72BetaObserveEdge() in
+// trigger_central.cpp and docs/mitsubishi-6g72-fast-crank-cam-sync.md.
+struct Mitsu6g72BetaEdge {
+	uint8_t isCam;
+	uint8_t newLevel;
+	uint8_t otherLevel;
+
+	bool operator==(const Mitsu6g72BetaEdge& other) const {
+		return isCam == other.isCam && newLevel == other.newLevel && otherLevel == other.otherLevel;
+	}
 };
 
 #define HAVE_CAM_INPUT() (isBrainPinValid(engineConfiguration->camInputs[0]))
@@ -65,7 +70,15 @@ public:
 	angle_t syncEnginePhaseAndReport(int divider, int remainder, bool isProvisional = false);
 	void handleShaftSignal(trigger_event_e signal, efitick_t timestamp);
 	// VVT_MITSUBISHI_6G72_BETA fast-sync path - see trigger_central.cpp for details.
-	void tryMitsu6g72BetaFastSync(efitick_t nowNt);
+	// Called for every real edge, from both handleShaftSignal() (isCam=false) and
+	// handleVvtCamSignal() (isCam=true).
+	void mitsu6g72BetaObserveEdge(bool isCam, uint8_t newLevel);
+	// VVT_MITSUBISHI_6G75_BETA fast-sync path - see trigger_central.cpp for details.
+	// Called from handleVvtCamSignal() for every real cam rise edge on the sync cam.
+	void mitsu6g75BetaObserveCamEdge();
+	// Called from handleShaftSignal() exactly once per crank revolution (CurrentIndex == 0) -
+	// consumes the count accumulated by mitsu6g75BetaObserveCamEdge() since the previous call.
+	void tryMitsu6g75BetaSync();
 	int getHwEventCounter(int index) const;
 	void resetCounters();
 	void validateCamVvtCounters();
@@ -183,11 +196,25 @@ public:
 	PrimaryTriggerDecoder triggerState;
 #endif //EFI_SHAFT_POSITION_INPUT
 
-	// VVT_MITSUBISHI_6G72_BETA fast-sync: cam level + continuous elapsed-time-since-last-cam-edge
-	// sampled at crank FALL edges, used to guess engine phase faster than the normal cam
-	// gap-decoder. See docs/mitsubishi-6g72-fast-crank-cam-sync.md
-	efitick_t mitsu6g72BetaLastCamEdgeTime = 0;
-	Mitsu6g72BetaPendingPair mitsu6g72BetaPendingPair = Mitsu6g72BetaPendingPair::None;
+	// VVT_MITSUBISHI_6G72_BETA fast-sync: pure level/order "straddle" pattern - the edge
+	// immediately before a crank rise, combined with the edge immediately after it, identifies
+	// engine phase without any timing/RPM-dependent math at all. See
+	// TriggerCentral::mitsu6g72BetaObserveEdge() and docs/mitsubishi-6g72-fast-crank-cam-sync.md
+	Mitsu6g72BetaEdge mitsu6g72BetaPrevEdge{};
+	bool mitsu6g72BetaPrevEdgeValid = false;
+	Mitsu6g72BetaEdge mitsu6g72BetaEvent1{};
+	bool mitsu6g72BetaWaitingForEvent2 = false;
+
+	// VVT_MITSUBISHI_6G75_BETA fast-sync: raw count of real cam rise edges on the sync cam since
+	// the last crank revolution boundary (see TriggerCentral::tryMitsu6g75BetaSync() and
+	// docs/report.md 2026-09-08). The 7-tooth cam wheel produces 3.5 edges per crank revolution
+	// on average, so this always lands on exactly 3 or 4, alternating - never anything else on a
+	// clean signal.
+	uint8_t mitsu6g75BetaCamEdgeCount = 0;
+	// False until the first full (not partial) revolution has been counted after (re)acquiring
+	// crank sync - the count spanning the moment sync was acquired covers an unknown partial
+	// window and must be discarded rather than classified.
+	bool mitsu6g75BetaCountValid = false;
 
 	TriggerWaveform triggerShape;
 

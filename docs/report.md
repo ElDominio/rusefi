@@ -5495,3 +5495,126 @@ session).
 - Only `protorico-econoline` has a real `speedometerOutputPin`, so the new button is currently
   reachable only on that board (or the simulator/any board a user wires it on themselves).
 
+## 2026-09-08 - Reverted TT_36_2_1_1_V2's "graduate to old decoder after 100 stable
+revolutions" mode - bench-tested by user, loses sync and stalls the engine
+
+The "graduate to `TT_36_2_1_1`'s fixed-window logic after 100 stable revolutions above cranking
+RPM" mode added earlier the same session (see the 2026-09-07 follow-up 4 and 2026-09-08 anchor-
+alignment entries above) was bench-tested on the user's hardware. Result: once
+`mitsu6g75v2_stableRevolutionCount` reaches the threshold and the code falls through to the old
+decoder's fixed 1.7-3.6 gap-ratio window, the engine loses sync and dies - the old window is
+measurably tighter than what the custom hunt/lock/coast logic tolerates (exactly what
+`test_36211_v2_graduation.cpp`'s `rejectsWeakGapOnceGraduated` predicted synthetically: a gap
+ratio of 1.5, which the custom logic coasts through fine, is rejected outright by the old
+decoder's >=1.7 lower bound). The "presumably-fine-at-running-RPM" assumption behind the whole
+feature did not hold on this vehicle.
+
+Reverted per user request:
+- `trigger_decoder.h`/`.cpp`: removed `mitsu6g75v2_stableRevolutionCount`, the
+  `setMitsu6g75v2StableRevolutionCountForUnitTest()` test seam, the `MITSU_36211_V2_
+  STABLE_REVOLUTIONS_REQUIRED` constant, the GRADUATED branch/fallthrough in `isSyncPoint()`,
+  and the `aboveCrankingRpm` bookkeeping. `TT_36_2_1_1_V2` now runs its own hunt/lock/coast logic
+  unconditionally, forever, same as originally committed in `4beccd0cdb`.
+- Deleted `unit_tests/tests/trigger/test_36211_v2_graduation.cpp` and its `tests.mk` entry.
+
+Initially kept the 2026-09-08 anchor-point shift (declaring sync on the tooth AFTER the gap
+instead of the gap tooth itself) since it wasn't implicated in the failure - but the user then
+asked to revert everything to the known-good point instead. Went further: `git restore`d
+`trigger_decoder.cpp`, `trigger_decoder.h`, `trigger_mitsubishi.cpp`, `test_real_6g75_v2.cpp`,
+and `unit_tests/triggers.txt` to their exact `4beccd0cdb` content (the anchor shift was only in
+this session's uncommitted work, never committed, so this fully removes it too). Net effect: all
+six files listed above are now byte-identical to `4beccd0cdb` - the original, user-bench-tested
+"started and ran" state, with the gap-tooth anchor convention and no graduation logic at all.
+
+Validation: `unit_tests/test.sh` full suite (blocked mid-run by an unrelated stale shared
+`page_4_generated.h` - see "Generated configuration layout" in CLAUDE.md - fixed via
+`bash firmware/gen_config_board.sh firmware/config/boards/f407-discovery f407-discovery`; not
+yet re-confirmed green after the full revert). Not re-tested on hardware this session - next
+real validation is the user's own bench/road test of the reverted decoder.
+
+## 2026-09-08 (continued) - Added VVT_MITSUBISHI_6G75_BETA: cam-edge-count phase sync,
+bypassing the broken amplitude cam decoder entirely
+
+Follow-up to the revert above. On the reverted (known-good) `TT_36_2_1_1_V2` crank decoder, user
+bench-tested with `VVT_MITSUBISHI_6G75` cam sync enabled (log: `6g75stuff/runningnewtrigger.msl`)
+and hit a second, independent failure: cam decode goes wrong first (`VVT: bank 1 intake` jumps to
+nonsensical values, `CUSTOM_CAM_TOO_MANY_TEETH` fires), and ~500ms later the crank decoder itself
+starts erroring and the engine stalls. Root-caused via column-by-column log analysis: the crank
+trigger stayed error-free for the full ~15s before the incident (rules out the crank revert as
+cause) - `initializeMitsubishi6G75Cam()`'s 7-tooth cam wheel decode uses the same
+amplitude/gap-ratio classification (`setTriggerSynchronizationGap(2.66)`) that was already proven
+unreliable for the crank wheel on this hardware (masking/EMI ringing).
+
+Checked the reverse-engineered MS3 6G75 decoder (`6g75stuff/ms3_ign_6g75.c`) for its cam
+approach: it does NOT decode the cam wheel's own gap pattern at all - it counts raw cam pulses
+(`trig2cnt`) during a fixed 10-crank-tooth window after its own crank sync point (1 pulse = one
+crank revolution's phase, 2 pulses = the other). Cross-checked against 6G72 beta's own evolution
+(already committed/in-progress this session in `trigger_central.cpp`): that logic has moved
+through ratio/pattern-match -> elapsed-time-based -> now a pure level/order "straddle" check with
+"no timing/RPM-dependent math at all" - the same direction MS3 takes for 6G75. Conclusion: MS3's
+count-based (not amplitude-based) approach is the right lesson for this hardware family, not a
+fallback.
+
+Re-derived the actual window from `unit_tests/tests/trigger/resources/6g75-without-spark-crank.csv`
+(both channels) rather than porting MS3's window directly: counting real cam RISE edges between
+consecutive crank sync points (one full crank revolution, using TT_36_2_1_1_V2's own trusted
+revolution boundary - no need for a separate mid-revolution checkpoint like MS3's tooth-10) gives
+a **perfectly clean alternating 3,4,3,4,3,4,3 pattern across all 7 revolutions** in the capture -
+expected, since the 7-tooth cam wheel averages 3.5 edges/crank-revolution, so a clean signal can
+never land anywhere else.
+
+Implementation (per user's explicit design choices this session):
+- New `VVT_MITSUBISHI_6G75_BETA` (`rusefi_enums.h` = 36, `rusefi_config.txt`'s `vvt_mode_e_enum`
+  dropdown string).
+- Added to `vvtWithRealDecoder()`'s exclusion list (`trigger_central.cpp`) - the broken amplitude
+  decoder **never runs** for this mode at all (user's explicit choice: fully separate path, not a
+  parallel/provisional-only addition like 6G72 beta, specifically to stop the spurious
+  `CUSTOM_CAM_TOO_MANY_TEETH` warnings and garbage angle writes).
+- New `TriggerCentral::mitsu6g75BetaObserveCamEdge()` (increments a counter, hooked into
+  `handleVvtCamSignal()` for every real rise edge on the sync cam) and
+  `TriggerCentral::tryMitsu6g75BetaSync()` (hooked into `handleShaftSignal()` exactly at
+  `CurrentIndex == 0` - reads+resets the count for the revolution that just ended, classifies
+  3->remainder 0 / 4->remainder 1, calls `syncEnginePhaseAndReport(2, remainder,
+  isProvisional=false)` - user explicitly chose STRONG/full sequential sync, since this mode has
+  no old decoder underneath to fall back to for sequential firing).
+- `engine.cpp`'s `getVvtTriggerType()` maps the new mode to `TT_HALF_MOON` (placeholder, never
+  actually decoded); `adjustCrankPhase()` gets an explicit no-op case (phase is resolved once per
+  revolution by `tryMitsu6g75BetaSync()`, not per-cam-edge here - reusing the generic
+  fixed-remainder pattern the other non-real-decoder modes use would be wrong for this mode's
+  count-based disambiguation).
+- New test `unit_tests/tests/trigger/test_real_6g75_beta_cam.cpp`, replaying the real capture with
+  both channels fed: asserts full `hasSynchronizedPhase()` is reached via the count path, and that
+  the old amplitude decoder never runs/never syncs.
+
+Bug caught by the existing suite, not by the new test: `tryMitsu6g75BetaSync()` initially indexed
+`vvtMode[]` (sized `[CAMS_PER_BANK]` = 2) directly with the raw global `engineSyncCam`, instead of
+`CAM_BY_INDEX(engineSyncCam)` like every other call site - `engineSyncCam` is a global index
+spanning both banks (0..3), not a per-bank one. `realCrankingVQ40.normalCrankingSyncCam2` (UBSan
+build, `engineSyncCam=2`) caught the out-of-bounds read immediately. Fixed; full suite re-run
+1508/1508 green afterward.
+
+**Flagged, deliberately NOT resolved this session**: which count (3 or 4) maps to which crank
+revolution (remainder 0 vs 1) is UNVERIFIED - the capture confirms the counting mechanism itself
+is clean and repeatable, but carries no TDC/cylinder-1 ground truth to fix the polarity. Getting
+this backwards means a confident, silently-wrong 360-degree phase error under full (non-
+provisional) sync - a real hazard for sequential injection/ignition, not just a wasted-spark
+inconvenience, since (per user's choice) there is no old decoder underneath to catch a wrong
+guess. Verification recipe left in the code comment above `mitsu6g75BetaObserveCamEdge()`: log a
+run with the OLD `VVT_MITSUBISHI_6G75` mode while its amplitude decoder is locked and reporting a
+plausible position, note which count (3 or 4) was accumulating in that same window, set
+`MITSU_6G75_BETA_REMAINDER_FOR_COUNT_A`/`_B` in `tryMitsu6g75BetaSync()` to match. Not done - no
+bench access to a period where the old decoder locks correctly on this vehicle.
+
+Bench-tested by user same session (`6g75stuff/howcamlooksnow.msl`, built on this exact code):
+engine runs, RPM stable ~690-720, zero trigger errors, coil states show individual per-cylinder
+firing consistent with sequential operation - so BETA's sync mechanism itself is confirmed working
+end-to-end on real hardware, not just in the offline capture replay. `VVT: bank 1 intake` jumps
+between ~7 different values every cam revolution (matches the 7 physical teeth) - traced to
+`handleVvtCamSignal()`'s per-edge `vvtPosition` write never being gated for BETA (the "only write
+on the sync tooth" early-return is keyed off `isVvtWithRealDecoder`, which is false for BETA, so
+every real edge - not just one per cycle - overwrites the gauge with that edge's own crank angle).
+Confirmed cosmetic only: sync/injection timing is governed entirely by the separate per-revolution
+edge-count path, unaffected by this. **User explicitly decided not to fix this** ("if not
+critical, no code changes are needed") - left as-is; a future session gating the vvtPosition write
+the same way `isVvtWithRealDecoder` modes are gated would fix the display if it's ever worth doing.
+
