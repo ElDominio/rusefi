@@ -91,6 +91,12 @@ trigger_type_e getVvtTriggerType(vvt_mode_e vvtMode) {
 	case VVT_HONDA_K_INTAKE:
 	case VVT_SINGLE_TOOTH:
 	case VVT_MAP_V_TWIN:
+	case VVT_MITSUBISHI_6G75_BETA:
+	  // Deliberately NOT TT_VVT_MITSUBISHI_6G75 - the whole point of BETA is to never run that
+	  // amplitude/gap-ratio decoder (see docs/report.md 2026-09-08). TT_HALF_MOON is unused here
+	  // (vvtWithRealDecoder() excludes this mode, so decodeTriggerEvent() never actually runs
+	  // against this shape) - same placeholder convention as the other non-real-decoder modes
+	  // grouped in this case.
 		return trigger_type_e::TT_HALF_MOON;
 	case VVT_FORD_ST170:
 		return trigger_type_e::TT_FORD_ST170;
