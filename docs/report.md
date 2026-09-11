@@ -5703,6 +5703,64 @@ this dev box). No firmware board build attempted.
 
 None.
 
+## 2026-09-10 - Wheel Speed Sensors: OSS -> Vehicle Speed now shares driveWheelRevPerKm/finalGearRatio
+
+Committed now as part of a later catch-up pass (no report entry was written at the time). Follow-up
+to the Wheel Speed Sensors v5 rework (2026-08-17 entries above): removed the dedicated
+`ossRevPerKm` field (`page6_s`, added in the v3 revision) and replaced it with the same
+`driveWheelRevPerKm`/`finalGearRatio` fields Gear Setup already exposes.
+
+### Why
+
+`ossRevPerKm` duplicated information Gear Setup already collects for the opposite conversion
+(`GearDetector::getDriveshaftRpm()` scales VehicleSpeed by `driveWheelRevPerKm x finalGearRatio` to
+get driveshaft RPM). OSS is measured at the transmission output, pre-differential, so going the
+other direction (`OutputShaftSpeed` RPM -> Vehicle Speed) needs the same wheel-revs/km constant
+scaled *up* by the final drive ratio - `revPerKm = driveWheelRevPerKm * finalGearRatio` - rather
+than a second, independently-tuned constant a user could let drift out of sync with Gear Setup's.
+
+### Implementation
+
+- `firmware/integration/config_page_6.txt`: removed `ossRevPerKm`.
+- `firmware/init/sensor/init_vehicle_speed_sensor.cpp`: `MainVehicleSpeedSensor`'s
+  `OutputShaftSpeed` branch now computes `revPerKm = engineConfiguration->driveWheelRevPerKm *
+  engineConfiguration->finalGearRatio` instead of reading `getCustomPage()->ossRevPerKm`; the debug
+  print was updated to log both source values.
+- `firmware/tunerstudio/tunerstudio.template.ini`: removed the "Output Shaft Speed Wheel Revs/km"
+  field from the OSS panel; added "Wheel revolutions per kilometer" / "Final drive ratio" fields
+  (`driveWheelRevPerKm`/`finalGearRatio`) to the Chassis Sensors "Main Speed Sensor" section, gated
+  on `mainSpeedSensorSource == 1` (Output Shaft Speed) - Gear Setup only shows these fields when
+  gear detection itself needs them, which is not the case when its own Speed Source is Output Shaft
+  Speed, so Main Speed Sensor needed its own visible copies of the same fields for this path.
+- `unit_tests/tests/sensor/test_wheel_speed_sensors.cpp`: updated
+  `mainSpeedSensorFromOutputShaftSpeed` and the invalid-without-OSS-reading test for the new
+  formula (`driveWheelRevPerKm=169, finalGearRatio=3` in place of `ossRevPerKm=507`).
+
+### protorico-econoline: real hardware now exercises this path
+
+`board_configuration.cpp`: `acRelayPin` (no A/C clutch on this build) freed and reassigned to
+`speedometerOutputPin` (`Gpio::C6`, `H144_OUT_PWM2`) - this is the board referenced as "currently
+assigns a real pin" in the 2026-09-10 Speedometer report entry above. `connectors.yaml` renamed the
+matching TS pin labels ("A/C Clutch" -> "Speedometer Output" on `H144_OUT_PWM2`, "Digital Input 4"
+-> "Output Shaft Speed" on `H144_IN_D_4`).
+
+Wiring "Output Shaft Speed" onto an `event_inputs`-class pin surfaced a real bug in the pinout
+codegen: `PinoutLogic.java` folded every `EVENT_INPUTS` pin into the `SWITCH_INPUTS` pin type using
+the *event-input* class's own name list (`classList`) instead of the switch-input type's list
+(`names.get(PinType.SWITCH_INPUTS...)`), so an event-input pin exposed as a `switch_input_pin_e`
+choice (like `outputShaftSpeedSensorPin`) could get the wrong label pool. Fixed to look up and pass
+the correct `switchInputsList`.
+
+### Validation
+
+Full unit test suite passing as part of this catch-up commit pass. No firmware board build
+specifically re-verified in this catch-up pass beyond what the unit-test build's config-generation
+step already confirms.
+
+### Open follow-ups
+
+None known - not yet bench-tested against a real OSS sensor on protorico-econoline hardware.
+
 ## 2026-09-10 (continued) - Speedometer output: investigated correctness, added "Test Speedo" bench test
 
 ### Investigation: does the speedometer output function actually work?
