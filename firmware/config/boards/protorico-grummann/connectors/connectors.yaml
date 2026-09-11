@@ -1,0 +1,100 @@
+meta: config/boards/hellen_meta.h
+
+pins:
+  - meta: H144_IGN_1
+    class: outputs
+    ts_name: Ignition Coil 1
+
+  - meta: H144_IGN_2
+    class: outputs
+    ts_name: Ignition Bypass Output
+
+  - meta: H144_IGN_3
+    class: outputs
+    ts_name: Idle Stepper Direction
+
+  - meta: H144_IGN_4
+    class: outputs
+    ts_name: Idle Stepper Enable
+
+  - meta: H144_IGN_5
+    class: outputs
+    ts_name: Idle Stepper Step
+
+  - id: D3
+    class: outputs
+    ts_name: Injector 1 (All Cylinders)
+
+  - id: A9
+    class: event_inputs
+    ts_name: A/C Request Input
+
+  - id: D15
+    class: outputs
+    ts_name: Torque Converter Lockup
+
+  - id: A8
+    class: outputs
+    ts_name: EGR Solenoid
+
+  - meta: H144_IN_D_1
+    class: event_inputs
+    ts_name: Crank Trigger
+
+  - meta: H144_IN_D_2
+    class: event_inputs
+    ts_name: Vehicle Speed Sensor (VSS)
+
+  - meta: H144_IN_D_3
+    class: event_inputs
+    ts_name: Park/Neutral Switch Input
+
+  - meta: H144_IN_D_4
+    class: event_inputs
+    ts_name: Digital Input 4
+
+  - id: B14
+    class: outputs
+    ts_name: Fuel Pump Relay
+
+  - meta: H144_OUT_PWM2
+    class: outputs
+    ts_name: A/C Relay Output
+
+  - meta: H144_OUT_PWM3
+    class: outputs
+    ts_name: Tachometer Output
+
+  - meta: H144_OUT_PWM4
+    class: outputs
+    ts_name: Check Engine Light
+
+  - meta: H144_IN_MAP1
+    class: analog_inputs
+    ts_name: MAP Sensor
+
+  - meta: H144_IN_CLT
+    class: analog_inputs
+    ts_name: Coolant Temperature
+
+  - meta: H144_IN_IAT
+    class: analog_inputs
+    ts_name: Intake Air Temp
+
+  - meta: H144_IN_TPS
+    class: analog_inputs
+    ts_name: Throttle Position Sensor
+
+  - meta: H144_IN_AUX4_DIGITAL
+    class: event_inputs
+    ts_name: Power Steering Pressure Switch
+
+  - meta: H144_IN_VBATT
+    class: analog_inputs
+    ts_name: Battery Voltage
+
+info:
+  cid: main
+  title: protorico-grummann
+  name: Protorico-Grummann Pinout
+  directory: hellen/protorico-grummann
