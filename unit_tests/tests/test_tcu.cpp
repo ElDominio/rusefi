@@ -248,6 +248,63 @@ TEST(tcu, testIdleShiftToFirstVssThreshold) {
 	ASSERT_TRUE(engine->gearController->transmissionController->tcu_idleShiftToFirst);
 }
 
+// tcu_pcRampTimeMs slews the line pressure solenoid duty toward a new target instead of
+// stepping instantly, at a rate of (100 / tcu_pcRampTimeMs) percent per ms.
+TEST(tcu, testPcDutyRamp) {
+	EngineTestHelper eth(engine_type_e::TCU_4R70W);
+	engineConfiguration->gearControllerMode = GearControllerMode::Automatic;
+	initGearController();
+
+	TransmissionControllerBase* tc = engine->gearController->transmissionController;
+	ASSERT_NE(nullptr, tc);
+
+	// Flatten the table to 0 except one exact-bin cell (RPM bin 0 = 800, TPS bin 4 = 100) so the
+	// base duty is deterministic (no interpolation), and zero out the other modifiers so only the
+	// table lookup drives the target.
+	for (int row = 0; row < 5; row++) {
+		for (int col = 0; col < 5; col++) {
+			config->tcu_pcTable[row][col] = 0;
+		}
+	}
+	config->tcu_pcTable[4][0] = 100;
+	config->tcu_pcShiftAdderDuty = 0;
+	config->tcu_pcLockupAdderDuty = 0;
+	config->tcu_pcGearAdderDuty[0] = 0; // GEAR_1
+
+	// Establish a steady duty of 0 with ramping still disabled (default), so the initial
+	// NEUTRAL -> GEAR_1 shift (see testIdleShiftToFirst) settles at an exact, known duty before
+	// the ramp itself is under test.
+	Sensor::setMockValue(SensorType::Rpm, 800);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0);
+	Sensor::setMockValue(SensorType::VehicleSpeed, 0);
+	engine->gearController->update();
+	eth.moveTimeForwardAndInvokeEventsUs(config->tcu_shiftTime * 1000 + 1000);
+	engine->gearController->update();
+	engine->gearController->update();
+	ASSERT_FALSE(tc->isShifting);
+	ASSERT_EQ(0, tc->pressureControlDuty);
+
+	// Now enable ramping and raise TPS to the table's 100-duty cell.
+	config->tcu_pcRampTimeMs = 1000; // 1000ms to cross the full 0-100% range
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 100);
+	engine->gearController->update();
+	ASSERT_FALSE(tc->isShifting);
+	int8_t dutyRightAfterTargetChanged = tc->pressureControlDuty;
+	ASSERT_LT(dutyRightAfterTargetChanged, 100);
+
+	// Halfway through the configured ramp time, duty should have climbed but not yet arrived.
+	eth.moveTimeForwardAndInvokeEventsUs(500 * 1000);
+	engine->gearController->update();
+	int8_t dutyAtHalfRamp = tc->pressureControlDuty;
+	ASSERT_GT(dutyAtHalfRamp, dutyRightAfterTargetChanged);
+	ASSERT_LT(dutyAtHalfRamp, 100);
+
+	// Well past the configured ramp time, duty settles at (and clamps to) the target.
+	eth.moveTimeForwardAndInvokeEventsUs(600 * 1000);
+	engine->gearController->update();
+	ASSERT_EQ(100, tc->pressureControlDuty);
+}
+
 TEST(tcu, testAutomaticGaugeFields) {
 	EngineTestHelper eth(engine_type_e::TCU_4R70W);
 	engineConfiguration->gearControllerMode = GearControllerMode::Automatic;
@@ -436,10 +493,46 @@ TEST(tcu, shiftCompletesWhenTheTargetGearIsDetected) {
 	ASSERT_FLOAT_EQ(0, tc.isShiftCompleted());
 
 	Sensor::setMockValue(SensorType::DetectedGear, GEAR_2);
-	ASSERT_NEAR(0.3, tc.isShiftCompleted(), 0.01);
+	// DetectedGear now matches, but a single matching sample isn't enough -- isShiftCompleted()
+	// requires the match to hold for tcu_shiftGearConfirmTime (rejects a one-tick RPM flare/sag
+	// through the target gear's ratio band during clutch handoff).
+	ASSERT_FLOAT_EQ(0, tc.isShiftCompleted());
+
+	// hasElapsedMs() is a strict '>', so overshoot the confirm window by 1ms
+	eth.moveTimeForwardAndInvokeEventsUs(config->tcu_shiftGearConfirmTime * 1000 + 1000);
+	ASSERT_NEAR(0.301 + config->tcu_shiftGearConfirmTime / 1000.0, tc.isShiftCompleted(), 0.01);
 
 	// the shift is only reported once
 	ASSERT_FLOAT_EQ(0, tc.isShiftCompleted());
+}
+
+TEST(tcu, shiftDoesNotCompleteOnATransientGearMatch) {
+	EngineTestHelper eth(engine_type_e::TCU_4R70W);
+
+	TestTransmissionController tc;
+	Sensor::setMockValue(SensorType::InputShaftSpeed, 1500);
+	Sensor::setMockValue(SensorType::DetectedGear, GEAR_1);
+
+	tc.measureShiftTime(GEAR_2);
+
+	// a brief flare/sag through the target gear's ratio band, then back to the old gear before
+	// the confirm window elapses -- must not complete the shift
+	Sensor::setMockValue(SensorType::DetectedGear, GEAR_2);
+	ASSERT_FLOAT_EQ(0, tc.isShiftCompleted());
+	eth.moveTimeForwardAndInvokeEventsUs(10000);
+	Sensor::setMockValue(SensorType::DetectedGear, GEAR_1);
+	ASSERT_FLOAT_EQ(0, tc.isShiftCompleted());
+
+	// even after the confirm window would have elapsed from the original (transient) match
+	eth.moveTimeForwardAndInvokeEventsUs(config->tcu_shiftGearConfirmTime * 1000);
+	ASSERT_FLOAT_EQ(0, tc.isShiftCompleted());
+
+	// now it genuinely settles into the target gear and stays there for the full confirm window
+	Sensor::setMockValue(SensorType::DetectedGear, GEAR_2);
+	ASSERT_FLOAT_EQ(0, tc.isShiftCompleted());
+	// hasElapsedMs() is a strict '>', so overshoot the confirm window by 1ms
+	eth.moveTimeForwardAndInvokeEventsUs(config->tcu_shiftGearConfirmTime * 1000 + 1000);
+	ASSERT_GT(tc.isShiftCompleted(), 0);
 }
 
 TEST(tcu, shiftFallsBackToConfiguredTimeWithoutInputShaftSpeed) {

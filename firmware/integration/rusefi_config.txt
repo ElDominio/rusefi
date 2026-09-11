@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260824
+#define FLASH_DATA_VERSION 260910
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -2366,18 +2366,38 @@ uint8_t[8] tcu_tccUnlockSpeed;;{bitStringValue(velocityUnitsLabels, useMetricOnI
 uint8_t tcu_tccMinGear;Lock-up is only allowed at or above this gear, regardless of the TCC Lock/Unlock curve.;"gear", 1, 0, 0, 4, 0
 int16_t tcu_tccMinClt;Lock-up is inhibited below this coolant temperature, to avoid locking a cold converter. 0 disables the check.;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? 0 : 32}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
 
-// Simplified line pressure control: one duty per (Low/Mid/High driver demand) x (cruising/shifting),
-// applied regardless of gear. Replaces tcu_pcVals*/tcu_pcAirmassBins (kept, unused, for tune compatibility).
-uint8_t tcu_pcLowMidTpsEnter;TPS threshold to move from Low to Mid line pressure demand (rising).;"TPS", 1, 0, 0, 100, 0
-uint8_t tcu_pcLowMidTpsExit;TPS threshold to move from Mid back to Low line pressure demand (falling). Keep at or below the enter threshold to avoid duty chatter.;"TPS", 1, 0, 0, 100, 0
-uint8_t tcu_pcMidHighTpsEnter;TPS threshold to move from Mid to High line pressure demand (rising).;"TPS", 1, 0, 0, 100, 0
-uint8_t tcu_pcMidHighTpsExit;TPS threshold to move from High back to Mid line pressure demand (falling). Keep at or below the enter threshold to avoid duty chatter.;"TPS", 1, 0, 0, 100, 0
-uint8_t tcu_pcLowCruiseDuty;Line pressure solenoid duty at Low driver demand, not shifting.;"%", 1, 0, 0, 100, 0
-uint8_t tcu_pcMidCruiseDuty;Line pressure solenoid duty at Mid driver demand, not shifting.;"%", 1, 0, 0, 100, 0
-uint8_t tcu_pcHighCruiseDuty;Line pressure solenoid duty at High driver demand, not shifting.;"%", 1, 0, 0, 100, 0
-uint8_t tcu_pcLowShiftDuty;Line pressure solenoid duty at Low driver demand, while shifting.;"%", 1, 0, 0, 100, 0
-uint8_t tcu_pcMidShiftDuty;Line pressure solenoid duty at Mid driver demand, while shifting.;"%", 1, 0, 0, 100, 0
-uint8_t tcu_pcHighShiftDuty;Line pressure solenoid duty at High driver demand, while shifting.;"%", 1, 0, 0, 100, 0
+#define TCU_PC_TABLE_SIZE 5
+
+// Line pressure control: a 2D table of RPM (X) x driver demand/TPS (Y) -> base solenoid duty (Z),
+// applied regardless of gear. Three modifiers apply on top: tcu_pcShiftAdderDuty while a shift is
+// in progress, the TCC lock-up adder below, and tcu_pcGearAdderDuty indexed by desired gear.
+// Replaces the earlier Low/Mid/High TPS-band scheme entirely (and, before that,
+// tcu_pcVals*/tcu_pcAirmassBins, still kept unused for tune compatibility).
+// Note: duty-to-pressure polarity is whatever your EPC solenoid's hydraulics make it -- some
+// designs raise pressure as duty falls (common Ford-style inverted/normally-open solenoids), others
+// raise pressure as duty rises (normally-closed/direct-acting). This table and all the adders below
+// are just raw duty percentages with no assumption baked in either way -- calibrate the table's
+// gradient and the adders' sign to match whichever direction actually raises pressure on your
+// hardware.
+uint16_t[TCU_PC_TABLE_SIZE] tcu_pcRpmBins;RPM axis for the line pressure table.;"RPM", 1, 0, 0, 8000, 0
+uint8_t[TCU_PC_TABLE_SIZE] tcu_pcTpsBins;Driver demand (TPS) axis for the line pressure table.;"TPS", 1, 0, 0, 100, 0
+uint8_t[TCU_PC_TABLE_SIZE x TCU_PC_TABLE_SIZE] tcu_pcTable;Line pressure solenoid base duty as a function of RPM (X) and driver demand (Y).;"%", 1, 0, 0, 100, 0
+
+int8_t tcu_pcShiftAdderDuty;Line pressure duty added to the table lookup while a shift is in progress. Sign depends on your EPC solenoid: use whichever sign raises pressure on your hardware.;"%", 1, 0, -100, 100, 0
+
+// Added on top of the table lookup (+ shift adder) for tcu_pcLockupAdderTime after the TCC
+// lock-up (on/off) solenoid engages, to help control converter clutch apply shock. Signed: use
+// whichever sign raises pressure on your EPC solenoid (some designs raise pressure as duty falls,
+// others as duty rises). 0 duty/time disables it.
+int8_t tcu_pcLockupAdderDuty;Line pressure duty added on top of the table lookup for a period after TCC lock-up engages. Sign depends on your EPC solenoid: use whichever sign raises pressure on your hardware.;"%", 1, 0, -100, 100, 0
+uint16_t tcu_pcLockupAdderTime;How long after TCC lock-up engages the lock-up duty adder is applied.;"ms", 1, 0, 0, 3000, 0
+
+int8_t[4 iterate] tcu_pcGearAdderDuty;Line pressure duty added on top of the table lookup (+ shift/lock-up adders), indexed by desired gear (1st..4th). Sign depends on your EPC solenoid: use whichever sign raises pressure on your hardware.;"%", 1, 0, -100, 100, 0
+
+// Time to slew the line pressure solenoid duty across its full 0-100% range whenever the target
+// changes (table lookup, shift adder, lock-up adder, or gear adder), instead of stepping
+// instantly. 0 disables the ramp.
+uint16_t tcu_pcRampTimeMs;Time to ramp the line pressure solenoid duty across its full 0-100% range whenever the target duty changes. 0 disables ramping (instant change).;"ms", 1, 0, 0, 5000, 0
 
 uint8_t[8] tcu_32SpeedBins;;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
 uint8_t[8] tcu_32Vals;;"%", 1, 0, 0, 255, 0
@@ -2556,6 +2576,7 @@ uint8_t[TCU_TABLE_WIDTH] tcu_shiftSpeed32;;{bitStringValue(velocityUnitsLabels, 
 uint8_t[TCU_TABLE_WIDTH] tcu_shiftSpeed43;;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
 
 float tcu_shiftTime;;"ms", 1, 0, 0, 3000, 0
+float tcu_shiftGearConfirmTime;Minimum time DetectedGear must stay matched to the target gear before a shift is considered complete, rejecting a single-tick RPM flare/sag through the target ratio band during clutch handoff.;"ms", 1, 0, 0, 2000, 0
 bit tcuIdleShiftToFirstEnabled,"Enabled","Disabled"
 uint8_t tcuIdleShiftToFirstMaxVss;Idle-shift VSS threshold. A value of 0 disables the speed check entirely, so only the idle RPM/TPS condition is required.;"km/h", 1, 0, 0, 255, 0
 

@@ -9,10 +9,12 @@
 #include "pch.h"
 
 #include "tc_4.h"
+#include "table_helper.h"
 
 #if EFI_TCU
 Generic4TransmissionController generic4TransmissionController;
 static SimplePwm pcPwm("Pressure Control");
+static Map3D<TCU_PC_TABLE_SIZE, TCU_PC_TABLE_SIZE, uint8_t, uint16_t, uint8_t> pcTable{"pc"};
 
 void Generic4TransmissionController::init() {
 	SimpleTransmissionController::init();
@@ -26,6 +28,8 @@ void Generic4TransmissionController::init() {
 								 &enginePins.tcuPcSolenoid,
 								 engineConfiguration->tcu_pc_solenoid_freq,
 								 0);
+
+	pcTable.initTable(config->tcu_pcTable, config->tcu_pcRpmBins, config->tcu_pcTpsBins);
 }
 
 void Generic4TransmissionController::update(gear_e gear) {
@@ -37,7 +41,7 @@ void Generic4TransmissionController::update(gear_e gear) {
 
 	// set torque converter and pressure control state
 	updateTccLockup(gear);
-	setPcState();
+	setPcState(gear);
 
 	setCurrentGear(gear);
 
@@ -51,51 +55,51 @@ void Generic4TransmissionController::update(gear_e gear) {
 	}
 }
 
-// Simplified line pressure control: a 3-band driver-demand read on TPS (Low/Mid/High), each
-// with its own duty for cruising vs. shifting -- 6 duties total, the same for every gear.
-// Band transitions use separate rising/falling TPS thresholds (Schmitt trigger) so cruising
-// right at a boundary doesn't chatter the duty between two values.
-void Generic4TransmissionController::setPcState() {
+// Line pressure control: a 2D table of RPM x driver demand (TPS) gives a base duty, then three
+// signed modifiers are added on top: a shift adder while a shift is in progress, the TCC lock-up
+// adder, and a per-gear adder indexed by desired gear.
+void Generic4TransmissionController::setPcState(gear_e desiredGear) {
 	auto tps = Sensor::get(SensorType::DriverThrottleIntent);
-	if (!tps.Valid) {
+	auto rpm = Sensor::get(SensorType::Rpm);
+	if (!tps.Valid || !rpm.Valid) {
 		return;
 	}
 
-	switch (tcu_pcDemandBand) {
-	case 0: // Low
-		if (tps.Value >= config->tcu_pcLowMidTpsEnter) {
-			tcu_pcDemandBand = 1;
-		}
-		break;
-	case 2: // High
-		if (tps.Value <= config->tcu_pcMidHighTpsExit) {
-			tcu_pcDemandBand = 1;
-		}
-		break;
-	default: // Mid
-		if (tps.Value >= config->tcu_pcMidHighTpsEnter) {
-			tcu_pcDemandBand = 2;
-		} else if (tps.Value <= config->tcu_pcLowMidTpsExit) {
-			tcu_pcDemandBand = 0;
-		}
-		break;
+	float targetDuty = pcTable.getValue(rpm.Value, tps.Value);
+
+	if (isShifting) {
+		targetDuty += config->tcu_pcShiftAdderDuty;
 	}
 
-	uint8_t duty;
-	switch (tcu_pcDemandBand) {
-	case 0:
-		duty = isShifting ? config->tcu_pcLowShiftDuty : config->tcu_pcLowCruiseDuty;
-		break;
-	case 2:
-		duty = isShifting ? config->tcu_pcHighShiftDuty : config->tcu_pcHighCruiseDuty;
-		break;
-	default:
-		duty = isShifting ? config->tcu_pcMidShiftDuty : config->tcu_pcMidCruiseDuty;
-		break;
+	// adjust line pressure duty right after TCC lock-up engages, to help control converter
+	// clutch apply shock -- signed, use whichever sign raises pressure on this EPC solenoid
+	targetDuty += getPcLockupAdderDuty();
+
+	// desiredGear is GEAR_1..GEAR_4 (1..4); anything else (Neutral/Reverse) gets no adder
+	int gearIndex = static_cast<int>(desiredGear) - static_cast<int>(GEAR_1);
+	if (gearIndex >= 0 && gearIndex < 4) {
+		targetDuty += config->tcu_pcGearAdderDuty[gearIndex];
 	}
 
-	pressureControlDuty = duty;
-	pcPwm.setSimplePwmDutyCycle(0.01f * duty);
+	targetDuty = clampF(0, targetDuty, 100);
+
+	// Slew the output toward targetDuty at tcu_pcRampTimeMs (time to cross the full 0-100% range)
+	// instead of stepping instantly, regardless of which modifiers above contributed to the target
+	// -- so table changes, shift transitions, the lock-up adder, and the gear adder are all
+	// smoothed the same way. 0 disables the ramp (instant change, prior behavior). m_pcDutyRamped
+	// is a float so slow ramp rates don't get lost to integer rounding every tick.
+	float dtSeconds = m_pcRampTimer.getElapsedSeconds();
+	m_pcRampTimer.reset();
+	if (config->tcu_pcRampTimeMs == 0) {
+		m_pcDutyRamped = targetDuty;
+	} else {
+		float maxStep = 100.0f * 1000.0f * dtSeconds / config->tcu_pcRampTimeMs;
+		float delta = clampF(-maxStep, targetDuty - m_pcDutyRamped, maxStep);
+		m_pcDutyRamped = clampF(0, m_pcDutyRamped + delta, 100);
+	}
+
+	pressureControlDuty = static_cast<int8_t>(m_pcDutyRamped + 0.5f);
+	pcPwm.setSimplePwmDutyCycle(0.01f * m_pcDutyRamped);
 }
 
 Generic4TransmissionController* getGeneric4TransmissionController() {
@@ -182,18 +186,29 @@ void configureTcu4R70W() {
 	config->tcuSolenoidTable[0][5] = 1;
 	config->tcuSolenoidTable[1][5] = 1;
 
-	// Pressure Control: 3-band TPS demand (Low/Mid/High) x cruise/shift, same for every gear.
-	// Hysteresis on the band thresholds avoids duty chatter at a fixed cruising TPS.
-	config->tcu_pcLowMidTpsEnter = 15;
-	config->tcu_pcLowMidTpsExit = 10;
-	config->tcu_pcMidHighTpsEnter = 55;
-	config->tcu_pcMidHighTpsExit = 48;
-	config->tcu_pcLowCruiseDuty = 30;
-	config->tcu_pcMidCruiseDuty = 40;
-	config->tcu_pcHighCruiseDuty = 60;
-	config->tcu_pcLowShiftDuty = 45;
-	config->tcu_pcMidShiftDuty = 55;
-	config->tcu_pcHighShiftDuty = 80;
+	// Pressure Control: RPM x driver demand (TPS) table of base duty. This default calibration
+	// targets the 4R70W's inverted/normally-open EPC solenoid (duty falls as RPM/demand rise, so
+	// pressure rises with RPM/demand) -- a board with a direct-acting solenoid would need this
+	// table's gradient (and the adders below) entered with the opposite sign/slope.
+	config->tcu_pcRpmBins[0] = 800;
+	config->tcu_pcRpmBins[1] = 1500;
+	config->tcu_pcRpmBins[2] = 2500;
+	config->tcu_pcRpmBins[3] = 4000;
+	config->tcu_pcRpmBins[4] = 6000;
+	config->tcu_pcTpsBins[0] = 0;
+	config->tcu_pcTpsBins[1] = 25;
+	config->tcu_pcTpsBins[2] = 50;
+	config->tcu_pcTpsBins[3] = 75;
+	config->tcu_pcTpsBins[4] = 100;
+	// rows = TPS bins (Y), columns = RPM bins (X)
+	config->tcu_pcTable[0][0] = 70; config->tcu_pcTable[0][1] = 65; config->tcu_pcTable[0][2] = 60; config->tcu_pcTable[0][3] = 55; config->tcu_pcTable[0][4] = 50;
+	config->tcu_pcTable[1][0] = 60; config->tcu_pcTable[1][1] = 55; config->tcu_pcTable[1][2] = 50; config->tcu_pcTable[1][3] = 45; config->tcu_pcTable[1][4] = 40;
+	config->tcu_pcTable[2][0] = 50; config->tcu_pcTable[2][1] = 45; config->tcu_pcTable[2][2] = 40; config->tcu_pcTable[2][3] = 35; config->tcu_pcTable[2][4] = 30;
+	config->tcu_pcTable[3][0] = 35; config->tcu_pcTable[3][1] = 30; config->tcu_pcTable[3][2] = 25; config->tcu_pcTable[3][3] = 20; config->tcu_pcTable[3][4] = 15;
+	config->tcu_pcTable[4][0] = 20; config->tcu_pcTable[4][1] = 15; config->tcu_pcTable[4][2] = 10; config->tcu_pcTable[4][3] = 5;  config->tcu_pcTable[4][4] = 0;
+
+	// Firm the line up while a shift is in progress.
+	config->tcu_pcShiftAdderDuty = -15;
 
 	// TCC Control
 	config->tcu_tccTpsBins[0] = 11.0;
@@ -226,6 +241,7 @@ void configureTcu4R70W() {
 
 	// Shift Config
 	config->tcu_shiftTime = 600.0;
+	config->tcu_shiftGearConfirmTime = 150.0;
 	config->tcu_shiftTpsBins[0] = 11.0;
 	config->tcu_shiftTpsBins[1] = 22.0;
 	config->tcu_shiftTpsBins[2] = 33.0;

@@ -10,8 +10,20 @@ public:
 	TransmissionControllerMode getMode() const {
 		return TransmissionControllerMode::Generic4;
 	}
+#if EFI_UNIT_TEST
+	void resetForUnitTest() override {
+		TransmissionControllerBase::resetForUnitTest();
+		m_pcDutyRamped = 0;
+		m_pcRampTimer.reset();
+	}
+#endif // EFI_UNIT_TEST
 private:
-	void setPcState();
+	void setPcState(gear_e desiredGear);
+	// Slew-rate state for the line pressure solenoid duty (tcu_pcRampTimeMs): persists across
+	// calls so setPcState() can move the output gradually toward its computed target instead of
+	// stepping instantly.
+	Timer m_pcRampTimer;
+	float m_pcDutyRamped = 0;
 };
 
 Generic4TransmissionController* getGeneric4TransmissionController();

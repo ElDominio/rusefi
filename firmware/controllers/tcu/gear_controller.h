@@ -19,6 +19,13 @@ public:
 	// update() checks this against NULL before dereferencing it, which only worked because every
 	// production controller is a file-scope instance and therefore zero initialized
 	TransmissionControllerBase *transmissionController = nullptr;
+#if EFI_UNIT_TEST
+	// Production controllers are file-scope singletons reused by every test, so without this
+	// seam desiredGear leaks between tests depending on execution order.
+	void resetForUnitTest() {
+		desiredGear = NEUTRAL;
+	}
+#endif // EFI_UNIT_TEST
 protected:
 	virtual gear_e setDesiredGear(gear_e);
 	void initTransmissionController();

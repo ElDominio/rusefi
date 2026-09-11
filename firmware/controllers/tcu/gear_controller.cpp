@@ -75,6 +75,12 @@ void initGearController() {
 		return;
 	}
 	engine->gearController->init();
+#if EFI_UNIT_TEST
+	engine->gearController->resetForUnitTest();
+	if (engine->gearController->transmissionController != nullptr) {
+		engine->gearController->transmissionController->resetForUnitTest();
+	}
+#endif // EFI_UNIT_TEST
 }
 
 float* GearControllerBase::getRangeStateArray(int i) {

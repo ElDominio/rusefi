@@ -5027,3 +5027,339 @@ passing.
 
 None known.
 
+## 2026-09-10 - TCU: line pressure shift-duty debounce fix + TCC lock-up gauge and pressure adder
+
+Branch `6g72-fast-crank-cam-sync`. Two related fixes/features in `firmware/controllers/tcu/`,
+prompted by a real hardware observation on a 4R70W: the EPC solenoid briefly jumped to the
+"shifting" line pressure duty for a split second during a shift and then immediately dropped back
+to the "cruising" duty, even though the gear had clearly not mechanically engaged yet.
+
+### Root cause
+
+Confirmed via code trace, not guesswork: `GearDetector` (`firmware/controllers/modules/gear_detector/gear_detector.cpp`)
+republishes `SensorType::DetectedGear` from a single, instantaneous engine-RPM/driveshaft-RPM
+ratio sample every 20 Hz slow-callback tick (50 ms) - no debounce, no EMA, no minimum dwell time.
+`TransmissionControllerBase::isShiftCompleted()` (`firmware/controllers/tcu/tcu.cpp`) treated any
+single tick where `DetectedGear == targetGear` as proof the shift had finished. During a real
+shift, torque-converter/clutch handoff causes the ratio to flare or sag *through* the target
+gear's ratio band for a tick or two before the clutch has actually locked up - that transient
+false-matched, clearing `isShifting` one tick after it was set. Because
+`Generic4TransmissionController::setPcState()` (`tc_4.cpp`) reads `isShifting` before
+`isShiftCompleted()` can clear it that same tick, the symptom was exactly ShiftDuty visible for
+~1 tick (~50 ms) then an immediate drop to CruiseDuty.
+
+### Fix: sustained-match debounce, not GearDetector changes
+
+Deliberately did not touch `GearDetector` (would also affect the `tcuCurrentGear` dash gauge and
+any other `DetectedGear` consumer). Instead, `isShiftCompleted()` now requires `DetectedGear` to
+stay continuously matched to the target gear for a new tunable `config->tcu_shiftGearConfirmTime`
+(ms) before declaring the shift complete - any drop-out mid-window resets the confirmation timer.
+The pre-existing fixed-timer fallback (used when `InputShaftSpeed` isn't configured) is unchanged.
+Default for the 4R70W preset (`configureTcu4R70W()` in `tc_4.cpp`): 150 ms. New TS field: "Shift
+Gear-Match Confirm Time" in the existing `shiftSettingsPanel` dialog.
+
+### TCC lock-up gauge + line-pressure "lock-up adder"
+
+Follow-up ask: (1) an explicit on/off gauge for TCC lock-up state, matching the existing
+`tcu_solenoid1On`/`tcu_solenoid2On` pattern, and (2) a way to nudge line pressure for a short
+window right as TCC lock-up engages (to control converter clutch apply shock) - initially
+discussed as a separate PWM output, but the user clarified it's actually about biasing the
+*existing* EPC line-pressure duty when the on/off lock-up solenoid turns on, not a new solenoid.
+(Incidentally, this surfaced that `firmware/controllers/tcu/tc_4l6x.cpp`'s `tcuTccPwmSolenoid`/
+`tccPwm` is started at init but its duty is never actually driven anywhere in the codebase - an
+unrelated pre-existing gap, left alone since it wasn't what was asked for.)
+
+Implementation:
+- New gauge `tcu_tccLockupOn` (bit) in `tcu_controller.txt`, set from a new
+  `TransmissionControllerBase::setLockupState(bool)` helper that both branches of
+  `updateTccLockup()` now funnel through (replacing the old duplicated
+  `torqueConverterDuty = ...; enginePins.tcuTccOnoffSolenoid.setValue(...)` pairs).
+- New signed config field `tcu_pcLockupAdderDuty` (`int8_t`, -100..100 %) and
+  `tcu_pcLockupAdderTime` (`uint16_t`, ms). Signed because the user's EPC solenoid is inverted -
+  lowering duty raises pressure - so the adder has to be able to go negative to actually raise
+  pressure on engage.
+- On the rising edge of lock-up (tracked via a new `m_lockupEngageTimer` reset in
+  `setLockupState()`), `getPcLockupAdderDuty()` returns the configured adder for
+  `tcu_pcLockupAdderTime` ms, else 0. `Generic4TransmissionController::setPcState()` adds it to
+  the normal band duty, clamped to [0, 100] with `maxI(0, minI(100, ...))` (not just capped at
+  100, since the adder can be negative).
+- New TS fields "TCC Lock-up Engage Adder" / "TCC Lock-up Engage Adder Time" in the existing
+  `pcDutiesPanel` dialog ("Line Pressure Duties"). Both default to 0 (disabled) for the 4R70W
+  preset - left for the user to tune on their hardware rather than guessing a value.
+
+### Config layout / compatibility
+
+Two new persistent-config fields (`tcu_shiftGearConfirmTime`, `tcu_pcLockupAdderDuty`,
+`tcu_pcLockupAdderTime` - three total) inserted mid-struct in `rusefi_config.txt`, which shifts
+byte offsets of every field declared after them. Per project convention, bumped
+`FLASH_DATA_VERSION` (`260908` -> `260910`) rather than hunting for reserved padding - this is the
+established pattern in this repo for this exact situation (see prior `FLASH_DATA_VERSION` memory
+note). Consequence: any existing tune gets reset to defaults on the next flash of this firmware,
+not just the new fields - expected and matches how this fork has handled similar mid-struct
+additions before.
+
+### Validation
+
+- `Timer::hasElapsedMs()` is a strict `>`, not `>=` - initial debounce tests that moved the mock
+  clock forward by *exactly* the confirm window failed because of this; fixed by overshooting by
+  1 ms in the tests (`unit_tests/tests/test_tcu.cpp`).
+- Added `tcu.shiftDoesNotCompleteOnATransientGearMatch` (flare-then-revert must not complete the
+  shift) alongside the updated `tcu.shiftCompletesWhenTheTargetGearIsDetected`.
+- Full unit test suite: `./test.sh` (GCC/Linux) - 1514/1514 passed after these changes (was
+  1513 total before adding the new debounce test; one pre-existing test needed updating for the
+  new debounce behavior, one new test added).
+- Did not run `make CC=clang` per standing guidance for this dev box (clang verification skipped
+  here; see prior session feedback).
+- No firmware board build attempted this session (unit test build alone regenerates and validates
+  the shared config headers/struct layout that firmware boards also consume).
+
+### Open follow-ups
+
+- `tc_4l6x.cpp`'s `tccPwm`/`tcuTccPwmSolenoid` is dead code (PWM output started but duty never
+  driven) - not touched, flagged for whoever next works on the GM 4L60/65/70 controller.
+- Lock-up adder duration/duty values are untuned defaults (0/0, disabled) - needs bench/road
+  tuning on the user's actual 4R70W hardware.
+
+## 2026-09-10 (continued) - TCU: force max line pressure while idle-shifted to 1st + test isolation fix
+
+Follow-up in the same session/branch. User asked for a yes/no to force line pressure to the
+existing "High Demand, Shifting" duty whenever "Shift to First if Idle" has forced the gear to 1st
+- so the transmission has firm pressure ready when pulling away from a stop, regardless of what
+the (near-zero, at idle) TPS-demand band would otherwise pick.
+
+### Implementation
+
+- New bit `tcuIdleShiftForceMaxLinePressure` (`rusefi_config.txt`, next to the existing
+  `tcuIdleShiftToFirstEnabled`/`tcuIdleShiftToFirstMaxVss`) - same `config->` struct as its
+  neighbors. TS field "Force Max Line Pressure on Idle Shift" added to `shiftSettingsPanel`,
+  gated on `tcuEnabled && tcuIdleShiftToFirstEnabled` like the VSS threshold field above it.
+- `Generic4TransmissionController::setPcState()` (`tc_4.cpp`): when the flag is set and
+  `tcu_idleShiftToFirst` is true (set by `AutomaticGearController::update()` on
+  `transmissionController` *before* it calls `GearControllerBase::update()` -> ... ->
+  `setPcState()`, so the flag is always current for the tick), duty is forced straight to
+  `config->tcu_pcHighShiftDuty`, bypassing the TPS-demand-band switch and the TCC lock-up adder
+  entirely (lock-up is separately gated off below `tcu_tccMinGear` anyway, so 1st + lock-up
+  shouldn't coincide).
+- No new `FLASH_DATA_VERSION` bump needed - this field was added to the same uncommitted,
+  already-bumped (`260910`) layout from earlier in the session.
+
+### Test isolation bug found and fixed along the way
+
+Writing the new test (`tcu.testIdleShiftForceMaxLinePressure`) initially broke three *other*,
+previously-passing TCU tests (`testIdleShiftToFirstDisabled`, `testIdleShiftToFirstVssThreshold`,
+`testAutomaticGaugeFields`) purely by being inserted earlier in the file. Root cause: every
+production `GearControllerBase`/`TransmissionControllerBase` subclass is a file-scope singleton
+(`automaticGearController`, `generic4TransmissionController`, etc., returned by
+`getAutomaticGearController()` / `getGeneric4TransmissionController()`), and `initGearController()`
+only re-points `engine->gearController` at one and calls `init()` - it never resets
+`desiredGear`/`currentGear`/`isShifting`/`m_shiftTime`/etc. Every existing TCU test that exercises
+these singletons was implicitly relying on running in a specific order to inherit a "clean enough"
+leftover state; a new test landing between two others could readily flip which stale state the
+next test started from - `desiredGear` ended up `GEAR_3` instead of the expected `GEAR_2` in
+downstream tests purely from unrelated state my new test left behind.
+
+Fixed properly rather than worked around: added `#if EFI_UNIT_TEST`-only `resetForUnitTest()`
+methods on both `GearControllerBase` (resets `desiredGear`) and `TransmissionControllerBase`
+(resets `currentGear`, `shiftingFrom`, `isShifting`, `m_shiftTime`, `m_gearMatching`,
+`tcu_idleShiftToFirst`, `tcu_tccLockupOn`, `torqueConverterDuty`, `pressureControlDuty`,
+`tcu_pcDemandBand`), both called unconditionally from `initGearController()`
+(`gear_controller.cpp`) under the same guard - mirrors the existing documented
+`resetDcHardwareForUnitTest()`/`resetIdleHardwareForUnitTest()` pattern for DC/idle hardware pools
+(see CLAUDE.md). Zero risk to firmware/simulator builds (`EFI_UNIT_TEST`-only). This is a real,
+previously-latent test-isolation gap, not something introduced by the new test - worth folding
+into CLAUDE.md as a general TCU-singleton gotcha for future test authors.
+
+Separately debugged two authoring mistakes in the new test itself before it was correct:
+1. Initially drove the "settle the shift, then check cruise duty" step with VSS=30 constant at
+   TPS=2 - but at that low TPS bin, the 2->3 upshift threshold (`tcu_shiftSpeed23[0]`=20 by
+   default) is below 30, so simply calling `update()` again after advancing time re-triggered a
+   *new* 2->3 shift instead of letting the original 1->2 settle. Fixed by using VSS=15, which sits
+   between the 2->1 (5) and 2->3 (20) thresholds at that TPS bin.
+2. `setPcState()` runs before `isShiftCompleted()` within `Generic4TransmissionController::update()`,
+   so the tick that clears `isShifting` still computes duty with the old (true) value - needed a
+   second `update()` call after the shift settles before `pressureControlDuty` reflects the
+   now-current Cruise duty rather than the stale Shift duty.
+
+### Validation
+
+Full unit test suite: `./test.sh` (GCC/Linux) - 1515/1515 passed (1514 before this addition, +1
+new test). Did not run `make CC=clang` (standing guidance for this dev box). No firmware board
+build attempted.
+
+### Open follow-ups
+
+None - the TCU-singleton test-isolation gotcha was folded into CLAUDE.md's Unit Tests section
+alongside the existing DC/idle hardware seam documentation.
+
+## 2026-09-10 (continued) - TCU: configurable line pressure solenoid duty ramp (slew rate)
+
+Follow-up to the two entries above, requested after walking through a real tune (`protoricotunelinepres.msq`) and log (`normalduty.msl`) with the user: every duty change computed by
+`Generic4TransmissionController::setPcState()` - band transitions, cruise/shift toggling, the TCC
+lock-up adder, and the idle-shift-force override - previously stepped the line pressure solenoid
+instantly. Added an optional linear ramp so the output slews toward the target instead.
+
+- New field `config->tcu_pcRampTimeMs` (`rusefi_config.txt`, next to `tcu_pcLockupAdderTime`,
+  same `config->` struct): time in ms to cross the full 0-100% duty range. `0` disables the ramp
+  (instant change, prior behavior - this is also the implicit default for every existing tune, so
+  no migration/`applyDefaultsOrFixAfterBurn()` entry needed). TS field "Duty Transition Time
+  (0 = instant)" added to the `pcDutiesPanel` dialog ("Line Pressure Duties"), gated on
+  `tcuEnabled` like its siblings. No `FLASH_DATA_VERSION` bump needed - same already-bumped
+  (`260910`) uncommitted layout as the two entries above.
+- `Generic4TransmissionController::setPcState()` (`tc_4.cpp`) now computes `targetDuty` exactly as
+  before (band switch, cruise/shift, idle-shift-force, lock-up adder), then slews a new float
+  member `m_pcDutyRamped` toward it by at most `100 * dtSeconds * 1000 / tcu_pcRampTimeMs` percent
+  per call, using a per-instance `Timer m_pcRampTimer` (`getElapsedSeconds()`/`reset()`) to measure
+  real elapsed time between calls rather than assuming a fixed slow-callback period. Kept as a
+  float specifically so slow ramp rates don't stall: an integer accumulator can compute a per-tick
+  step of e.g. 0.7% that truncates to 0 forever. `pressureControlDuty` (the existing logged/`int8_t`
+  field) and the PWM duty are both derived from `m_pcDutyRamped` each call, so the ramped value is
+  what shows up in TS/log as `TCU: EPC Duty` - no separate "target vs actual" field needed. On the
+  very first call after boot/init, `m_pcRampTimer` is fresh (`Timer::InitialState`, far in the
+  past) so the computed `dtSeconds` is huge and the output jumps straight to the initial target
+  regardless of the configured ramp time - intentional, matches the existing instant-boot
+  expectation the other TCU tests already rely on.
+- `Generic4TransmissionController` is a file-scope singleton reused across unit tests (same class
+  of hazard documented in the two entries above and in CLAUDE.md), so `m_pcDutyRamped`/
+  `m_pcRampTimer` needed their own reset seam. `TransmissionControllerBase::resetForUnitTest()`
+  (`tcu.h`) was previously non-virtual and called only through a `TransmissionControllerBase*`
+  pointer in `gear_controller.cpp` - marked it `virtual` (cost-free outside `EFI_UNIT_TEST`, since
+  the whole method is already `#if EFI_UNIT_TEST`-guarded) and added an override in
+  `Generic4TransmissionController` (`tc_4.h`) that calls the base version then resets the two new
+  members. `Gm4l6xTransmissionController` inherits this override unchanged (it extends
+  `Generic4TransmissionController` and doesn't touch `setPcState()`).
+
+### Test isolation trap hit again mid-implementation (stale generated Lua lookup files)
+
+Before any of the above, `./test.sh tcu` failed to *compile* with `'struct persistent_config_s'
+has no member named 'boardUseTachPullUp'` etc. in `firmware/controllers/lua/generated/
+value_lookup_table_generated.cpp` - unrelated to this change. Root cause matched the documented
+"shared, not board-suffixed generated header" gotcha (CLAUDE.md, `page_5_generated.h` example) but
+for a different generator: `value_lookup_generated.cpp`/`.md` and `value_lookup_table_generated.cpp`
+are written to a single non-board-suffixed path by `gen_config_common.sh`'s
+`-field_lookup_file` invocation, and the copies sitting in the tree were stamped for an AlphaX
+board's `board_config.txt` (which defines `boardUseTachPullUp`/`boardUseCrankPullUp`/
+`boardUseCamPullDown`/`boardUse2stepPullDown`/`boardUseTempPullUp`), not `f407-discovery` (the
+unit test default, `PROJECT_BOARD` in `unit_test_rules.mk`). Rebuilding the `config_definition`
+shadow jar (`./gradlew :config_definition:shadowJar`, per the existing stale-jar memory) and
+`make clean` in `unit_tests/` both left the same three files stale, since neither regenerates a
+path `make` doesn't consider a tracked dependency of the unit test build. Fixed the same way
+CLAUDE.md prescribes for `page_5_generated.h`: explicitly `bash firmware/gen_config_board.sh
+firmware/config/boards/f407-discovery f407-discovery` before rebuilding. Worth generalizing the
+existing CLAUDE.md note beyond `page_5_generated.h` to cover the Lua lookup files too, since this
+is the second shared-generated-file class hit this session.
+
+### Validation
+
+New test `tcu.testPcDutyRamp`: establishes a known steady duty with ramping disabled (avoids
+interaction with the initial NEUTRAL->GEAR_1 shift-settle transient covered by the entries above),
+enables a 1000ms ramp, forces a 0->100 target change via TPS-driven demand-band transitions, and
+asserts duty is still short of the target immediately after the change, partway there at the
+ramp's halfway point, and exactly at (clamped to) the target once well past the configured ramp
+time. Full unit test suite: `./test.sh` (GCC/Linux) - 1516/1516 passed (1515 before this addition,
++1 new test). Did not run `make CC=clang` (standing guidance for this dev box). No firmware board
+build attempted.
+
+### Open follow-ups
+
+None - folded the "shared, not board-suffixed generated header" gotcha for
+`value_lookup_generated.cpp`/`.md` and `value_lookup_table_generated.cpp` into CLAUDE.md's
+existing `page_5_generated.h` note in the same session, so the next person hitting this doesn't
+have to re-derive the fix from scratch.
+
+## 2026-09-11 - TCU: line pressure control redesigned as a 2D RPM x TPS table + adders
+
+Full redo of `Generic4TransmissionController::setPcState()` at the user's request, replacing the
+Low/Mid/High TPS-band scheme from the two 2026-09-10 TCU entries above entirely. Design decisions
+were confirmed with the user up front (AskUserQuestion): remove the old fields outright rather
+than keep them unused for compat, drop "Force Max Line Pressure on Idle Shift" rather than port it
+forward, and scope the new per-gear modifier to GEAR_1..GEAR_4 only (no Neutral/Reverse slot).
+
+- **New config** (`rusefi_config.txt`, `config->` struct, replacing the whole
+  `tcu_pcLowMidTpsEnter`..`tcu_pcHighShiftDuty` block and the `tcuIdleShiftForceMaxLinePressure`
+  bit): `#define TCU_PC_TABLE_SIZE 5`; `tcu_pcRpmBins[5]`/`tcu_pcTpsBins[5]` axes; `tcu_pcTable[5][5]`
+  base duty (rows = TPS/Y, cols = RPM/X, matching the existing `veTable`/`boostTable` `[LOAD x RPM]`
+  convention); `tcu_pcShiftAdderDuty` (single signed scalar, added while `isShifting`);
+  `tcu_pcGearAdderDuty[4 iterate]` (signed, indexed by desired gear 1st..4th, exposed in TS as
+  `tcu_pcGearAdderDuty1`..`4` the same way `gearRatio[N iterate]` is). `tcu_pcLockupAdderDuty`/
+  `tcu_pcLockupAdderTime` and `tcu_pcRampTimeMs` (the 2026-09-10 duty-ramp feature) are unchanged
+  and still apply on top. No `FLASH_DATA_VERSION` bump needed - riding the same already-bumped
+  (`260910`) uncommitted layout as the earlier TCU entries; still uncommitted as of this entry too.
+- **Lookup mechanism**: a file-scope `Map3D<TCU_PC_TABLE_SIZE, TCU_PC_TABLE_SIZE, uint8_t, uint16_t,
+  uint8_t> pcTable{"pc"}` in `tc_4.cpp` (same pattern as `boost_control.cpp`'s `boostMapOpen`),
+  `initTable()`'d once in `Generic4TransmissionController::init()` against
+  `config->tcu_pcTable`/`tcu_pcRpmBins`/`tcu_pcTpsBins`. `Map3D::initValues()` stores a pointer to
+  the config array rather than copying it, so tests can mutate `config->tcu_pcTable` after
+  `initGearController()` and have `pcTable.getValue()` see it immediately - confirmed by reading
+  `table_helper.h` before relying on it in the new unit test.
+- **`setPcState()` signature changed** to `setPcState(gear_e desiredGear)` - `update(gear_e gear)`
+  already receives `getDesiredGear()` from `GearControllerBase::update()`, so the per-gear modifier
+  needed no new sensor/state plumbing, just forwarding that parameter through. Modifier order: table
+  lookup (bilinear RPM x TPS interpolation) -> `+ tcu_pcShiftAdderDuty` if `isShifting` -> `+
+  getPcLockupAdderDuty()` (unchanged helper) -> `+ tcu_pcGearAdderDuty[desiredGear - GEAR_1]` (only
+  for `GEAR_1..GEAR_4`; `NEUTRAL`/`REVERSE` get no gear adder) -> clamp 0-100 -> fed into the
+  existing ramp logic unchanged. `tcu_pcDemandBand` (the old band-hysteresis LiveData field) was
+  removed from `tcu_controller_s`/`resetForUnitTest()`/`gauge_declarations.ini` since nothing
+  computes a "band" anymore.
+- **TS**: new `table = tcu_pcTableTbl` block (`tunerstudio.template.ini`, next to the boost tables,
+  `xBins = tcu_pcRpmBins, RPMValue` / `yBins = tcu_pcTpsBins, TPSValue`) replaces the old
+  `pcBandsPanel`; `pcDutiesPanel` renamed `pcModifiersPanel` and now lists the shift adder, lock-up
+  adder (unchanged), the four per-gear adder fields, and the duty ramp time. Removed the "Force Max
+  Line Pressure on Idle Shift" field from `shiftSettingsPanel` per the user's decision to drop that
+  feature rather than reimplement it against the new table.
+- **Default calibration** (`configureTcu4R70W()`): RPM bins 800/1500/2500/4000/6000, TPS bins
+  0/25/50/75/100, a hand-picked declining-duty gradient (70% at idle/low-RPM cruise down to 0% at
+  WOT/high-RPM, consistent with the inverted/normally-open EPC solenoid - lower duty means higher
+  pressure), `tcu_pcShiftAdderDuty = -15` (firms the line during a shift), gear adders left at their
+  zero-init default (no per-gear bias out of the box).
+
+### Test changes
+
+Deleted `tcu.testIdleShiftForceMaxLinePressure` (feature removed). Rewrote `tcu.testPcDutyRamp` to
+flatten `config->tcu_pcTable` to 0 except one exact-bin cell (RPM bin 0 = 800, TPS bin 4 = 100,
+chosen to land exactly on axis bins and avoid interpolation) and zero the other modifiers, so the
+ramp test again has a fully deterministic 0->100 target step to ramp across - same halfway/settled
+assertions as before, just retargeted at the new table mechanism instead of the old band duties.
+
+### Validation
+
+Full unit test suite: `./test.sh` (GCC/Linux) - 1516/1516 passed (18 TCU tests, down from 19 after
+deleting the dropped-feature test). Did not run `make CC=clang` (standing guidance for this dev
+box). No firmware board build attempted - this branch already has several other boards mid-WIP
+(protorico-econoline, paralela-f427, alphax-2chan) per git status, so a full board build wasn't
+run to avoid conflating results; the config generation step alone (implicit in the unit test build)
+confirms the new struct layout compiles for f407-discovery.
+
+### Open follow-ups
+
+None outstanding for this change. A real firmware build for at least one `EFI_TCU`-enabled board
+(e.g. `proteus`/whatever board `TCU_4R70W`-style setups actually target) is worth doing before
+flashing hardware, same caveat as the alternator entry above.
+
+## 2026-09-11 (continued) - TCU: reworded line pressure adder comments to not assume solenoid polarity
+
+User asked what happens with a solenoid where pressure *increases* with duty (the opposite of the
+Ford 4R70W-style inverted/normally-open EPC solenoid the new table's comments and default
+calibration assumed). Answer: no functional change was needed - `setPcState()` never hardcodes a
+polarity, it just feeds the computed 0-100 duty straight to the PWM, so a direct-acting solenoid
+works today by calibrating the table gradient and all three adder signs the opposite way. The gap
+was purely in the comments/TS tooltips, which said "negative raises pressure" as if that were
+universally true. Confirmed with the user (AskUserQuestion) that the fix should be wording-only,
+not a new polarity config bit or a duty-inversion code path.
+
+- `rusefi_config.txt`: added a note above the whole `tcu_pcRpmBins`/`tcu_pcTable`/adders block
+  explaining the table and adders are raw duty percentages with no baked-in polarity assumption -
+  calibrate the gradient/signs to match your hardware. Reworded the three adder field comments
+  (`tcu_pcShiftAdderDuty`, `tcu_pcLockupAdderDuty`, `tcu_pcGearAdderDuty`) from "negative values
+  raise pressure on an inverted/normally-open EPC solenoid" to "sign depends on your EPC solenoid:
+  use whichever sign raises pressure on your hardware" - these strings surface as TS tooltips, so
+  the old wording was actively misleading for anyone with the opposite-polarity hardware.
+- `tc_4.cpp`: same reword for the lock-up adder comment in `setPcState()`. Left the
+  `configureTcu4R70W()` default-calibration comment referencing "inverted/normally-open" as-is but
+  clarified it's describing *that specific default calibration's target hardware* (the actual
+  4R70W EPC solenoid), not a system-wide constraint - added a note that a direct-acting-solenoid
+  board needs the table gradient and adders entered with the opposite sign/slope.
+
+### Validation
+
+`./test.sh tcu` (GCC/Linux) - 18/18 passed, unchanged from before (comment-only change, confirmed
+the config-definition codegen still parses the reworded `.txt` comments without issue).
