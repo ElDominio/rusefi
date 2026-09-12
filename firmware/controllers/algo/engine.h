@@ -17,7 +17,6 @@
 #include "accel_enrichment.h"
 #include "trigger_central.h"
 #include "local_version_holder.h"
-#include "buttonshift.h"
 #include "gear_controller.h"
 #include "dynoview.h"
 #include "high_pressure_fuel_pump.h"

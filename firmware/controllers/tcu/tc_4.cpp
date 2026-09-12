@@ -2,8 +2,10 @@
  * @file tc_4.cpp
  * @brief Generic 4-speed transmission controller.
  *
- * Controls the shift solenoids of a simple 4-speed automatic transmission, selecting
- * the solenoid pattern for the requested gear.
+ * Drives a 4-speed automatic's shift solenoids (a per-gear on/off truth table,
+ * updateShiftSolenoids()) and, if wired, its line pressure/TCC lock-up solenoids
+ * (setPcState()/updateTccLockup()) -- a board that only wires the shift solenoid pins gets
+ * shift-only behavior for free, since the EPC/TCC pins simply no-op when left unconfigured.
  */
 
 #include "pch.h"
@@ -18,7 +20,9 @@ static SimplePwm pcPwm("Pressure Control");
 static Map3D<TCU_PC_TABLE_SIZE, TCU_PC_TABLE_SIZE, uint8_t, uint16_t, uint8_t> pcTable{"pc"};
 
 void Generic4TransmissionController::init() {
-	SimpleTransmissionController::init();
+	for (size_t i = 0; i < efi::size(engineConfiguration->tcu_solenoid); i++) {
+		enginePins.tcuSolenoids[i].initPin("Transmission Solenoid", engineConfiguration->tcu_solenoid[i], engineConfiguration->tcu_solenoid_mode[i]);
+	}
 
 	enginePins.tcuTccOnoffSolenoid.initPin("TCC On/Off Solenoid", engineConfiguration->tcu_tcc_onoff_solenoid, engineConfiguration->tcu_tcc_onoff_solenoid_mode);
 
@@ -50,7 +54,7 @@ void Generic4TransmissionController::update(gear_e gear) {
 
 	setCurrentGear(gear);
 
-	SimpleTransmissionController::update(gear);
+	updateShiftSolenoids(gear);
 
 	float time = isShiftCompleted();
 	// 0 means shift is not completed
@@ -58,6 +62,31 @@ void Generic4TransmissionController::update(gear_e gear) {
 		lastShiftTime = time;
 		isShifting = false;
 	}
+
+	postState();
+}
+
+void Generic4TransmissionController::updateShiftSolenoids(gear_e gear) {
+	for (size_t i = 0; i < efi::size(engineConfiguration->tcu_solenoid); i++) {
+#if ! EFI_UNIT_TEST
+		enginePins.tcuSolenoids[i].setValue(config->tcuSolenoidTable[i][static_cast<int>(gear) + 1]);
+#endif
+	}
+
+	// Only solenoids 1 & 2 are exposed in the TS "Shift Solenoids" dialog today; publish
+	// their commanded on/off state as gauges (see tcu_controller.txt).
+	tcu_solenoid1On = config->tcuSolenoidTable[0][static_cast<int>(gear) + 1] != 0;
+	tcu_solenoid2On = config->tcuSolenoidTable[1][static_cast<int>(gear) + 1] != 0;
+
+#if EFI_TUNER_STUDIO
+	if (engineConfiguration->debugMode == DBG_TCU) {
+		engine->outputChannels.debugIntField1 = config->tcuSolenoidTable[static_cast<int>(gear) + 1][0];
+		engine->outputChannels.debugIntField2 = config->tcuSolenoidTable[static_cast<int>(gear) + 1][1];
+		engine->outputChannels.debugIntField3 = config->tcuSolenoidTable[static_cast<int>(gear) + 1][2];
+		engine->outputChannels.debugIntField4 = config->tcuSolenoidTable[static_cast<int>(gear) + 1][3];
+		engine->outputChannels.debugIntField5 = config->tcuSolenoidTable[static_cast<int>(gear) + 1][4];
+	}
+#endif
 }
 
 // Line pressure control: a 2D table of RPM x driver demand (TPS) gives a base duty, then four

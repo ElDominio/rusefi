@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "debounce.h"
+
 struct StartStopState {
   ButtonDebounce startStopButtonDebounce{"start_button"};
   Timer timeSinceIgnitionPower;

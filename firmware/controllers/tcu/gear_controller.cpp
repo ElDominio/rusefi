@@ -9,9 +9,6 @@ void GearControllerBase::init() {
 
 void GearControllerBase::initTransmissionController() {
 	switch (engineConfiguration->transmissionControllerMode) {
-	case TransmissionControllerMode::SimpleTransmissionController :
-		transmissionController = getSimpleTransmissionController();
-		break;
 	case TransmissionControllerMode::Generic4 :
 		transmissionController = getGeneric4TransmissionController();
 		break;
@@ -61,9 +58,6 @@ void GearControllerBase::postState() {
 
 void initGearController() {
 	switch (engineConfiguration->gearControllerMode) {
-	case GearControllerMode::ButtonShift :
-		engine->gearController = getButtonShiftController();
-		break;
 	case GearControllerMode::Automatic :
 		engine->gearController = getAutomaticGearController();
 		break;

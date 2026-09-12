@@ -1684,11 +1684,11 @@ tChargeMode_e tChargeMode;
 uint16_t vvtActivationDelayMs;We need to give engine time to build oil pressure without diverting it to VVT;"ms", 1, 0, 0, 65000, 0
 
 
-#define gear_controller_e_enum "None", "Button Shift", "Automatic", "Generic"
+#define gear_controller_e_enum "None", "Automatic", "Generic"
 		custom GearControllerMode 1 bits, U08, @OFFSET@, [0:1], @@gear_controller_e_enum@@
 		GearControllerMode gearControllerMode
 
-#define transmission_controller_e_enum "None", "Simple Transmission", "Generic 4-Speed", "GM 4L6X"
+#define transmission_controller_e_enum "None", "Generic 4-Speed", "GM 4L6X"
 		custom TransmissionControllerMode 1 bits, U08, @OFFSET@, [0:1], @@transmission_controller_e_enum@@
 		TransmissionControllerMode transmissionControllerMode
 
