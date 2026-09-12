@@ -172,9 +172,9 @@ TEST(tcu, testIdleShiftToFirstVssThreshold) {
 	ASSERT_TRUE(engine->gearController->transmissionController->tcu_idleShiftToFirst);
 }
 
-// tcu_pcRampTimeMs slews the line pressure solenoid duty toward a new target instead of
-// stepping instantly, at a rate of (100 / tcu_pcRampTimeMs) percent per ms.
-TEST(tcu, testPcDutyRamp) {
+// Base duty comes straight from the RPM x driver-demand table (+ adders/trim) with no slew --
+// pressureControlDuty tracks the table lookup instantly.
+TEST(tcu, testPcDutyInstantFromTable) {
 	EngineTestHelper eth(engine_type_e::TCU_4R70W);
 	engineConfiguration->gearControllerMode = GearControllerMode::Automatic;
 	initGearController();
@@ -195,9 +195,8 @@ TEST(tcu, testPcDutyRamp) {
 	config->tcu_pcLockupAdderDuty = 0;
 	config->tcu_pcGearAdderDuty[0] = 0; // GEAR_1
 
-	// Establish a steady duty of 0 with ramping still disabled (default), so the initial
-	// NEUTRAL -> GEAR_1 shift (see testIdleShiftToFirst) settles at an exact, known duty before
-	// the ramp itself is under test.
+	// Establish a steady duty of 0, so the initial NEUTRAL -> GEAR_1 shift (see
+	// testIdleShiftToFirst) settles at an exact, known duty first.
 	Sensor::setMockValue(SensorType::Rpm, 800);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0);
 	Sensor::setMockValue(SensorType::VehicleSpeed, 0);
@@ -208,24 +207,11 @@ TEST(tcu, testPcDutyRamp) {
 	ASSERT_FALSE(tc->isShifting);
 	ASSERT_EQ(0, tc->pressureControlDuty);
 
-	// Now enable ramping and raise TPS to the table's 100-duty cell.
-	config->tcu_pcRampTimeMs = 1000; // 1000ms to cross the full 0-100% range
+	// Raise TPS to the table's 100-duty cell -- duty jumps to the target on the very next update,
+	// no ramp.
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 100);
 	engine->gearController->update();
 	ASSERT_FALSE(tc->isShifting);
-	int8_t dutyRightAfterTargetChanged = tc->pressureControlDuty;
-	ASSERT_LT(dutyRightAfterTargetChanged, 100);
-
-	// Halfway through the configured ramp time, duty should have climbed but not yet arrived.
-	eth.moveTimeForwardAndInvokeEventsUs(500 * 1000);
-	engine->gearController->update();
-	int8_t dutyAtHalfRamp = tc->pressureControlDuty;
-	ASSERT_GT(dutyAtHalfRamp, dutyRightAfterTargetChanged);
-	ASSERT_LT(dutyAtHalfRamp, 100);
-
-	// Well past the configured ramp time, duty settles at (and clamps to) the target.
-	eth.moveTimeForwardAndInvokeEventsUs(600 * 1000);
-	engine->gearController->update();
 	ASSERT_EQ(100, tc->pressureControlDuty);
 }
 

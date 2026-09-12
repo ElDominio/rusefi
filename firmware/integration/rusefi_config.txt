@@ -93,7 +93,7 @@
 ! This is the version of the data stored in flash configuration
 ! Any time an incompatible change is made to the configuration format stored in flash,
 ! update this string to the current date!
-#define FLASH_DATA_VERSION 260911
+#define FLASH_DATA_VERSION 260912
 
 ! Remove next line when Java toolset gets adjusted to load those from json config into VariablesRegistry
 ! Also remove file integration/generated/rusefi_config_generated_enums.txt
@@ -2403,22 +2403,22 @@ int8_t[4 iterate] tcu_pcGearAdderDuty;Line pressure duty added on top of the tab
 // it raises the trim (fast, proportional to how far over), and once slip has stayed at/below 0
 // for Decay Hold Time it lets the trim relax back toward 0 (slow, fixed step) -- never past 0,
 // i.e. this can only ever push pressure higher than the table+adders above already call for.
-// tcu_pcSlipCorrectionGain == 0 disables the whole thing (default). Resets to 0 every commanded
-// shift and every key-on -- not persisted, not indexed by gear/RPM/TPS, a single accumulator like
-// simple (non-region) short term fuel trim. Requires Gear Setup's Slip Detection to be enabled
-// with Slip RPM Source = Input Shaft Speed -- Engine RPM also carries normal torque-converter
-// slip, which this would misread as a clutch problem.
-int8_t tcu_pcSlipMaxAllowedPercent;Maximum transmission slip (Detected Gear vs Speed Source) tolerated before the closed-loop trim starts raising line pressure. See Gear Setup's Slip Detection.;"%", 1, 0, 0, 50, 0
+// tcu_pcSlipCorrectionGain == 0 disables the whole thing (default). The trim accumulator itself
+// resets to 0 every commanded shift and every key-on and is not persisted, not indexed by gear --
+// a single accumulator like simple (non-region) short term fuel trim. Max Allowed Slip (below) is
+// a 2D table indexed by vehicle speed (X) and driver demand (Y), since how much slip is tolerable
+// before a shift firms up is not the same at parking-lot speeds as at highway speed/full throttle.
+// Requires Gear Setup's Slip Detection to be enabled with Slip RPM Source = Input Shaft Speed --
+// Engine RPM also carries normal torque-converter slip, which this would misread as a clutch
+// problem.
+uint8_t[TCU_PC_TABLE_SIZE] tcu_pcSlipMaxVssBins;Vehicle speed axis for the Max Allowed Slip table.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
+uint8_t[TCU_PC_TABLE_SIZE] tcu_pcSlipMaxTpsBins;Driver demand (TPS) axis for the Max Allowed Slip table.;"TPS", 1, 0, 0, 100, 0
+int8_t[TCU_PC_TABLE_SIZE x TCU_PC_TABLE_SIZE] tcu_pcSlipMaxTable;Maximum transmission slip (Detected Gear vs Speed Source) tolerated before the closed-loop trim starts raising line pressure, as a function of vehicle speed (X) and driver demand (Y). See Gear Setup's Slip Detection.;"%", 1, 0, 0, 50, 0
 float tcu_pcSlipCorrectionGain;Proportional gain applied to (measured slip - Max Allowed Slip) each tick while slipping, before clamping to Max Correction Step. Sign depends on your EPC solenoid: use whichever sign raises pressure on your hardware. 0 disables the slip trim entirely.;"%/%", 1, 0, -10, 10, 2
 uint8_t tcu_pcSlipCorrectionStepMax;Upper bound on the trim's per-tick raise step (after applying Correction Gain), so a single bad or transient slip reading cannot slam the accumulator.;"%", 1, 0, 0, 100, 0
 uint8_t tcu_pcSlipDecayStepDuty;Fixed per-tick trim step magnitude applied once slip has stayed at/below 0 for Decay Hold Time, moving the trim back toward 0 (never past it, regardless of which sign the trim currently is) -- this always relaxes the trim, it never adds pressure.;"%", 1, 0, 0, 100, 0
 uint16_t tcu_pcSlipDecayHoldMs;How long slip must stay at/below 0 before the Decay Step starts pulling the trim back toward 0.;"ms", 1, 0, 0, 30000, 0
 uint8_t tcu_pcSlipTrimMaxDuty;Upper bound on the magnitude of the accumulated slip-correction trim.;"%", 1, 0, 0, 100, 0
-
-// Time to slew the line pressure solenoid duty across its full 0-100% range whenever the target
-// changes (table lookup, shift adder, lock-up adder, or gear adder), instead of stepping
-// instantly. 0 disables the ramp.
-uint16_t tcu_pcRampTimeMs;Time to ramp the line pressure solenoid duty across its full 0-100% range whenever the target duty changes. 0 disables ramping (instant change).;"ms", 1, 0, 0, 5000, 0
 
 uint8_t[8] tcu_32SpeedBins;;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 255 : 158}, 0
 uint8_t[8] tcu_32Vals;;"%", 1, 0, 0, 255, 0

@@ -13,8 +13,6 @@ public:
 #if EFI_UNIT_TEST
 	void resetForUnitTest() override {
 		TransmissionControllerBase::resetForUnitTest();
-		m_pcDutyRamped = 0;
-		m_pcRampTimer.reset();
 		m_pcSlipTrim = 0;
 		m_pcSlipCleanTimer.reset();
 	}
@@ -28,11 +26,6 @@ private:
 	// shift solenoid pins and leaves the EPC/TCC pins unconfigured gets shift-only behavior for
 	// free, since those pins simply no-op when unconfigured.
 	void updateShiftSolenoids(gear_e gear);
-	// Slew-rate state for the line pressure solenoid duty (tcu_pcRampTimeMs): persists across
-	// calls so setPcState() can move the output gradually toward its computed target instead of
-	// stepping instantly.
-	Timer m_pcRampTimer;
-	float m_pcDutyRamped = 0;
 	// Slip-based closed-loop trim state (tcu_pcSlip*) -- see updateSlipTrim(). Reset to 0 on
 	// every commanded shift (Generic4TransmissionController::update()) and every key-on; not
 	// persisted.

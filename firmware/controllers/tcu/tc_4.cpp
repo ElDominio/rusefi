@@ -18,6 +18,7 @@
 Generic4TransmissionController generic4TransmissionController;
 static SimplePwm pcPwm("Pressure Control");
 static Map3D<TCU_PC_TABLE_SIZE, TCU_PC_TABLE_SIZE, uint8_t, uint16_t, uint8_t> pcTable{"pc"};
+static Map3D<TCU_PC_TABLE_SIZE, TCU_PC_TABLE_SIZE, int8_t, uint8_t, uint8_t> pcSlipMaxTable{"pcsm"};
 
 void Generic4TransmissionController::init() {
 	for (size_t i = 0; i < efi::size(engineConfiguration->tcu_solenoid); i++) {
@@ -35,6 +36,7 @@ void Generic4TransmissionController::init() {
 								 0);
 
 	pcTable.initTable(config->tcu_pcTable, config->tcu_pcRpmBins, config->tcu_pcTpsBins);
+	pcSlipMaxTable.initTable(config->tcu_pcSlipMaxTable, config->tcu_pcSlipMaxVssBins, config->tcu_pcSlipMaxTpsBins);
 }
 
 void Generic4TransmissionController::update(gear_e gear) {
@@ -121,35 +123,21 @@ void Generic4TransmissionController::setPcState(gear_e desiredGear) {
 
 	targetDuty = clampF(0, targetDuty, 100);
 
-	// Slew the output toward targetDuty at tcu_pcRampTimeMs (time to cross the full 0-100% range)
-	// instead of stepping instantly, regardless of which modifiers above contributed to the target
-	// -- so table changes, shift transitions, the lock-up adder, and the gear adder are all
-	// smoothed the same way. 0 disables the ramp (instant change, prior behavior). m_pcDutyRamped
-	// is a float so slow ramp rates don't get lost to integer rounding every tick.
-	float dtSeconds = m_pcRampTimer.getElapsedSeconds();
-	m_pcRampTimer.reset();
-	if (config->tcu_pcRampTimeMs == 0) {
-		m_pcDutyRamped = targetDuty;
-	} else {
-		float maxStep = 100.0f * 1000.0f * dtSeconds / config->tcu_pcRampTimeMs;
-		float delta = clampF(-maxStep, targetDuty - m_pcDutyRamped, maxStep);
-		m_pcDutyRamped = clampF(0, m_pcDutyRamped + delta, 100);
-	}
-
-	pressureControlDuty = static_cast<int8_t>(m_pcDutyRamped + 0.5f);
-	pcPwm.setSimplePwmDutyCycle(0.01f * m_pcDutyRamped);
+	pressureControlDuty = static_cast<int8_t>(targetDuty + 0.5f);
+	pcPwm.setSimplePwmDutyCycle(0.01f * targetDuty);
 }
 
 // Closed-loop trim on top of the table+adders above, driven by Gear Setup's Slip Detection.
 // There is no line pressure sensor, so this cannot be a PID against a setpoint -- it's a
 // threshold-triggered accumulator: raise (fast, proportional to how far over) while slip exceeds
-// Max Allowed Slip, decay (slow, fixed step) once slip has stayed clean for Decay Hold Time,
-// otherwise hold. m_pcSlipTrim only ever moves in whichever sign tcu_pcSlipCorrectionGain is
-// calibrated to (the direction that raises pressure on this EPC solenoid) and decay only ever
-// pulls it back toward 0, never past -- so this can only ever push pressure higher than the base
-// table+adders already call for, never lower. Reset to 0 on every commanded shift (see update())
-// and every key-on; not persisted, not indexed by gear/RPM/TPS -- a single accumulator, like
-// simple (non-region) short term fuel trim.
+// Max Allowed Slip (a table indexed by vehicle speed and driver demand -- how much slip is
+// tolerable is not the same at parking-lot speed as at highway speed/full throttle), decay (slow,
+// fixed step) once slip has stayed clean for Decay Hold Time, otherwise hold. m_pcSlipTrim only
+// ever moves in whichever sign tcu_pcSlipCorrectionGain is calibrated to (the direction that
+// raises pressure on this EPC solenoid) and decay only ever pulls it back toward 0, never past --
+// so this can only ever push pressure higher than the base table+adders already call for, never
+// lower. Reset to 0 on every commanded shift (see update()) and every key-on; not persisted, not
+// indexed by gear -- a single accumulator, like simple (non-region) short term fuel trim.
 void Generic4TransmissionController::updateSlipTrim() {
 	if (config->tcu_pcSlipCorrectionGain == 0) {
 		// feature disabled (default)
@@ -171,7 +159,11 @@ void Generic4TransmissionController::updateSlipTrim() {
 		return;
 	}
 
-	float excess = gearDetector->getSlipPercent() - config->tcu_pcSlipMaxAllowedPercent;
+	float vehicleSpeed = Sensor::getOrZero(SensorType::VehicleSpeed);
+	float driverDemand = Sensor::getOrZero(SensorType::DriverThrottleIntent);
+	float maxAllowedSlip = pcSlipMaxTable.getValue(vehicleSpeed, driverDemand);
+
+	float excess = gearDetector->getSlipPercent() - maxAllowedSlip;
 
 	if (excess > 0) {
 		m_pcSlipCleanTimer.reset();

@@ -6328,3 +6328,63 @@ about-to-be-reverted) generated enum file.
   candidate for a future pass along with actually removing the fields from `rusefi_config.txt`.
 - `GenericGearController` remains unreachable through the UI, same as before this cleanup - kept
   intentionally per the user's choice, not yet re-exposed.
+
+## 2026-09-12 - TCU: Max Allowed Slip as a VSS x driver-demand table; removed line pressure duty ramp
+
+### What was done
+
+Two follow-ups to the 2026-09-11 slip-based line pressure trim, both by direct user request:
+
+1. `tcu_pcSlipMaxAllowedPercent` (a single scalar) is now a 2D table, `tcu_pcSlipMaxTable`, indexed
+   by vehicle speed (X, `tcu_pcSlipMaxVssBins`) and driver demand/TPS (Y, `tcu_pcSlipMaxTpsBins`) -
+   how much transmission slip is tolerable before the closed-loop trim starts raising line pressure
+   is not the same at parking-lot speed as at highway speed/full throttle. Same size
+   (`TCU_PC_TABLE_SIZE` x `TCU_PC_TABLE_SIZE`) and `Map3D` pattern as the existing `tcu_pcTable`
+   (RPM x TPS -> base duty). The trim accumulator itself (`m_pcSlipTrim`) is unchanged - still a
+   single, non-indexed value; only the threshold it compares against is now table-driven.
+2. Removed the line pressure duty ramp entirely (`tcu_pcRampTimeMs`, `m_pcDutyRamped`,
+   `m_pcRampTimer`) - user's call: it was a leftover from before the RPM x TPS base duty table
+   existed (an interpolated table already changes gradually as RPM/TPS move; the ramp was only
+   ever smoothing step *adders* - shift/lock-up/gear - and the new slip trim, none of which the
+   ramp was designed for). `pressureControlDuty` now reflects the table+adders+trim lookup
+   instantly, no slew.
+
+### Implementation
+
+- `firmware/integration/rusefi_config.txt`: replaced `int8_t tcu_pcSlipMaxAllowedPercent` with
+  `tcu_pcSlipMaxVssBins`/`tcu_pcSlipMaxTpsBins`/`tcu_pcSlipMaxTable` (same value range/type, 0-50,
+  `int8_t`, as the old scalar); deleted `tcu_pcRampTimeMs` and its comment. Bumped
+  `FLASH_DATA_VERSION` 260911 -> 260912 (persistent struct layout changed on both counts).
+- `firmware/controllers/tcu/tc_4.cpp`: new file-scope `pcSlipMaxTable` (`Map3D`, same pattern as
+  `pcTable`), initialized in `init()`. `updateSlipTrim()` now reads `SensorType::VehicleSpeed` and
+  `SensorType::DriverThrottleIntent` and looks up Max Allowed Slip from the table instead of the
+  scalar. `setPcState()`'s ramp block deleted - `pressureControlDuty`/`pcPwm` now driven directly
+  by the clamped `targetDuty`.
+- `firmware/controllers/tcu/tc_4.h`: removed `m_pcRampTimer`/`m_pcDutyRamped` members and their
+  `resetForUnitTest()` resets.
+- `firmware/tunerstudio/tunerstudio.template.ini`: added `tcu_pcSlipMaxTableTbl` (VSS x TPS,
+  mirrors `tcu_pcTableTbl`'s xyLabels/xBins/yBins/zBins shape); `pcSlipTrimPanel` split into a table
+  panel (`tcu_pcSlipMaxTableTbl`) plus the existing scalar fields (moved into a new
+  `pcSlipTrimSettingsPanel`, minus the now-removed `Max Allowed Slip` field); removed the `Duty
+  Transition Time (0 = instant)` field from `pcModifiersPanel`.
+- `unit_tests/tests/test_tcu.cpp`: deleted `testPcDutyRamp` (tested the now-removed ramp
+  mechanism directly - `tcu_pcRampTimeMs` no longer exists); replaced with
+  `testPcDutyInstantFromTable`, asserting `pressureControlDuty` jumps to the table's target on the
+  very next `update()` with no intermediate/ramped value.
+
+### Validation
+
+`unit_tests/./test.sh -j12` (GCC): 1515/1515 passing, including the new
+`testPcDutyInstantFromTable` and the other 16 `tcu` suite tests. Grepped for any remaining
+reference to `tcu_pcRampTimeMs`/`tcu_pcSlipMaxAllowedPercent`/`m_pcDutyRamped`/`m_pcRampTimer`
+across `.cpp`/`.h`/`.txt`/`.ini`/`.java` (excluding generated files) - none found.
+
+### Open follow-ups
+
+- No default values populated for `tcu_pcSlipMaxVssBins`/`tcu_pcSlipMaxTpsBins`/`tcu_pcSlipMaxTable`
+  in `configureTcu4R70W()` (same as the scalar it replaces had no default) - harmless today since
+  `tcu_pcSlipCorrectionGain == 0` disables the whole feature by default, but a user enabling the
+  trim without touching this new table gets an all-zero Max Allowed Slip surface (immediately
+  "always slipping" at any nonzero slip reading) rather than a sensible starting curve. Worth a
+  real default calibration whenever this feature gets bench-validated on real hardware - it hasn't
+  been yet (no line pressure sensor to verify against, per the original design note).
