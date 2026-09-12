@@ -6232,3 +6232,99 @@ the new dialog fields/gauge landed in the generated per-board headers/ini
   Default `tcu_pcSlipCorrectionGain = 0` keeps it fully inert until the user opts in.
 - Same caveat as the underlying slip feature: the proportional/decay step sizes, hold time, and
   trim cap are uncalibrated starting points, not derived from any real clutch capacity data.
+
+## 2026-09-11 (continued) - TCU: removed ButtonShiftController, merged SimpleTransmissionController into Generic4TransmissionController
+
+### What was done
+
+Follow-up to the same-day TCU architecture discussion (which modes are actually reachable). User's
+critique: "button shift" is an input method for commanding a gear, not a transmission type or
+architecture, and "SimpleTransmissionController" is a meaningless name - transmissions have a gear
+count and are actuated specific ways (valve bodies, clutch-to-clutch), and none of that is what
+either class name communicates.
+
+Checked what each class actually did before touching anything (see conversation) - they weren't
+equally dead:
+
+- **`ButtonShiftController`** (`GearControllerMode::ButtonShift`) - genuinely dead AND conceptually
+  wrong. Just polled two debounced pins and incremented/decremented `desiredGear`; had real test
+  coverage (`test_tcu.cpp`'s `testButtonshift`, ~90 lines) but was unreachable via
+  `engineConfiguration->gearControllerMode` (the TS dropdown that selected it was removed a while
+  back; `applyDefaultsOrFixAfterBurn()` force-overrides to `Automatic` regardless). Deleted outright
+  - `buttonshift.h`/`.cpp` and the `testButtonshift` test (plus its now-orphaned
+  `blipGearControllerPin` helper, used nowhere else).
+- **`SimpleTransmissionController`** - NOT dead, just badly named. Its `update()` is the actual
+  shift-solenoid on/off truth-table application (`tcuSolenoidTable`) that
+  `Generic4TransmissionController::update()` called into every single shift - the real mechanical
+  actuation layer underneath the whole 4-speed controller. Only the *standalone* enum value
+  (`TransmissionControllerMode::SimpleTransmissionController`, i.e. shift solenoids with zero line
+  pressure control layered on top) was unreachable, not the class's logic. Per the user's own
+  answer ("couldn't we have it merged and just not populate line pressure/TCC lockup?") - confirmed
+  this already works for free: `setPcState()`/`updateTccLockup()` already bail out cleanly on
+  invalid TPS/RPM/VSS sensors, and writing to an unconfigured EPC/TCC pin is already a no-op, so a
+  board that only wires the shift solenoid pins gets shift-only behavior without any class split at
+  all. Merged `SimpleTransmissionController::init()`/`update()`'s content directly into
+  `Generic4TransmissionController` (new `updateShiftSolenoids()` method), changed its base class
+  from `SimpleTransmissionController` to `TransmissionControllerBase` directly, deleted
+  `simple_tcu.h`/`.cpp`.
+- **`GenericGearController`** (range-selector P/R/N/D/M/1/2/3 support, digital or analog pins,
+  hands off to `AutomaticGearController` in Drive) - discussed and kept as-is per user's explicit
+  choice. Real, non-trivial capability for physical-shifter-equipped vehicles, just currently
+  unreachable through the UI same as the others were - not a naming/conceptual problem like the
+  other two, so left alone this round.
+- `Gm4l6xTransmissionController` (extends `Generic4TransmissionController`) untouched - inherits the
+  merge for free, still fine.
+
+### Implementation
+
+- Deleted `firmware/controllers/tcu/buttonshift.{h,cpp}` and `simple_tcu.{h,cpp}`.
+- `firmware/controllers/controllers.mk`: removed both from the build.
+- `firmware/controllers/tcu/tc_4.{h,cpp}`: `Generic4TransmissionController` now extends
+  `TransmissionControllerBase`; `init()`/`update()` inline the solenoid-table logic directly
+  (new `updateShiftSolenoids(gear_e)`); `update()` now ends by calling `postState()` itself
+  (previously reached indirectly through `SimpleTransmissionController::update()` ->
+  `TransmissionControllerBase::update()`).
+- `firmware/controllers/tcu/gear_controller.{h,cpp}`: removed the `ButtonShift`/
+  `SimpleTransmissionController` switch cases in `initGearController()`/
+  `initTransmissionController()`; `#include "simple_tcu.h"` -> nothing needed (tc_4l6x.h already
+  pulls in tcu.h); `GearControllerBase::getMode()`'s default fallback changed from
+  `GearControllerMode::ButtonShift` to `GearControllerMode::None` (no longer a meaningful "first"
+  mode to default to).
+- `firmware/controllers/algo/engine.h`, `firmware/controllers/engine_controller.cpp`: dropped
+  vestigial `#include "buttonshift.h"` (unused otherwise in both files).
+- `firmware/integration/rusefi_config.txt`: `gear_controller_e_enum`/`transmission_controller_e_enum`
+  string lists trimmed (removed "Button Shift" and "Simple Transmission"). Renumbers
+  `Automatic`/`Generic`/`Generic4`/`Gm4l6x`'s underlying byte values, but since this field is
+  force-overwritten unconditionally on every burn whenever TCU is enabled and code only ever
+  references these symbolically, the stored byte value never mattered anyway. Same
+  `FLASH_DATA_VERSION` bump (260911) as today's earlier slip-trim change covers this too - both
+  landed the same calendar day, no need for a second bump.
+- `unit_tests/tests/test_tcu.cpp`: removed `testButtonshift` and its `blipGearControllerPin` helper.
+
+### Gotcha caught by the build
+
+`firmware/controllers/start_stop.h` used `ButtonDebounce` without including `debounce.h` itself -
+it was silently relying on `engine.h` including `buttonshift.h` (which pulls in `debounce.h`)
+*before* `start_stop.h` in the PCH chain. Removing that include broke the build with `'ButtonDebounce'
+does not name a type`. Fixed by adding `#include "debounce.h"` directly to `start_stop.h` rather
+than restoring the accidental transitive path.
+
+### Validation
+
+`unit_tests/./test.sh` (GCC) - full rebuild (`rm -rf .dep` first, since source files were deleted/
+moved and stale `.dep` entries reference paths that no longer exist, per the existing CLAUDE.md
+build-quirks note). 1515/1515 passing (1516 minus the deleted `testButtonshift`). Confirmed by grep
+that no remaining references to `GearControllerMode::ButtonShift` /
+`TransmissionControllerMode::SimpleTransmissionController` exist anywhere except the (stale,
+about-to-be-reverted) generated enum file.
+
+### Open follow-ups
+
+- `configureTcu4R70W()` still sets `tcuUpshiftButtonPin`/`tcuDownshiftButtonPin` config fields
+  (leftover from when this preset used to select `GearControllerMode::Generic`, which itself
+  predates today's force-override). These are now fully orphaned - no consumer reads them anymore
+  since `ButtonShiftController` is gone and `GenericGearController`'s manual +/- is driven by range
+  states, not these pins. Left alone this round (a config-field removal, not a class cleanup) -
+  candidate for a future pass along with actually removing the fields from `rusefi_config.txt`.
+- `GenericGearController` remains unreachable through the UI, same as before this cleanup - kept
+  intentionally per the user's choice, not yet re-exposed.
