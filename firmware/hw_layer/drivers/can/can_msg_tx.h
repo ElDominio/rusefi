@@ -15,13 +15,6 @@
 #include "can_category.h"
 #include "can.h"
 
-// A CAN frame is only eight payload bytes, but the HAL frame layout differs
-// between bxCAN and FDCAN.  Keep the complete native frame in each queue slot.
-// The shared worker queues a whole periodic burst before it can send it:
-// verbose (12) + QC (8) + console announcement (1) + wideband (1) = 22.
-// Leave room for Lua/ISO-TP too. A 16-frame queue drops the announcement.
-#define CAN_TX_QUEUE_CAPACITY 32
-
 #if EFI_SIMULATOR || EFI_UNIT_TEST
 #include "fifo_buffer.h"
 extern fifo_buffer<CANTxFrame, TEST_CAN_BUFFER_SIZE> txCanBuffer;
@@ -40,7 +33,7 @@ extern fifo_buffer<CANTxFrame, TEST_CAN_BUFFER_SIZE> txCanBuffer;
  * Usage:
  *   * Create an instance of CanTxMessage
  *   * Set any data you'd like to transmit either using the subscript operator to directly access bytes, or any of the helper functions.
- *   * Upon destruction, the message is queued for transmission by its bus's worker.
+ *   * Upon destruction, the message is transmitted.
  */
 class CanTxMessage
 {
@@ -59,45 +52,23 @@ public:
 	 , bool isExtended = false);
 
 	/**
-	 * Queue the message when it goes out of scope, unless it was already submitted.
+	 * Destruction of an instance of CanTxMessage will transmit the message over the wire.
 	 */
 	~CanTxMessage();
-
-	// Copy the frame into its bus's queue without waiting for space.
-	// Return false if it cannot be queued or was already submitted.
-	bool submit();
-	// Queue the frame and wait for the worker's result. Success means the CAN
-	// controller accepted the frame, not that another node acknowledged it.
-	msg_t submitAndWait(sysinterval_t timeout);
 
     CanCategory category;
 
 #if EFI_CAN_SUPPORT || EFI_UNIT_TEST
 	/**
-	 * Set the CAN controller used to transmit on this bus.
+	 * Configures the device for all messages to transmit from.
 	 */
 	static void setDevice(size_t idx, CANDriver* device);
-	// Discard queued frames and tell waiting senders that the bus was reset.
-	static void stopBus(size_t idx);
 	/**
-	 * Stop accepting new frames on this bus and discard its queued frames.
+	 * Removes device from interface list
 	 */
-	static void removeDevice(size_t idx);
-	// Handle one bus without waiting for a hardware mailbox. False means no
-	// completed/discarded frame, including a retryable full mailbox.
-	static bool serviceOne(size_t idx);
-	// Keep handling frames until serviceOne reports no more work.
-	static void service(size_t idx);
-	// Shared TX workers wait here after a no-progress round. New work wakes
-	// them immediately; a short timeout lets them revisit retry deadlines.
-	static msg_t waitForWork(sysinterval_t timeout);
-	static int getQueueDropCount(size_t idx);
-#if EFI_UNIT_TEST
-	// Let host tests run the worker while a sender waits. Firmware uses the
-	// operating system to wake the worker and notify the waiting sender.
-	static void setWaitHookForUnitTest(void (*hook)(size_t));
-	static void setRescheduleHookForUnitTest(void (*hook)());
-#endif
+	static void removeDevice(size_t idx) {
+		setDevice(idx, nullptr);
+	}
 #endif // EFI_CAN_SUPPORT || EFI_UNIT_TEST
 
 	size_t busIndex = 0;
@@ -159,7 +130,6 @@ private:
 #if EFI_CAN_SUPPORT || EFI_UNIT_TEST
 	static CANDriver* s_devices[EFI_CAN_BUS_COUNT];
 #endif // EFI_CAN_SUPPORT || EFI_UNIT_TEST
-	bool m_submitted = false;
 };
 
 /**
