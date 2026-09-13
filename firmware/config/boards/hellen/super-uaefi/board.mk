@@ -12,6 +12,9 @@ DDEFS += -DEFI_SOFTWARE_KNOCK=TRUE -DSTM32_ADC_USE_ADC3=TRUE
 # EGT chip
 DDEFS += -DEFI_MAX_31855=TRUE
 
+# OTG2 has enough endpoints for MSD plus a second CDC ACM for the CAN sniffer.
+DDEFS += -DHAL_USE_USB_CDC_2=TRUE
+
 DDEFS += -DHELLEN_BOARD_ID_DEBUG
 
 # on the one hand we do not use boardID YET and it takes 350ms, on the other hand who knows what the future would bring
@@ -39,4 +42,3 @@ DDEFS += $(PRIMARY_COMMUNICATION_PORT_USART2)
 DDEFS += -DBOARD_SERIAL="\"000100000000000000000000\""
 
 DDEFS += -DUSB_DESCRIPTOR_STRING_CONTENT="'r', 0, 'u', 0, 's', 0, 'E', 0, 'F', 0, 'I', 0, ' ', 0, 'u', 0, 'a', 0, 'E', 0, 'F', 0, 'I', 0"
-
