@@ -55,6 +55,229 @@ public:
 	std::list<CANRxFrame> crfList;
 };
 
+class FailingCanTransport : public TestCanTransport {
+public:
+	can_msg_t transmit(CanTxMessage &, can_sysinterval_t) override {
+		return CAN_MSG_TIMEOUT;
+	}
+};
+
+class FailAfterFirstCanTransport : public TestCanTransport {
+public:
+	can_msg_t transmit(CanTxMessage &ctfp, can_sysinterval_t timeout) override {
+		if (successfulTransmits++ != 0) {
+			return CAN_MSG_TIMEOUT;
+		}
+		return TestCanTransport::transmit(ctfp, timeout);
+	}
+
+	int successfulTransmits = 0;
+};
+
+class FailFirstCanTransport : public TestCanTransport {
+public:
+	can_msg_t transmit(CanTxMessage &message, can_sysinterval_t timeout) override {
+		if (++attempts == 1) {
+			return CAN_MSG_TIMEOUT;
+		}
+		return TestCanTransport::transmit(message, timeout);
+	}
+
+	int attempts = 0;
+};
+
+// if the first frame fails, stop sending the packet even if the
+// remaining frames could be sent successfully.
+TEST(IsoTpStream, FailedFirstFrameAbortsFlush) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	FailFirstCanTransport transport;
+	CanStreamerState state(&transport, &transport, 0, 0x7e9, 0x7e1);
+	uint8_t payload[10] = {};
+	size_t size = sizeof(payload);
+	ASSERT_EQ(CAN_MSG_OK, state.streamAddToTxTimeout(&size, payload, 0));
+	EXPECT_EQ(CAN_MSG_TIMEOUT, state.streamFlushTx(0));
+	EXPECT_EQ(1, transport.attempts);
+	EXPECT_EQ(0u, transport.ctfList.size());
+	EXPECT_EQ(0, state.txFifoBuf.getCount());
+}
+
+TEST(IsoTpWrite, FailedFirstFrameDoesNotConsumeStaleFlowControl) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	FailFirstCanTransport transport;
+	IsoTpRxTx endpoint(0, 0x7e9, 0x7e1);
+	endpoint.txTransport = &transport;
+	CANRxFrame flowControl{};
+	flowControl.DLC = 8;
+	flowControl.data8[0] = 0x30;
+	endpoint.decodeFrame(flowControl, 0);
+	const uint8_t payload[10] = {};
+	EXPECT_EQ(0, endpoint.writeTimeout(payload, sizeof(payload), 0));
+	EXPECT_EQ(1, transport.attempts);
+	EXPECT_EQ(0u, transport.ctfList.size());
+	EXPECT_FALSE(endpoint.isRxEmpty());
+}
+
+TEST(IsoTpStream, PropagatesFailedFullAndPartialFlush) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	FailingCanTransport transport;
+	CanStreamerState state(&transport, &transport, 0, 0x7e9, 0x7e1);
+
+	std::vector<uint8_t> full(state.txFifoBuf.getSize(), 0);
+	size_t fullSize = full.size();
+	EXPECT_EQ(CAN_MSG_TIMEOUT, state.streamAddToTxTimeout(&fullSize, full.data(), 0));
+	EXPECT_EQ(0, state.txFifoBuf.getCount());
+
+	uint8_t partial[7] = {};
+	size_t partialSize = sizeof(partial);
+	ASSERT_EQ(CAN_MSG_OK, state.streamAddToTxTimeout(&partialSize, partial, 0));
+	EXPECT_EQ(CAN_MSG_TIMEOUT, state.streamFlushTx(0));
+	EXPECT_EQ(0, state.txFifoBuf.getCount());
+}
+
+TEST(IsoTpStream, DiscardsPartialPrefixFromBothStreamLayers) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	uint8_t multiFrame[10] = {};
+
+	// Only the first frame succeeds. Flushing must report failure and clear
+	// the buffer so a later flush cannot send that first frame again.
+	FailAfterFirstCanTransport flushTransport;
+	CanStreamerState flushState(&flushTransport, &flushTransport, 0, 0x7e9, 0x7e1);
+	size_t flushSize = sizeof(multiFrame);
+	ASSERT_EQ(CAN_MSG_OK, flushState.streamAddToTxTimeout(&flushSize, multiFrame, 0));
+	EXPECT_EQ(CAN_MSG_TIMEOUT, flushState.streamFlushTx(0));
+	EXPECT_EQ(1u, flushTransport.ctfList.size());
+	EXPECT_EQ(0, flushState.txFifoBuf.getCount());
+
+	// Filling the buffer also triggers a send. Check that it handles the same
+	// failure by reporting a timeout and clearing the buffer.
+	FailAfterFirstCanTransport addTransport;
+	CanStreamerState addState(&addTransport, &addTransport, 0, 0x7e9, 0x7e1);
+	std::vector<uint8_t> full(addState.txFifoBuf.getSize(), 0);
+	size_t fullSize = full.size();
+	EXPECT_EQ(CAN_MSG_TIMEOUT, addState.streamAddToTxTimeout(&fullSize, full.data(), 0));
+	EXPECT_EQ(1u, addTransport.ctfList.size());
+	EXPECT_EQ(0, addState.txFifoBuf.getCount());
+}
+
+// Regression: the 10-byte Dodge RAM-read request was rejected for a nonzero BS.
+TEST(IsoTpWrite, DodgeReadAcceptsBlockSizeEight) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	TestCanTransport transport;
+	IsoTpRxTx isoTp(0, 0x7E9, 0x7E1);
+	isoTp.txTransport = &transport;
+	isoTp.paddingByte = 0;
+
+	CANRxFrame flowControl{};
+	flowControl.SID = 0x7E9;
+	flowControl.DLC = 8;
+	flowControl.data8[0] = 0x30; // Continue to send
+	flowControl.data8[1] = 8;    // Observed TCU block size
+	isoTp.decodeFrame(flowControl, 0);
+
+	const uint8_t request[] = {0x23, 0x44, 0xFF, 0xF8, 0x9B, 0xCD, 0, 0, 0, 2};
+	EXPECT_EQ(10, isoTp.writeTimeout(request, sizeof(request), 0));
+	EXPECT_TRUE(isoTp.isRxEmpty()); // The actual FC handling path consumed it.
+	ASSERT_EQ(2u, transport.ctfList.size());
+	EXPECT_EQ(0x7E1u, transport.ctfList.front().SID);
+	transport.checkFrame(transport.ctfList.front(), "\x10\x0A\x23\x44\xFF\xF8\x9B\xCD"s, 0);
+	transport.checkFrame(transport.ctfList.back(), "\x21\x00\x00\x00\x02\x00\x00\x00"s, 1);
+}
+
+TEST(IsoTpWrite, DodgeReadAcceptsUnlimitedBlockSize) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	TestCanTransport transport;
+	IsoTpRxTx isoTp(0, 0x7E9, 0x7E1);
+	isoTp.txTransport = &transport;
+	isoTp.paddingByte = 0;
+
+	CANRxFrame flowControl{};
+	flowControl.SID = 0x7E9;
+	flowControl.DLC = 8;
+	flowControl.data8[0] = 0x30; // Continue to send, unlimited block size, no delay
+	isoTp.decodeFrame(flowControl, 0);
+
+	const uint8_t request[] = {0x23, 0x44, 0xFF, 0xF8, 0x9B, 0xCD, 0, 0, 0, 2};
+	EXPECT_EQ(10, isoTp.writeTimeout(request, sizeof(request), 0));
+	EXPECT_TRUE(isoTp.isRxEmpty());
+	ASSERT_EQ(2u, transport.ctfList.size());
+	transport.checkFrame(transport.ctfList.front(), "\x10\x0A\x23\x44\xFF\xF8\x9B\xCD"s, 0);
+	transport.checkFrame(transport.ctfList.back(), "\x21\x00\x00\x00\x02\x00\x00\x00"s, 1);
+}
+
+TEST(IsoTpWrite, MultipleFlowControlBlocks) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	TestCanTransport transport;
+	IsoTpRxTx isoTp(0, 0x7E9, 0x7E1);
+	isoTp.txTransport = &transport;
+	isoTp.paddingByte = 0;
+
+	CANRxFrame flowControl{};
+	flowControl.DLC = 8;
+	flowControl.data8[0] = 0x30;
+	for (uint8_t blockSize : {2, 1, 0}) {
+		flowControl.data8[1] = blockSize;
+		isoTp.decodeFrame(flowControl, 0);
+	}
+
+	// 17 consecutive frames exercise sequence-number rollover across blocks.
+	std::array<uint8_t, 125> request{};
+	for (size_t i = 0; i < request.size(); i++) {
+		request[i] = static_cast<uint8_t>(i);
+	}
+	EXPECT_EQ(125, isoTp.writeTimeout(request.data(), request.size(), 0));
+	ASSERT_EQ(18u, transport.ctfList.size());
+	EXPECT_TRUE(isoTp.isRxEmpty());
+	transport.checkFrame(transport.ctfList.front(), "\x10\x7D\x00\x01\x02\x03\x04\x05"s, 0);
+	auto frame = std::next(transport.ctfList.begin());
+	size_t offset = 6;
+	for (size_t index = 1; index <= 17; index++, frame++) {
+		EXPECT_EQ(0x20u | (index & 0x0f), frame->data8[0]);
+		for (size_t byte = 1; byte < 8; byte++) {
+			EXPECT_EQ(request[offset++], frame->data8[byte]);
+		}
+	}
+}
+
+TEST(IsoTpWrite, ExactBlockDoesNotConsumeAnotherFlowControl) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	TestCanTransport transport;
+	IsoTpRxTx isoTp(0, 0x7E9, 0x7E1);
+	isoTp.txTransport = &transport;
+
+	CANRxFrame flowControl{};
+	flowControl.DLC = 8;
+	flowControl.data8[0] = 0x30;
+	flowControl.data8[1] = 2;
+	isoTp.decodeFrame(flowControl, 0);
+	flowControl.data8[0] = 0x32; // Must remain queued when the payload is complete.
+	isoTp.decodeFrame(flowControl, 0);
+
+	const uint8_t request[20]{}; // First frame plus exactly two consecutive frames.
+	EXPECT_EQ(20, isoTp.writeTimeout(request, sizeof(request), 0));
+	ASSERT_EQ(3u, transport.ctfList.size());
+	EXPECT_FALSE(isoTp.isRxEmpty());
+}
+
+TEST(IsoTpWrite, AbortAtBlockBoundary) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	TestCanTransport transport;
+	IsoTpRxTx isoTp(0, 0x7E9, 0x7E1);
+	isoTp.txTransport = &transport;
+
+	CANRxFrame flowControl{};
+	flowControl.DLC = 8;
+	flowControl.data8[0] = 0x30;
+	flowControl.data8[1] = 2;
+	isoTp.decodeFrame(flowControl, 0);
+	flowControl.data8[0] = 0x32;
+	isoTp.decodeFrame(flowControl, 0);
+
+	const uint8_t request[21]{}; // One byte still pending at the block boundary.
+	EXPECT_EQ(-4, isoTp.writeTimeout(request, sizeof(request), 0));
+	ASSERT_EQ(3u, transport.ctfList.size());
+	EXPECT_TRUE(isoTp.isRxEmpty());
+}
+
 class TestCanStreamerState : public CanStreamerState {
 public:
 	TestCanStreamerState() : CanStreamerState(&streamer, &streamer, 0, 10, 10) {}
