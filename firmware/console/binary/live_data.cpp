@@ -16,6 +16,7 @@
 #include "imrc_controller.h"
 #include "dfco_state_generated.h"
 #include "dfco.h"
+#include "ads7128_state_generated.h"
 #include <livedata_board_extra.h>
 
 template<>
@@ -272,6 +273,16 @@ template<>
 const mc33810_state_s* getLiveData(size_t idx) {
 #if (BOARD_MC33810_COUNT > 0)
 	return mc33810getLiveData(idx);
+#else
+	UNUSED(idx);
+	return nullptr;
+#endif
+}
+
+template<>
+const ads7128_state_s* getLiveData(size_t idx) {
+#if (BOARD_ADS7128_COUNT > 0)
+	return ads7128getLiveData(idx);
 #else
 	UNUSED(idx);
 	return nullptr;

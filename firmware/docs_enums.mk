@@ -62,6 +62,7 @@ DOCS_ENUMS_INPUTS = \
   $(PROJECT_DIR)/controllers/modules/launch_power_ramp/launch_power_ramp_state.txt \
   $(PROJECT_DIR)/integration/rusefi_config_trigger.txt \
   $(PROJECT_DIR)/integration/ts_protocol.txt \
+  $(PROJECT_DIR)/hw_layer/drivers/adc/ads7128_state.txt \
   $(PROJECT_DIR)/integration/LiveData.yaml \
   $(PROJECT_DIR)/controllers/sensors/sensor_type.h \
   $(PROJECT_DIR)/controllers/trigger/decoders/sync_edge.h \
