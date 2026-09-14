@@ -1,5 +1,9 @@
 #include "pch.h"
 #include "can_msg_tx.h"
+#include "can_startup.h"
+#include "gmock/gmock.h"
+#include "isotp.h"
+#include "rusefi_lua.h"
 
 namespace {
 
@@ -111,6 +115,82 @@ protected:
 		CanTxMessage::setRescheduleHookForUnitTest(nullptr);
 	}
 };
+
+} // namespace
+
+namespace {
+
+class CanStartupTest : public ::testing::Test {
+protected:
+	struct StartupOperations {
+		MOCK_METHOD(CANDriver*, getDevice, (size_t));
+		MOCK_METHOD(void, duplicateDevice, (size_t, size_t));
+		MOCK_METHOD(void, configureDevice, (size_t, CANDriver*));
+		MOCK_METHOD(void, startWriter, ());
+		MOCK_METHOD(void, startReader, (size_t, CANDriver*));
+		MOCK_METHOD(void, startSniffer, ());
+	};
+
+	// Fail if startup makes a call the test did not expect, such as starting
+	// a worker when no CAN device is configured.
+	testing::StrictMock<StartupOperations> ops;
+	CANDriver primary;
+	CANDriver secondary;
+};
+
+TEST_F(CanStartupTest, ReadEnabledWithPeriodicWriterDisabled) {
+	testing::InSequence sequence;
+	EXPECT_CALL(ops, getDevice(0)).WillOnce(testing::Return(&primary));
+	EXPECT_CALL(ops, getDevice(1)).WillOnce(testing::Return(nullptr));
+	EXPECT_CALL(ops, configureDevice(0, &primary));
+	// Lua/ISO-TP still need the TX worker when periodic broadcasts are disabled.
+	EXPECT_CALL(ops, startWriter()).Times(1);
+	EXPECT_CALL(ops, startReader(0, &primary));
+	EXPECT_CALL(ops, startReader(1, nullptr));
+	EXPECT_CALL(ops, startSniffer());
+	EXPECT_TRUE(startCan<2>(true, false, ops));
+}
+
+TEST_F(CanStartupTest, WriteOnlyStartsWriterAfterAllDevicesAreConfigured) {
+	testing::InSequence sequence;
+	EXPECT_CALL(ops, getDevice(0)).WillOnce(testing::Return(&primary));
+	EXPECT_CALL(ops, getDevice(1)).WillOnce(testing::Return(&secondary));
+	EXPECT_CALL(ops, configureDevice(0, &primary));
+	EXPECT_CALL(ops, configureDevice(1, &secondary));
+	EXPECT_CALL(ops, startWriter());
+	EXPECT_TRUE(startCan<2>(false, true, ops));
+}
+
+TEST_F(CanStartupTest, BothFeaturesEnabledStartsWriterBeforeReaders) {
+	testing::InSequence sequence;
+	EXPECT_CALL(ops, getDevice(0)).WillOnce(testing::Return(nullptr));
+	EXPECT_CALL(ops, getDevice(1)).WillOnce(testing::Return(&secondary));
+	EXPECT_CALL(ops, configureDevice(1, &secondary));
+	EXPECT_CALL(ops, startWriter());
+	EXPECT_CALL(ops, startReader(0, nullptr));
+	EXPECT_CALL(ops, startReader(1, &secondary));
+	EXPECT_CALL(ops, startSniffer());
+	EXPECT_TRUE(startCan<2>(true, true, ops));
+}
+
+TEST_F(CanStartupTest, BothFeaturesDisabledDoesNotDiscoverOrStartDevices) {
+	EXPECT_FALSE(startCan<2>(false, false, ops));
+}
+
+TEST_F(CanStartupTest, MissingDevicesDoNotStartWorkers) {
+	testing::InSequence sequence;
+	EXPECT_CALL(ops, getDevice(0)).WillOnce(testing::Return(nullptr));
+	EXPECT_CALL(ops, getDevice(1)).WillOnce(testing::Return(nullptr));
+	EXPECT_FALSE(startCan<2>(true, true, ops));
+}
+
+TEST_F(CanStartupTest, DuplicateDevicesFailBeforeStartingAnyPeripheral) {
+	testing::InSequence sequence;
+	EXPECT_CALL(ops, getDevice(0)).WillOnce(testing::Return(&primary));
+	EXPECT_CALL(ops, getDevice(1)).WillOnce(testing::Return(&primary));
+	EXPECT_CALL(ops, duplicateDevice(1, 0));
+	EXPECT_FALSE(startCan<2>(true, true, ops));
+}
 
 } // namespace
 
@@ -386,4 +466,56 @@ TEST_F(DualCanWithDisconnectedSecondaryTest, DisableTxAfterAdmissionResetsQueued
 	EXPECT_EQ(MSG_RESET, synchronous.submitAndWait(TIME_MS2I(10)));
 	EXPECT_EQ(0u, primaryTransmitCount);
 	EXPECT_FALSE(CanTxMessage::serviceOne(0));
+}
+
+TEST_F(DualCanWithDisconnectedSecondaryTest, LuaTransmitsWithPeriodicWriterDisabled) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	engineConfiguration->canReadEnabled = true;
+	engineConfiguration->canWriteEnabled = false;
+	engine->allowCanTx = true;
+	// Host tests do not run real threads, so simulate the TX worker here.
+	// CanStartupTest separately checks that startup actually requests this worker.
+	CanTxMessage::setRescheduleHookForUnitTest(serviceWorkerFromReschedule);
+
+	EXPECT_EQ(1, testLuaReturnsInteger(R"(
+		function testFunc()
+			txCan(1, 0x123, 0, {0x12, 0x34, 0x56})
+			return 1
+		end
+	)"));
+
+	// Check the HAL call
+	ASSERT_EQ(1u, primaryTransmitCount);
+	EXPECT_EQ(0u, secondaryTransmitCount);
+	EXPECT_EQ(0x123u, CAN_ID(lastPrimaryFrame));
+	EXPECT_EQ(CAN_IDE_STD, lastPrimaryFrame.IDE);
+	EXPECT_EQ(3u, lastPrimaryFrame.DLC);
+	EXPECT_EQ(0x12u, lastPrimaryFrame.data8[0]);
+	EXPECT_EQ(0x34u, lastPrimaryFrame.data8[1]);
+	EXPECT_EQ(0x56u, lastPrimaryFrame.data8[2]);
+}
+
+TEST_F(DualCanWithDisconnectedSecondaryTest, IsoTpTransmitsWithPeriodicWriterDisabled) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	engineConfiguration->canReadEnabled = true;
+	engineConfiguration->canWriteEnabled = false;
+	engine->allowCanTx = true;
+	// Simulate the TX worker when the scheduler runs. Remove the fixture's
+	// wait hook so a missing send completion times out instead of hanging.
+	CanTxMessage::setWaitHookForUnitTest(nullptr);
+	CanTxMessage::setRescheduleHookForUnitTest(serviceWorkerFromReschedule);
+
+	IsoTpRxTx isoTp(0, 0x7e0, 0x7e8);
+	const uint8_t reply[] = {0x62, 0xf1, 0x90};
+	EXPECT_EQ(3, isoTp.writeTimeout(reply, sizeof(reply), TIME_MS2I(10)));
+
+	ASSERT_EQ(1u, primaryTransmitCount);
+	EXPECT_EQ(0u, secondaryTransmitCount);
+	EXPECT_EQ(0x7e8u, CAN_ID(lastPrimaryFrame));
+	EXPECT_EQ(CAN_IDE_STD, lastPrimaryFrame.IDE);
+	EXPECT_EQ(8u, lastPrimaryFrame.DLC);
+	EXPECT_EQ(3u, lastPrimaryFrame.data8[0]); // Single-frame payload length.
+	EXPECT_EQ(0x62u, lastPrimaryFrame.data8[1]);
+	EXPECT_EQ(0xf1u, lastPrimaryFrame.data8[2]);
+	EXPECT_EQ(0x90u, lastPrimaryFrame.data8[3]);
 }
