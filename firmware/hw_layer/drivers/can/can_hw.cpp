@@ -18,7 +18,6 @@
 
 #include "can.h"
 #include "can_hw.h"
-#include "can_startup.h"
 #include "can_msg_tx.h"
 #include "string.h"
 #include "mpu_util.h"
@@ -110,6 +109,33 @@ CCM_OPTIONAL static CanRead canRead[EFI_CAN_BUS_COUNT] = { CanRead(0), CanRead(1
 #endif
 	};
 static CanWrite canWrite CCM_OPTIONAL;
+
+// Each CAN bus has its own transmit worker, so waiting to send on one bus
+// does not delay the other buses or the code that queues periodic messages.
+class CanTxWorker final : protected ThreadController<512> {
+public:
+	CanTxWorker(size_t index) : ThreadController("CAN TX", PRIO_CAN_TX), m_index(index) {}
+
+	using ThreadController::start;
+	using ThreadController::stop;
+
+	void ThreadTask() override {
+		while (!chThdShouldTerminateX()) {
+			// Handle the next frame, or wait briefly if the queue is empty.
+			CanTxMessage::serviceOne(m_index);
+		}
+	}
+
+private:
+	const size_t m_index;
+};
+
+RUSEFI_STACK_ROOT(CanTxWorker, ThreadTask);
+static CanTxWorker canTxWorker[EFI_CAN_BUS_COUNT] = { CanTxWorker(0), CanTxWorker(1)
+#if (EFI_CAN_BUS_COUNT >= 3)
+	, CanTxWorker(2)
+#endif
+};
 
 #if EFI_PROD_CODE
 static CANDriver* getCanDevice(size_t index)
@@ -279,48 +305,76 @@ static void applyListenOnly(CANConfig* canConfig, bool isListenOnly) {
 #endif
 }
 
-struct CanStartupOperations {
-	CANDriver* getDevice(size_t index) {
-		return getCanDevice(index);
+void initCan() {
+	addConsoleAction("caninfo", canInfo);
+
+	isCanEnabled = false;
+
+	// No CAN features enabled, nothing more to do.
+	if (!engineConfiguration->canWriteEnabled && !engineConfiguration->canReadEnabled) {
+		return;
 	}
 
-	void duplicateDevice(size_t index, size_t other) {
-		criticalError("CAN%d and CAN%d pins must be set to different devices", index + 1, other + 1);
+	// Determine physical CAN peripherals based on selected pins
+	CANDriver *device[EFI_CAN_BUS_COUNT];
+	bool anyCan = false;
+	for (size_t index = 0; index < EFI_CAN_BUS_COUNT; index++) {
+		device[index] = getCanDevice(index);
+
+		// Check for same devie select
+		for (size_t j = 0; j < index; j++) {
+			if ((device[index] != nullptr) && (device[index] == device[j])) {
+				criticalError("CAN%d and CAN%d pins must be set to different devices", index + 1, j + 1);
+				return;
+			}
+		}
+		anyCan |= (device[index] != nullptr);
 	}
 
-	void configureDevice(size_t index, CANDriver* device) {
-		// The CAN driver saves a pointer to this local config, but only reads
-		// it during canStart().
-		CANConfig canConfig;
-		currentBaudRate[index] = getDefaultCanBaudRate(index);
-		memcpy(&canConfig, findCanConfig(currentBaudRate[index]), sizeof(canConfig));
-		applyListenOnly(&canConfig, getCanListenOnly(index));
-		canStart(device, &canConfig);
-		CanTxMessage::setDevice(index, device);
+	// If all devices are null, a firmware error was already thrown by detectCanDevice, but we shouldn't continue
+	if (!anyCan) {
+		return;
 	}
 
-	void startWriter() {
+	// Initialize peripherals
+	for (size_t index = 0; index < EFI_CAN_BUS_COUNT; index++) {
+		if (device[index]) {
+			// Config based on baud rate
+			// Pointer to this local canConfig is stored inside CANDriver
+			// even it is used only during canStart this is wierd
+			CANConfig canConfig;
+			currentBaudRate[index] = getDefaultCanBaudRate(index);
+			memcpy(&canConfig, findCanConfig(currentBaudRate[index]), sizeof(canConfig));
+			applyListenOnly(&canConfig, getCanListenOnly(index));
+			canStart(device[index], &canConfig);
+
+			// Plumb CAN devices to tx system
+			CanTxMessage::setDevice(index, device[index]);
+		}
+	}
+
+	// fire up threads, as necessary
+	if (engineConfiguration->canWriteEnabled) {
 		canWrite.start();
 	}
-
-	void startReader(size_t index, CANDriver* device) {
-		canRead[index].setDevice(device);
-		canRead[index].start();
+	// ISO-TP/Lua may transmit even when the periodic CAN writer is disabled.
+	for (size_t index = 0; index < EFI_CAN_BUS_COUNT; index++) {
+		if (device[index]) {
+			canTxWorker[index].start();
+		}
 	}
 
-	void startSniffer() {
+	if (engineConfiguration->canReadEnabled) {
+		for (size_t index = 0; index < EFI_CAN_BUS_COUNT; index++) {
+			canRead[index].setDevice(device[index]);
+			canRead[index].start();
+		}
 #if EFI_PROD_CODE && HAL_USE_USB_CDC_2
 		canSniffer.start();
 #endif
 	}
-};
 
-void initCan() {
-	addConsoleAction("caninfo", canInfo);
-	isCanEnabled = false;
-	CanStartupOperations ops;
-	isCanEnabled = startCan<EFI_CAN_BUS_COUNT>(engineConfiguration->canReadEnabled,
-		engineConfiguration->canWriteEnabled, ops);
+	isCanEnabled = true;
 }
 
 bool getIsCanEnabled(void) {
@@ -336,8 +390,9 @@ static int restartCanBus(size_t index, can_baudrate_e rate) {
 	// Stop listener
 	canRead[index].stop();
 
-	// Quiesce this bus and reject new sends before stopping its controller.
-	// The shared transmit worker continues servicing the other buses.
+	// Wait for this bus's transmit worker to stop before changing the controller.
+	canTxWorker[index].stop();
+	// Discard queued frames and reject new sends while the bus is restarting.
 	CanTxMessage::removeDevice(index);
 
 	// Actually stop HW
@@ -356,6 +411,7 @@ static int restartCanBus(size_t index, can_baudrate_e rate) {
 
 	// Plumb CAN devices to tx system
 	CanTxMessage::setDevice(index, device);
+	canTxWorker[index].start();
 
 	// Start listener
 	if (engineConfiguration->canReadEnabled) {
