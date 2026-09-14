@@ -1,4 +1,5 @@
 TESTS_SRC_CPP = \
+	tests/test_hardware_pwm.cpp \
 	tests/test_scoped_logs.cpp \
 	tests/ltft_sandbox.cpp \
 	tests/log_replay_sandbox.cpp \
