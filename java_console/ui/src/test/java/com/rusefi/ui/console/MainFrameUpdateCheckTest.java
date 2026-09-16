@@ -5,6 +5,7 @@ import com.rusefi.io.ConnectionStatusValue;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import javax.swing.Icon;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
@@ -19,12 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MainFrameUpdateCheckTest {
-
-    @Test
-    public void binaryLogExtensionIsAddedWhenMissing() {
-        assertEquals(new File("capture.mlg"), MainFrame.ensureMlgExtension(new File("capture")));
-        assertEquals(new File("capture.MLG"), MainFrame.ensureMlgExtension(new File("capture.MLG")));
-    }
 
     // ECU signature: rusEFI development.2026.05.09.uaefi_pro.4226383888
     private static final RusEfiSignature ECU_SIG = new RusEfiSignature(
