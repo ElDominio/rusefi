@@ -342,6 +342,7 @@ static void setDefaultCanSettings() {
 	engineConfiguration->canSleepPeriodMs = 50;
 	engineConfiguration->canReadEnabled = true;
 	engineConfiguration->canWriteEnabled = true;
+	engineConfiguration->canSnifferIncludeBus = true;
 
 	for (size_t i = 0; i < efi::size(engineConfiguration->canSniffer); i++) {
 		engineConfiguration->canSniffer[i].listenOurs = true;
