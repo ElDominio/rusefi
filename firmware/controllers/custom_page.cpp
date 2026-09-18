@@ -41,7 +41,7 @@ void customPageSetDefaults() {
 
 	// Engine State Machine thresholds + shift detection (enable bit lives in page 1).
 	d.smWotTpsThreshold = 90;           // 90% TPS
-	d.smTransientHoldoffCallbacks = 4;  // 200 ms at 20 Hz
+	d.smTransientHoldTimeMs = 200;
 	d.smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
 	d.smDownshiftClutchSwitch = sm_clutch_switch_e::None;
 	d.smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;

@@ -11,7 +11,7 @@ static constexpr float TEST_RUNNING_RPM  = 800.0f;
 static void setupSmConfig() {
 	engineConfiguration->useEngineStateMachine = true;
 	getCustomPage()->smWotTpsThreshold = 90;
-	getCustomPage()->smTransientHoldoffCallbacks = 0; // no hold-off by default in tests
+	getCustomPage()->smTransientHoldTimeMs = 0; // no hold-off by default in tests
 	// Lower AE threshold so tests can trigger Transient with small TPS steps on Tps1
 	engineConfiguration->tpsAccelEnrichmentThreshold = 5.0f;
 }
@@ -150,7 +150,7 @@ TEST(EngineStateMachine, transientState) {
 TEST(EngineStateMachine, transientHoldoff) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smTransientHoldoffCallbacks = 2; // hold Transient for 2 callbacks after AE drops
+	getCustomPage()->smTransientHoldTimeMs = 100; // hold Transient for 100 ms (2 ticks) after AE drops
 
 	// Use a 2-entry AE buffer so delta from the step scrolls out on the very next stable callback
 	engine->module<TpsAccelEnrichment>()->setLength(2);
@@ -161,16 +161,21 @@ TEST(EngineStateMachine, transientHoldoff) {
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 30.0f);
 	Sensor::setMockValue(SensorType::Tps1, 30.0f);
 	runAndGetState();
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
 	runAndGetState();
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
 
 	// Trigger: step Tps1 to 40% → delta=10% > 5% threshold → AE fires → Transient
 	Sensor::setMockValue(SensorType::Tps1, 40.0f);
 	EXPECT_EQ(EngineStateMachineState::Transient, runAndGetState());
 
 	// AE drops on next callback (buffer is [40,40], delta=0); hold-off starts
-	EXPECT_EQ(EngineStateMachineState::Transient, runAndGetState()); // holdoff 2→1
-	EXPECT_EQ(EngineStateMachineState::Transient, runAndGetState()); // holdoff 1→0
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	EXPECT_EQ(EngineStateMachineState::Transient, runAndGetState()); // 50 ms into the 100 ms hold
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	EXPECT_EQ(EngineStateMachineState::Transient, runAndGetState()); // 100 ms into the 100 ms hold
 	// Hold-off expired — state falls through to Cruising
+	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
 	EXPECT_NE(EngineStateMachineState::Transient, runAndGetState());
 }
 
@@ -958,7 +963,7 @@ TEST(EngineStateMachine, overrunBreaksAcceleratingHoldImmediately) {
 // Eco Mode's own actuation (ecoThrottleMult / VVT override) is a real RPM-rate transient once
 // engineSmIsEcoMode flips, but it isn't driver-initiated. determineState() must not misread that
 // transient as Accelerating right after the edge, or eco would immediately bounce itself back
-// off. m_ecoSettleHoldoffRemaining (armed for smTransientHoldoffCallbacks ticks on the edge)
+// off. m_ecoSettleHoldTimer (armed for smTransientHoldTimeMs on the edge)
 // suppresses the RPM-rate check for that window, then lets real detection resume.
 TEST(EngineStateMachine, ecoEngageSuppressesFalseAcceleratingDuringSettleHoldoff) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
@@ -968,7 +973,7 @@ TEST(EngineStateMachine, ecoEngageSuppressesFalseAcceleratingDuringSettleHoldoff
 	getCustomPage()->smUpshiftClutchSwitch       = sm_clutch_switch_e::ClutchDown;
 	getCustomPage()->smAccelRateThreshold        = 500; // RPM/s
 	getCustomPage()->smRpmRateWindowMs           = 50;  // one tick
-	getCustomPage()->smTransientHoldoffCallbacks = 3;    // settle window after the eco edge
+	getCustomPage()->smTransientHoldTimeMs       = 150;  // settle window after the eco edge (3 ticks @ 50 ms)
 
 	getCustomPage()->ecoModeEnabled      = true;
 	getCustomPage()->ecoModeCruisingTime = 0; // engage as soon as Cruising is seen
@@ -1018,7 +1023,7 @@ TEST(EngineStateMachine, genuineAccelerationDropsEcoWithoutArmingHoldoff) {
 	getCustomPage()->smUpshiftClutchSwitch       = sm_clutch_switch_e::ClutchDown;
 	getCustomPage()->smAccelRateThreshold        = 500; // RPM/s
 	getCustomPage()->smRpmRateWindowMs           = 50;  // one tick
-	getCustomPage()->smTransientHoldoffCallbacks = 3;
+	getCustomPage()->smTransientHoldTimeMs       = 150;
 
 	getCustomPage()->ecoModeEnabled      = true;
 	getCustomPage()->ecoModeCruisingTime = 0;

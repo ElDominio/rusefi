@@ -118,13 +118,13 @@ void EngineStateMachine::onSlowCallback() {
 	// Arm a settle holdoff on an eco engage/disengage edge: the ecoThrottleMult/VVT step that
 	// follows is a real RPM transient but not driver-initiated, and determineState() must not
 	// misread it as Accelerating/Decelerating next tick or eco would immediately bounce itself
-	// back off (see m_ecoSettleHoldoffRemaining). Skipped when the edge itself was caused by a
+	// back off (see m_ecoSettleHoldTimer). Skipped when the edge itself was caused by a
 	// genuine, already-detected Accelerating/Decelerating this tick -- that's real driver input,
 	// not eco noise, and masking further detection would just blind us to its continuation.
 	if (engineSmIsEcoMode != m_prevEcoModeActive
 			&& m_currentState != EngineStateMachineState::Accelerating
 			&& m_currentState != EngineStateMachineState::Decelerating) {
-		m_ecoSettleHoldoffRemaining = getCustomPage()->smTransientHoldoffCallbacks;
+		m_ecoSettleHoldTimer.reset();
 	}
 	m_prevEcoModeActive = engineSmIsEcoMode;
 
@@ -571,16 +571,15 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps,
 	}
 
 	// Priority 4: AE-driven transient — active while AE threshold is met, then held
-	//             for smTransientHoldoffCallbacks slow-callback periods after it drops.
+	//             for smTransientHoldTimeMs after it drops.
 	{
 		bool aeActive = engine->module<TpsAccelEnrichment>()->isAboveAccelThreshold ||
 		                engine->module<TpsAccelEnrichment>()->isBelowDecelThreshold;
 		if (aeActive) {
-			m_transientHoldoffRemaining = getCustomPage()->smTransientHoldoffCallbacks;
+			m_transientHoldTimer.reset();
 			return EngineStateMachineState::Transient;
 		}
-		if (m_transientHoldoffRemaining > 0) {
-			m_transientHoldoffRemaining--;
+		if (!m_transientHoldTimer.hasElapsedMs(static_cast<float>(getCustomPage()->smTransientHoldTimeMs))) {
 			return EngineStateMachineState::Transient;
 		}
 	}
@@ -592,10 +591,10 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps,
 	// lag is negligible at ~100 ms). Thresholds of 0 disable the respective state.
 	// Skipped while the IdleController considers us in closed-loop idle territory: RPM rate
 	// noise from idle hunting or AC/load compensation must not be misread as a driver-initiated
-	// tip-in/tip-out. Also skipped for m_ecoSettleHoldoffRemaining ticks after an eco engage/
+	// tip-in/tip-out. Also skipped for smTransientHoldTimeMs after an eco engage/
 	// disengage edge, for the same reason (see onSlowCallback()).
-	if (m_ecoSettleHoldoffRemaining > 0) {
-		m_ecoSettleHoldoffRemaining--;
+	if (!m_ecoSettleHoldTimer.hasElapsedMs(static_cast<float>(getCustomPage()->smTransientHoldTimeMs))) {
+		// still within the post-eco-edge settle hold-off
 	} else if (idlePhase != IIdleController::Phase::Idling) {
 		int16_t accelThr = getCustomPage()->smAccelRateThreshold;
 		int16_t decelThr = getCustomPage()->smDecelRateThreshold;

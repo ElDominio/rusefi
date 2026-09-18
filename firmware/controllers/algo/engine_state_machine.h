@@ -103,8 +103,9 @@ private:
 	void updateShiftAccumulator(float rpm, float vss, efitimems_t nowMs);
 	bool evaluateShiftDirection(bool isUpshift, float currentVss);
 
-	// Remaining slow-callback hold-off periods after AE threshold drops
-	uint8_t m_transientHoldoffRemaining = 0;
+	// Reset whenever AE is active; determineState() holds Transient until smTransientHoldTimeMs
+	// has elapsed since the last reset (see determineState()).
+	Timer m_transientHoldTimer;
 
 	// Current computed state — uint8_t stores are atomic in hardware on Cortex-M
 	EngineStateMachineState m_currentState = EngineStateMachineState::Off;
@@ -193,10 +194,10 @@ private:
 
 	// Eco mode's own actuation (ecoThrottleMult, VVT override) is a real RPM-rate transient but
 	// not driver-initiated; misreading it as Accelerating/Decelerating would bounce eco straight
-	// back off. Armed for smTransientHoldoffCallbacks ticks on any engineSmIsEcoMode edge (see
+	// back off. Reset for smTransientHoldTimeMs ms on any engineSmIsEcoMode edge (see
 	// onSlowCallback()) and consumed by determineState() to suppress the RPM-rate check.
-	bool    m_prevEcoModeActive        = false;
-	uint8_t m_ecoSettleHoldoffRemaining = 0;
+	bool  m_prevEcoModeActive = false;
+	Timer m_ecoSettleHoldTimer;
 
 	// Pops and Bangs state machine
 	bool isPopsAndBangsBlocked() const;

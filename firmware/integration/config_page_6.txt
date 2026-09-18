@@ -174,7 +174,6 @@ struct_no_prefix page6_s
 
 	! --- Engine State Machine thresholds + shift detection (enable bit stays in page 1) ---
 	uint8_t smWotTpsThreshold;Engine SM: TPS threshold above which the engine is at Wide Open Throttle.;"%", 1, 0, 50, 100, 0
-	uint8_t smTransientHoldoffCallbacks;Engine SM: slow-callback periods (50 ms each) to hold the Transient state after the accel-enrichment threshold drops. 0 = no hold-off.;"callbacks", 1, 0, 0, 20, 0
 
 	bit stateBasedStft,"enabled","disabled";Engine SM: drive STFT region selection from the live SM state (Idle/Overrun/WOT/Cruise) instead of the RPM/load region thresholds. The per-region STFT settings (time constant, max add/remove) are reused unchanged.
 	bit smSecondClutchSwitchAvailable,"yes","no";Engine SM: a second clutch switch is also wired (e.g. both Clutch-Up and Clutch-Down, not just whichever is selected below). Lets shift detection open the window on the earliest available press edge and close it on the earliest available release edge, instead of relying solely on the configured switch's own edges.
@@ -188,6 +187,7 @@ struct_no_prefix page6_s
 	int16_t smDecelRateThreshold;Engine SM: RPM/s rate threshold to enter the Decelerating state (RPM falling faster than this). Also the accumulator normalizer in Overrun. 0 disables the Decelerating state.;"RPM/s", 1, 0, 0, 10000, 0
 	uint16_t smRpmRateWindowMs;Engine SM: Time window used to compute RPM rate of change (RPM/s, "RPM/t") for Accelerating/Decelerating state detection and the RPM-rate shift-accumulator signal. Larger values smooth out sensor/tooth noise at the cost of slower response, smaller values track faster but are noisier. Internally floored to one slow-callback tick (50 ms). smAccelRateThreshold/smDecelRateThreshold stay in RPM/s regardless of this setting and do not need re-tuning when it changes.;"ms", 1, 0, 0, 1000, 0
 	uint16_t smShiftLatchTimeMs;Engine SM: once shift direction is confirmed, hold Upshifting/Downshifting true for at least this long. 0 = no latch.;"ms", 1, 0, 0, 2000, 0
+	uint16_t smTransientHoldTimeMs;Engine SM: time to hold the Transient state after the accel-enrichment threshold drops, and to hold off the Accelerating/Decelerating rate check after an Eco Mode engage/disengage edge. 0 = no hold.;"ms", 1, 0, 0, 2000, 0
 	uint16_t smShiftMinVss;Engine SM: VSS Rate mode only -- minimum vehicle speed. Below this the accumulator decays instead of accumulating. 0 = no minimum.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
 	int8_t smAccumulatorUpshiftThreshold;Engine SM: Accumulator must reach or exceed this value (0..100) to confirm an upshift. The accumulator runs from -100 to +100.;"", 1, 0, 0, 100, 0
 	int8_t smAccumulatorDownshiftThreshold;Engine SM: Accumulator must reach or fall below the negative of this value (0..100) to confirm a downshift.;"", 1, 0, 0, 100, 0
