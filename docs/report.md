@@ -6329,6 +6329,106 @@ about-to-be-reverted) generated enum file.
 - `GenericGearController` remains unreachable through the UI, same as before this cleanup - kept
   intentionally per the user's choice, not yet re-exposed.
 
+## 2026-09-15 - Investigation: LuaGauge3 "flip back" and Ghost Cam not engaging (fw-custom-paralela-master)
+
+### What was done
+
+User reported two symptoms from a captured tune/log pair (`luagaugeflipback.msq`/`.msl`, repo
+root, user-provided scratch files, not tracked): (1) a CAN-driven Lua script sets LuaGauge 3 to 5
+on a traction-control-disabled CAN frame (0x239, byte1==0x42), but the gauge silently reverts to 0
+after a few seconds even though the CAN bit stays steady; (2) Ghost Cam Mode (see
+[Ghost Cam Mode feature](../.claude/... n/a - see AlphaX memory)) never engages even though Sport
+Mode is wired to the same LuaGauge and the tune has `ghostCamEnabled = enabled`.
+
+Root cause 1 (gauge flipback): the page-4 `luaScript` in the `.msq` only calls `setLuaGauge(3, ...)`
+on a state *transition* (`if tc_disabled ~= tc_off_state then ...`), never on steady-state frames.
+`LuaGauge` values are backed by `StoredValueSensor` with a hardcoded 5000 ms timeout
+(`firmware/init/sensor/init_aux.cpp:21-29`, `StoredValueSensor luaGauges[] = {{SensorType::LuaGauge1,
+MS2NT(5000)}, ...}`) - `StoredValueSensor::get()` returns `Timeout` (reads as invalid/0) once
+`getTimeNowNt() - m_lastUpdate > m_timeoutPeriod`. Since the script stopped touching gauge 3 once
+TC settled disabled, the gauge timed out ~5s after the last edge with no new CAN activity required
+to explain it - it's a starvation timeout, not TC re-enabling.
+
+Root cause 1 also explained the Sport Mode instability: `EngineStateMachine::updateSportMode()`
+(`firmware/controllers/algo/engine_state_machine.cpp:340-348`) requires
+`Sensor::get(gaugeType).Valid`, so the same timeout that zeroed the displayed gauge also dropped
+`engineSmIsSportMode` back to false.
+
+Root cause 2 (Ghost Cam never engaging, independent of root cause 1): `fw-custom-paralela-master`
+builds for the F427 (STM32F4) variant, where `EFI_GHOST_CAM` defaults `FALSE`
+(`firmware/config/stm32f4ems/efifeatures.h:641-642`; only F7 defaults `TRUE`). The board's
+`board.mk` has a block explicitly titled "Enable all AlphaX custom features (TS page 5) on this
+board" enumerating every other page-5/6 feature flag, but `EFI_GHOST_CAM` was never added to it -
+so on this board's firmware, `EngineStateMachine::updateGhostCam()` compiles to the `#else` stub
+(`engine_state_machine.cpp:1051`, `engineSmIsGhostCam = false` unconditionally) and never even
+reads `ghostCamEnabled`/Sport Mode/CLT/idle state. The tune's `ghostCamEnabled = enabled` setting
+is a no-op on this specific firmware build; this is unrelated to the LuaGauge timeout and would
+have blocked Ghost Cam even with root cause 1 fixed.
+
+### Fixes applied
+
+- `luagaugeflipback.msq` (user's scratch tune, not tracked in git): added
+  `setLuaGauge(3, tc_off_state and 5 or 0)` inside the existing `tick_count % 20 == 0` block in
+  `onTick()` so gauge 3 is rewritten every ~2s (tick rate is 100ms via `setTickRate(100)`) well
+  inside the 5s timeout, regardless of whether the CAN state changed.
+- `firmware/config/boards/fw-custom-paralela-master/board.mk`: added
+  `DDEFS += -DEFI_GHOST_CAM=TRUE` next to the other AlphaX feature flags (after
+  `EFI_ENGINE_STATE_MACHINE=TRUE`), enabling the feature for this board's firmware build.
+
+### Validation
+
+Static/source investigation only - traced the timeout constant, the `StoredValueSensor` timeout
+mechanism, the Sport Mode/Ghost Cam gating chain in `engine_state_machine.cpp`, and the
+per-board/per-chip `EFI_GHOST_CAM` default resolution via `board.mk` -> `efifeatures.h`. No
+firmware rebuild/hardware test performed in this session.
+
+### Follow-up: audited the rest of the AlphaX flag inventory against this board
+
+Per user request, diffed `FEATURE_FLAGS.md`'s full AlphaX flag table against
+`fw-custom-paralela-master/board.mk` (grep confirmed each of these was entirely absent from the
+board directory, not just unset). Six more AlphaX flags were missing beyond `EFI_GHOST_CAM`:
+`EFI_ROLLING_LAUNCH`, `EFI_SPORT_PEDAL`, `EFI_AC_PRESSURE_FAN`, `EFI_CHT_CLT_ESTIMATOR`,
+`EFI_OIL_LIFE_MONITOR`, `EFI_CHECK_ENGINE_TRIGGERING`. Checked the tune for evidence of active use
+of each (the same "tune already configured, feature silently no-op" smoking gun that caught the
+Ghost Cam bug) - unlike Ghost Cam, all six were sitting at their off/default state in
+`luagaugeflipback.msq` (`rollingLaunchEnabled=disabled`, `sportPedalActivationMode=OFF`,
+`cltFromCht=no`, `oilLifeMonitorEnabled=disabled`, no AC-pressure-fan fields present, and
+`celPointsThreshold`/`celBlinkPointsThreshold` at their stock shipped defaults from
+`custom_page.cpp:180-181`, not user-dialed values) - so none were another live instance of the same
+bug, just not-yet-enabled features.
+
+User asked for three of the six to be enabled: `EFI_ROLLING_LAUNCH`, `EFI_SPORT_PEDAL`,
+`EFI_AC_PRESSURE_FAN`. Verified both flags' documented prerequisites (`EFI_LAUNCH_CONTROL` for
+Rolling Launch, `EFI_ELECTRONIC_THROTTLE_BODY` for Sport Pedal) already default `TRUE` on
+`stm32f4ems` - no other flag needed. Added all three to `board.mk` next to the existing AlphaX
+feature block. Left `EFI_CHT_CLT_ESTIMATOR`, `EFI_OIL_LIFE_MONITOR`, `EFI_CHECK_ENGINE_TRIGGERING`
+unset per user's explicit scoping (only asked for the first three).
+
+### Validation
+
+Static/source investigation (LuaGauge timeout, Sport Mode/Ghost Cam gating chain, per-board
+`EFI_GHOST_CAM` default resolution) plus a full rebuild: `bash firmware/bin/compile.sh
+config/boards/fw-custom-paralela-master/meta-info-paralela-f427.env -j12` - build succeeded
+(`build/rusefi.elf`/`build/rusefi.bin` both got fresh timestamps, per this repo's "compile.sh can
+exit 0 on a failed make" caveat, so timestamp was checked rather than trusting exit code alone).
+No hardware test performed in this session.
+
+### Open follow-ups
+
+- `firmware/config/boards/fw-custom-paralela-master/board.mk` needs a reflash (bin already rebuilt
+  this session) for the `EFI_GHOST_CAM=TRUE`/`EFI_ROLLING_LAUNCH=TRUE`/`EFI_SPORT_PEDAL=TRUE`/
+  `EFI_AC_PRESSURE_FAN=TRUE` changes to take effect; no tune/`.ini` change is needed for Ghost Cam
+  (already configured correctly). Rolling Launch, Sport Pedal, and AC Pressure Fan are all still
+  `disabled`/`OFF`/unconfigured in the tune - user will need to configure and enable them in
+  TunerStudio once the new firmware is flashed.
+- `EFI_CHT_CLT_ESTIMATOR`, `EFI_OIL_LIFE_MONITOR`, `EFI_CHECK_ENGINE_TRIGGERING` remain unset on
+  this board - flag if the user later wants any of those.
+- Worth grepping other F4-based AlphaX boards for the same
+  "feature flag missing from the enable-all-AlphaX-features block" pattern - this is the same class
+  of silent-gap bug as the `show_tcu_gauges`-style always-false flags noted elsewhere in this repo's
+  guidance (see CLAUDE.md's "grep whether any board ever sets that flag true" note), just caught via
+  a board.mk omission instead of a `.txt`/`.ini` default.
+
 ## 2026-09-12 - TCU: Max Allowed Slip as a VSS x driver-demand table; removed line pressure duty ramp
 
 ### What was done
@@ -6388,3 +6488,92 @@ across `.cpp`/`.h`/`.txt`/`.ini`/`.java` (excluding generated files) - none foun
   "always slipping" at any nonzero slip reading) rather than a sensible starting curve. Worth a
   real default calibration whenever this feature gets bench-validated on real hardware - it hasn't
   been yet (no line pressure sensor to verify against, per the original design note).
+
+## 2026-09-16 - Engine SM: Transient hold-off converted from callback count to milliseconds
+
+### What was done
+
+Per user request, converted `smTransientHoldoffCallbacks` (page 6, a raw slow-callback-tick
+counter, range 0-20) into `smTransientHoldTimeMs` (uint16_t, range 0-2000 ms) - a "Hold Time"
+field the user tunes directly in milliseconds rather than in units of the internal 50 ms
+slow-callback period. This field drives two things in `EngineStateMachine`: how long the
+Transient state is held after the TPS accel-enrichment threshold drops (`determineState()`), and
+how long the post-Eco-Mode-edge settle hold-off suppresses the Accelerating/Decelerating rate
+check (see the eco settle comment in `onSlowCallback()`).
+
+### Implementation
+
+- `firmware/integration/config_page_6.txt`: removed `uint8_t smTransientHoldoffCallbacks` (was
+  grouped with the uint8 fields); added `uint16_t smTransientHoldTimeMs` (`"ms", 1, 0, 0, 2000, 0`)
+  next to the other uint16 ms-based fields (`smShiftLatchTimeMs`), matching the file's declared
+  "bits, then bytes, then uint16, then floats" ordering convention.
+- `firmware/controllers/algo/engine_state_machine.h`: replaced the two tick-counter members
+  (`uint8_t m_transientHoldoffRemaining`, `uint8_t m_ecoSettleHoldoffRemaining`) with `Timer
+  m_transientHoldTimer` / `Timer m_ecoSettleHoldTimer`, matching the existing `Timer`-based
+  pattern already used for `smAccelHoldMs`/`smShiftLatchTimeMs` elsewhere in the same class.
+- `firmware/controllers/algo/engine_state_machine.cpp`: `determineState()`'s AE-driven Transient
+  check now does `m_transientHoldTimer.reset()` on the AE-active edge and
+  `!m_transientHoldTimer.hasElapsedMs(smTransientHoldTimeMs)` to hold, instead of loading/
+  decrementing a counter. The eco-settle arm/consume sites (`onSlowCallback()` edge-arm,
+  `determineState()`'s Accelerating/Decelerating rate-check gate) were converted the same way.
+  `Timer`'s brand-new/never-reset state already reads as "long elapsed" (`hasElapsedMs` true), and
+  `hasElapsedMs(0)` is unconditionally true, so both `0 = no hold` and the very-first-tick case
+  behave identically to the old counter-at-0 default - no special-casing needed.
+- `firmware/controllers/custom_page.cpp`: default changed from `smTransientHoldoffCallbacks = 4`
+  (`// 200 ms at 20 Hz` comment) to `smTransientHoldTimeMs = 200` directly.
+- `firmware/tunerstudio/tunerstudio.template.ini`: renamed the tooltip and the
+  `EngineStateMachineSettings` dialog field label from "Transient hold-off (50ms steps)" to
+  "Transient hold time" bound to the new field name.
+- `unit_tests/tests/engine_state_machine/test_engine_state_machine.cpp`: updated all four sites
+  that set the old field. `transientHoldoff` previously advanced state purely by calling
+  `runAndGetState()` repeatedly with no mock-clock movement (valid only because the old field
+  counted callbacks, not time) - added explicit `advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000)`
+  calls between ticks and set `smTransientHoldTimeMs = 100` (2 x 50 ms) to reproduce the same
+  tick-by-tick transitions under real elapsed time. The two eco-settle-holdoff tests already
+  advanced real time once per loop iteration (`advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000)` per
+  tick), so converting their `= 3` (ticks) to `= 150` (ms) reproduced identical pass/fail timing
+  with no other changes needed.
+
+### Validation
+
+`unit_tests/./test.sh EngineStateMachine` (GCC): 70/70 passing. Full suite
+`unit_tests/./test.sh -j12`: 1515/1515 passing. Grepped for any remaining reference to
+`smTransientHoldoffCallbacks`/`m_transientHoldoffRemaining`/`m_ecoSettleHoldoffRemaining` across
+`.cpp`/`.h`/`.txt`/`.ini` (excluding generated files) - none found.
+
+### Open follow-ups
+
+- None. This is a page-6 (custom, non-mainline) field with no `FLASH_DATA_VERSION` implication
+  (that version guards the main `rusefi_config.txt`/page-1 image, not the isolated custom page);
+  existing tunes simply get the field's new default position/size on next full config write.
+
+## 2026-09-18 - Predictive MAP: fixed stale m_tpsPeak self-cancelling a smaller subsequent tip-in
+
+### What was done
+
+Fixed a bug in `SpeedDensityAirmass::getPredictiveMap()`
+(`firmware/controllers/algo/airmass/speed_density_airmass.cpp`): the new-event trigger branch set
+`m_initialPredictedMap`/`m_predictionTimer`/`m_sessionTimer`/`effectiveMap` but never reset
+`m_tpsPeak`, so it stayed latched at whatever the highest TPS was during the *prior* prediction
+event. The in-flight exit check (`currentTps < m_tpsPeak - tpsAccelEnrichmentThreshold` = "throttle
+released") is evaluated against `m_tpsPeak` starting on the very next tick after trigger - if the
+new tip-in's TPS was below the old stale peak by more than the accel threshold, the very first
+tick after triggering read as an already-released throttle and immediately cancelled
+`m_isMapPredictionActive`, so the predicted MAP never got to hold or blend. A large tip-in followed
+later by a smaller one was the reproducing case.
+
+### Fix
+
+Added `m_tpsPeak = Sensor::getOrZero(SensorType::Tps1);` in the trigger branch, alongside the
+other per-event state resets, so the peak always starts from the current TPS at the moment
+prediction activates rather than carrying over from a previous event.
+
+### Validation
+
+Source-level fix; no unit test added (no existing test harness in this file's test suite mocks a
+two-event TPS sequence). Not yet hardware/bench validated.
+
+### Open follow-ups
+
+- Consider a regression unit test that triggers two predictive-MAP events back to back (large tip
+  then small tip) to lock in the reset behavior.
