@@ -145,6 +145,11 @@ float SpeedDensityAirmass::getPredictiveMap(float rpm, bool postState, float map
 				engine->outputChannels.predTimerResetCnt++;
 				effectiveMap = predictedMap;
 				m_awaitingThrottleRelease = true;
+				// Must reset here: m_tpsPeak otherwise stays latched at whatever the
+				// highest TPS was during a PRIOR event, so a smaller subsequent tip-in
+				// reads as "throttle already released" on its very next tick and
+				// self-cancels before it can ever hold/blend.
+				m_tpsPeak = Sensor::getOrZero(SensorType::Tps1);
 			}
 		}
 	}
