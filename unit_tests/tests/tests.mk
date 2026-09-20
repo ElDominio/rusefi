@@ -185,6 +185,7 @@ TESTS_SRC_CPP = \
 	tests/test_knock.cpp \
 	tests/test_config_error_refresh.cpp \
 	tests/test_check_engine_light.cpp \
+	tests/test_bench_test.cpp \
 	tests/test_lambda_monitor.cpp \
 	tests/test_flex_sensor.cpp \
 	tests/sensor/basic_sensor.cpp \
