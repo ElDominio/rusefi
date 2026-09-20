@@ -90,6 +90,15 @@ window (`SPEEDO_BENCH_TEST_DURATION_SEC`), checked every tick from `speedoUpdate
 (`Engine::periodicFastCallback()`, 200 Hz) via a `Timer`, then reverts to the normal
 VehicleSpeed-derived calculation - no scheduler-based auto-revert like `runBench()` uses.
 
+VVT output storage, pin initialization, PWM callbacks, and bench dispatch also build under
+`EFI_UNIT_TEST`, without enabling the automatic VVT controller modules. `VvtBenchTest` verifies
+all four TS commands against distinct configured pins and the simulator/CAN QC pin lookup,
+including their fixed 300 ms ON / 100 ms OFF / one-pulse requests. It drives real VVT PWM
+callbacks on the simulated clock while modeling the bench worker's ownership and forced
+edges: the selected output stays steady, the other three keep toggling, and PWM resumes
+after release. This covers the pin handoff, not the excluded bench thread's scheduling
+or physical smart-driver behavior.
+
 ### Console commands (registered in `initBenchTest()`)
 
 `fuelpumpbench`, `fuelpumpbench2 <ms>`, `fuelbench <on> <off> <count>`,
