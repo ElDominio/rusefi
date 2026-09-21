@@ -145,7 +145,7 @@ bool applyDefaultsOrFixAfterBurn(const engine_configuration_s* previousConfigura
   }
 
   if (engineConfiguration->engineShutDownPeriod == 0) {
-    engineConfiguration->engineShutDownPeriod = 5;
+    engineConfiguration->engineShutDownPeriod = 3;
     changed = true;
   }
 
