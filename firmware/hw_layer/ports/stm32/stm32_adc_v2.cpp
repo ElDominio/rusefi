@@ -413,57 +413,55 @@ static slowAdcState_t slowAdcGetNextState(slowAdcState_t state)
 
 static slowAdcState_t slowAdcState = convertPrimary;
 
-static void slowAdcEndCB(ADCDriver *adcp) {
-	if (adcIsBufferComplete(adcp)) {
-		chSysLockFromISR();
-		// Switch state to ready to allow starting new conversion from here
-		adcp->state = ADC_READY;
-		// get next state
-		slowAdcState = slowAdcGetNextState(slowAdcState);
-		// A scan is complete only after the final auxiliary conversion has
-		// completed and the state machine wraps back to the primary group.
-		if (slowAdcState == convertPrimary) {
-			engine->outputChannels.slowAdcScanCount++;
-		}
-		switch (slowAdcState) {
-		case convertPrimary:
-			#ifdef ADC_MUX_PIN
-			muxControl.setValue(ADC_MUX_PRIMARY_VALUE, /*force*/true);
-			#endif
-			adcStartConversionI(&EFI_SLOW_ADC, &convGroupSlow, (adcsample_t *)slowSampleBuffer, SLOW_ADC_OVERSAMPLE);
-			break;
-		#ifdef ADC3_SLOW_CHANNEL_COUNT
-		case convertAdc3Primary:
-			// mux already 0; start ADC3 primary
-			adcStartConversionI(&ADCD3, &convGroupSlowAdc3, (adcsample_t *)slowSampleBufferAdc3, SLOW_ADC_OVERSAMPLE);
-			break;
-		#endif
-		#if ADC1_SLOW_MUXED
-		case convertMuxed:
-			muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
-			adcStartConversionI(&EFI_SLOW_ADC, &convGroupSlow, (adcsample_t *)slowSampleBufferMuxed, SLOW_ADC_OVERSAMPLE);
-			break;
-		#endif
-		#if ADC3_SLOW_MUXED
-		case convertAdc3Muxed:
-			#if (ADC1_SLOW_MUXED == 0)
-			// If ADC1 wasn't muxed, the mux pin hasn't been set high yet
-			muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
-			#endif
-			adcStartConversionI(&ADCD3, &convGroupSlowAdc3, (adcsample_t *)slowSampleBufferAdc3Muxed, SLOW_ADC_OVERSAMPLE);
-			break;
-		#endif
-		case convertAux:
-			adcSTM32DisableVBATE();
-			adcStartConversionI(&EFI_SLOW_ADC, &aux1ConvGroup, (adcsample_t *)aux1SensorSamples, auxSensorOversample);
-			break;
-		case convertAux2:
-			adcSTM32EnableVBATE();
-			adcStartConversionI(&EFI_SLOW_ADC, &aux2ConvGroup, (adcsample_t *)aux2SensorSamples, auxSensorOversample);
-			break;
-		}
-		chSysUnlockFromISR();
+static void slowAdcEndCB(ADCDriver *) {
+	// All slow ADC groups are linear, so this callback only runs after a full
+	// conversion. ChibiOS has already returned the driver to ADC_READY here.
+	chSysLockFromISR();
+	// get next state
+	slowAdcState = slowAdcGetNextState(slowAdcState);
+	// A scan is complete only after the final auxiliary conversion has
+	// completed and the state machine wraps back to the primary group.
+	if (slowAdcState == convertPrimary) {
+		engine->outputChannels.slowAdcScanCount++;
 	}
+	switch (slowAdcState) {
+	case convertPrimary:
+		#ifdef ADC_MUX_PIN
+		muxControl.setValue(ADC_MUX_PRIMARY_VALUE, /*force*/true);
+		#endif
+		adcStartConversionI(&EFI_SLOW_ADC, &convGroupSlow, (adcsample_t *)slowSampleBuffer, SLOW_ADC_OVERSAMPLE);
+		break;
+	#ifdef ADC3_SLOW_CHANNEL_COUNT
+	case convertAdc3Primary:
+		// mux already 0; start ADC3 primary
+		adcStartConversionI(&ADCD3, &convGroupSlowAdc3, (adcsample_t *)slowSampleBufferAdc3, SLOW_ADC_OVERSAMPLE);
+		break;
+	#endif
+	#if ADC1_SLOW_MUXED
+	case convertMuxed:
+		muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
+		adcStartConversionI(&EFI_SLOW_ADC, &convGroupSlow, (adcsample_t *)slowSampleBufferMuxed, SLOW_ADC_OVERSAMPLE);
+		break;
+	#endif
+	#if ADC3_SLOW_MUXED
+	case convertAdc3Muxed:
+		#if (ADC1_SLOW_MUXED == 0)
+		// If ADC1 wasn't muxed, the mux pin hasn't been set high yet
+		muxControl.setValue(ADC_MUX_MUXED_VALUE, /*force*/true);
+		#endif
+		adcStartConversionI(&ADCD3, &convGroupSlowAdc3, (adcsample_t *)slowSampleBufferAdc3Muxed, SLOW_ADC_OVERSAMPLE);
+		break;
+	#endif
+	case convertAux:
+		adcSTM32DisableVBATE();
+		adcStartConversionI(&EFI_SLOW_ADC, &aux1ConvGroup, (adcsample_t *)aux1SensorSamples, auxSensorOversample);
+		break;
+	case convertAux2:
+		adcSTM32EnableVBATE();
+		adcStartConversionI(&EFI_SLOW_ADC, &aux2ConvGroup, (adcsample_t *)aux2SensorSamples, auxSensorOversample);
+		break;
+	}
+	chSysUnlockFromISR();
 }
 #endif // EFI_INTERNAL_SLOW_ADC_BACKGROUND
 
