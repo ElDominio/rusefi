@@ -147,6 +147,10 @@
 
 #define EFI_CAN_SUPPORT TRUE
 
+#ifndef EFI_UDS
+#define EFI_UDS FALSE
+#endif
+
 #define EFI_WIDEBAND_FIRMWARE_UPDATE TRUE
 #define EFI_MAX_31855 FALSE
 
