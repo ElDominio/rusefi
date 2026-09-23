@@ -71,6 +71,16 @@ void customPageSetDefaults() {
 	d.limpModeRevLimit       = 3000; // 3000 RPM hard limit
 	d.limpModeBoostLimit     = 0;    // 0 = no boost ceiling
 
+	// Limiter Adders (Lua-gauge-driven RPM/boost curves on top of the hard limits; enable bit
+	// luaLimiterEnabled lives in engineConfiguration) — seed an ascending 0..7 LuaGauge axis so an
+	// unconfigured/partially-filled curve degrades to a flat hold instead of interpolate2d's
+	// off-scale-high branch snapping to whatever default value sits in the last unfilled slot.
+	// luaLimiterRpmAdd/luaLimiterBoostAdd stay zero (no adder) until the user tunes them.
+	for (size_t i = 0; i < efi::size(d.luaLimiterRpmAddBins); i++) {
+		d.luaLimiterRpmAddBins[i] = i;
+		d.luaLimiterBoostAddBins[i] = i;
+	}
+
 	// Misfire Detection (Engine State Machine sub-feature) — disabled by default.
 	d.misfireDetectionEnabled = false;
 	d.misfireConsecutiveCount  = 2;     // need >=2 flagged firings within the window to count one
