@@ -26,7 +26,14 @@
 #include "ch.hpp"
 #include "error_handling.h"
 
-#ifdef KNOCK_SPECTROGRAM
+// KNOCK_SPECTROGRAM is a tristate DDEFS value (TRUE/FALSE), not a plain #define marker -
+// boards disable it with `-DKNOCK_SPECTROGRAM=FALSE`, so every check below must be `#if`,
+// never `#ifdef` (which is true for ANY defined value, including FALSE).
+#ifndef KNOCK_SPECTROGRAM
+#define KNOCK_SPECTROGRAM FALSE
+#endif
+
+#if KNOCK_SPECTROGRAM
 #include "fft/fft.hpp"
 
 #define COMPRESSED_SPECTRUM_PROTOCOL_SIZE 16 // 16 * 4 = 64 byte for transport to TS
@@ -124,7 +131,7 @@ void initSoftwareKnock() {
 
 		knockFilter.configureBandpass(KNOCK_SAMPLE_RATE, frequencyHz, 3);
 
-	#ifdef KNOCK_SPECTROGRAM
+	#if KNOCK_SPECTROGRAM
 		if (engineConfiguration->enableKnockSpectrogram) {
 
 			// TODO: use big buffer
@@ -175,7 +182,7 @@ void initSoftwareKnock() {
 	}
 }
 
-#ifdef KNOCK_SPECTROGRAM
+#if KNOCK_SPECTROGRAM
 static uint8_t toDb(const float& voltage) {
 	float db = 200 * log10f(voltage*voltage) + 40; // best scaling for view
 	db = clampF(0, db, 255);
@@ -227,7 +234,7 @@ static void processLastKnockEvent() {
 	// We're done with inspecting the buffer, another sample can be taken
 	knockNeedsProcess = false;
 
-#ifdef KNOCK_SPECTROGRAM
+#if KNOCK_SPECTROGRAM
 	if (engineConfiguration->enableKnockSpectrogram) {
 		ScopePerf perf(PE::KnockAnalyzer);
 
