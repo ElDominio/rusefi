@@ -139,7 +139,13 @@ constexpr float CAN_ETB_BOARD_ADC_MAX_COUNT = 4095.0f;
 // term actually applied this tick (0 outside NORMAL/AUTOTUNE) - populates
 // IEtbController::setFeedForward()'s target field rather than rusEFI recomputing
 // interpolate2d() locally, since the board is the authority on what it actually used.
+// PTERM (bytes 2-3) rides along here rather than getting its own frame - it's the board's own
+// pid_state_t.pTerm, previously not on the wire at all (pid_state_t only persisted iTerm/dTerm/
+// output; the ETB_PID_STATUS frame (base+1) was already full at 8/8 bytes with no room for it -
+// see can_etb_remote.cpp/init_etb_can.cpp's docs/external-etb-can-followups.md-style history).
+// 0 whenever ETB_FEEDFORWARD_OFFSET_VALUE is (outside the mode that actually runs pid_get_output()).
 #define ETB_FEEDFORWARD_OFFSET_VALUE  0 // int16, x100
+#define ETB_FEEDFORWARD_OFFSET_PTERM  2 // int16, x100
 #define ETB_FEEDFORWARD_OFFSET_STATUS 6 // uint8, etb_status_t
 #define ETB_FEEDFORWARD_OFFSET_SEQ    7 // uint8, tx sequence
 

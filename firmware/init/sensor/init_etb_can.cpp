@@ -18,7 +18,9 @@
  *    the board still computes and sends them (needed for its own local PID's target tracking,
  *    see ETB_CAL_TPS below), but rusEFI now independently re-derives percent from ETB_RAW instead
  *    of trusting the board's copy, same as any other redundant TPS pair.
- *  - outputChannels.etbStatus.{iTerm,dTerm} <- ETB_PID_STATUS, via a plain CanListener (step 3)
+ *  - outputChannels.etbStatus.{iTerm,dTerm,pTerm} <- ETB_PID_STATUS (iTerm/dTerm) and
+ *    ETB_FEEDFORWARD's piggybacked pTerm bytes (see EtbCanFeedForwardListener below), via plain
+ *    CanListeners (step 3)
  *  - outputChannels.etbStatus.output AND outputChannels.etb1DutyCycle <- ETB_STATUS's actualDuty,
  *    via a plain CanListener (step 3) - the latter is the plain "ETB: Duty" gauge, which
  *    EtbController::setOutput() would normally populate but never runs for CAN mode
@@ -50,9 +52,9 @@
  *
  * outputChannels.etbStatus is the same pid_status_s struct Pid::postState() (efi_pid.cpp) writes
  * for a *local* PID - there is no live Pid instance here (the CH32 runs its own PID loop), so this
- * populates the same struct a different way, from the board's own reported iTerm/dTerm/duty
- * instead of computing them. pTerm/error/resetCounter aren't on the wire (the CH32 doesn't track
- * pTerm separately, see can_bus.c's can_tx_pid_status()) and are left at their default of 0.
+ * populates the same struct a different way, from the board's own reported iTerm/dTerm/pTerm/duty
+ * instead of computing them. error/resetCounter still aren't on the wire and are left at their
+ * default of 0.
  *
  * Mirrors the ObdCanSensor pattern in init_can_sensors.cpp: when this flag is on, the board's
  * tps1_1AdcChannel/tps2_1AdcChannel should be left unconfigured so initTps() (init_tps.cpp)
@@ -166,6 +168,12 @@ static EtbCanDutyListener externalEtbDutyListener;
 // rather than rusEFI recomputing interpolate2d() locally, since the board is the authority on
 // what it actually used (docs/external-etb-can-followups.md). Throttle-1-only, same "no per-
 // throttle addressing yet" assumption checkStatus()'s postState() call already makes.
+//
+// Also carries the board's own pTerm (bytes 2-3, can_etb.h) -> outputChannels.etbStatus.pTerm -
+// this was previously always 0 (see this file's top header comment): pid_state_t never persisted
+// it and ETB_PID_STATUS (base+1) had no spare bytes for it, so pTerm was simply never on the wire
+// at all. Piggybacking it on ETB_FEEDFORWARD's previously-unused reserved bytes gets it onto the
+// same struct EtbCanPidStatusListener below populates, same as a local Pid::postState() would.
 class EtbCanFeedForwardListener : public CanListener {
 public:
 	EtbCanFeedForwardListener() : CanListener(CAN_ID_ETB_FEEDFORWARD) {}
@@ -177,6 +185,12 @@ public:
 		if (auto controller = engine->etbControllers[0]) {
 			controller->setFeedForward(*feedForwardRaw);
 		}
+
+#if EFI_TUNER_STUDIO
+		const auto pTermRaw = reinterpret_cast<const scaled_channel<int16_t, 100>*>(
+			&frame.data8[ETB_FEEDFORWARD_OFFSET_PTERM]);
+		engine->outputChannels.etbStatus.pTerm = *pTermRaw;
+#endif // EFI_TUNER_STUDIO
 	}
 };
 
