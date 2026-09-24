@@ -66,7 +66,7 @@ static void uaefi_121boardDefaultConfiguration() {
     setupDefaultSensorInputs();
 }
 
-int getBoardMetaDcOutputsCount() {
+static int boardGetMetaDcOutputsCount() {
     return 2;
 }
 
@@ -109,21 +109,21 @@ static Gpio SBC_OUTPUTS[] = {
 
 };
 
-int getBoardMetaOutputsCount() {
+static int boardGetMetaOutputsCount() {
     if (engineConfiguration->engineType == engine_type_e::GM_SBC) {
         return efi::size(SBC_OUTPUTS);
     }
     return efi::size(OUTPUTS);
 }
 
-int getBoardMetaLowSideOutputsCount() {
+static int boardGetMetaLowSideOutputsCount() {
     if (engineConfiguration->engineType == engine_type_e::GM_SBC) {
         return getBoardMetaOutputsCount() - 3;
     }
     return getBoardMetaOutputsCount() - 1 - 6;
 }
 
-Gpio* getBoardMetaOutputs() {
+static Gpio* boardGetMetaOutputs() {
     if (engineConfiguration->engineType == engine_type_e::GM_SBC) {
         return SBC_OUTPUTS;
     }
@@ -131,6 +131,10 @@ Gpio* getBoardMetaOutputs() {
 }
 
 void setup_custom_board_overrides() {
+	custom_board_getMetaOutputsCount = boardGetMetaOutputsCount;
+	custom_board_getMetaLowSideOutputsCount = boardGetMetaLowSideOutputsCount;
+	custom_board_getMetaOutputs = boardGetMetaOutputs;
+	custom_board_getMetaDcOutputsCount = boardGetMetaDcOutputsCount;
 	custom_board_InitHardware = uaefi_121boardInitHardware;
 	custom_board_DefaultConfiguration = uaefi_121boardDefaultConfiguration;
 	custom_board_ConfigOverrides = setMegaUaefiBoardConfigOverrides;
