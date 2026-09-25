@@ -6734,3 +6734,50 @@ under time pressure.
   `unit_tests/efifeatures.h` against `firmware/config/stm32f4ems/efifeatures.h` +
   `stm32f7ems/efifeatures.h` on every new AlphaX feature flag addition, so this class of drift is
   caught before it reaches CI instead of one `-Werror=undef` at a time.
+
+### Follow-up #2 (same day) - the real root cause was a Makefile dependency gap, not the script
+
+After pushing the four-bug fix above (commit `1ea4a7b9ca`), CI (build-firmware.yaml, run
+https://github.com/ElDominio/rusefi/actions/runs/36112015929, board `hellen154hyundai_f7`) still
+failed with the exact `ramdisk_image` "not declared" error the `gen_image_board.sh` fix (bug #4
+above) was supposed to resolve. All local verification this session up to that point used the
+`-b`/`bundle`/`build_both_bundles` make targets, which happen to already force ramdisk regeneration
+via `rusefi_config.mk`'s `$(TCPPOBJS): $(RAMDISK)` rule (a dependency of the *firmware's own* object
+files) - so that path never exposed the actual gap.
+
+CI's `build-firmware.yaml` has a separate step, "Building Windows simulator separately just to
+make github logs more readable", that builds `../simulator/build/rusefi_simulator.exe` as its own
+standalone make target (`bash bin/compile.sh $BOARD_META_PATH ../simulator/build/rusefi_simulator.exe`)
+*before* the later "Build Firmware" step (`build_both_bundles`) that would otherwise trigger
+`$(TCPPOBJS)` and, transitively, ramdisk regeneration. `firmware/bundle.mk`'s `$(SIMULATOR_EXE)`
+rule only depended on `$(CONFIG_FILES) $(DOCS_ENUMS) .FORCE` - never `$(RAMDISK)`. So that
+standalone step just compiled against whatever `ramdisk_image.h` (a single shared,
+non-board-suffixed generated file) happened to already be checked into git, regardless of how
+correct `gen_image_board.sh`'s own logic was after the previous fix.
+
+Fixed (commit `2db335625a`) by adding `$(RAMDISK)` as an explicit prerequisite to all three
+simulator targets in `bundle.mk` (`$(SIMULATOR_EXE)`, `rusefi_simulator.linux`,
+`rusefi_simulator.both`), mirroring the existing `$(TCPPOBJS): $(RAMDISK)` pattern. Also folded in
+a small hygiene fix from the same investigation: `.ramdisk-sentinel` (in `rusefi_config.mk`) now
+also depends on `bin/gen_image_board.sh` itself, so a future change to the generator script is
+never missed.
+
+### Validation (follow-up #2)
+
+Reproduced CI's exact failure locally for the first time this session by using CI's own standalone
+command instead of the `bundle` targets used previously: deliberately reverted
+`firmware/hw_layer/mass_storage/ramdisk_image.h` to the stale placeholder content (no `ramdisk_image`
+symbol, matching what was actually checked into git) and ran
+`bash bin/compile.sh config/boards/hellen/hellen154hyundai_f7/meta-info-hellen154hyundai_f7.env
+../simulator/build/rusefi_simulator.exe -j12`. Before the `bundle.mk` fix, this reproduced the exact
+CI failure. After the fix: the log showed `.ramdisk-sentinel`'s `gen_image_board.sh` invocation
+firing as part of this standalone target for the first time, `ramdisk_image.h` was correctly
+regenerated with the fixed placeholder content, the build completed with zero errors, and
+`simulator/build/rusefi_simulator.exe` was produced fresh.
+
+### Lesson for future verification in this repo
+
+Always verify a fix by reproducing the *exact* CI command (check the relevant `.github/workflows/*.yaml`
+step's `run:` line), not a locally-convenient equivalent (`-b`/`bundle` vs. a specific standalone
+target) - two invocations that both "build the simulator" can pull in different Make prerequisite
+subgraphs and mask real dependency gaps.
