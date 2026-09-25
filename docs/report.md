@@ -6577,3 +6577,160 @@ two-event TPS sequence). Not yet hardware/bench validated.
 
 - Consider a regression unit test that triggers two predictive-MAP events back to back (large tip
   then small tip) to lock in the reset behavior.
+
+## 2026-09-25 - Fixed missing EFI_CHECK_ENGINE_TRIGGERING default breaking every enabled board's simulator/bundle CI build
+
+### What was done
+
+GHA reported the Windows-bundle build failing identically across essentially every enabled board,
+e.g. for `fw-custom-paralela-master`:
+```
+../firmware/controllers/lua/generated/output_lookup_generated.cpp:1542:5: error:
+  "EFI_CHECK_ENGINE_TRIGGERING" is not defined, evaluates to 0 [-Werror=undef]
+```
+Root cause: the Check Engine Triggering feature's `firmware/integration/LiveData.yaml` entry sets
+`conditional_compilation: "EFI_CHECK_ENGINE_TRIGGERING"`, which the codegen turns into an
+`#if EFI_CHECK_ENGINE_TRIGGERING` guard in the generated `output_lookup_generated.cpp` - but unlike
+every sibling AlphaX page-6 feature (`EFI_ROLLING_LAUNCH`, `EFI_BURST_KNOCK`,
+`EFI_WOT_ENRICHMENT`, etc.), no `#ifndef EFI_CHECK_ENGINE_TRIGGERING #define ... #endif` default
+was ever added to `stm32f4ems/efifeatures.h` or `stm32f7ems/efifeatures.h` (or any board.mk). The
+macro was simply never defined anywhere. `simulator/Makefile` sets `CPPWARN = -Wall -Wextra
+-Wundef` (plain firmware board builds do not), so the undefined-macro `#if` is fatal there under
+`-Werror`; since every enabled board's Windows-bundle CI job also builds the embedded simulator
+(`bundle.mk`'s `$(SIMULATOR_EXE)` target), the one gap broke that job identically for every board.
+This is exactly the kind of gap the "grep whether any board ever sets that flag true" CLAUDE.md
+guidance is meant to catch, except in this case the flag was not merely never-set-true, it was
+never defined at all.
+
+### Fix
+
+Added the standard default block to both `firmware/config/stm32f4ems/efifeatures.h` (FALSE) and
+`firmware/config/stm32f7ems/efifeatures.h` (TRUE), matching the placement/convention of the
+sibling flags immediately preceding it (`EFI_OIL_LIFE_MONITOR`). `stm32h7ems/efifeatures.h`
+inherits the F7 default via its `#include "../stm32f7ems/efifeatures.h"`, so no H7-specific change
+was needed. The `CheckEngineLight`/`CheckEngineTriggering` C++ module itself has no `#if
+EFI_CHECK_ENGINE_TRIGGERING` guard anywhere (it compiles unconditionally via
+`controllers/modules/check_engine_light/check_engine_light.mk` in every board's `modules.mk`) -
+this flag only ever gated the generated Lua value-lookup entries, so defining it does not change
+any existing board's runtime behavior.
+
+### Validation
+
+Local reproduction was constrained by this dev box lacking both the `i686-w64-mingw32` cross
+toolchain (Windows sim target) and 32-bit multilib host headers (native Linux sim target `-m32`
+build hits `fatal error: bits/c++config.h: No such file or directory`), so neither simulator
+target can link end-to-end here - confirmed via `bin/compile.sh -b
+config/boards/fw-custom-paralela-master/meta-info-paralela-f427.env -j12`, which got past the
+bootloader and dozens of simulator translation units before failing only at the (pre-existing,
+environment-only) `i686-w64-mingw32-g++: No such file or directory`. Verified the fix logically
+instead: `EFI_ROLLING_LAUNCH`/`EFI_BURST_KNOCK`/`EFI_WOT_ENRICHMENT` sit in the identical
+`#ifndef`/`#define`/`#endif` form in the same two files and were already resolving correctly for
+this exact board/translation-unit (build got past every other `#if` in the same generated file
+before hitting the one undefined macro) - the new block is textually adjacent and structurally
+identical, so it resolves the same way. Did not commit any of the regenerated/build-artifact files
+this local attempt touched (`f407-discovery`/`paralela-f427` generated headers, `.ini`s, etc.) -
+only the two `efifeatures.h` source edits were staged and pushed.
+
+### Open follow-ups
+
+- This dev box cannot build either simulator target end-to-end (no mingw, no 32-bit multilib) -
+  true confirmation is CI-only for this class of fix; watch the next `alphax-beta` CI run.
+- Consider installing `gcc-multilib`/`g++-multilib` (or `i686-w64-mingw32-{gcc,g++}`) locally so
+  future simulator-only build breaks (as opposed to plain firmware breaks) can be reproduced
+  without waiting on CI.
+
+### Follow-up (same day) - the above commit was necessary but insufficient; four more bugs found and fixed
+
+mingw (`i686-w64-mingw32-{gcc,g++}`) became available on the dev box later the same session,
+enabling a real end-to-end simulator build for the first time. It immediately surfaced that the
+`efifeatures.h` default fix above did not actually fix the reported CI failure by itself - CI
+continued to fail identically on a subsequent unrelated push (`26d5ad14b9`, disabling CI for
+non-AlphaX boards). Iteratively rebuilding `paralela-f427`'s bundle (firmware + embedded Windows
+simulator) via `bin/compile.sh -b config/boards/fw-custom-paralela-master/meta-info-paralela-f427.env
+-j12` and fixing whatever the next compile error was, four further distinct bugs were found, all on
+top of the already-pushed `stm32f4ems`/`stm32f7ems` fix:
+
+1. **`simulator/simulator/efifeatures.h` and `unit_tests/efifeatures.h` keep their own separate
+   copies of every `EFI_*` feature flag** (that file's own header comment says so explicitly: "the
+   simulator and unit_tests keep their own efifeatures.h copies that bypass all of this"). Neither
+   copy had `EFI_CHECK_ENGINE_TRIGGERING` either, so the `stm32f4ems`/`f7ems` fix never reached the
+   simulator or unit-test builds at all. Fixed by adding the flag to both (`TRUE`).
+2. **`firmware/integration/LiveData.yaml`'s `check_engine_light_state` entry had
+   `engineModule: CheckEngineTriggering`, but the real C++ class is `CheckEngineLight`**
+   (`firmware/controllers/modules/check_engine_light/check_engine_light.h:42`). Confirmed the
+   `engineModule:` field must be the literal class name by checking working sibling entries
+   (`RollingLaunchControl`, `BurstKnock`) which correctly reference their own real class names.
+   This typo meant `engine->module<CheckEngineTriggering>()` in the generated
+   `output_lookup_generated.cpp` could never compile once the flag above was actually turned on
+   anywhere - previously silent dead code (the flag was undefined project-wide before fix #1), so
+   nothing had ever exercised this path. Fixed the YAML to reference `CheckEngineLight`.
+3. **`simulator/simulator/efifeatures.h` was separately missing three more flags** it had simply
+   never been kept in sync with, found one at a time as each next rebuild hit a fresh
+   `-Werror=undef`: `EFI_EXTERNAL_CAN_ETB` (added `FALSE`, matching firmware default - bench/opt-in
+   feature), `EFI_CRANKING_NO_SPARK` (added `TRUE`, matching the simulator's existing pattern of
+   enabling every AlphaX subsystem). A fourth issue in the same file was a *pre-existing* (not
+   introduced this session) invalid combination: `EFI_OIL_LIFE_MONITOR TRUE` together with
+   `EFI_MAIN_RELAY_CONTROL FALSE`, which `oil_life_monitor.cpp` itself explicitly rejects via
+   `#error` (no reliable relay signal to flush the oil-life counter to flash on shutdown). Fixed by
+   disabling `EFI_OIL_LIFE_MONITOR` for the simulator specifically rather than enabling relay-control
+   simulation (the module's entire purpose - surviving power loss - does not apply to a desktop
+   simulator, and flipping `EFI_MAIN_RELAY_CONTROL` risked unrelated side effects). `unit_tests/efifeatures.h`
+   already has `EFI_MAIN_RELAY_CONTROL TRUE`, so it does not hit this particular conflict.
+4. **`firmware/bin/gen_image_board.sh`'s placeholder for boards with `board.mk`'s
+   `EFI_EMBED_INI_MSD=FALSE`** (an intentional flash-size mitigation from the same original merge,
+   `712c61ec07` "Merge master (stage 3/4): DTC manager / CheckEngineLight / MILController" - affects
+   roughly a dozen boards: `alphax-s550-pnp`, `proteus`, `protorico-econoline`, `alphax-s197-v2`,
+   `f407-discovery`, `hellen/alphax-8chan`, `protorico-grummann`, `hellen/alphax-gold`,
+   `fw-custom-paralela-master`, `hellen/hellen154hyundai_f7`, `hellen/hellen154hyundai`,
+   `hellen/small-can-board`) wrote a comment-only `ramdisk_image.h` with no `ramdisk_image` symbol
+   defined at all. Real firmware for these boards never references it (its own
+   `#if EFI_EMBED_INI_MSD` in `mass_storage_init.cpp` is `FALSE` there), but
+   `simulator/Makefile` unconditionally forces `-DEFI_EMBED_INI_MSD=TRUE` for every board's
+   simulator target regardless of `board.mk`, so the simulator build for any of these boards hit
+   `error: 'ramdisk_image' was not declared in this scope`. This is a separate, unrelated bug from
+   the same merge, and very plausibly the actual reason "every enabled board" was failing, not just
+   `EFI_CHECK_ENGINE_TRIGGERING`. Fixed the placeholder to define
+   `unsigned char ramdisk_image[] = { 0 };` so it links; the desktop simulator will present a
+   degenerate/near-empty embedded mass-storage image for these boards, which does not affect real
+   firmware at all.
+
+### Validation
+
+Iterative: after each single-flag/single-line fix, reran the full bundle build
+(`bin/compile.sh -b config/boards/fw-custom-paralela-master/meta-info-paralela-f427.env -j12`,
+which builds the bootloader, firmware, and embeds the Windows simulator via mingw - the exact CI
+job class that was reported broken) and grepped the log for `error|undef|was not declared|static
+assertion`, fixing exactly the next error each time rather than guessing ahead. Final iteration
+completed with zero errors; `simulator/build/rusefi_simulator.exe` was produced fresh (82 MB) and
+the log shows the full bundle packaging (zip) completing successfully.
+
+Two *mid-session* false leads, both self-inflicted and unrelated to the real fix, are worth
+recording so they aren't repeated: (a) running the `unit_tests` build concurrently with a
+`paralela-f427` bundle build corrupts the shared (non-board-suffixed) `page_4_generated.h`/
+`page_5_generated.h` headers per the class of bug already documented above under "Generated
+configuration layout" in CLAUDE.md - always rebuild one board/target at a time and re-run
+`gen_config_board.sh` for whichever target you're about to build if you've just built a different
+one; (b) a "clean" `make clean && ./test.sh` run in `unit_tests` surfaced `undefined reference to
+registerCanListener(CanListener&)/unregisterCanListener(CanListener&)` (from `test_can_msg_tx.cpp`
+via `isotp.h`) - traced to `EFI_CAN_SUPPORT` being entirely absent from `unit_tests/efifeatures.h`
+(same "shadow copy missing a flag" family as fix #1/#3 above, just manifesting as a link error
+since `unit_tests` doesn't set `-Wundef`). **Deliberately left unfixed** - it does not block the
+simulator/bundle CI job this session was fixing, and diagnosing the *correct* value/scope for
+`EFI_CAN_SUPPORT` in `unit_tests/efifeatures.h` deserves its own follow-up rather than a rushed fix
+under time pressure.
+
+### Open follow-ups (this follow-up)
+
+- Fix `unit_tests/efifeatures.h`'s missing `EFI_CAN_SUPPORT` (see above) - currently unit tests do
+  not link cleanly on this branch for an unrelated reason.
+- `simulator/simulator/efifeatures.h` may still have further latent gaps against the real firmware
+  flag set (a `comm -23` diff against `stm32f4ems`/`stm32f7ends/efifeatures.h` also flagged
+  `EFI_BOR_LEVEL`, `EFI_CLI_SUPPORT`, `EFI_CUSTOM_PANIC_METHOD`, `EFI_DFU_JUMP`,
+  `EFI_INTERNAL_SLOW_ADC_BACKGROUND`, `EFI_SUPPORT_FATFS`, `EFI_USE_FAST_ADC` as absent - these are
+  plausibly STM32-hardware-only concepts never reached by a bare `#if` in code the simulator
+  compiles, so they were deliberately *not* preemptively added; fix only if/when a real rebuild
+  actually hits one).
+- Consider a small script/test that diffs `simulator/simulator/efifeatures.h` and
+  `unit_tests/efifeatures.h` against `firmware/config/stm32f4ems/efifeatures.h` +
+  `stm32f7ems/efifeatures.h` on every new AlphaX feature flag addition, so this class of drift is
+  caught before it reaches CI instead of one `-Werror=undef` at a time.

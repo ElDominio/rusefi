@@ -37,10 +37,18 @@ INI_IMAGE_COMPRESSED_SIZE=${INI_IMAGE_COMPRESSED_SIZE:-1088}
 # Skip the uncompressed ramdisk for boards that explicitly disable EFI_EMBED_INI_MSD.
 # Such boards never compile ramdisk_image.h into firmware, so we just write a placeholder
 # to satisfy the Makefile target rather than risk a "Disk full" failure when the INI is large.
+# The placeholder must still define the real `ramdisk_image` symbol (as an empty array) because
+# simulator/Makefile unconditionally forces EFI_EMBED_INI_MSD=TRUE regardless of board.mk, so the
+# simulator build (unlike real firmware for these boards) does reference it.
 BOARD_MK_FILE="${BOARD_DIR}/board.mk"
 if grep -q "EFI_EMBED_INI_MSD=FALSE" "${BOARD_MK_FILE}" 2>/dev/null; then
   echo "gen_image_board: EFI_EMBED_INI_MSD=FALSE in ${BOARD_MK_FILE} — skipping uncompressed ramdisk"
-  echo "// placeholder: EFI_EMBED_INI_MSD=FALSE for ${SHORT_BOARD_NAME}" > ./hw_layer/mass_storage/ramdisk_image.h
+  {
+    echo "// placeholder: EFI_EMBED_INI_MSD=FALSE for ${SHORT_BOARD_NAME}"
+    echo "// real content skipped to avoid a \"Disk full\" failure when the INI is large (see above);"
+    echo "// this stub only exists so the simulator (which always wants EFI_EMBED_INI_MSD=TRUE) links"
+    echo "unsigned char ramdisk_image[] = { 0 };"
+  } > ./hw_layer/mass_storage/ramdisk_image.h
 else
   hw_layer/mass_storage/create_ini_image.sh            ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image.h            ${INI_IMAGE_SIZE}            ${SHORT_BOARD_NAME} ${BOARD_SPECIFIC_URL} || { echo "ERROR: create_ini_image.sh failed with ${INI_IMAGE_SIZE}"; exit 1; }
 fi
