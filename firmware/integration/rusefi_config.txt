@@ -2057,7 +2057,7 @@ end_struct
 ! Misfire Detection settings also live in TS page 6 (integration/config_page_6.txt / page6_s).
 
 	! --- I2C interfaces ---
-	custom i2c_device_e 1 bits, U08, , @OFFSET@, [0:2], $i2c_device_e_list
+	custom i2c_bus_e 1 bits, U08, , @OFFSET@, [0:2], $i2c_bus_e_list
 	custom i2c_speed_e 1 bits, U08, , @OFFSET@, [0:2], $i2c_speed_e_list
 
 	struct i2c_config_s
