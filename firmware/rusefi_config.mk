@@ -89,7 +89,7 @@ $(SIG_FILE): .FORCE
 # In particular, the version that ships with macOS is quite old.
 $(RAMDISK): .ramdisk-sentinel ;
 
-.ramdisk-sentinel: $(INI_FILE) $(TGT_SENTINEL)
+.ramdisk-sentinel: $(INI_FILE) $(TGT_SENTINEL) $(PROJECT_DIR)/bin/gen_image_board.sh
 	$(FLOCK) bash $(PROJECT_DIR)/bin/gen_image_board.sh $(BOARD_DIR) $(SHORT_BOARD_NAME)
 	@touch $@
 

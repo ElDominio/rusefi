@@ -186,16 +186,22 @@ BUNDLE_FILES = \
   $(UPDATE_BUNDLE_FILES) \
   $(FULL_BUNDLE_CONTENT)
 
-$(SIMULATOR_EXE): $(CONFIG_FILES) $(DOCS_ENUMS) .FORCE
+# $(RAMDISK) must be a prerequisite here too, not just of $(TCPPOBJS) in rusefi_config.mk: the
+# simulator is built via a separate sub-make (its own object files, its own rules) and CI builds
+# it as a standalone target (see build-firmware.yaml's "Building Windows simulator separately"
+# step) *before* anything else would otherwise force ramdisk_image.h/.ramdisk-sentinel to
+# regenerate - without this, the simulator silently compiles against whatever stale
+# ramdisk_image.h happens to be checked into git.
+$(SIMULATOR_EXE): $(CONFIG_FILES) $(DOCS_ENUMS) $(RAMDISK) .FORCE
 	$(MAKE) -C ../simulator -r OS="Windows_NT" SUBMAKE=yes TS_PAGE_GUARD_DEFS="$(TS_PAGE_GUARD_DEFS)"
 
 # make sure not to invoke in parallel with SIMULATOR_EXE rule above
-../simulator/build/rusefi_simulator.linux: $(CONFIG_FILES) $(DOCS_ENUMS) .FORCE
+../simulator/build/rusefi_simulator.linux: $(CONFIG_FILES) $(DOCS_ENUMS) $(RAMDISK) .FORCE
 	$(MAKE) -C ../simulator -r OS="Linux" SUBMAKE=yes TS_PAGE_GUARD_DEFS="$(TS_PAGE_GUARD_DEFS)"
 
 # make Windows simulator a prerequisite so that we don't try compiling them concurrently
 # that also means no incremental compilation making that rule less useful. See 'rusefi_simulator.linux' above
-../simulator/build/rusefi_simulator.both: $(CONFIG_FILES) $(DOCS_ENUMS) .FORCE | $(SIMULATOR_EXE)
+../simulator/build/rusefi_simulator.both: $(CONFIG_FILES) $(DOCS_ENUMS) $(RAMDISK) .FORCE | $(SIMULATOR_EXE)
 	$(MAKE) -C ../simulator -r OS="Linux" SUBMAKE=yes TS_PAGE_GUARD_DEFS="$(TS_PAGE_GUARD_DEFS)"
 
 $(BOOTLOADER_HEX) $(BOOTLOADER_BIN): .bootloader-sentinel ;
