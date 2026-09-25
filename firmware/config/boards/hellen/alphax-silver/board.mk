@@ -30,6 +30,10 @@ DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_ALPHAX_SILVER
 
 DDEFS += $(PRIMARY_COMMUNICATION_PORT_USART2)
 
+# INI has grown too large for the fixed-size embedded ramdisk (same "Disk full" issue every other
+# AlphaX board - alphax-gold, alphax-s550-pnp, alphax-s197-v2, alphax-8chan - already opts out of)
+DDEFS += -DEFI_EMBED_INI_MSD=FALSE
+
 # AlphaX custom features (TS page 5)
 DDEFS += -DEFI_VVT_COMPENSATION=TRUE
 DDEFS += -DEFI_VVT_ADVANCED_MODE=TRUE
