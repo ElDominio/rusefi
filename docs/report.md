@@ -6781,3 +6781,21 @@ Always verify a fix by reproducing the *exact* CI command (check the relevant `.
 step's `run:` line), not a locally-convenient equivalent (`-b`/`bundle` vs. a specific standalone
 target) - two invocations that both "build the simulator" can pull in different Make prerequisite
 subgraphs and mask real dependency gaps.
+
+### Follow-up #3 (same day) - one board-specific bug found during real-CI validation, unrelated to the above
+
+After `2db335625a` landed, a real CI run
+(https://github.com/ElDominio/rusefi/actions/runs/36113310535) came back green for essentially the
+whole board fleet - confirming the Makefile fix worked - except `alphax-silver`
+(job 108003683559), which failed with a literal `Disk full` from `create_ini_image.sh`, making the
+`.ramdisk-sentinel` Make rule itself error out. Root cause: `alphax-silver`'s `board.mk` never got
+the `EFI_EMBED_INI_MSD=FALSE` opt-out that every sibling AlphaX board (`alphax-gold`,
+`alphax-s550-pnp`, `alphax-s197-v2`, `alphax-8chan`) already has - its INI has grown too large for
+the fixed-size embedded ramdisk (same underlying INI-growth cause as those boards, from the
+DTC manager / CheckEngineLight / MILController merge), it was just missed when the opt-out was
+rolled out. This is a separate, previously-latent, board-specific bug - not part of the
+`EFI_CHECK_ENGINE_TRIGGERING` family - that would have also broken `alphax-silver`'s real firmware
+build, not just the simulator; `2db335625a`'s fix simply triggered `gen_image_board.sh` for the
+simulator step for the first time, surfacing it. Fixed (`ef8a8446a6`) by adding the same
+`DDEFS += -DEFI_EMBED_INI_MSD=FALSE` line to its `board.mk`. Verified locally with CI's exact
+command before pushing.
