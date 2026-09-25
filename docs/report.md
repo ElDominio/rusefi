@@ -6799,3 +6799,35 @@ build, not just the simulator; `2db335625a`'s fix simply triggered `gen_image_bo
 simulator step for the first time, surfacing it. Fixed (`ef8a8446a6`) by adding the same
 `DDEFS += -DEFI_EMBED_INI_MSD=FALSE` line to its `board.mk`. Verified locally with CI's exact
 command before pushing.
+
+## 2026-09-25 - Fixed alphax-silver real-firmware RAM overflow (link-time, ~10KB over HEAP_RAM)
+
+After `ef8a8446a6` fixed the ramdisk issue above, the next real CI run
+(https://github.com/ElDominio/rusefi/actions/runs/36115558788, job 108009204214) still failed on
+`alphax-silver`, this time at the link step for the real firmware build (not the simulator):
+
+```
+rules_memory.ld:314 cannot move location counter backwards (from 20022820 to 20020000)
+collect2: error: ld returned 1 exit status
+```
+
+`rules_memory.ld:314` is the `.heap` section's `. = ORIGIN(HEAP_RAM) + LENGTH(HEAP_RAM);` line -
+this error means static RAM usage (.data+.bss) before that point had already run past the end of
+`HEAP_RAM` (0x20020000), by 0x2820 bytes (~10.1KB). Root cause: `a57a20e64e` ("enable full AlphaX
+feature flag set across all AlphaX boards") gave `alphax-silver` the same 16-flag AlphaX feature set
+as every other AlphaX board, including F7 boards with far more RAM, without accounting for its
+tighter budget - and unlike `alphax-s197-v2` (the only other plain-F4 AlphaX board with this same
+full feature set), `alphax-silver`'s `board.mk` was missing `IS_STM32F429 = yes`. That flag (see
+`alphax-s197-v2/board.mk`'s comment) tells the build this MCU is an F427/F429-family part with an
+extra 64KB SRAM3 bank on top of the base 128KB SRAM1+SRAM2 - without it the linker only sees the
+128KB base RAM. Confirmed with the user that `alphax-silver`'s actual silicon is the same
+F427/F429-compatible family as `alphax-s197-v2`'s (not a plain F407), so this was a missing-flag bug,
+not a case for trimming features.
+
+Fix: added the same `ifeq ($(PROJECT_CPU),ARCH_STM32F4) / IS_STM32F429 = yes / endif` block to
+`alphax-silver/board.mk` (mirroring `alphax-s197-v2`). Verified locally with the board's exact CI
+command (`bash bin/compile.sh config/boards/hellen/alphax-silver/meta-info.env -j12`, this repo has
+`arm-none-eabi-gcc 13.2.1` installed): build completed with zero errors, `ram3` (the newly-unlocked
+64KB SRAM3 region carrying `HEAP_RAM`) showed 0% used (i.e. now has full headroom), `ram0`/`ram4`
+(base SRAM1+SRAM2 / CCM) at 100%, and `flash0` at 83.05% - healthy margin, matching `alphax-s197-v2`'s
+shape. No source/feature changes were needed, only the one `board.mk` flag.
