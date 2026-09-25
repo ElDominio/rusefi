@@ -87,6 +87,11 @@
 #define EFI_OIL_LIFE_MONITOR TRUE
 #endif
 
+// Check Engine Triggering (TS-configurable threshold checks that light the MIL/CEL, TS page 6 config)
+#ifndef EFI_CHECK_ENGINE_TRIGGERING
+#define EFI_CHECK_ENGINE_TRIGGERING TRUE
+#endif
+
 // Ghost Cam Mode (idle lope via VVT overlap + AFR/ignition overrides; needs Engine State Machine)
 #ifndef EFI_GHOST_CAM
 #define EFI_GHOST_CAM TRUE
