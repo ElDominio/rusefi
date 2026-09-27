@@ -83,6 +83,7 @@
 #define EFI_MAP_AVERAGING TRUE
 
 #define EFI_LUA TRUE
+#define LUA_I2C_DAC TRUE
 
 #define EFI_HPFP TRUE
 

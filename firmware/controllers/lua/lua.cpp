@@ -22,6 +22,10 @@
 #include "bench_test.h"
 #include <cstdlib>
 
+#if LUA_I2C_DAC
+#include "mcp4728.h"
+#endif
+
 #define TAG "LUA "
 
 static bool withErrorLoading = false;
@@ -360,6 +364,10 @@ void LuaThread::ThreadTask() {
 static LuaThread luaThread;
 
 void startLua() {
+
+#if LUA_I2C_DAC
+	initI2cDacConsole();
+#endif
 
 #if EFI_CAN_SUPPORT
 	initLuaCanRx();
