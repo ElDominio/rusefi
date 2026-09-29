@@ -35,6 +35,45 @@ float getFuncPairAllowedSplit() {
 }
 
 /**
+ * @brief ExpAverage wrapper that resets (jumps straight to the raw value) instead of smoothing
+ * through a fast transient - see tpsExpAverageResetThreshold/tpsExpAverageResetTimeMs.
+ *
+ * TPS already runs the fastest ADC-layer filter in the system (200 Hz Biquad) because ETB
+ * closed-loop control and TPS accel enrichment need minimal lag; a plain ExpAverage on top of
+ * that would still add phase delay to a genuine tip-in/tip-out. Detecting a "too big, too fast"
+ * step and resetting the average (ExpAverage::reset() zeroes `current`, so the next
+ * initOrAverage() latches directly onto the new value - see exp_average.h) keeps steady-state
+ * smoothing while snapping straight through real driver inputs.
+ */
+class SmartExpAverage {
+public:
+	float update(float value, float alpha, float resetThreshold, float resetTimeMs) {
+		efitick_t nowNt = getTimeNowNt();
+
+		if (m_hasPrevious
+				&& resetThreshold > 0
+				&& resetTimeMs > 0
+				&& std::abs(value - m_lastRawValue) >= resetThreshold
+				&& (nowNt - m_lastRawTime) < MS2NT(resetTimeMs)) {
+			m_average.reset();
+		}
+
+		m_lastRawValue = value;
+		m_lastRawTime = nowNt;
+		m_hasPrevious = true;
+
+		m_average.setSmoothingFactor(alpha);
+		return m_average.initOrAverage(value);
+	}
+
+private:
+	ExpAverage m_average;
+	float m_lastRawValue = 0;
+	efitick_t m_lastRawTime = 0;
+	bool m_hasPrevious = false;
+};
+
+/**
  * @brief LinearSensorUnit ties together a LinearFunc and a FunctionalSensor for sensor initialization.
  *
  * This class handles the setup of a single sensor that maps a raw ADC voltage to a physical value (like TPS percentage)
@@ -231,16 +270,18 @@ static LinearSensorUnit tps2p(TPS_TS_CONVERSION, SensorType::Tps2Primary);
 static LinearSensorUnit tps2s(TPS_TS_CONVERSION, SensorType::Tps2Secondary);
 
 // Used in case of "normal", non-Ford ETB TPS
-static RedundantPair analogTps1(tps1p, tps1s, SensorType::Tps1);
-static RedundantPair tps2(tps2p, tps2s, SensorType::Tps2);
+// Registered under the *Unfiltered type - see tps1FilterSensor/tps2FilterSensor below, which apply
+// ExpAverage (tpsExpAverageAlpha) and republish under the plain Tps1/Tps2 type that everything else reads.
+static RedundantPair analogTps1(tps1p, tps1s, SensorType::Tps1Unfiltered);
+static RedundantPair tps2(tps2p, tps2s, SensorType::Tps2Unfiltered);
 
 #if EFI_SENT_SUPPORT
 SentTps sentTps;
 #endif
 
-// Used only in case of weird Ford-style ETB TPS
-static RedundantFordTps fordTps1(SensorType::Tps1, SensorType::Tps1Primary, SensorType::Tps1Secondary);
-static RedundantFordTps fordTps2(SensorType::Tps2, SensorType::Tps2Primary, SensorType::Tps2Secondary);
+// Used only in case of weird Ford-style ETB TPS - same *Unfiltered convention as above.
+static RedundantFordTps fordTps1(SensorType::Tps1Unfiltered, SensorType::Tps1Primary, SensorType::Tps1Secondary);
+static RedundantFordTps fordTps2(SensorType::Tps2Unfiltered, SensorType::Tps2Primary, SensorType::Tps2Secondary);
 static RedundantFordTps
 		fordPps(SensorType::AcceleratorPedalUnfiltered,
 				SensorType::AcceleratorPedalPrimary,
@@ -258,6 +299,8 @@ void updateUnfilteredRawPedal() {
 // This sensor indicates the driver's throttle intent - Pedal if we have one, TPS if not.
 static ProxySensor driverIntent(SensorType::DriverThrottleIntent);
 static ProxySensor ppsFilterSensor(SensorType::AcceleratorPedal);
+static ProxySensor tps1FilterSensor(SensorType::Tps1);
+static ProxySensor tps2FilterSensor(SensorType::Tps2);
 
 // These sensors are TPS-like, so handle them in here too
 static LinearSensorUnit wastegate(1, SensorType::WastegatePosition);
@@ -322,6 +365,36 @@ void initTps() {
 				 (float)engineConfiguration->tps2SecondaryMax,
 				 minTpsPps,
 				 maxTpsPps});
+
+		tps1FilterSensor.setProxiedSensor(SensorType::Tps1Unfiltered);
+		tps1FilterSensor.setConverter([](SensorResult arg) {
+			if (!arg) {
+				return arg;
+			}
+			static SmartExpAverage tps1ExpAverage;
+			SensorResult result = tps1ExpAverage.update(
+					arg.Value,
+					engineConfiguration->tpsExpAverageAlpha,
+					engineConfiguration->tpsExpAverageResetThreshold,
+					engineConfiguration->tpsExpAverageResetTimeMs);
+			return result;
+		});
+		tps1FilterSensor.Register();
+
+		tps2FilterSensor.setProxiedSensor(SensorType::Tps2Unfiltered);
+		tps2FilterSensor.setConverter([](SensorResult arg) {
+			if (!arg) {
+				return arg;
+			}
+			static SmartExpAverage tps2ExpAverage;
+			SensorResult result = tps2ExpAverage.update(
+					arg.Value,
+					engineConfiguration->tpsExpAverageAlpha,
+					engineConfiguration->tpsExpAverageResetThreshold,
+					engineConfiguration->tpsExpAverageResetTimeMs);
+			return result;
+		});
+		tps2FilterSensor.Register();
 
 		float ppsSecondaryMaximum = engineConfiguration->ppsSecondaryMaximum;
 		if (ppsSecondaryMaximum < 20) {

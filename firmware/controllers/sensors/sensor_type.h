@@ -43,6 +43,8 @@ enum class SensorType : unsigned char {
 
 	FuelTemperature,
 
+	// Raw combined position before ExpAverage smoothing (tpsExpAverageAlpha) - see Tps1
+	Tps1Unfiltered,
 	// This is the "resolved" position, potentially composited out of the following two
 	Tps1, // 10
 	// This is the first sensor
@@ -50,6 +52,7 @@ enum class SensorType : unsigned char {
 	// This is the second sensor
 	Tps1Secondary,
 
+	Tps2Unfiltered,
 	Tps2,
 	Tps2Primary,
 	Tps2Secondary,

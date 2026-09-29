@@ -241,6 +241,18 @@ bool applyDefaultsOrFixAfterBurn(const engine_configuration_s* previousConfigura
 	  engineConfiguration->ppsExpAverageAlpha = 1;
 	  changed = true;
 	}
+	if (engineConfiguration->tpsExpAverageAlpha <= 0 || engineConfiguration->tpsExpAverageAlpha > 1) {
+	  engineConfiguration->tpsExpAverageAlpha = 1;
+	  changed = true;
+	}
+	if (engineConfiguration->tpsExpAverageResetThreshold < 0) {
+	  engineConfiguration->tpsExpAverageResetThreshold = 10;
+	  changed = true;
+	}
+	if (engineConfiguration->tpsExpAverageResetTimeMs < 0) {
+	  engineConfiguration->tpsExpAverageResetTimeMs = 50;
+	  changed = true;
+	}
 	if (engineConfiguration->afrExpAverageAlpha <= 0 || engineConfiguration->afrExpAverageAlpha > 1) {
 	  engineConfiguration->afrExpAverageAlpha = 1;
 	  changed = true;
