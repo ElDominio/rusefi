@@ -267,10 +267,13 @@ enum class trigger_type_e : uint32_t {
 	// cam-only VVT shape, see VVT_BMW_VANOS_RELUCTOR
 	TT_BMW_VANOS_RELUCTOR = 98,
 
+	// GM Gen II LT1 Optispark, low-resolution track only (one cycle per cam revolution).
+	TT_GM_LT1_OPTISPARK_8 = 99,
+
 	// Same physical 3-tooth wheel as TT_3_TOOTH_CRANK (Mitsubishi 6G72), but counts both
 	// edges (SyncEdge::Both, 6 samples/rev) instead of rising-only (3 samples/rev), enabling
 	// a faster crank+cam disambiguation path. See docs/mitsubishi-6g72-fast-crank-cam-sync.md
-	TT_6G72_CRANK = 99,
+	TT_6G72_CRANK = 103,
 
 	// EXPERIMENTAL - Mitsubishi 6G75 36-2-1-1 crank, same physical wheel as TT_36_2_1_1 but a
 	// different sync algorithm (see the special case in TriggerDecoderBase::isSyncPoint()):
@@ -283,7 +286,7 @@ enum class trigger_type_e : uint32_t {
 	// coasts through up to one missed detection per revolution once locked. TT_36_2_1_1 is left
 	// untouched - this is a separate, still-experimental trigger type pending more real-world
 	// validation. See docs/report.md 2026-09-07 entries and GitHub issue #8827.
-	TT_36_2_1_1_V2 = 100,
+	TT_36_2_1_1_V2 = 104,
 
 	// TL,DR https://github.com/rusefi/rusefi/commit/523805138589585cc8889d6afd9305d120180902 example of new trigger commit
 	//
@@ -296,7 +299,7 @@ enum class trigger_type_e : uint32_t {
 	//
 	// Another point: once you add a new trigger, run get_trigger_images.bat which would run rusefi_test.exe from unit_tests
 	//
-	TT_UNUSED = 101, // this is used if we want to iterate over all trigger types
+	TT_UNUSED = 105, // this is used if we want to iterate over all trigger types
 };
 
 typedef enum {
