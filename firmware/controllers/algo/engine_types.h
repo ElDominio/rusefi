@@ -270,6 +270,8 @@ enum class trigger_type_e : uint32_t {
 	// GM Gen II LT1 Optispark, low-resolution track only (one cycle per cam revolution).
 	TT_GM_LT1_OPTISPARK_8 = 99,
 
+	TT_SUZUKI_36_2_2 = 100,
+
 	// Same physical 3-tooth wheel as TT_3_TOOTH_CRANK (Mitsubishi 6G72), but counts both
 	// edges (SyncEdge::Both, 6 samples/rev) instead of rising-only (3 samples/rev), enabling
 	// a faster crank+cam disambiguation path. See docs/mitsubishi-6g72-fast-crank-cam-sync.md
