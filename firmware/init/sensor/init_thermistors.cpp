@@ -7,6 +7,9 @@
 #include "cht_clt_estimator.h"
 #include "eot_estimator.h"
 #include "custom_page.h"
+#include "board_overrides.h"
+
+std::optional<setup_custom_get_adc_float_type> custom_board_getThermistorSupplyVoltage;
 
 // Each one could be either linear or thermistor
 struct FuncPair {
@@ -41,7 +44,7 @@ static void validateThermistorConfig(const char* msg, thermistor_conf_s& cfg) {
 }
 
 static SensorConverter&
-configureTempSensorFunction(const char* msg, thermistor_conf_s& cfg, FuncPair& p, bool isLinear, bool isPulldown) {
+configureTempSensorFunction(const char* msg, thermistor_conf_s& cfg, FuncPair& p, bool isLinear, bool isPulldown, adc_channel_e channel) {
 	if (isLinear) {
 		p.linear.configure(cfg.resistance_1, cfg.tempC_1, cfg.resistance_2, cfg.tempC_2, -50, 250);
 
@@ -49,7 +52,8 @@ configureTempSensorFunction(const char* msg, thermistor_conf_s& cfg, FuncPair& p
 	} else /* sensor is thermistor */ {
 		validateThermistorConfig(msg, cfg);
 
-		p.thermistor.get<resist>().configure(5.0f, cfg.bias_resistor, isPulldown);
+		const float supplyVoltage = get_board_override_result(custom_board_getThermistorSupplyVoltage, 5.0f, channel);
+		p.thermistor.get<resist>().configure(supplyVoltage, cfg.bias_resistor, isPulldown);
 		p.thermistor.get<therm>().configure(cfg);
 
 		return p.thermistor;
@@ -69,7 +73,7 @@ static void configTherm(
 	}
 
 	// Configure the conversion function for this sensor
-	sensor.setFunction(configureTempSensorFunction(msg, p_config.config, p, isLinear, isPulldown));
+	sensor.setFunction(configureTempSensorFunction(msg, p_config.config, p, isLinear, isPulldown, p_config.adcChannel));
 }
 
 static void configureTempSensor(

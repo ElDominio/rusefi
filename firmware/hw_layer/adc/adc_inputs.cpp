@@ -10,9 +10,11 @@
 #include "board_overrides.h"
 
 std::optional<setup_custom_board_adjust_voltage_type> custom_board_boardAdjustVoltage;
+std::optional<setup_custom_get_adc_float_type> custom_board_getAnalogInputDividerCoefficient;
 
-float PUBLIC_API_WEAK getAnalogInputDividerCoefficient(adc_channel_e) {
-    return engineConfiguration->analogInputDividerCoefficient;
+float PUBLIC_API_WEAK getAnalogInputDividerCoefficient(adc_channel_e channel) {
+    return get_board_override_result(custom_board_getAnalogInputDividerCoefficient,
+        engineConfiguration->analogInputDividerCoefficient, channel);
 }
 
 float boardAdjustVoltage(float voltage, adc_channel_e hwChannel) {
