@@ -25,6 +25,7 @@
 #include "knock_config.h"
 #include "ch.hpp"
 #include "error_handling.h"
+#include "adc_onchip.h"
 
 // KNOCK_SPECTROGRAM is a tristate DDEFS value (TRUE/FALSE), not a plain #define marker -
 // boards disable it with `-DKNOCK_SPECTROGRAM=FALSE`, so every check below must be `#if`,
@@ -81,14 +82,18 @@ void onStartKnockSampling(uint8_t cylinderNumber, float samplingSeconds, uint8_t
 		return;
 	}
 
+	chibios_rt::CriticalSectionLocker csl;
+	// If there's pending processing, leave a background conversion alone.
+	if (knockNeedsProcess) {
+		return;
+	}
+#if EFI_ADC3_SLOW
+	adc3SlowPreemptI(&KNOCK_ADC);
+#endif
+
 	// Cancel if ADC isn't ready
 	if (!((KNOCK_ADC.state == ADC_READY) ||
 			(KNOCK_ADC.state == ADC_ERROR))) {
-		return;
-	}
-
-	// If there's pending processing, skip this event
-	if (knockNeedsProcess) {
 		return;
 	}
 
