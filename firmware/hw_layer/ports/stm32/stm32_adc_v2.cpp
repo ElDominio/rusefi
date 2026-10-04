@@ -22,6 +22,8 @@
 
 #if HAL_USE_ADC
 
+#include "adc_onchip.h"
+
 /* HW channels count per ADC */
 constexpr size_t adcChannelCount = 16;
 constexpr size_t adcAux1ChannelCount = 2;
@@ -575,10 +577,10 @@ static void slowAdcEnableDisableChannel(adc_channel_e hwChannel, bool en)
 		return;
 	}
 
-	/* TODO: following is correct for STM32 ADC1/2.
-	 * ADC3 has another input to gpio mapping
-	 * and should be handled separately */
-	uint32_t channelAdcIndex = hwChannel - EFI_ADC_0;
+	int channelAdcIndex = getAdcInternalChannel(EFI_SLOW_ADC.adc, hwChannel);
+	if (channelAdcIndex < 0 || channelAdcIndex >= static_cast<int>(adcChannelCount)) {
+		return;
+	}
 	// Switch disabled channel to internal Vrefint channel
 	adcConversionGroupSetSeqInput(&convGroupSlow, channelAdcIndex, en ? channelAdcIndex : 17);
 }
@@ -742,7 +744,12 @@ void portInitAdc() {
 #endif // EFI_SOFTWARE_KNOCK
 
 #ifdef ADC3_SLOW_CHANNEL_COUNT
+	// AlphaX ADC3 slow channels (alphax-s550-pnp), sampled from the slow ADC state machine above
 	adcStart(&ADCD3, nullptr);
+#endif
+
+#if EFI_ADC3_SLOW
+	initAdc3Slow();
 #endif
 }
 
