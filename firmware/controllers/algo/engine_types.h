@@ -274,6 +274,7 @@ enum class trigger_type_e : uint32_t {
 
 	// 36-1-1 crank wheel, repeating every 180 crank degrees.
 	TT_NISSAN_VK56DE = 101,
+	TT_NISSAN_VK56DE_CAM = 102,
 
 	// Same physical 3-tooth wheel as TT_3_TOOTH_CRANK (Mitsubishi 6G72), but counts both
 	// edges (SyncEdge::Both, 6 samples/rev) instead of rising-only (3 samples/rev), enabling

@@ -146,9 +146,11 @@ typedef enum  __attribute__ ((__packed__)) {
 
   VVT_CUSTOM_5 = 34,
 
+  VVT_NISSAN_VK56DE = 35,
+
   // Same physical cam waveform as VVT_MITSUBISHI_6G72, plus a faster crank-edge/cam-level
   // fast-sync path. See docs/mitsubishi-6g72-fast-crank-cam-sync.md
-  VVT_MITSUBISHI_6G72_BETA = 35,
+  VVT_MITSUBISHI_6G72_BETA = 36,
 
   // Does NOT use the VVT_MITSUBISHI_6G75 amplitude/gap-ratio cam decoder at all (that decoder
   // is unreliable on real hardware - see docs/report.md 2026-09-08). Instead counts real cam
@@ -156,7 +158,7 @@ typedef enum  __attribute__ ((__packed__)) {
   // cam wheel produces 3.5 edges/crank-revolution on average) to resolve 360-vs-720 phase, the
   // same style of pulse-count disambiguation as the reverse-engineered MS3 6G75 decoder
   // (6g75stuff/ms3_ign_6g75.c). See TriggerCentral::tryMitsu6g75BetaSync().
-  VVT_MITSUBISHI_6G75_BETA = 36,
+  VVT_MITSUBISHI_6G75_BETA = 37,
 
 } vvt_mode_e;
 
