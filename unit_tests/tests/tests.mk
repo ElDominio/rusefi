@@ -1,4 +1,5 @@
 TESTS_SRC_CPP = \
+	tests/test_setting_diagnostics.cpp \
 	tests/test_nucleo_hardware_ci.cpp \
 	tests/test_adc_callbacks.cpp \
 	tests/test_adc_sample_buffer.cpp \
