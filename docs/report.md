@@ -6831,3 +6831,101 @@ command (`bash bin/compile.sh config/boards/hellen/alphax-silver/meta-info.env -
 64KB SRAM3 region carrying `HEAP_RAM`) showed 0% used (i.e. now has full headroom), `ram0`/`ram4`
 (base SRAM1+SRAM2 / CCM) at 100%, and `flash0` at 83.05% - healthy margin, matching `alphax-s197-v2`'s
 shape. No source/feature changes were needed, only the one `board.mk` flag.
+
+## 2026-09-26 - Added ExpAverage smoothing to TPS1/TPS2 (shared alpha, default 1/disabled)
+
+User asked (after a walkthrough of existing analog-input filtering, see
+`docs/sensor-rate-of-change-filtering.md`) whether TPS could get the same `ExpAverage` smoothing
+PPS already has (`ppsExpAverageAlpha` -> `AcceleratorPedal` proxy over `AcceleratorPedalUnfiltered`,
+`init/sensor/init_tps.cpp`). Implemented the same pattern for both TPS channels, sharing one alpha.
+
+What changed:
+- `controllers/sensors/sensor_type.h`: added `Tps1Unfiltered`/`Tps2Unfiltered` SensorType entries
+  (mirrors `AcceleratorPedalUnfiltered`), inserted just before `Tps1`/`Tps2` respectively.
+- `init/sensor/init_tps.cpp`: `analogTps1`/`tps2` (RedundantPair) and `fordTps1`/`fordTps2`
+  (RedundantFordTps, the Ford/Toyota redundant-TPS path) now register under the `*Unfiltered` type
+  instead of `Tps1`/`Tps2` directly. Two new `ProxySensor`s, `tps1FilterSensor`/`tps2FilterSensor`,
+  proxy `*Unfiltered` -> `Tps1`/`Tps2` through an `ExpAverage` (own state per channel, same converter
+  shape as `ppsFilterSensor`: pass invalid results through unchanged, only average valid ones).
+  Every existing consumer of `SensorType::Tps1`/`Tps2` (ETB closed loop, TPS accel enrichment,
+  `driverIntent`, OBD PID, dyno view, sensor_checker, etc.) is unaffected code-wise and now
+  transparently reads the smoothed value.
+- `integration/rusefi_config.txt`: new `float tpsExpAverageAlpha` field in `engineConfiguration->`
+  (placed next to `mapExpAverageAlpha`, same 0-1/"1 = disabled" convention - NOT the 0-100 percent
+  convention `ppsExpAverageAlpha` uses). One field drives both TPS1 and TPS2, per user's request.
+- `controllers/algo/defaults/default_base_engine.cpp`: `applyDefaultsOrFixAfterBurn()` sanitizes
+  `tpsExpAverageAlpha` back to 1 if out of `(0, 1]`, same as `mapExpAverageAlpha`/`ppsExpAverageAlpha`.
+  This is also what makes old tunes (where the new field reads as 0) safe: they get alpha=1 (pass
+  through, no behavior change) rather than a divide-by-zero-shaped EMA.
+- `tunerstudio/tunerstudio.template.ini`: added the field to the existing `tpsSpecialSensors`
+  dialog ("ETB Position Sensors special cases"), which `secondary_panels.ini` already wires in as
+  the Center panel of the throttle-position screen whenever `isEtbEnabled` - shared by TPS1 and
+  TPS2, matching the shared-alpha semantics.
+
+Key decision: field growth vs FLASH_DATA_VERSION. `tpsExpAverageAlpha` grows `engine_configuration_s`
+by inserting a genuinely new field mid-struct (next to its ExpAverage siblings), not reusing existing
+reserved bytes (`magicNumberAvailableForDevTricks`/`turbochargerFilter` right after it are both
+already claimed - grepped and confirmed in use). Per the project's calibration-compatibility
+convention this is an ordinary struct-size-changing addition (caught by the existing
+config-size/CRC check at load, unlike the page-5 same-size reserved-byte-reuse case that actually
+needs a manual `FLASH_DATA_VERSION` bump) - no bump made here, consistent with how the sibling
+`mapExpAverageAlpha`/`ppsExpAverageAlpha` fields were added previously.
+
+Main tradeoff flagged to the user before implementing: TPS already gets the fastest ADC-layer
+filter in the system (200 Hz Biquad, vs 100 Hz MAP / 50 Hz MAF / 2 Hz thermistors) specifically
+because ETB closed-loop control and `accel_enrichment.cpp`'s `deltaTps` depend on minimal lag;
+layering ExpAverage on top adds phase delay to that same signal. Default alpha=1 keeps this a no-op
+until a user tunes it down.
+
+Validation: unit_tests `make -j12` (GCC, per standing preference to skip clang locally) compiled
+all touched files (`init_tps.cpp`, `default_base_engine.cpp`, generated config headers regenerated
+cleanly from the `rusefi_config.txt` change) with no errors. The overall link failed, but on a
+pre-existing, unrelated issue: `tests/controllers/can/test_can_msg_tx.cpp` pulls in `isotp.h`,
+which needs `registerCanListener`/`unregisterCanListener` (defined in `can_rx.cpp`) - `can_rx.cpp`
+is absent from `unit_tests/tests/tests.mk`'s source list. Confirmed via `grep` (not by touching
+the tree) that neither this session nor any of the files it touched reference CAN listener code;
+this branch's unit-test link was already broken independently of this change. Not fixed here -
+out of scope for a TPS-filtering feature; flagged to the user, left for a separate fix.
+
+No firmware/board build or hardware test performed (no bench access this session; risk is
+primarily to ETB closed-loop feel, which needs bench/vehicle testing before shipping with a
+non-default alpha). Follow-up: build a firmware target for whichever board the user wants to try
+this on, and confirm the new `tpsExpAverageAlpha` field survives a burn/reboot cycle.
+
+### Same session, follow-up: "smart" EMA reset (fast-transient bypass)
+
+User asked, right after the above, to address the ETB-lag tradeoff directly: add a threshold+time
+window so a fast enough TPS step clears the EMA and jumps straight to the raw value instead of
+smoothing into it (avoiding averaging lag specifically during a genuine tip-in/tip-out, while still
+smoothing steady-state noise).
+
+- New `SmartExpAverage` helper class in `init/sensor/init_tps.cpp` (above `LinearSensorUnit`),
+  wrapping `ExpAverage`: tracks the last raw value + timestamp (`getTimeNowNt()`), and on the next
+  sample, if `|value - lastRawValue| >= resetThreshold` AND the elapsed time is `< MS2NT(resetTimeMs)`,
+  calls `ExpAverage::reset()` before feeding the new value through `initOrAverage()`. This relies on
+  an existing `exp_average.h` behavior (shared by MAP/PPS/AFR use of the same class, not something
+  new here): `reset()` zeroes `current`, and `initOrAverage()` treats `current == 0` as
+  "uninitialized" and latches directly to the new value on the next call - i.e. reset already means
+  "jump to current raw value" for free, no extra code needed for that part. (Pre-existing corollary,
+  not fixed here: a legitimately-0 raw value, e.g. TPS fully closed, re-triggers this same
+  "just initialized" path every time - same latent quirk PPS already has at idle, since PPS also
+  spends most of its time at/near 0%.)
+- Two new config fields, `tpsExpAverageResetThreshold` (%) and `tpsExpAverageResetTimeMs` (ms),
+  again shared by both TPS1 and TPS2 (one pair of numbers, not per-channel) per the user's established
+  preference for one shared config. Added right after `tpsExpAverageAlpha` in `rusefi_config.txt`
+  (same `engineConfiguration->` struct), migrated in `applyDefaultsOrFixAfterBurn()` with `< 0` (not
+  `<= 0`) guards - deliberately leaving 0 as a valid, meaningful "disabled" value (matching the
+  `mafFilterParameter` convention) rather than forcing a nonzero default, since this is a new opt-in
+  refinement on top of `tpsExpAverageAlpha` (itself already 1/disabled by default) and no default
+  engine profile needs it. Only genuinely invalid negative values get clamped (to 10% / 50ms).
+  Exposed in the same `tpsSpecialSensors` TS dialog as `tpsExpAverageAlpha`.
+- `tps1FilterSensor`/`tps2FilterSensor`'s converters now call `SmartExpAverage::update()` (one
+  instance per channel, `static` inside each converter lambda exactly like the plain `ExpAverage`
+  they replaced) instead of driving `ExpAverage` directly.
+
+Validation: same as above - `unit_tests` `make -j12` compiled `init_tps.cpp` and
+`default_base_engine.cpp` cleanly; the build's only failure is the pre-existing, unrelated
+`registerCanListener` link error (now also noted in CLAUDE.md's Unit Tests section) that predates
+this session's changes entirely. No hardware/bench validation of the reset behavior itself - this
+needs a real fast pedal/throttle stab on a bench or vehicle to confirm the threshold/window
+defaults feel right before anyone ships with `tpsExpAverageAlpha` turned down from 1.

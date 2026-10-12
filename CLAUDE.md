@@ -50,6 +50,8 @@ cd unit_tests
 
 `test.sh` is the recommended way to run tests as it automatically handles both the build (`make`) and execution.
 
+**Known pre-existing link failure on `alphax-beta` (as of 2026-09-26, unconfirmed if fixed since)**: `unit_tests/tests/controllers/can/test_can_msg_tx.cpp` includes `isotp.h`, whose `IsoTpRx` ctor/dtor call `registerCanListener`/`unregisterCanListener` (declared in `controllers/can/can.h`, defined in `controllers/can/can_rx.cpp`) - but `can_rx.cpp` is absent from `unit_tests/tests/tests.mk`'s source list, so the link fails with `undefined reference to registerCanListener(CanListener&)` regardless of what else changed. If a full-suite build fails at the link step with this exact symbol and your change didn't touch CAN code, this is why - not a regression from your edit. Fix (not yet applied) is presumably adding `can_rx.cpp` to the unit-test source list, but verify it actually builds standalone under `EFI_UNIT_TEST` first.
+
 #### Code Coverage
 Coverage reports are generated using `gcovr` (requires Python 3).
 
