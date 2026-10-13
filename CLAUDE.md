@@ -57,7 +57,7 @@ cd unit_tests
 
 `test.sh` is the recommended way to run tests as it automatically handles both the build (`make`) and execution.
 
-**Known pre-existing link failure on `alphax-beta` (as of 2026-09-26, unconfirmed if fixed since)**: `unit_tests/tests/controllers/can/test_can_msg_tx.cpp` includes `isotp.h`, whose `IsoTpRx` ctor/dtor call `registerCanListener`/`unregisterCanListener` (declared in `controllers/can/can.h`, defined in `controllers/can/can_rx.cpp`) - but `can_rx.cpp` is absent from `unit_tests/tests/tests.mk`'s source list, so the link fails with `undefined reference to registerCanListener(CanListener&)` regardless of what else changed. If a full-suite build fails at the link step with this exact symbol and your change didn't touch CAN code, this is why - not a regression from your edit. Fix (not yet applied) is presumably adding `can_rx.cpp` to the unit-test source list, but verify it actually builds standalone under `EFI_UNIT_TEST` first.
+**Known pre-existing link failure on `alphax-beta` (as of 2026-09-26; gone on `alphax-alpha`, whose master CAN/ISO-TP sync links cleanly - verified 2026-10-13)**: `unit_tests/tests/controllers/can/test_can_msg_tx.cpp` includes `isotp.h`, whose `IsoTpRx` ctor/dtor call `registerCanListener`/`unregisterCanListener` (declared in `controllers/can/can.h`, defined in `controllers/can/can_rx.cpp`) - but `can_rx.cpp` is absent from `unit_tests/tests/tests.mk`'s source list, so the link fails with `undefined reference to registerCanListener(CanListener&)` regardless of what else changed. If a full-suite build fails at the link step with this exact symbol and your change didn't touch CAN code, this is why - not a regression from your edit. Fix (not yet applied) is presumably adding `can_rx.cpp` to the unit-test source list, but verify it actually builds standalone under `EFI_UNIT_TEST` first.
 
 #### Code Coverage
 Coverage reports are generated using `gcovr` (requires Python 3).
@@ -302,6 +302,16 @@ Any code reachable from a unit-test build (`unit_tests/` itself, plus firmware s
 #### Relationship to test infrastructure
 
 `EFI_UNIT_TEST` is the *compile-time* gate; the *runtime* test scaffolding it enables lives in `unit_tests/test-framework/` — most notably `EngineTestHelper` and `setUnitTestCreateLogs(true)` (see the "Troubleshooting test output" section above).
+
+## Syncing master into an AlphaX branch
+
+`alphax-alpha` (2026-10-13) took master by selective `git cherry-pick -x`, not `git merge master`, because the user scopes upstream features per category and rejects anything unmentioned; see docs/report.md 2026-10-13 for the include/exclude list. Non-obvious rules learned there:
+- **Trigger/VVT enum numbers:** upstream keeps its numbers; AlphaX-only `trigger_type_e`/`vvt_mode_e` entries move above them (and the `trigger_type_e_enum`/`vvt_mode_e_enum` string lists get INVALID padding), then bump `FLASH_DATA_VERSION`. Regenerate and commit `unit_tests/triggers.txt` by running the unit tests.
+- **Master commits already cherry-picked earlier** (out of master order) must be re-picked in order alongside their neighbours; otherwise 3-way merges of the files they touched (iso-tp, CAN TX) conflict with half-applied content. Identical re-picks just come up empty.
+- **Earlier alphax merges silently dropped INI content** (AFR axis unit labels, `afrLoadSrc`, the SD `readoutPanel`). Master's strict `IniReferenceValidator` runs during config generation and also as `GeneratedIniValidatorTest`/`TablePointerUnitsTest` in `:config_definition:test`; after a sync, run config generation for every enabled board and those Java tests before trusting the INI. The validator reports all problems at once - read the full exception, not just the first line.
+- **Board files that exist only on AlphaX branches** never receive master's mechanical board migrations (e.g. 0305942c9e moved `getBoardMeta*` to `custom_board_getMeta*` hooks); grep `config/boards` for the old pattern after each sync.
+- After the ChibiOS 7.0.6 switch, stale `firmware/.dep` files point at the removed `ChibiOS/os/various/syscalls.c`; `rm -rf firmware/.dep firmware/build` once.
+- Embedded-INI ramdisk `Disk full` on many F4/F7 boards is pre-existing on alphax-beta (verified on alphax-2chan, alphax-4chan, hellen121nissan), not a sync regression.
 
 ## Source Control Hygiene
 

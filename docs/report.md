@@ -7002,3 +7002,66 @@ Remaining:
   No macOS hardware run or thread dump was available, so these reproduced leaks
   do not establish that every possible source of thread exhaustion is fixed.
 - No commit, push, or GitHub comment was made.
+
+
+## 2026-10-13 - alphax-alpha: selective master sync onto alphax-beta
+
+- New branch `alphax-alpha` from `alphax-beta` (ebb877615e). Cherry-picked
+  (`-x`) the user-selected master commits between merge-base 9154d40f57 and
+  master 8b55109fe5 in master order; no `git merge master`. 367 picks plus
+  13 local fix-up commits.
+- Included: ChibiOS 7.0.6 + stable_21.11 switch, ADC (shared sampler, ADC3
+  slow path, channel map, PUBLIC_API_WEAK removal, MAP 6899 fix), CAN (ISO-TP
+  #10193 + flow control, CanSniffer multi-bus/includeBus, EFI_UDS,
+  EFI_SERIAL_CAN_BUS, SLCAN on second VCP), triggers (LT1 Optispark, Suzuki
+  36-2-2, VK56DE + VVT), dwell #10256/#10257, config validation
+  #10358/#10361/#10363, error reports (#10160, #10362), bench tests,
+  start/stop supersede, detectedGear signed, spectrogram #10359, AT32 port +
+  L9779, LTFT #10174, script_setting_t, OpenBLT, USB bcdDevice, AE UI, biquad,
+  H7 MPU, ObdCodeFilter/Ethernet/ACR, gauge reshuffle, all Java console/tooling.
+- Excluded on purpose: i2c rework, PCA9685, ADS7128, LUA_I2C_DAC, H723 banks,
+  turn signals, smart-GPIO ignitionKey fix, idleParkNeutralOffset (exists in
+  idleup), master fan changes, non-AlphaX board tweaks, auto-close-large-PRs
+  workflow, auto-generated commits.
+
+| Decision | Why |
+| --- | --- |
+| Master trigger numbers kept; TT_6G72_CRANK 99->103, TT_36_2_1_1_V2 100->104, VVT_MITSUBISHI_6G72_BETA 35->36, VVT_MITSUBISHI_6G75_BETA 36->37 | User decision; tunes using those must be re-selected |
+| FLASH_DATA_VERSION 261013, CONSOLE_VERSION 20261013 | Enum renumbering and new config fields |
+| stm32_adc_v2: master callback shape (no adcIsBufferComplete / manual ADC_READY) + AlphaX ADC3/mux-inversion cases kept; master EFI_ADC3_SLOW path coexists | Both ADC3 schemes are opt-in |
+| MIL: master lamp state + code filter merged with Check Engine Triggering blink escalation and celOnKoeo gate | Keep both behaviors |
+| bundle.mk keeps cp (not ln), ramdisk scripts keep Windows generation | AlphaX choices from 3531cc1a2d / afc185c189 |
+| CLAUDE.md: non-master commit authority kept; master TDB two-step rule not taken | User feedback (single PR) |
+| Previously cherry-picked master commits (CAN TX workers, RTC, H-bridge PWM) re-picked in order | Out-of-order copies broke 3-way merges of iso-tp files |
+
+Fixes found during validation (separate commits):
+
+| Commit | Fix |
+| --- | --- |
+| SENT TPS -> Tps1Unfiltered | Pre-existing: d3e61a5305 smoothing proxy + SentTps both registered Tps1 (firmwareError at init) |
+| TS ini validator fixes | Stale tooltips, lua limiter gauge=, restored sdLoggingStatePanel, engineSm gauge names, OilPressGauge guard |
+| AFR/ign axis units (#10338) | AFR unit labels/scaling lost in an earlier merge restored; Alpha-N ign axes no longer shown as psi; per-bank trim cursor |
+| Board meta outputs via hooks | s550, s197-v2, paralela, econoline, grummann (multiple definition after 0305942c9e) |
+| ts_show_gear_ratio_7_8 | paralela TCU_GEAR_COUNT 6 |
+| m74_9 EFI_EMBED_INI_MSD=FALSE | No USB; ramdisk Disk full |
+| Unit-test build | speedometer.h include; CAN VSS tests removed (legacy CAN VSS gone) |
+
+Validation:
+- Unit tests (GCC, clean build): 1760/1760 pass. clang not run (per user).
+- `./gradlew build -x javadoc --continue`: BUILD SUCCESSFUL, no test failures.
+- Firmware OK: alphax-s550-pnp, alphax-8chan_f7, alphax-silver, alphax-gold,
+  alphax-s197-v2, paralela (F407 + F427), protorico-econoline,
+  protorico-grummann, hellen154hyundai, hellen154hyundai_f7, m74_9 (AT32).
+- Firmware FAIL, pre-existing on alphax-beta (verified there): embedded INI
+  ramdisk "Disk full" on alphax-2chan, alphax-4chan(_f7), alphax-4K-GDI,
+  hellen121nissan, hellen121vag, hellen-gm-e67, hellen-honda-k,
+  test-build-guards. alphax-4chan F4 also overflows ram0 at link
+  (0xA10 bytes before, 0xBE8 after the sync).
+- No hardware run.
+
+Follow-ups:
+- Decide per board: EFI_EMBED_INI_MSD=FALSE (as gold/s550/silver) or a larger
+  INI image; alphax-4chan F4 needs ~3 KB RAM back.
+- Re-select 6G72/6G75 beta trigger/VVT types in existing tunes.
+- protorico-grummann needs a one-time gen_config_board.sh for its generated
+  pin files (documented quirk); those files are not committed.
