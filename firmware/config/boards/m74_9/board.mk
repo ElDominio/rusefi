@@ -14,6 +14,8 @@ BOARDINC = $(BOARD_DIR)
 #This board has no USB wired out
 DDEFS += -DSTM32_USB_USE_OTG1=FALSE
 DDEFS += -DSTM32_USB_USE_OTG2=FALSE
+# No USB, so no embedded-INI mass storage; also keeps the ramdisk step from failing (Disk full)
+DDEFS += -DEFI_EMBED_INI_MSD=FALSE
 
 DDEFS += -DBOARD_L9779_COUNT=1
 
