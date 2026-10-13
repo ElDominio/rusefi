@@ -7081,3 +7081,23 @@ Follow-ups:
   0x2E08, 0xEC8 bytes over respectively.
 - Follow-up: per-board feature trimming for those F4 boards (e.g. the
   paralela/4chan EFI_* set), or disable their CI builds.
+
+
+## 2026-10-13 - alphax-alpha: per-MCU EFI feature policy
+
+- Policy (user): every F4 board uses fw-custom-paralela-master's EFI_* feature
+  set, every F7 board uses alphax-s550-pnp's. Applied to all CI-enabled boards
+  as a `[tag:alphax_cpu_feature_policy]` block at the end of each board.mk;
+  previous per-board copies of those flags were removed. Board hardware
+  defines (SOFTWARE_KNOCK, MAX_31855, SENT, TCU, MC33816, KLINE, ETB=FALSE on
+  protorico boards, ...) are untouched.
+- F4 set = paralela's flags incl. KNOCK_SPECTROGRAM=FALSE, minus
+  EFI_EXTERNAL_CAN_ETB (paralela-only hardware). F7 set = stm32f7ems
+  efifeatures defaults + EFI_STORAGE_SD=FALSE + EFI_EMBED_INI_MSD=FALSE.
+- Exception: alphax-4K-GDI keeps SD config storage - its 2mb_flash.mk is
+  commented out (flash size unverified), so SD is the only extra-page backend;
+  storage_flash.cpp's #error enforces this.
+- Builds checked (user asked for two previously failing boards per MCU):
+  alphax-2chan F4 OK, hellen121nissan F4 OK (ram0 at 100.00% on both),
+  alphax-4chan_f7 OK, alphax-4K-GDI OK. Other boards not rebuilt after this
+  change.

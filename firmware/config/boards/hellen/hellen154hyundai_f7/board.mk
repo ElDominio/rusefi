@@ -23,7 +23,6 @@ DDEFS += -DBOARD_TLE9201_COUNT=1
 	# EFI_STORAGE_SD defaults TRUE (USE_FATFS=yes), which would otherwise register SD
 	# as the last storage backend and let a stale custom_page.bin clobber the flash
 	# copy of page 5 on read. Datalogging is gated separately by EFI_FILE_LOGGING.
-	DDEFS += -DEFI_STORAGE_SD=FALSE
 
 
 
@@ -33,11 +32,20 @@ DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_HELLEN_154_HYUNDAI
 
 include $(BOARDS_DIR)/hellen/hellen-common-mega144.mk
 DDEFS += -DHW_HELLEN_HYUNDAI=1
-DDEFS += -DEFI_WOT_ENRICHMENT=TRUE
 
 # F7 default is already EFI_EMBED_INI_MSD FALSE (see config/stm32f7ems/efifeatures.h), but
 # firmware/bin/gen_image_board.sh decides whether to build the uncompressed INI ramdisk by
 # grepping this board.mk for the literal string, not by evaluating the macro - without an
 # explicit copy here it tries (and fails) to fit the multi-hundred-KB INI into the 136KB
 # uncompressed ramdisk image (mkfs.fat/create_ini_image.sh error).
-DDEFS += -DEFI_EMBED_INI_MSD=FALSE
+
+# [tag:alphax_cpu_feature_policy] AlphaX feature-set policy: every F4 board uses
+# fw-custom-paralela-master's EFI_* feature set (EFI_EXTERNAL_CAN_ETB excluded: paralela-only
+# hardware), every F7 board uses alphax-s550-pnp's (F7 efifeatures defaults, no SD config
+# storage, no embedded INI). Board hardware defines stay above. Keep this block in sync with
+# those two boards.
+ifeq ($(PROJECT_CPU),ARCH_STM32F7)
+	# F7 defaults (stm32f7ems/efifeatures.h) enable the AlphaX features; SD is datalogging only
+	DDEFS += -DEFI_STORAGE_SD=FALSE
+	DDEFS += -DEFI_EMBED_INI_MSD=FALSE
+endif

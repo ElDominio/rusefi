@@ -19,23 +19,15 @@ DDEFS += -DLUA_STM32_STANDBY=1
 include $(BOARDS_DIR)/hellen/hellen-common-mega144.mk
 
 # AlphaX custom features (TS page 5)
-DDEFS += -DEFI_VVT_COMPENSATION=TRUE
-DDEFS += -DEFI_VVT_ADVANCED_MODE=TRUE
-DDEFS += -DEFI_ADVANCED_FUEL_PUMP=TRUE
-DDEFS += -DEFI_EXHAUST_CUTOUT=TRUE
-DDEFS += -DEFI_DOWNSHIFT_BLIPPER=TRUE
-DDEFS += -DEFI_UPSHIFT_RPM_HOLD=TRUE
-DDEFS += -DEFI_ENGINE_STATE_MACHINE=TRUE
-DDEFS += -DEFI_MISFIRE_DETECTION=TRUE
-DDEFS += -DEFI_CLUTCH_DELAY_VALVE=TRUE
-DDEFS += -DEFI_LAUNCH_POWER_RAMP=TRUE
-DDEFS += -DEFI_BURST_KNOCK=TRUE
-DDEFS += -DEFI_WOT_ENRICHMENT=TRUE
-DDEFS += -DEFI_SPORT_PEDAL=TRUE
-DDEFS += -DEFI_AC_PRESSURE_FAN=TRUE
-DDEFS += -DEFI_OFF_IDLE_RPM_ADDER=TRUE
-DDEFS += -DEFI_LUA_LIMITER=TRUE
 
-
-# INI no longer fits the embedded ramdisk image (Disk full)
-DDEFS += -DEFI_EMBED_INI_MSD=FALSE
+# [tag:alphax_cpu_feature_policy] AlphaX feature-set policy: every F4 board uses
+# fw-custom-paralela-master's EFI_* feature set (EFI_EXTERNAL_CAN_ETB excluded: paralela-only
+# hardware), every F7 board uses alphax-s550-pnp's (F7 efifeatures defaults, no SD config
+# storage, no embedded INI). Board hardware defines stay above. Keep this block in sync with
+# those two boards.
+ifeq ($(PROJECT_CPU),ARCH_STM32F7)
+	# F7 defaults (stm32f7ems/efifeatures.h) enable the AlphaX features.
+	# Exception: no 2mb_flash.mk on this board (flash size unverified, see top), so SD is the
+	# only backend for extra TS pages - keep EFI_STORAGE_SD at its default here.
+	DDEFS += -DEFI_EMBED_INI_MSD=FALSE
+endif

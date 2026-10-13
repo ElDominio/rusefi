@@ -19,6 +19,8 @@ DDEFS += -DADC_MUX_PIN_INVERTED=1
 LED_CRITICAL_ERROR_BRAIN_PIN = -DLED_CRITICAL_ERROR_BRAIN_PIN=H176_MCU_MEGA_LED1_RED
 include $(BOARDS_DIR)/hellen/hellen-common-mega176.mk
 
+# [tag:alphax_cpu_feature_policy] Reference EFI_* feature set for every F7 board;
+# changes here must be mirrored in the policy block at the end of the other boards' board.mk.
 ifeq ($(PROJECT_CPU),ARCH_STM32F7)
 	DDEFS += -DCH_DBG_ENABLE_ASSERTS=FALSE
 	DDEFS += -DENABLE_PERF_TRACE=FALSE

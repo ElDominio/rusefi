@@ -37,6 +37,8 @@ DDEFS += -DOPENBLT_CAN_TX_PORT=GPIOD
 DDEFS += -DOPENBLT_CAN_TX_PIN=1
 
 
+# [tag:alphax_cpu_feature_policy] Reference EFI_* feature set for every F4 board;
+# changes here must be mirrored in the policy block at the end of the other boards' board.mk.
 DDEFS += -DEFI_HPFP=FALSE
 DDEFS += -DEFI_WIDEBAND_FIRMWARE_UPDATE=FALSE
 DDEFS += -DEFI_EMBED_INI_MSD=FALSE

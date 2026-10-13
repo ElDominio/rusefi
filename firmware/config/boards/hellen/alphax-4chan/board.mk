@@ -16,8 +16,6 @@ DDEFS += -DETB_INTERMITTENT_LIMIT=60001
 DDEFS += -DBOOT_BACKDOOR_ENTRY_TIMEOUT_MS=0
 
 # 1mb is not enough for everything we have
-DDEFS += -DEFI_LOGIC_ANALYZER=FALSE
-DDEFS += -DEFI_HPFP=FALSE
 MODULE_MIL = no
 MODULE_DTC_MANAGER = no
 
@@ -39,13 +37,22 @@ ifeq ($(PROJECT_CPU),ARCH_STM32F7)
     # EFI_STORAGE_SD defaults TRUE (USE_FATFS=yes), which would otherwise register SD
     # as the last storage backend and let a stale custom_page.bin clobber the flash
     # copy of page 5 on read. Datalogging is gated separately by EFI_FILE_LOGGING.
-    DDEFS += -DEFI_STORAGE_SD=FALSE
     DDEFS += -DTS_PRIMARY_UxART_PORT=SD2 -DEFI_TS_PRIMARY_IS_SERIAL=TRUE -DSTM32_SERIAL_USE_USART2=TRUE -DSTM32_UART_USE_USART2=FALSE
 else ifeq ($(PROJECT_CPU),ARCH_STM32F4)
 	DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_ALPHAX_4CHAN
 	DDEFS += $(PRIMARY_COMMUNICATION_PORT_USART2)
-	# Same EFI_* feature set as fw-custom-paralela-master (F4 RAM/flash budget), minus
-	# EFI_EXTERNAL_CAN_ETB which needs paralela's external CAN ETB hardware.
+else
+$(error Unsupported PROJECT_CPU [$(PROJECT_CPU)])
+endif
+
+DDEFS += -DHW_HELLEN_4CHAN=1
+
+# [tag:alphax_cpu_feature_policy] AlphaX feature-set policy: every F4 board uses
+# fw-custom-paralela-master's EFI_* feature set (EFI_EXTERNAL_CAN_ETB excluded: paralela-only
+# hardware), every F7 board uses alphax-s550-pnp's (F7 efifeatures defaults, no SD config
+# storage, no embedded INI). Board hardware defines stay above. Keep this block in sync with
+# those two boards.
+ifeq ($(PROJECT_CPU),ARCH_STM32F4)
 	DDEFS += -DEFI_HPFP=FALSE
 	DDEFS += -DEFI_WIDEBAND_FIRMWARE_UPDATE=FALSE
 	DDEFS += -DEFI_EMBED_INI_MSD=FALSE
@@ -77,11 +84,9 @@ else ifeq ($(PROJECT_CPU),ARCH_STM32F4)
 	DDEFS += -DEFI_UART_GPS=FALSE
 	DDEFS += -DEFI_WIFI=FALSE
 	DDEFS += -DEFI_WOT_ENRICHMENT=TRUE
-else
-$(error Unsupported PROJECT_CPU [$(PROJECT_CPU)])
+	DDEFS += -DKNOCK_SPECTROGRAM=FALSE
+else ifeq ($(PROJECT_CPU),ARCH_STM32F7)
+	# F7 defaults (stm32f7ems/efifeatures.h) enable the AlphaX features; SD is datalogging only
+	DDEFS += -DEFI_STORAGE_SD=FALSE
+	DDEFS += -DEFI_EMBED_INI_MSD=FALSE
 endif
-
-DDEFS += -DHW_HELLEN_4CHAN=1
-
-# INI no longer fits the embedded ramdisk image (Disk full)
-DDEFS += -DEFI_EMBED_INI_MSD=FALSE

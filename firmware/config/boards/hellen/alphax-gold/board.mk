@@ -29,7 +29,6 @@ include $(PROJECT_DIR)/hw_layer/ports/stm32/2mb_flash.mk
 # EFI_STORAGE_SD defaults TRUE (USE_FATFS=yes), which would otherwise register SD
 # as the last storage backend and let a stale custom_page.bin clobber the flash
 # copy of page 5 on read. Datalogging is gated separately by EFI_FILE_LOGGING.
-DDEFS += -DEFI_STORAGE_SD=FALSE
 
 
 
@@ -42,26 +41,16 @@ DDEFS += -DBOOT_BACKDOOR_ENTRY_TIMEOUT_MS=0
 DDEFS += -DHW_HELLEN_SKIP_BOARD_TYPE=TRUE
 DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_ALPHAX_GOLD
 
-DDEFS += -DEFI_EMBED_INI_MSD=FALSE
-DDEFS += -DEFI_LOGIC_ANALYZER=FALSE
-DDEFS += -DEFI_ENGINE_SNIFFER=FALSE
-DDEFS += -DEFI_ENGINE_EMULATOR=FALSE
-DDEFS += -DEFI_TOOTH_LOGGER=FALSE
 
 # AlphaX custom features (TS page 5)
-DDEFS += -DEFI_VVT_COMPENSATION=TRUE
-DDEFS += -DEFI_VVT_ADVANCED_MODE=TRUE
-DDEFS += -DEFI_ADVANCED_FUEL_PUMP=TRUE
-DDEFS += -DEFI_EXHAUST_CUTOUT=TRUE
-DDEFS += -DEFI_DOWNSHIFT_BLIPPER=TRUE
-DDEFS += -DEFI_UPSHIFT_RPM_HOLD=TRUE
-DDEFS += -DEFI_ENGINE_STATE_MACHINE=TRUE
-DDEFS += -DEFI_MISFIRE_DETECTION=TRUE
-DDEFS += -DEFI_CLUTCH_DELAY_VALVE=TRUE
-DDEFS += -DEFI_LAUNCH_POWER_RAMP=TRUE
-DDEFS += -DEFI_BURST_KNOCK=TRUE
-DDEFS += -DEFI_WOT_ENRICHMENT=TRUE
-DDEFS += -DEFI_SPORT_PEDAL=TRUE
-DDEFS += -DEFI_AC_PRESSURE_FAN=TRUE
-DDEFS += -DEFI_OFF_IDLE_RPM_ADDER=TRUE
-DDEFS += -DEFI_LUA_LIMITER=TRUE
+
+# [tag:alphax_cpu_feature_policy] AlphaX feature-set policy: every F4 board uses
+# fw-custom-paralela-master's EFI_* feature set (EFI_EXTERNAL_CAN_ETB excluded: paralela-only
+# hardware), every F7 board uses alphax-s550-pnp's (F7 efifeatures defaults, no SD config
+# storage, no embedded INI). Board hardware defines stay above. Keep this block in sync with
+# those two boards.
+ifeq ($(PROJECT_CPU),ARCH_STM32F7)
+	# F7 defaults (stm32f7ems/efifeatures.h) enable the AlphaX features; SD is datalogging only
+	DDEFS += -DEFI_STORAGE_SD=FALSE
+	DDEFS += -DEFI_EMBED_INI_MSD=FALSE
+endif
