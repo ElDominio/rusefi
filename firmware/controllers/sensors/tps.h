@@ -44,8 +44,11 @@ void postExternalCanEtbRawPedal(float pedal1Volts, float pedal2Volts, efitick_t 
 
 #if EFI_SENT_SUPPORT
 
+// Registered under Tps1Unfiltered, like the analog TPS1 path in init_tps.cpp: tps1FilterSensor
+// applies the ExpAverage smoothing and republishes as Tps1. Registering Tps1 directly here
+// collided with that proxy ("Duplicate registration for sensor Tps1" at init).
 struct SentTps : public StoredValueSensor {
-	SentTps() : StoredValueSensor(SensorType::Tps1, MS2NT(200)) {
+	SentTps() : StoredValueSensor(SensorType::Tps1Unfiltered, MS2NT(200)) {
 	}
 
 	bool isRedundant() const override {
