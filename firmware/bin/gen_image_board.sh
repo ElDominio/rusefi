@@ -40,11 +40,21 @@ INI_IMAGE_COMPRESSED_SIZE=${INI_IMAGE_COMPRESSED_SIZE:-1088}
 # The placeholder must still define the real `ramdisk_image` symbol (as an empty array) because
 # simulator/Makefile unconditionally forces EFI_EMBED_INI_MSD=TRUE regardless of board.mk, so the
 # simulator build (unlike real firmware for these boards) does reference it.
+#
+# F7 firmware defaults EFI_EMBED_INI_MSD to FALSE (config/stm32f7ems/efifeatures.h), so on F7 skip it
+# unless board.mk explicitly opts in. This matters for board dirs shared by an F4 and an F7 variant
+# (e.g. alphax-4chan): the F4 variant still embeds the uncompressed image, so the board.mk grep below
+# can't be used to disable it for the F7 variant only. PROJECT_CPU comes from the exported meta-info.env.
 BOARD_MK_FILE="${BOARD_DIR}/board.mk"
-if grep -q "EFI_EMBED_INI_MSD=FALSE" "${BOARD_MK_FILE}" 2>/dev/null; then
-  echo "gen_image_board: EFI_EMBED_INI_MSD=FALSE in ${BOARD_MK_FILE} — skipping uncompressed ramdisk"
+if [ "${PROJECT_CPU}" = "ARCH_STM32F7" ] && ! grep -q "EFI_EMBED_INI_MSD=TRUE" "${BOARD_MK_FILE}" 2>/dev/null; then
+  SKIP_UNCOMPRESSED_REASON="PROJECT_CPU=ARCH_STM32F7 defaults EFI_EMBED_INI_MSD to FALSE"
+elif grep -q "EFI_EMBED_INI_MSD=FALSE" "${BOARD_MK_FILE}" 2>/dev/null; then
+  SKIP_UNCOMPRESSED_REASON="EFI_EMBED_INI_MSD=FALSE in ${BOARD_MK_FILE}"
+fi
+if [ -n "${SKIP_UNCOMPRESSED_REASON}" ]; then
+  echo "gen_image_board: ${SKIP_UNCOMPRESSED_REASON} — skipping uncompressed ramdisk"
   {
-    echo "// placeholder: EFI_EMBED_INI_MSD=FALSE for ${SHORT_BOARD_NAME}"
+    echo "// placeholder: ${SKIP_UNCOMPRESSED_REASON} for ${SHORT_BOARD_NAME}"
     echo "// real content skipped to avoid a \"Disk full\" failure when the INI is large (see above);"
     echo "// this stub only exists so the simulator (which always wants EFI_EMBED_INI_MSD=TRUE) links"
     echo "unsigned char ramdisk_image[] = { 0 };"

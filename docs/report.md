@@ -6929,3 +6929,28 @@ Validation: same as above - `unit_tests` `make -j12` compiled `init_tps.cpp` and
 this session's changes entirely. No hardware/bench validation of the reset behavior itself - this
 needs a real fast pedal/throttle stab on a bench or vehicle to confirm the threshold/window
 defaults feel right before anyone ships with `tpsExpAverageAlpha` turned down from 1.
+
+## 2026-10-13 - alphax-4chan_f7 build fails at .ramdisk-sentinel ("Disk full")
+
+build_gui.py's alphax-4chan_f7 bundle build failed with `ERROR: create_ini_image.sh failed with 136`
+/ `make: *** [rusefi_config.mk:93: .ramdisk-sentinel] Error 1`. Root cause: the F7 INI (~984 KB)
+now 7z-compresses to ~149 KB, which no longer fits the 136 KB uncompressed FAT ramdisk image
+(`mkfs.fat` -> `Disk full`). Not a build_gui.py bug - plain `compile.sh` fails the same way.
+
+That uncompressed image is dead weight on F7: `config/stm32f7ems/efifeatures.h` defaults
+`EFI_EMBED_INI_MSD` to FALSE, so `ramdisk_image.h` is never compiled in. But `gen_image_board.sh`
+only skips it when `board.mk` literally contains `EFI_EMBED_INI_MSD=FALSE` (the workaround
+hellen154hyundai_f7 uses). That trick can't work for alphax-4chan: the F4 and F7 variants share one
+`board.mk`, and the F4 variant does embed the uncompressed image (its INI still fits, ~118 KB 7z).
+
+| File | Change |
+|------|--------|
+| `firmware/bin/gen_image_board.sh` | Also skip the uncompressed ramdisk (write the placeholder) when `PROJECT_CPU=ARCH_STM32F7` and `board.mk` does not opt in with `EFI_EMBED_INI_MSD=TRUE` (nucleo_f767 does). `PROJECT_CPU` comes from the meta-info.env that `compile.sh` exports. |
+
+Validation: full `bin/compile.sh -b .../meta-info-alphax-4chan_f7.env BUNDLE_SIMULATOR=false` -> rc 0,
+fresh `build/rusefi.elf` + `artifacts/rusefi_bundle_alphax-4chan_f7.zip`. Re-ran the script with
+`PROJECT_CPU=ARCH_STM32F4` for alphax-4chan -> real FAT image still generated (fits).
+Follow-ups: the F4 variant is at ~118/136 KB and will hit the same wall as the INI grows (see the
+F4 128 KB ramdisk note); the per-board `EFI_EMBED_INI_MSD=FALSE` line in hellen154hyundai_f7 is now
+redundant but harmless. If make is invoked directly without compile.sh, PROJECT_CPU may not be in the
+environment and the old board.mk-grep behavior applies.
