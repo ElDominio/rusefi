@@ -3064,6 +3064,8 @@ end_struct
 #define ts_show_cylinder_6 true
 #define ts_show_cylinder_7 true
 #define ts_show_cylinder_8 true
+! TCU_GEAR_COUNT < 8 boards (fw-custom-paralela-master) must set this false: gearRatio7/8 do not exist there
+#define ts_show_gear_ratio_7_8 true
 #define ts_show_cylinder_9 true
 #define ts_show_cylinder_10 true
 #define ts_show_cylinder_11 true

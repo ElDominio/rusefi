@@ -52,6 +52,7 @@
 #define VBAT_INJECTOR_CURVE_SIZE 6
 #define VEHICLE_INFO_SIZE 17
 #define TCU_GEAR_COUNT 6
+#define ts_show_gear_ratio_7_8 false
 #define TCU_RANGE_COUNT 6
 #define TCU_SOLENOID_COUNT 2
 #define TCU_TABLE_WIDTH 2
