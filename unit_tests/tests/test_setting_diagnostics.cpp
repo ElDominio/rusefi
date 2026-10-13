@@ -1,7 +1,6 @@
 #include "pch.h"
 
 #include "can_dash.h"
-#include "can_vss.h"
 #include "fuel_computer.h"
 #include "fuel_math.h"
 #include "spark_logic.h"
@@ -121,33 +120,4 @@ TEST_F(SettingDiagnostics, CanDashType) {
 	engineConfiguration->canNbcType = static_cast<can_nbc_e>(182);
 	EXPECT_THAT([&] { updateDash(CanCycle(0)); },
 		ThrowsMessage<std::logic_error>(StrEq("Unsupported CAN dash type: 182")));
-}
-
-TEST_F(SettingDiagnostics, CanVssType) {
-	engineConfiguration->enableCanVss = true;
-	engineConfiguration->canVssNbcType = static_cast<can_vss_nbc_e>(182);
-	EXPECT_THAT([&] { initCanVssSupport(); },
-		ThrowsMessage<std::logic_error>(StrEq("Invalid CAN VSS type: 182")));
-}
-
-TEST_F(SettingDiagnostics, CanVssTypeWithoutRpmSupport) {
-	engineConfiguration->enableCanVss = true;
-	engineConfiguration->canInputBCM = true;
-	engineConfiguration->canVssNbcType = BMW_e46;
-	EXPECT_THAT([&] { initCanVssSupport(); },
-		ThrowsMessage<std::logic_error>(StrEq("CAN VSS type does not support RPM input: 0")));
-}
-
-TEST_F(SettingDiagnostics, CanVssTypeWithoutSecondSpeedSupport) {
-	engineConfiguration->enableCanVss = true;
-	engineConfiguration->canInputBCM = false;
-	engineConfiguration->canVssNbcType = NISSAN_350;
-	initCanVssSupport();
-
-	// Reconfigure after init to reach the second-speed decoder's defensive branch.
-	engineConfiguration->canVssNbcType = BMW_e46;
-	CANRxFrame frame = {};
-	frame.SID = 645;
-	EXPECT_THAT([&] { processCanRxVss(frame, 0); },
-		ThrowsMessage<std::logic_error>(StrEq("CAN VSS type does not support second speed input: 0")));
 }

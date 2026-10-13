@@ -22,6 +22,7 @@
 
 #include "pch.h"
 #include "bench_test.h"
+#include "speedometer.h"
 #include "tunerstudio.h"
 #include "tunerstudio_calibration_channel.h"
 #include "long_term_fuel_trim.h"
@@ -66,7 +67,6 @@ void setOutputOnTheBenchTestForUnitTest(OutputPin* output) {
 
 #include "flash_main.h"
 #include "bench_test.h"
-#include "speedometer.h"
 #include "fan_control.h"
 #include "main_trigger_callback.h"
 #include "periodic_thread_controller.h"
