@@ -11,3 +11,6 @@ include $(BOARDS_DIR)/hellen/hellen-common144.mk
 
 DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_HELLEN_GM_E67
 
+
+# INI no longer fits the embedded ramdisk image (Disk full)
+DDEFS += -DEFI_EMBED_INI_MSD=FALSE

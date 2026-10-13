@@ -28,3 +28,6 @@ DDEFS += -DBOARD_SERIAL="\"000210000000000000000000\""
 include $(BOARDS_DIR)/hellen/hellen-common-mega144.mk
 DDEFS += -DHW_HELLEN_HONDA=1
 DDEFS += -DHELLEN_BOARD_ID_DEBUG
+
+# INI no longer fits the embedded ramdisk image (Disk full)
+DDEFS += -DEFI_EMBED_INI_MSD=FALSE

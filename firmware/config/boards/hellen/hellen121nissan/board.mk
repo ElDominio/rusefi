@@ -17,3 +17,6 @@ DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_HELLEN_121NISSAN
 
 include $(BOARDS_DIR)/hellen/hellen-common144.mk
 DDEFS += -DHW_HELLEN_NISSAN=1
+
+# INI no longer fits the embedded ramdisk image (Disk full)
+DDEFS += -DEFI_EMBED_INI_MSD=FALSE
