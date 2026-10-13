@@ -7065,3 +7065,19 @@ Follow-ups:
 - Re-select 6G72/6G75 beta trigger/VVT types in existing tunes.
 - protorico-grummann needs a one-time gen_config_board.sh for its generated
   pin files (documented quirk); those files are not committed.
+
+
+## 2026-10-13 - alphax-alpha: board fixes after the master sync
+
+- alphax-4chan F4 now uses fw-custom-paralela-master's EFI_* set (minus
+  EFI_EXTERNAL_CAN_ETB, paralela-only hardware); EFI_EMBED_INI_MSD=FALSE on
+  F4 and F7. Both variants link (F4 ram0 at 100.00%).
+- EFI_EMBED_INI_MSD=FALSE on alphax-2chan, alphax-4K-GDI, hellen121nissan,
+  hellen121vag, hellen-gm-e67, hellen-honda-k, test-build-guards.
+- Builds: alphax-4chan F4/F7 and alphax-4K-GDI OK. The six F4 boards
+  alphax-2chan, hellen121nissan, hellen121vag, hellen-gm-e67, hellen-honda-k,
+  test-build-guards now reach the link step and overflow ram0 (previously
+  hidden behind the ramdisk failure): 0x3240, 0x2458, 0x2438, 0x2438,
+  0x2E08, 0xEC8 bytes over respectively.
+- Follow-up: per-board feature trimming for those F4 boards (e.g. the
+  paralela/4chan EFI_* set), or disable their CI builds.
