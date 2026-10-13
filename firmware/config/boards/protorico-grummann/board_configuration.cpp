@@ -180,19 +180,22 @@ static Gpio OUTPUTS[] = {
 	Gpio::A8,  // EGR Solenoid
 };
 
-int getBoardMetaOutputsCount() {
+static int boardGetMetaOutputsCount() {
 	return efi::size(OUTPUTS);
 }
 
-Gpio* getBoardMetaOutputs() {
+static Gpio* boardGetMetaOutputs() {
 	return OUTPUTS;
 }
 
-int getBoardMetaDcOutputsCount() {
+static int boardGetMetaDcOutputsCount() {
 	return 0;
 }
 
 void setup_custom_board_overrides() {
+	custom_board_getMetaOutputsCount = boardGetMetaOutputsCount;
+	custom_board_getMetaOutputs = boardGetMetaOutputs;
+	custom_board_getMetaDcOutputsCount = boardGetMetaDcOutputsCount;
 	custom_board_DefaultConfiguration = protorico_grummann_boardDefaultConfiguration;
 	custom_board_ConfigOverrides = protorico_grummann_boardConfigOverrides;
 }

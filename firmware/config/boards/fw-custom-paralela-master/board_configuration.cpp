@@ -27,11 +27,11 @@ static Gpio OUTPUTS[] = {
     Gpio::E12,
 };
 
-int getBoardMetaOutputsCount() {
+static int boardGetMetaOutputsCount() {
     return efi::size(OUTPUTS);
 }
 
-Gpio* getBoardMetaOutputs() {
+static Gpio* boardGetMetaOutputs() {
     return OUTPUTS;
 }
 
@@ -73,5 +73,7 @@ void setBoardDefaultConfiguration() {
 */
 
 void setup_custom_board_overrides() {
+	custom_board_getMetaOutputsCount = boardGetMetaOutputsCount;
+	custom_board_getMetaOutputs = boardGetMetaOutputs;
 	custom_board_DefaultConfiguration = customBoardDefaultConfiguration;
 }

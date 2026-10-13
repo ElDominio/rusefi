@@ -190,19 +190,22 @@ static Gpio OUTPUTS[] = {
 	Gpio::E8,  // VVT 4
 };
 
-int getBoardMetaOutputsCount() {
+static int boardGetMetaOutputsCount() {
 	return efi::size(OUTPUTS);
 }
 
-Gpio* getBoardMetaOutputs() {
+static Gpio* boardGetMetaOutputs() {
 	return OUTPUTS;
 }
 
-int getBoardMetaDcOutputsCount() {
+static int boardGetMetaDcOutputsCount() {
 	return 2; // ETB H-Bridge
 }
 
 void setup_custom_board_overrides() {
+	custom_board_getMetaOutputsCount = boardGetMetaOutputsCount;
+	custom_board_getMetaOutputs = boardGetMetaOutputs;
+	custom_board_getMetaDcOutputsCount = boardGetMetaDcOutputsCount;
 	custom_board_DefaultConfiguration = alphax_s197_boardDefaultConfiguration;
 	custom_board_ConfigOverrides = alphax_s197_boardConfigOverrides;
 }
