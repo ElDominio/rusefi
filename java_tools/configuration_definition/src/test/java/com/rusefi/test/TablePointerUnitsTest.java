@@ -98,7 +98,8 @@ class TablePointerUnitsTest {
         }
         // Main/second VE and ignition, trim views, AFR/lambda, analyzer targets,
         // maximum lambda deviation and injector staging all use these load bins.
-        assertEquals(36, checked);
+        // AlphaX adds the two manual per-bank fuel trim tables (36 upstream).
+        assertEquals(38, checked);
     }
 
     private static double evaluate(String expression, Map<String, Double> values) {
