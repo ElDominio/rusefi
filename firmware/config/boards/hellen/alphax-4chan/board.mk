@@ -22,6 +22,12 @@ MODULE_DTC_MANAGER = no
 include $(BOARDS_DIR)/hellen/hellen-common-mega144.mk
 
 ifeq ($(PROJECT_CPU),ARCH_STM32F7)
+	# Same F7 software setup as alphax-s550-pnp
+	DDEFS += -DCH_DBG_ENABLE_ASSERTS=FALSE
+	DDEFS += -DENABLE_PERF_TRACE=FALSE
+	DDEFS += -DLUA_STM32_STANDBY=1
+	# watchdog suddenly i see it #8699
+	DDEFS += -DHAL_USE_WDG=FALSE
   # need boot times of under 350ms for car that expects fast CAN https://github.com/rusefi/alphax-4chan/issues/184
   DDEFS += -DHW_HELLEN_SKIP_BOARD_TYPE=TRUE
 	DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_ALPHAX_4CHAN_F7
