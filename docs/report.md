@@ -6954,3 +6954,24 @@ Follow-ups: the F4 variant is at ~118/136 KB and will hit the same wall as the I
 F4 128 KB ramdisk note); the per-board `EFI_EMBED_INI_MSD=FALSE` line in hellen154hyundai_f7 is now
 redundant but harmless. If make is invoked directly without compile.sh, PROJECT_CPU may not be in the
 environment and the old board.mk-grep behavior applies.
+
+## 2026-10-13 - alphax-4chan_f7: match alphax-s550-pnp software/EFI setup
+
+AlphaX feature flags (EFI_VVT_COMPENSATION, EFI_ENGINE_STATE_MACHINE, ...) were already identical:
+both boards get them from the F7 defaults in `config/stm32f7ems/efifeatures.h`. The real differences
+were build options in `board.mk` and table sizes / TS visibility in `prepend.txt`. Because 4chan's
+`board.mk`/`prepend.txt` are shared with the F4 variant, everything went into the F7 branch / the
+per-variant `prepend_alphax-4chan_f7.txt` (picked up by `-soft_prepend` and `rusefi_config.mk`).
+
+| File | Change |
+|------|--------|
+| `hellen/alphax-4chan/board.mk` | F7 branch: `CH_DBG_ENABLE_ASSERTS=FALSE`, `ENABLE_PERF_TRACE=FALSE`, `LUA_STM32_STANDBY=1`, `HAL_USE_WDG=FALSE` (as s550). `EFI_EMBED_INI_MSD=FALSE` intentionally NOT written: already the F7 default, and gen_image_board.sh's file-wide grep would also kill the F4 image. |
+| `hellen/alphax-4chan/prepend_alphax-4chan_f7.txt` (new) | `LUA_SCRIPT_SIZE 40000`, `CLT_IDLE_TABLE_CLT_SIZE 8`, `VBAT_INJECTOR_CURVE_PRESSURE_SIZE 4`, `MANUAL_PRESSURE_CORRECTION_*_SIZE 8`, `canReWidebandHwIndex_enum`, `ts_show_InjectorFlowLinearizationTable/analog_diag/vvt_compensation/advanced_fuel_pump true`. |
+
+Not copied (s550 hardware, not setup): ADC3-slow/ADC1-fast mapping, `ADC_MUX_PIN_INVERTED`,
+`DIAG_5VP_PIN`, mega176 LED/include, `STM32_I2C_USE_I2C2=FALSE`, and the pin/VR/GDI/TCU/vbatt/
+pull-up/analog-divider `ts_show_*` panels (4chan keeps its own values for its hardware).
+
+Validation: `gen_config_board.sh` + full `compile.sh -b` for alphax-4chan_f7 -> rc 0, flash 32%,
+ram0 100% (normal). F4 variant not rebuilt (untouched by design). Follow-up: the table-size changes
+alter the 4chan_f7 config layout/signature - existing 4chan_f7 tunes need re-import in TS after flashing.

@@ -1,0 +1,18 @@
+// F7-only additions, matching alphax-s550-pnp's prepend.txt (software setup, not hardware panels).
+// Shared settings live in prepend.txt; don't redefine anything from there here.
+#define LUA_SCRIPT_SIZE 40000
+
+#define ts_show_InjectorFlowLinearizationTable true
+#define ts_show_analog_diag true
+#define ts_show_vvt_compensation true
+#define ts_show_advanced_fuel_pump true
+
+#define CLT_IDLE_TABLE_CLT_SIZE 8
+
+#define VBAT_INJECTOR_CURVE_PRESSURE_SIZE 4
+
+#define MANUAL_PRESSURE_CORRECTION_MASS_SIZE 8
+#define MANUAL_PRESSURE_CORRECTION_PRESSURE_SIZE 8
+
+//                                            1                                        5
+#define canReWidebandHwIndex_enum "INVALID", "First", "INVALID", "INVALID", "INVALID", "Second", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID"
