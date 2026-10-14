@@ -8,6 +8,7 @@ include $(PROJECT_DIR)/controllers/system/system.mk
 CONTROLLERS_DIR=$(PROJECT_DIR)/controllers
 
 CONTROLLERS_SRC_CPP = \
+	$(CONTROLLERS_DIR)/gauges/past_codes.cpp \
 	$(CONTROLLERS_DIR)/actuators/electronic_throttle.cpp \
 	$(CONTROLLERS_DIR)/actuators/downshift_blipper.cpp \
 	$(CONTROLLERS_DIR)/actuators/upshift_rpm_hold.cpp \
