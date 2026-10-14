@@ -61,7 +61,7 @@ void MisfireController::onEngineStop() {
 
 void MisfireController::onSlowCallback() {
 	if (misfireLatched) {
-		addError(ObdCode::OBD_Random_Misfire);
+		warning(ObdCode::OBD_Random_Misfire);
 	}
 }
 
