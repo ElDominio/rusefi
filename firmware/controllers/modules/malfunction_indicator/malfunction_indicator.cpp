@@ -31,15 +31,12 @@
 
 #include "bench_test.h"
 #include "board_overrides.h"
-#include "custom_page.h"
-#include "check_engine_light.h"
 #include "malfunction_central.h"
 #include "malfunction_indicator.h"
 
 static constexpr float ShortPulseMs = 400;
 static constexpr float LongPulseMs = 1500;
 static constexpr float PulseGapMs = 400;
-static constexpr float CelBlinkPeriodMs = 200;
 
 // Optional board hook: decides which OBD codes are allowed to be blinked out at all.
 std::optional<board_mil_code_filter_type> custom_board_milCodeFilter;
@@ -158,67 +155,49 @@ void MILController::onSlowCallback() {
 		return;
 	}
 
-	// Check Engine Triggering escalation: once points reach celBlinkPointsThreshold (on top of an
-	// already-active DTC at celPointsThreshold), flash the CEL plainly instead of the normal
-	// digit-blink-out this cycle. A flashing MIL signals a more critical, actively-damaging
-	// condition than a steady one, per OBD-II convention. The digit-blink phase state is reset so
-	// it resumes cleanly from Idle once the escalation clears.
-	if (isCelBlinkingActive()) {
-		if (!m_wasCelBlinking) {
-			m_wasCelBlinking = true;
-			m_celBlinkOn = true;
-			m_celBlinkTimer.reset();
+	switch (m_phase) {
+	case Phase::Idle:
+		{
+			// Use one filtered snapshot for presence checks and code rotation so a
+			// rejected code can never start or keep a blink sequence alive.
+			error_codes_set_s codes;
+			getErrorCodes(&codes, custom_board_milCodeFilter.value_or(nullptr));
+			if (codes.count == 0) {
+				m_activeObdCode = ObdCode::None;
+				setLamp(engine->rpmCalculator.isStopped());
+				return;
+			}
+			startNextCode(codes);
 		}
-		m_phase = Phase::Idle;
-		m_activeObdCode = ObdCode::None;
-		if (m_celBlinkTimer.hasElapsedMs(CelBlinkPeriodMs)) {
-			m_celBlinkOn = !m_celBlinkOn;
-			m_celBlinkTimer.reset();
+	break;
+
+	case Phase::Pulse:
+		{
+			const float duration = m_digitPlace % 2 == 0 ? ShortPulseMs : LongPulseMs;
+			if (m_phaseTimer.hasElapsedMs(duration)) {
+				setLamp(false, true);
+				m_phase = Phase::Gap;
+				m_phaseTimer.reset();
+			}
 		}
-		setLamp(m_celBlinkOn, true);
-		return;
-	}
-	m_wasCelBlinking = false;
+	break;
 
-	// Use one filtered snapshot for presence checks and code rotation so a
-	// rejected code can never start or keep a blink sequence alive.
-	error_codes_set_s codes;
-	getErrorCodes(&codes, custom_board_milCodeFilter.value_or(nullptr));
-	if (codes.count == 0) {
-		m_phase = Phase::Idle;
-		m_activeObdCode = ObdCode::None;
-		// Key-On-Engine-Off bulb check: light the CEL solid while the engine is stopped, mimicking
-		// the classic OBD-II bulb-check, when celOnKoeo is enabled.
-		setLamp(getCustomPage()->celOnKoeo && engine->rpmCalculator.isStopped());
-		return;
-	}
+	case Phase::Gap:
+		{
+			if (!m_phaseTimer.hasElapsedMs(PulseGapMs)) {
+				return;
+			}
 
-	if (m_phase == Phase::Idle || !isActiveCodePresent(codes)) {
-		startNextCode(codes);
-		return;
-	}
-
-	if (m_phase == Phase::Pulse) {
-		const float duration = m_digitPlace % 2 == 0 ? ShortPulseMs : LongPulseMs;
-		if (m_phaseTimer.hasElapsedMs(duration)) {
-			setLamp(false, true);
-			m_phase = Phase::Gap;
-			m_phaseTimer.reset();
+			if (--m_pulsesRemaining > 0) {
+				startPulse();
+			} else if (m_divisor > 1) {
+				m_divisor /= 10;
+				m_digitPlace--;
+				startDigit();
+			} else {
+				m_phase = Phase::Idle;
+			}
 		}
-		return;
-	}
-
-	if (!m_phaseTimer.hasElapsedMs(PulseGapMs)) {
-		return;
-	}
-
-	if (--m_pulsesRemaining > 0) {
-		startPulse();
-	} else if (m_divisor > 1) {
-		m_divisor /= 10;
-		m_digitPlace--;
-		startDigit();
-	} else {
-		startNextCode(codes);
+	break;
 	}
 }
