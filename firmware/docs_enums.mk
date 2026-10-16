@@ -23,6 +23,8 @@ DOCS_ENUMS_INPUTS = \
   $(PROJECT_DIR)/controllers/actuators/electronic_throttle.txt \
   $(PROJECT_DIR)/controllers/actuators/exhaust_cutout.txt \
   $(PROJECT_DIR)/controllers/actuators/imrc_controller.txt \
+  $(PROJECT_DIR)/controllers/algo/misfire_detection_state.txt \
+  $(PROJECT_DIR)/controllers/algo/wall_fuel_state.txt \
   $(PROJECT_DIR)/hw_layer/drivers/gpio/mc33810_state.txt \
   $(PROJECT_DIR)/integration/LiveData.yaml \
   $(PROJECT_DIR)/controllers/sensors/sensor_type.h \
