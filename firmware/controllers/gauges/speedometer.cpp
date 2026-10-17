@@ -24,7 +24,8 @@ void startSpeedoBenchTest(float freqHz) {
 		return;
 	}
 
-	speedoBenchFreq = freqHz;
+	// Match normal speed output: below 1 Hz pauses PWM; zero is not a valid PWM frequency.
+	speedoBenchFreq = freqHz < 1 ? NAN : freqHz;
 	speedoBenchTimer.reset();
 	speedoBenchActive = true;
 }
