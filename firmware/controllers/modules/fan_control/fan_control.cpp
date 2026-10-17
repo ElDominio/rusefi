@@ -14,11 +14,8 @@ PUBLIC_API_WEAK bool fansEnabledByBoardStatus() {
   return false;
 }
 
-// Sets cranking/notRunning/disabledBySpeed/disabledWhileEngineStopped (all exposed as live data)
-// and returns true if any of them require the fan to stop regardless of temperature or A/C state.
-// Shared by the on/off relay path (getState()) and the PWM path (onSlowCallbackPwm()) so the two
-// can never disagree about these checks.
-bool FanController::isHardInhibited() {
+bool FanController::getState(bool acActive, bool lastState) {
+	auto clt = Sensor::get(SensorType::Clt);
 	auto vss = Sensor::get(SensorType::VehicleSpeed);
 
 #if EFI_SHAFT_POSITION_INPUT
@@ -29,63 +26,36 @@ bool FanController::isHardInhibited() {
 	notRunning = true;
 #endif
 
-	if (disableAtSpeed() > 0 && vss.Valid) {
-		if (vss.Value > disableAtSpeed()) {
-			disabledBySpeed = true;
-		} else if (vss.Value < (disableAtSpeed() - disableAtSpeedHysteresis())) {
-			disabledBySpeed = false;
-		}
-		// else: in hysteresis band — maintain previous disabledBySpeed
-	} else {
-		disabledBySpeed = false;
-	}
+	disabledBySpeed = disableAtSpeed() > 0 && vss.Valid && vss.Value > disableAtSpeed();
 	disabledWhileEngineStopped = notRunning && disableWhenStopped();
-
-	if (cranking) {
-		radiatorFanStatus = (int)RadiatorFanState::Cranking;
-		return true;
-	} else if (disabledWhileEngineStopped) {
-		radiatorFanStatus = (int)RadiatorFanState::EngineStopped;
-		return true;
-	} else if (disabledBySpeed) {
-		radiatorFanStatus = (int)RadiatorFanState::VehicleIsTooFast;
-		return true;
-	} else if (fansDisabledByBoardStatus()) {
-		radiatorFanStatus = (int)RadiatorFanState::BoardStatus;
-		return true;
-	}
-	return false;
-}
-
-bool FanController::getState(bool acActive, bool lastState) {
-	auto clt = Sensor::get(SensorType::Clt);
-	auto acMode = getAcMode();
+	brokenClt = !clt;
+	enabledForAc = enableWithAc() && acActive;
+	hot = clt.value_or(0) > getFanOnTemp();
+	cold = clt.value_or(0) < getFanOffTemp();
 
 	if (fansEnabledByBoardStatus()) {
 		radiatorFanStatus = (int)RadiatorFanState::BoardForcedOn;
 		return true;
-	}
-	if (isHardInhibited()) {
-		// radiatorFanStatus already set inside isHardInhibited()
+	} else if (cranking) {
+		// Inhibit while cranking
+		radiatorFanStatus = (int)RadiatorFanState::Cranking;
 		return false;
-	}
-
-	brokenClt = !clt;
-	enabledForAc = (acMode == fan_ac_mode_e::Relay) && acActive;
-	hot = clt.value_or(0) > getFanOnTemp();
-	cold = clt.value_or(0) < getFanOffTemp();
-
-	if (brokenClt) {
+	} else if (disabledWhileEngineStopped) {
+		// Inhibit while not running (if so configured)
+		radiatorFanStatus = (int)RadiatorFanState::EngineStopped;
+		return false;
+	} else if (disabledBySpeed) {
+		// Inhibit while driving fast
+		radiatorFanStatus = (int)RadiatorFanState::VehicleIsTooFast;
+		return false;
+  } else if (fansDisabledByBoardStatus()) {
+    radiatorFanStatus = (int)RadiatorFanState::BoardStatus;
+		return false;
+	} else if (brokenClt) {
 		// If CLT is broken, turn the fan on
 		radiatorFanStatus = (int)RadiatorFanState::CltBroken;
 		return true;
-#if EFI_AC_PRESSURE_FAN
-	} else if (acMode == fan_ac_mode_e::Pressure && enabledForAcByPressure(lastState)) {
-		return true;
-	} else if (acMode == fan_ac_mode_e::Relay && enabledForAc) {
-#else
 	} else if (enabledForAc) {
-#endif
 	  radiatorFanStatus = (int)RadiatorFanState::AC;
 		return true;
 	} else if (hot) {
@@ -101,57 +71,15 @@ bool FanController::getState(bool acActive, bool lastState) {
 	}
 }
 
-#if EFI_AC_PRESSURE_FAN
-bool FanController::enabledForAcByPressure(bool lastState) {
-	// Pressure is the command here: high-side pressure drives the fan regardless of
-	// whether the compressor is currently engaged (eg static heat soak with clutch open).
-	auto acPressure = Sensor::get(SensorType::AcPressure);
-	if (!acPressure.Valid) {
-		enabledForAcPressure = false;
-		return false;
-	}
-
-	float pressure = acPressure.Value;
-	if (pressure >= getAcPressureFanOnThreshold()) {
-		enabledForAcPressure = true;
-	} else if (pressure < getAcPressureFanOffThreshold()) {
-		enabledForAcPressure = false;
-	} else {
-		// hysteresis band: maintain previous fan state
-		enabledForAcPressure = lastState;
-	}
-
-	if (enabledForAcPressure) {
-		radiatorFanStatus = (int)RadiatorFanState::AcPressure;
-	}
-	return enabledForAcPressure;
-}
-#endif
-
 void FanController::initPwm() {
 	if (m_pwmInitialized) {
 		return;
 	}
 #if !EFI_UNIT_TEST
 	if (!isBrainPinValid(getConfigPin())) {
-		efiPrintf("Fan PWM: NOT starting, configured pin is invalid (brain_pin_e=%d)", (int)getConfigPin());
 		return;
 	}
-	float frequency = getPwmFrequency();
-	if (frequency < 1) {
-		// Guard against a corrupt/zero frequency (e.g. stale tune data after a config layout
-		// change, or a bad manual edit): startSimplePwm() silently refuses to start below 1 Hz,
-		// and without this guard initPwm() would still mark itself initialized, permanently
-		// freezing the fan output pin at its resting level with no further diagnostic once the
-		// one-time low-frequency warning scrolls by.
-		warning(ObdCode::CUSTOM_OBD_LOW_FREQUENCY, "Fan PWM: invalid frequency %.0f, using 250Hz fallback", frequency);
-		frequency = 250;
-	}
-	// getPin() (enginePins.fanRelay/fanRelay2) is already initialized under the "Fan Relay" name by
-	// the generic RegisteredOutputPin::init() registration pass at boot - do NOT re-initPin() it
-	// here under a different name ("Fan PWM"), that trips the pin repository's duplicate-ownership
-	// check (CUSTOM_OBD_PIN_CONFLICT) since it looks like two features are fighting over the pin.
-	startSimplePwm(&m_pwm, "Fan PWM", &engine->scheduler, &getPin(), frequency, 0);
+	startSimplePwm(&m_pwm, "Fan PWM", &engine->scheduler, &getPin(), getPwmFrequency(), 0);
 	m_pwmInitialized = true;
 #endif
 }
@@ -160,80 +88,59 @@ void FanController::onSlowCallbackPwm(bool acActive) {
 	initPwm();
 
 	auto clt = Sensor::get(SensorType::Clt);
-	auto acMode = getAcMode();
 
-	// The temperature curve is the only source of truth for PWM speed - there is no separate
-	// on/off temperature threshold here (unlike the relay path, which has no curve and still
-	// needs one). Its lowest bin doubles as "fan off" and its highest bin as "fan full speed" for
-	// the special-case demands below, gotten by reusing computeCurvePwm()'s own out-of-range
-	// clamping (interpolate2d) with an extreme temperature rather than a separate accessor.
-	float rawDemand;
-	if (fansEnabledByBoardStatus()) {
-		radiatorFanStatus = (int)RadiatorFanState::BoardForcedOn;
-		rawDemand = computeCurvePwm(1000.0f);
-	} else if (isHardInhibited()) {
-		// radiatorFanStatus already set inside isHardInhibited()
-		rawDemand = computeCurvePwm(-1000.0f);
-	} else if (!clt) {
-		// Fail safe: run at the curve's own "full speed" value rather than reading a stale/invalid
-		// temperature.
-		radiatorFanStatus = (int)RadiatorFanState::CltBroken;
-		rawDemand = computeCurvePwm(1000.0f);
-	} else {
-		rawDemand = computeCurvePwm(clt.Value);
-		radiatorFanStatus = (int)RadiatorFanState::Previous;
-		if (acMode == fan_ac_mode_e::Relay && acActive) {
-			// The condenser needs full airflow whenever the compressor relay is engaged - no
-			// point ramping a PWM fan gradually for A/C, just run it flat out.
-			radiatorFanStatus = (int)RadiatorFanState::AC;
-			rawDemand = computeCurvePwm(1000.0f);
-#if EFI_AC_PRESSURE_FAN
-		} else if (acMode == fan_ac_mode_e::Pressure) {
-			// Ramp demand from 0% at the Off pressure threshold to 100% at the On threshold, and
-			// take the max with the temperature curve's own demand: pressure can only push the fan
-			// faster than the curve already wants, never slower.
-			auto acPressure = Sensor::get(SensorType::AcPressure);
-			float onT = getAcPressureFanOnThreshold();
-			float offT = getAcPressureFanOffThreshold();
-			if (acPressure.Valid && onT > offT) {
-				float pressureDemand = clampF(0, 100.0f * (acPressure.Value - offT) / (onT - offT), 100);
-				if (pressureDemand > rawDemand) {
-					radiatorFanStatus = (int)RadiatorFanState::AcPressure;
-				}
-				rawDemand = maxF(rawDemand, pressureDemand);
-			}
-#endif
+	if (!clt) {
+		// Sensor invalid – run fan at max PWM
+		float safeDuty = getMaxPwm();
+		pwmCurvePwm = safeDuty;
+		pwmTargetPwm = safeDuty;
+		m_currentPwm = safeDuty;
+		pwmAppliedPwm = safeDuty;
+		m_state = (safeDuty > 0);
+#if !EFI_UNIT_TEST
+		if (m_pwmInitialized) {
+			m_pwm.setSimplePwmDutyCycle(safeDuty / 100.0f);
 		}
+#endif
+		return;
 	}
-	rawDemand = clampF(0, rawDemand, 100);
-	fanSpeedTarget = rawDemand; // 0% = fan off, 100% = full fan - table + AC/inhibit, pre-ramp
-	m_state = rawDemand > 0;
 
-	// Soft-start: limit upward slew rate in demand space (not raw duty) so ramping from 0 to full
-	// demand takes softStartSec seconds the same way regardless of whether fan1MinPwm/fan1MaxPwm
-	// describe a "normal" (min < max) or hardware-inverted (min > max) PWM signal. Skip the ramp
-	// entirely on a broken sensor - fail-safe should be immediate, not gradual.
+	pwmCurvePwm = computeCurvePwm(clt.Value);
+
+	float target = pwmCurvePwm;
+	if (acActive) {
+		target += getPwmAcAdder();
+	}
+	target = clampF(getMinPwm(), target, getMaxPwm());
+
+	if (disableWhenStopped() && Sensor::getOrZero(SensorType::Rpm) == 0) {
+		// Engine stopped and the safety flag is set: inhibit the fan entirely and
+		// reset the soft-start ramp so the next start ramps up from zero again.
+		target = 0;
+		m_currentPwm = 0;
+	}
+
+	if (disabledBySpeed) {
+		// Inhibit while driving fast, as in relay mode
+		target = 0;
+	}
+
+	pwmTargetPwm = target;
+
+	// Soft-start: limit upward slew rate so ramp from 0-100 takes softStartSec seconds
 	float softSec = getSoftStartSec();
-	if (clt && softSec > 0 && rawDemand > m_currentDemand) {
+	if (softSec > 0 && target > m_currentPwm) {
 		float maxStep = 100.0f / (softSec * 20.0f);
-		m_currentDemand = minF(rawDemand, m_currentDemand + maxStep);
-	} else {
-		m_currentDemand = rawDemand;
+		target = minF(target, m_currentPwm + maxStep);
 	}
-	fanSpeedApplied = m_currentDemand; // same as target, but after soft-start ramping
 
-	// fan1MinPwm is the duty cycle that means "fan off" (0% demand); fan1MaxPwm is the duty cycle
-	// that means "fan full speed" (100% demand). Interpolating between them - rather than clamping
-	// the demand value directly against [min, max] - lets min be numerically greater than max,
-	// describing hardware that drives the fan with an inverted PWM signal (e.g. an NPN transistor
-	// + pull-up: high duty = off, low duty = full speed).
-	float minPwm = getMinPwm();
-	float maxPwm = getMaxPwm();
-	pwmAppliedPwm = minPwm + (m_currentDemand / 100.0f) * (maxPwm - minPwm);
+	m_currentPwm = target;
+	pwmAppliedPwm = m_currentPwm;
+	m_state = (m_currentPwm > 0);
 
 #if !EFI_UNIT_TEST
 	if (m_pwmInitialized) {
-		m_pwm.setSimplePwmDutyCycle(pwmAppliedPwm / 100.0f);
+		m_pwm.setSimplePwmDutyCycle(m_currentPwm / 100.0f);
 	}
 #endif
 }
@@ -248,15 +155,15 @@ void FanController::onSlowCallback() {
 
 	bool acActive = engine->module<AcController>()->isAcEnabled();
 
+	auto& pin = getPin();
+	// Refresh status and condition flags for both control modes.
+	bool result = getState(acActive, pin.getLogicValue());
+
 	pwmActive = isPwmEnabled();
 	if (isPwmEnabled()) {
 		onSlowCallbackPwm(acActive);
 		return;
 	}
-
-	auto& pin = getPin();
-
-	bool result = getState(acActive, pin.getLogicValue());
 
 	m_state = result;
 
@@ -264,9 +171,6 @@ void FanController::onSlowCallback() {
 }
 
 void FanController::setDefaultConfiguration() {
-	engineConfiguration->disableFan1AtSpeedHysteresis = 5;
-	engineConfiguration->disableFan2AtSpeedHysteresis = 5;
-
 	engineConfiguration->fanOnTemperature = 92;
 	engineConfiguration->fanOffTemperature = 88;
 	engineConfiguration->fan2OnTemperature = 95;
@@ -280,28 +184,14 @@ void FanController::setDefaultConfiguration() {
 	setLinearCurve(engineConfiguration->fan2TempBins, 85, 115);
 	setLinearCurve(engineConfiguration->fan2PwmValues, 0, 100);
 
-	// fan1MinPwm/fan1MaxPwm are the duty cycles meaning "off" and "full speed" respectively -
-	// default assumes a non-inverted PWM signal path. See the field comment for how to set these
-	// for hardware that drives the fan through an inverting stage (min > max).
-	engineConfiguration->fan1MinPwm = 0;
+	engineConfiguration->fan1MinPwm = 20;
 	engineConfiguration->fan1MaxPwm = 100;
-	engineConfiguration->fan2MinPwm = 0;
+	engineConfiguration->fan2MinPwm = 20;
 	engineConfiguration->fan2MaxPwm = 100;
+
+	engineConfiguration->fan1AcAdder = 10;
+	engineConfiguration->fan2AcAdder = 10;
 
 	engineConfiguration->fan1SoftStartSec = 2.0f;
 	engineConfiguration->fan2SoftStartSec = 2.0f;
-
-#if EFI_AC_PRESSURE_FAN
-	// Defaults suited for R134a/R1234yf high-side: fan 1 on at ~200 psi, fan 2 on at ~260 psi.
-	getCustomPage()->fan1AcPressureOn  = 1400;
-	getCustomPage()->fan1AcPressureOff = 1100;
-	getCustomPage()->fan2AcPressureOn  = 1800;
-	getCustomPage()->fan2AcPressureOff = 1400;
-#endif
-}
-
-void debugReinitFanPwm() {
-	engine->module<FanControl1>()->debugForceInitPwm();
-	engine->module<FanControl2>()->debugForceInitPwm();
-	efiPrintf("fan_pwm_reinit: done");
 }
