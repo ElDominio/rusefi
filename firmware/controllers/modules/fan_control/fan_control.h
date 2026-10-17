@@ -2,7 +2,6 @@
 
 #include "fan_control_generated.h"
 #include "pwm_generator_logic.h"
-#include "custom_page.h"
 
 enum class RadiatorFanState : uint8_t {
   None, // 0
@@ -24,22 +23,15 @@ struct FanController : public EngineModule, public fan_control_s {
 	void onSlowCallback() override;
 	void setDefaultConfiguration() override;
 
-	// Console-callable hook (see "fan_pwm_reinit" in bench_test.cpp): force PWM re-init on demand,
-	// e.g. after a live frequency/pin change, without waiting for a reboot.
-	void debugForceInitPwm() {
-		m_pwmInitialized = false;
-		initPwm();
-	}
-
 private:
-	bool getState(bool acActive, bool lastState);
+	void updateConditions(bool acActive);
+	bool getState(bool lastState);
 	bool isHardInhibited();
 	void initPwm();
 	void onSlowCallbackPwm(bool acActive);
 
-#if EFI_AC_PRESSURE_FAN
 	bool enabledForAcByPressure(bool lastState);
-#endif
+	float getAcPressureDemand() const;
 
 	SimplePwm m_pwm;
 	bool m_pwmInitialized = false;
@@ -66,10 +58,8 @@ protected:
 	virtual float getMaxPwm() const = 0;
 	virtual float getSoftStartSec() const = 0;
 
-#if EFI_AC_PRESSURE_FAN
 	virtual float getAcPressureFanOnThreshold() const = 0;
 	virtual float getAcPressureFanOffThreshold() const = 0;
-#endif
 };
 
 struct FanControl1 : public FanController {
@@ -86,7 +76,7 @@ struct FanControl1 : public FanController {
 	}
 
 	fan_ac_mode_e getAcMode() const override {
-		return getCustomPage()->fan1AcMode;
+		return engineConfiguration->fan1AcMode;
 	}
 
 	bool disableWhenStopped() {
@@ -129,15 +119,13 @@ struct FanControl1 : public FanController {
 		return engineConfiguration->fan1SoftStartSec;
 	}
 
-#if EFI_AC_PRESSURE_FAN
 	float getAcPressureFanOnThreshold() const override {
-		return getCustomPage()->fan1AcPressureOn;
+		return engineConfiguration->fan1AcPressureOn;
 	}
 
 	float getAcPressureFanOffThreshold() const override {
-		return getCustomPage()->fan1AcPressureOff;
+		return engineConfiguration->fan1AcPressureOff;
 	}
-#endif
 };
 
 struct FanControl2 : public FanController {
@@ -154,7 +142,7 @@ struct FanControl2 : public FanController {
 	}
 
 	fan_ac_mode_e getAcMode() const override {
-		return getCustomPage()->fan2AcMode;
+		return engineConfiguration->fan2AcMode;
 	}
 
 	bool disableWhenStopped() {
@@ -197,17 +185,11 @@ struct FanControl2 : public FanController {
 		return engineConfiguration->fan2SoftStartSec;
 	}
 
-#if EFI_AC_PRESSURE_FAN
 	float getAcPressureFanOnThreshold() const override {
-		return getCustomPage()->fan2AcPressureOn;
+		return engineConfiguration->fan2AcPressureOn;
 	}
 
 	float getAcPressureFanOffThreshold() const override {
-		return getCustomPage()->fan2AcPressureOff;
+		return engineConfiguration->fan2AcPressureOff;
 	}
-#endif
 };
-
-// Console-callable diagnostic: force both fan controllers to (re)run their PWM init, bypassing
-// the normal onSlowCallback()-driven lazy init.
-void debugReinitFanPwm();

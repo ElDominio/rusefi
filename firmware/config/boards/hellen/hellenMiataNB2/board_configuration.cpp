@@ -13,7 +13,6 @@
 #include "pch.h"
 #include "hellen_meta.h"
 #include "board_overrides.h"
-#include "custom_page.h"
 
 static void setInjectorPins() {
 	engineConfiguration->injectionPins[0] = Gpio::G7;
@@ -89,6 +88,7 @@ static void hellen_MiataNB2_boardDefaultConfiguration() {
 	engineConfiguration->acSwitch = Gpio::B0;
 	engineConfiguration->acSwitchMode = PI_PULLUP;
 
+	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::H144_IN_VSS;
 	engineConfiguration->clutchDownPin = Gpio::H144_IN_RES3;
 	engineConfiguration->clutchDownPinMode = PI_INVERTED_DEFAULT;
 
@@ -96,7 +96,7 @@ static void hellen_MiataNB2_boardDefaultConfiguration() {
 	engineConfiguration->idle.solenoidPin = Gpio::D14;	// OUT_PWM5
 	engineConfiguration->fanPin = Gpio::D12;	// OUT_PWM8
 	engineConfiguration->fan2Pin = Gpio::D9;
-	getCustomPage()->fan2AcMode = fan_ac_mode_e::Relay;
+	engineConfiguration->fan2AcMode = fan_ac_mode_e::Relay;
 	engineConfiguration->mainRelayPin = Gpio::I2;	// OUT_LOW3
 	engineConfiguration->vvtPins[0] = Gpio::I0;    // 4R - VVT (O5)
 

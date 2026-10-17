@@ -15,7 +15,6 @@
 #include "pch.h"
 
 #include "custom_engine.h"
-#include "custom_page.h"
 #include "mazda_miata_1_6.h"
 #include "mazda_miata_base_maps.h"
 #include "mre_meta.h"
@@ -107,8 +106,8 @@ void miataNAcommonEngineSettings() {
 //	engineConfiguration->totalGearsCount = 5;
 
 	engineConfiguration->rpmHardLimit = 7200;
-	getCustomPage()->fan1AcMode = fan_ac_mode_e::Relay;
-	getCustomPage()->fan2AcMode = fan_ac_mode_e::Relay;
+	engineConfiguration->fan1AcMode = fan_ac_mode_e::Relay;
+	engineConfiguration->fan2AcMode = fan_ac_mode_e::Relay;
 
 	engineConfiguration->tachPulsePerRev = 2;
 
@@ -192,6 +191,16 @@ void miataNAcommonEngineSettings() {
 	// These may need to change based on your real car
 	engineConfiguration->driveWheelRevPerKm = 551;
 	engineConfiguration->finalGearRatio = 4.3;
+
+	// This should be correct for factory matched speedo gears and diffs,
+	// but will need to be adjusted for mismatched combinations.
+
+	// - 6 teeth on transmission output shaft
+	// - 23 teeth on speedometer sensor
+	// - 4.3 rear axle ratio
+	// 4.3 * 6 / 23 ~= 1.12
+	engineConfiguration->vssGearRatio = 4.3 * 6 / 23;
+	engineConfiguration->vssToothCount = 4;
 }
 
 /**

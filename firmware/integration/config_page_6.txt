@@ -54,8 +54,6 @@ custom sport_pedal_activation_e 1 bits, U08, @OFFSET@, [0:1], @@sport_pedal_acti
 custom sport_mode_activation_e 1 bits, U08, @OFFSET@, [0:1], @@sport_mode_activation_e_enum@@
 #define limiter_adder_source_e_enum "LuaGauge", "Sport Mode"
 custom limiter_adder_source_e 1 bits, U08, @OFFSET@, [0:0], @@limiter_adder_source_e_enum@@
-#define fan_ac_mode_e_enum "Disabled", "Relay", "Pressure"
-custom fan_ac_mode_e 1 bits, U08, @OFFSET@, [0:1], @@fan_ac_mode_e_enum@@
 #define oil_life_temp_source_e_enum "Oil Temp (EOT)", "Coolant Temp (CLT)"
 custom oil_life_temp_source_e 1 bits, U08, @OFFSET@, [0:1], @@oil_life_temp_source_e_enum@@
 
@@ -430,21 +428,6 @@ struct_no_prefix page6_s
 	float quickWarmupIdleTimingOverride;Quick Warmup: absolute idle ignition timing advance while active, replacing the idle timing curve. Only takes effect when useSeparateAdvanceForIdle is enabled - that curve becomes the base timing lookup this overrides.;"deg", 1, 0, -20, 90, 1
 	float quickWarmupLambdaTarget;Quick Warmup: absolute lambda target while active. Values below 1.0 richen the mixture (e.g. 0.95 = 5 percent rich). Applied as a hard override over the normal lambda table.;"lambda", 1, 0, 0.7, 1.2, 2
 
-	! --- Fan A/C Control Mode ---
-	! This is the single switch that decides whether each radiator fan reacts to the A/C
-	! compressor — there is no separate "enable for AC" elsewhere. 'Disabled' never runs the
-	! fan for A/C. 'Relay' turns the fan on whenever the A/C compressor relay is active.
-	! 'Pressure' (EFI_AC_PRESSURE_FAN) uses a high-side pressure sensor threshold instead: the
-	! fan turns ON above fanNAcPressureOn and OFF below fanNAcPressureOff (hysteresis band
-	! prevents rapid cycling). Requires SensorType::AcPressure to be wired. Pressure is the
-	! command in this mode: the fan follows the sensor reading regardless of whether the A/C
-	! compressor is currently engaged (eg static high-side heat soak with the clutch open).
-	fan_ac_mode_e fan1AcMode;Fan 1: A/C fan control mode. 'Disabled' never runs the fan for A/C. 'Relay' turns the fan on whenever the A/C compressor is active. 'Pressure' uses the high-side pressure thresholds below, independent of compressor state, and requires an A/C pressure sensor.
-	fan_ac_mode_e fan2AcMode;Fan 2: A/C fan control mode. 'Disabled' never runs the fan for A/C. 'Relay' turns the fan on whenever the A/C compressor is active. 'Pressure' uses the high-side pressure thresholds below, independent of compressor state, and requires an A/C pressure sensor.
-	uint16_t fan1AcPressureOn;Fan 1: A/C high-side pressure above which fan 1 turns on (pressure mode only).;"kPa", 1, 0, 0, 4000, 0
-	uint16_t fan1AcPressureOff;Fan 1: A/C high-side pressure below which fan 1 turns off (hysteresis lower bound). Must be less than fan1AcPressureOn.;"kPa", 1, 0, 0, 4000, 0
-	uint16_t fan2AcPressureOn;Fan 2: A/C high-side pressure above which fan 2 turns on (pressure mode only).;"kPa", 1, 0, 0, 4000, 0
-	uint16_t fan2AcPressureOff;Fan 2: A/C high-side pressure below which fan 2 turns off (hysteresis lower bound). Must be less than fan2AcPressureOn.;"kPa", 1, 0, 0, 4000, 0
 
 	! Dwell Duty Mode moved to the main engine_configuration_s (rusefi_config.txt) when this
 	! feature was ported onto master -- see ignition_state.cpp. No longer duplicated here.
