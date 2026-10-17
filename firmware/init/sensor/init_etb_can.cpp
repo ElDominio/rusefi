@@ -256,6 +256,31 @@ public:
 
 static EtbCanRawListener externalEtbRawListener;
 
+// Local pedal target state (can_etb.h's ETB_LOCAL_STATUS): which pedal target table the board
+// holds (by CRC - compared against this tune's in onExternalEtbBoardPedalTableCrc(), which also
+// confirms a transfer in flight), whether it's driving from that table right now, and the target
+// it computed.
+class EtbCanLocalStatusListener : public CanListener {
+public:
+	EtbCanLocalStatusListener() : CanListener(CAN_ID_ETB_LOCAL_STATUS) {}
+
+	void decodeFrame(const CANRxFrame& frame, efitick_t /*nowNt*/) override {
+		uint32_t boardCrc;
+		memcpy(&boardCrc, &frame.data8[ETB_LOCAL_STATUS_OFFSET_TABLE_CRC], sizeof(boardCrc));
+		onExternalEtbBoardPedalTableCrc(boardCrc);
+
+#if EFI_TUNER_STUDIO
+		const auto localTargetRaw = reinterpret_cast<const scaled_channel<int16_t, 100>*>(
+			&frame.data8[ETB_LOCAL_STATUS_OFFSET_LOCAL_TARGET]);
+		engine->outputChannels.canEtbLocalTarget = *localTargetRaw;
+		engine->outputChannels.canEtbLocalPedalActive =
+			(frame.data8[ETB_LOCAL_STATUS_OFFSET_FLAGS] & ETB_LOCAL_STATUS_FLAG_LOCAL_ACTIVE) != 0;
+#endif // EFI_TUNER_STUDIO
+	}
+};
+
+static EtbCanLocalStatusListener externalEtbLocalStatusListener;
+
 bool getExternalEtbRawTps(uint16_t& tps1, uint16_t& tpsB) {
 	if (externalEtbRawTps.lastUpdate == 0
 			|| getTimeNowNt() - externalEtbRawTps.lastUpdate > etbCanSensorTimeout) {
@@ -284,6 +309,7 @@ void initExternalCanEtbSensors() {
 	registerCanListener(externalEtbPidStatusListener);
 	registerCanListener(externalEtbRawListener);
 	registerCanListener(externalEtbFeedForwardListener);
+	registerCanListener(externalEtbLocalStatusListener);
 
 	registerCanListener(externalEtbAutotuneStatus1Listener);
 	registerCanListener(externalEtbAutotuneStatus2Listener);

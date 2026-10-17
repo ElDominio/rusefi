@@ -78,6 +78,10 @@ constexpr float CAN_ETB_BOARD_ADC_MAX_COUNT = 4095.0f;
 // board is the authority on what it actually used (its own copy can briefly lag rusEFI's after a
 // curve edit, until the next periodic ETB_BIAS_1..4 resend - see can_tx.cpp).
 #define CAN_ID_ETB_FEEDFORWARD (CAN_ETB_BASE_ID + 15)
+// Local pedal target state: CRC of the pedal target table the board holds (0 = none), the target it
+// computed locally this tick (0 while remote), status flags, last table-transfer result. See the
+// local pedal target block below.
+#define CAN_ID_ETB_LOCAL_STATUS (CAN_ETB_BASE_ID + 20)
 
 // Commands: rusEFI -> CH32, extended 29-bit frames, DLC 8
 #define CAN_ID_ETB_LIMITS     (CAN_ETB_BASE_ID + 3)
@@ -95,6 +99,25 @@ constexpr float CAN_ETB_BOARD_ADC_MAX_COUNT = 4095.0f;
 #define CAN_ID_ETB_BIAS_2     (CAN_ETB_BASE_ID + 12)
 #define CAN_ID_ETB_BIAS_3     (CAN_ETB_BASE_ID + 13)
 #define CAN_ID_ETB_BIAS_4     (CAN_ETB_BASE_ID + 14)
+
+/*
+ * Local pedal target (external-etb/firmware/src/pedal_table.h, can_bus.h). The pedal is wired to
+ * the board, so the remote-only path is pedal -> ETB_RAW (10Hz) -> getSetpointEtb() -> ETB_TARGET
+ * (50Hz): 20-120ms stale. With these, once the pedal is past idlePidDeactivationTpsThreshold the
+ * board looks up its own copy of pedalToTpsTable every control tick and applies
+ *     target = clamp(table(pedal, rpm) * mult + add, etbMinimumPosition, maxLimit)
+ * where mult/add/maxLimit are EtbLocalPedalShaping (electronic_throttle.h), i.e. everything
+ * getSetpointEtb() does on top of the table. Below the threshold, or with FORCE_REMOTE set, it tracks
+ * ETB_TARGET exactly as before (10% hysteresis either side of the threshold).
+ *
+ * The table itself goes over only when the user presses "Send to CAN ETB" in TunerStudio
+ * (TS_ETB_SEND_PEDAL_TABLE) - never periodically. The board stores it in flash and reports its CRC
+ * in ETB_LOCAL_STATUS, which is how rusEFI knows whether the board's copy matches this tune.
+ */
+#define CAN_ID_ETB_SHAPING      (CAN_ETB_BASE_ID + 16) // 50Hz, alongside ETB_TARGET
+#define CAN_ID_ETB_PEDAL_CONFIG (CAN_ETB_BASE_ID + 17) // 4Hz, alongside gains
+#define CAN_ID_ETB_TABLE_CTRL   (CAN_ETB_BASE_ID + 18) // table transfer BEGIN/END
+#define CAN_ID_ETB_TABLE_DATA   (CAN_ETB_BASE_ID + 19) // table transfer payload
 
 // ETB_STATUS (CAN_ETB_BASE_ID+0) byte layout - see can_bus.c's can_tx_status()
 #define ETB_STATUS_OFFSET_VERSION    0
@@ -186,6 +209,54 @@ enum class EtbCanMode : uint8_t {
 #define ETB_AUTOTUNE_STATUS_1_OFFSET_IFACTOR 4 // float32
 #define ETB_AUTOTUNE_STATUS_2_OFFSET_DFACTOR 0 // float32
 
+// ETB_SHAPING (CAN_ETB_BASE_ID+16) byte layout - see can_bus.c's handle_frame() CAN_ID_ETB_SHAPING branch
+#define ETB_SHAPING_OFFSET_MULT      0 // int16, x1000
+#define ETB_SHAPING_OFFSET_ADD       2 // int16, x100 (%)
+#define ETB_SHAPING_OFFSET_MAX_LIMIT 4 // uint16, x100 (%)
+#define ETB_SHAPING_OFFSET_RPM       6 // uint8, RPM / 50
+#define ETB_SHAPING_OFFSET_FLAGS     7 // uint8
+#define ETB_SHAPING_FLAG_FORCE_REMOTE 0x01
+
+// ETB_PEDAL_CONFIG (CAN_ETB_BASE_ID+17) byte layout
+#define ETB_PEDAL_CONFIG_OFFSET_IDLE_THRESHOLD 0 // int16, x100 (%)
+#define ETB_PEDAL_CONFIG_OFFSET_MIN_POSITION   2 // uint16, x100 (%)
+#define ETB_PEDAL_CONFIG_OFFSET_FLAGS          4 // uint8
+// Average both pedal channels, as RedundantSensor does; otherwise the board uses PEDAL1 alone.
+#define ETB_PEDAL_CONFIG_FLAG_PEDAL2_REDUNDANT 0x01
+
+// ETB_TABLE_CTRL (CAN_ETB_BASE_ID+18) byte layout - see pedal_table.c's pedal_table_rx_ctrl()
+#define ETB_TABLE_CTRL_OFFSET_CMD    0 // uint8
+#define ETB_TABLE_CTRL_OFFSET_CRC    1 // uint32, CRC-32 of the whole table (END only)
+#define ETB_TABLE_CTRL_OFFSET_LENGTH 5 // uint8, total table bytes
+#define ETB_TABLE_CTRL_CMD_BEGIN 1
+#define ETB_TABLE_CTRL_CMD_END   2
+
+// ETB_TABLE_DATA (CAN_ETB_BASE_ID+19): byte0 = byte offset into the table, then up to 7 bytes.
+#define ETB_TABLE_DATA_BYTES_PER_FRAME 7
+
+// The table as sent and CRC'd, unscaled config bytes: pedalToTpsPedalBins (8), pedalToTpsRpmBins
+// (8, RPM/100), pedalToTpsTable (64, [pedal][rpm]).
+#define ETB_PEDAL_TABLE_BYTES (PEDAL_TO_TPS_SIZE + PEDAL_TO_TPS_RPM_SIZE + PEDAL_TO_TPS_SIZE * PEDAL_TO_TPS_RPM_SIZE)
+
+// ETB_LOCAL_STATUS (CAN_ETB_BASE_ID+20) byte layout - see can_bus.c's can_tx_local_status()
+#define ETB_LOCAL_STATUS_OFFSET_TABLE_CRC    0 // uint32, 0 = no table on the board
+#define ETB_LOCAL_STATUS_OFFSET_LOCAL_TARGET 4 // int16, x100 (%), 0 while remote
+#define ETB_LOCAL_STATUS_OFFSET_FLAGS        6 // uint8
+#define ETB_LOCAL_STATUS_OFFSET_RESULT       7 // uint8, last transfer result (diagnostics)
+#define ETB_LOCAL_STATUS_FLAG_TABLE_VALID  0x01
+#define ETB_LOCAL_STATUS_FLAG_LOCAL_ACTIVE 0x02
+#define ETB_LOCAL_STATUS_FLAG_SAVE_PENDING 0x04
+#define ETB_LOCAL_STATUS_FLAG_SAVE_FAILED  0x08
+
+// outputChannels.canEtbPedalTableState
+enum class EtbCanPedalTableState : uint8_t {
+	NoTable = 0,     // the board has no valid table: remote operation only
+	OutOfDate = 1,   // the board's table differs from this tune - press "Send to CAN ETB"
+	Synced = 2,      // the board's table matches this tune
+	Sending = 3,     // transfer in progress
+	SendFailed = 4,  // the board never confirmed the table after every retry
+};
+
 // ETB_CAL_TPS (CAN_ETB_BASE_ID+7) / ETB_CAL_PEDAL (CAN_ETB_BASE_ID+8) byte layout - see can_bus.c's handle_frame()
 #define ETB_CAL_OFFSET_CH1_MIN 0 // uint16, raw ADC
 #define ETB_CAL_OFFSET_CH1_MAX 2 // uint16
@@ -265,3 +336,17 @@ void sendExternalEtbCalibration();
 // read instead of the local ADC voltages doAutocal() normally captures. Returns false if no
 // ETB_RAW frame has arrived recently (same 3x-telemetry-period staleness margin as the CanSensors).
 bool getExternalEtbRawTps(uint16_t& tps1, uint16_t& tpsB);
+
+// Local pedal target (see the block above the frame IDs). sendExternalEtbShaping() goes out with
+// ETB_TARGET, sendExternalEtbPedalConfig() with gains - both called from can_tx.cpp.
+void sendExternalEtbShaping();
+void sendExternalEtbPedalConfig();
+// TS button (TS_ETB_SEND_PEDAL_TABLE, bench_test.cpp): starts a table transfer. Safe from any
+// thread - the transfer itself runs from serviceExternalEtbPedalTableTransfer().
+void requestExternalEtbPedalTableSend();
+// Called every 10ms from can_tx.cpp: sends at most one table frame per call (the board's RX FIFO is
+// only 3 deep), then waits for ETB_LOCAL_STATUS to report the new CRC, retrying a few times.
+void serviceExternalEtbPedalTableTransfer();
+// init_etb_can.cpp's ETB_LOCAL_STATUS listener: the CRC of the board's table (0 = none). Updates
+// outputChannels.canEtbPedalTableState and confirms an in-flight transfer.
+void onExternalEtbBoardPedalTableCrc(uint32_t boardCrc);

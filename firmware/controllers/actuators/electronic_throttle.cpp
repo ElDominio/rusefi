@@ -363,8 +363,12 @@ bool isSportPedalActive() {
 #endif // EFI_SPORT_PEDAL
 
 expected<percent_t> EtbController::getSetpointEtb() {
+	// m_localPedalShaping is published exactly once per call, on every path - early returns publish
+	// the forceRemote default - so a reader never sees a half-built value.
+
 	// Autotune runs with 50% target position
 	if (m_isAutotune) {
+		m_localPedalShaping = {};
 		return 50.0f;
 	}
 
@@ -376,6 +380,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// If the pedal map hasn't been set, we can't provide a setpoint.
 	if (!m_pedalProvider) {
     state = (uint8_t)EtbState::NoPedal;
+		m_localPedalShaping = {};
 		return unexpected;
 	}
 
@@ -391,6 +396,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	constexpr float crankingTpsTargetVssToleranceKph = 2.0f;
 	if (engineConfiguration->crankingTpsTargetEnabled && engine->rpmCalculator.isCranking()
 			&& Sensor::getOrZero(SensorType::VehicleSpeed) < crankingTpsTargetVssToleranceKph) {
+		m_localPedalShaping = {};
 		return clampPercentValue(engineConfiguration->cranking.tpsTarget);
 	}
 
@@ -400,6 +406,15 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	percent_t preBoard = m_pedalProvider->getValue(rpm, sanitizedPedal);
 	etbCurrentTarget = boardAdjustEtbTarget(preBoard);
 	boardEtbAdjustment = etbCurrentTarget - preBoard;
+
+	// Tracks targetPosition as shaping.mult * preBoard + shaping.add through every step below - see
+	// EtbLocalPedalShaping (electronic_throttle.h). Intermediate clampPercentValue() calls aren't
+	// mirrored (the board clamps once, at the end); they only matter at the ends of the range.
+	EtbLocalPedalShaping shaping;
+	shaping.forceRemote = !Sensor::get(SensorType::AcceleratorPedal).Valid;
+	auto shapeAdd = [&](float add) { shaping.add += add; };
+	auto shapeMult = [&](float mult) { shaping.mult *= mult; shaping.add *= mult; };
+	shapeAdd(boardEtbAdjustment);
 
 #if EFI_SPORT_PEDAL
 	// Sport Pedal: reshape the pedal-to-throttle ratio by multiplying the throttle target by a
@@ -412,6 +427,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 			getCustomPage()->sportPedalPedalBins,
 			getCustomPage()->sportPedalMultValues);
 		etbCurrentTarget = clampPercentValue(etbCurrentTarget * sportMult);
+		shapeMult(sportMult);
 	}
 #endif // EFI_SPORT_PEDAL
 
@@ -423,19 +439,26 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// 0% target from table -> idle position as target
 	// 100% target from table -> 100% target position
 	targetWithIdlePosition = interpolateClamped(0, etbIdleAddition, 100, 100, etbCurrentTarget);
+	// interpolateClamped(0, idle, 100, 100, x) == idle + x * (100 - idle) / 100
+	shapeMult((100 - etbIdleAddition) / 100);
+	shapeAdd(etbIdleAddition);
 
-	percent_t targetPosition = targetWithIdlePosition + getLuaAdjustment();
+	float luaTargetAdjustment = getLuaAdjustment();
+	percent_t targetPosition = targetWithIdlePosition + luaTargetAdjustment;
+	shapeAdd(luaTargetAdjustment);
 	// just an additional logging data point
 	adjustedEtbTarget = targetPosition;
 
 #if EFI_ANTILAG_SYSTEM
 	if (engine->antilagController.isAntilagCondition) {
 		targetPosition += engineConfiguration->ALSEtbAdd;
+		shapeAdd(engineConfiguration->ALSEtbAdd);
 	}
 #endif /* EFI_ANTILAG_SYSTEM */
 
 	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
 		targetPosition += getCustomPage()->popsAndBangsAirAdd;
+		shapeAdd(getCustomPage()->popsAndBangsAirAdd);
 	}
 
 	// Eco Mode: scale the throttle target (0.8-1.2) while the economy overlay is active. Blends
@@ -445,13 +468,16 @@ expected<percent_t> EtbController::getSetpointEtb() {
 		float ecoModeBlend = engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
 		if (ecoModeBlend > 0) {
 			float ecoMult = clampF(0.8f, getCustomPage()->ecoThrottleMult, 1.2f);
-			targetPosition *= interpolateClamped(0, 1.0f, 1, ecoMult, ecoModeBlend);
+			float ecoBlendMult = interpolateClamped(0, 1.0f, 1, ecoMult, ecoModeBlend);
+			targetPosition *= ecoBlendMult;
+			shapeMult(ecoBlendMult);
 		}
 	}
 
 	// Quick Warmup: feed-forward ETB offset to compensate for torque lost to timing retard + rich target.
 	if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
 		targetPosition += getCustomPage()->quickWarmupEtbOffset;
+		shapeAdd(getCustomPage()->quickWarmupEtbOffset);
 	}
 
   tcEtbDrop = engine->tractionController.getAppliedEtbDrop();
@@ -460,6 +486,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// Clamped to +-10 to prevent anything too wild
 	trim = clampF(-10, getThrottleTrim(rpm, targetPosition), 10);
 	targetPosition += trim + tcEtbDrop;
+	shapeAdd(trim + tcEtbDrop);
 
 	// Clamp before rev limiter to avoid ineffective rev limit due to crazy out of range position target
 	targetPosition = clampPercentValue(targetPosition);
@@ -470,6 +497,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// limiter still clamps the blip — the blipper cannot out-vote the rev limiter.
 	if (engine->module<DownshiftBlipper>().unmock().isActive()) {
 		targetPosition = engine->module<DownshiftBlipper>().unmock().getThrottleRequest();
+		shaping.forceRemote = true;
 	}
 
 	// Upshift RPM Hold: inverse of the blipper — during an active hold, fully replace the
@@ -477,6 +505,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// Same ordering rationale: before the rev limiter, after the limp ceiling below.
 	if (engine->module<UpshiftRpmHold>().unmock().isActive()) {
 		targetPosition = engine->module<UpshiftRpmHold>().unmock().getThrottleRequest();
+		shaping.forceRemote = true;
 	}
 #endif // EFI_ELECTRONIC_THROTTLE_BODY
 
@@ -488,6 +517,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 		if (targetPosition > limpEtb) {
 			targetPosition = limpEtb;
 		}
+		shaping.maxLimit = std::min(shaping.maxLimit, limpEtb);
 	}
 
 	// Lastly, apply ETB rev limiter: a PID that actively manages throttle to hold RPM just
@@ -523,7 +553,9 @@ expected<percent_t> EtbController::getSetpointEtb() {
 
 			float targetRpm = revLimit - ETB_REV_LIMIT_TARGET_MARGIN_RPM;
 			float dt = m_revLimitDtTimer.getElapsedSecondsAndReset(getTimeNowNt());
-			targetPosition = std::min(targetPosition, m_revLimitPid.getOutput(targetRpm, rpm, dt));
+			float revLimitCeiling = m_revLimitPid.getOutput(targetRpm, rpm, dt);
+			targetPosition = std::min(targetPosition, revLimitCeiling);
+			shaping.maxLimit = std::min(shaping.maxLimit, revLimitCeiling);
 		}
 
 		etbRevLimitActive = shouldManage;
@@ -542,6 +574,9 @@ expected<percent_t> EtbController::getSetpointEtb() {
 
 	targetPosition = clampF(minPosition, targetPosition, maxPosition);
 	m_adjustedTarget = targetPosition;
+
+	shaping.maxLimit = std::min(shaping.maxLimit, maxPosition);
+	m_localPedalShaping = shaping;
 
 	return targetPosition;
 }

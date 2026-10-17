@@ -67,6 +67,23 @@ struct pid_s;
 class ValueProvider3D;
 struct pid_state_s;
 
+// The final ETB target expressed as an affine function of the raw pedal-table value, for the
+// external CAN ETB board's local pedal target (can_etb.h's ETB_SHAPING): the board looks the table
+// up itself every control tick and applies
+//     target = clamp(table * mult + add, etbMinimumPosition, maxLimit)
+// getSetpointEtb() builds this alongside the real target - every additive step (idle blend, Lua,
+// antilag, pops & bangs, quick warmup, traction drop, trim) folds into add, every multiplicative
+// one (sport pedal, eco) into mult, every ceiling (limp, rev limiter, etbMaximumPosition) into
+// maxLimit. Anything that replaces the target outright (autotune, cranking target, blipper,
+// upshift RPM hold) or makes it meaningless (no/invalid pedal) sets forceRemote instead, and the
+// board tracks ETB_TARGET as before.
+struct EtbLocalPedalShaping {
+	float mult = 1;
+	float add = 0;
+	float maxLimit = 100;
+	bool forceRemote = true;
+};
+
 class IEtbController : public ClosedLoopController<percent_t, percent_t>  {
 public:
 	// Initialize the throttle.
@@ -113,4 +130,7 @@ public:
 	// instead, to stop sending ETB_TARGET rather than racing a "disable" with no wire
 	// representation (can_bus.h: silence is the fail-safe signal, there is no disable bit).
 	virtual bool isEtbFaulted() const { return false; }
+
+	// See EtbLocalPedalShaping above. Valid as of the most recent getSetpoint() call.
+	virtual EtbLocalPedalShaping getLocalPedalShaping() const { return {}; }
 };

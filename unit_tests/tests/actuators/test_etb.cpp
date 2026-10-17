@@ -1228,3 +1228,71 @@ TEST(etb, tractionControlHoldAndDecay) {
 
 
 
+
+// External CAN ETB local pedal target: the board recomputes the setpoint from its own pedal-table
+// lookup as clamp(table * mult + add, etbMinimumPosition, maxLimit) - see EtbLocalPedalShaping
+// (electronic_throttle.h) and the board's main.c select_normal_target(). It must land on the same
+// value getSetpointEtb() does.
+static float boardLocalPedalTarget(const EtbLocalPedalShaping& shaping, float table) {
+	float target = clampF(0, table * shaping.mult + shaping.add, 100);
+	target = std::min(target, shaping.maxLimit);
+	return std::max(target, (float)engineConfiguration->etbMinimumPosition);
+}
+
+TEST(etb, localPedalShapingMatchesSetpoint) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	// Must have TPS & PPS initialized for ETB setup
+	Sensor::setMockValue(SensorType::Tps1Primary, 0);
+	Sensor::setMockValue(SensorType::Tps1, 0.0f, true);
+	Sensor::setMockValue(SensorType::AcceleratorPedal, 0.0f, true);
+
+	EtbController etb;
+
+	// Not passthru, so mult/add can't accidentally work out from pedal == table
+	StrictMock<MockVp3d> pedalMap;
+	EXPECT_CALL(pedalMap, getValue(_, _))
+		.WillRepeatedly([](float, float pedal) {
+			return pedal * 0.8f;
+		});
+	etb.init(DC_Throttle1, nullptr, nullptr, &pedalMap);
+
+	// Idle blend (multiplicative + additive), Lua (additive), max position (ceiling)
+	engineConfiguration->etbIdleThrottleRange = 10;
+	etb.setIdlePosition(40);
+	etb.setLuaAdjustment(3);
+	engineConfiguration->etbMaximumPosition = 75;
+
+	for (float pedal : {5.0f, 25.0f, 50.0f, 80.0f, 100.0f}) {
+		Sensor::setMockValue(SensorType::AcceleratorPedal, pedal, true);
+		float setpoint = etb.getSetpoint().value_or(-1);
+		EtbLocalPedalShaping shaping = etb.getLocalPedalShaping();
+		EXPECT_FALSE(shaping.forceRemote) << "pedal " << pedal;
+		EXPECT_NEAR(setpoint, boardLocalPedalTarget(shaping, pedal * 0.8f), 1e-3) << "pedal " << pedal;
+	}
+}
+
+TEST(etb, localPedalShapingForcesRemote) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	Sensor::setMockValue(SensorType::Tps1Primary, 0);
+	Sensor::setMockValue(SensorType::Tps1, 0.0f, true);
+	Sensor::setMockValue(SensorType::AcceleratorPedal, 0.0f, true);
+
+	EtbController etb;
+	StrictMock<MockVp3d> pedalMap;
+	EXPECT_CALL(pedalMap, getValue(_, _))
+		.WillRepeatedly([](float, float pedal) {
+			return pedal;
+		});
+	etb.init(DC_Throttle1, nullptr, nullptr, &pedalMap);
+
+	Sensor::setMockValue(SensorType::AcceleratorPedal, 30.0f, true);
+	etb.getSetpoint();
+	EXPECT_FALSE(etb.getLocalPedalShaping().forceRemote);
+
+	// A faulted pedal sensor must hand control back to rusEFI's own (pedal-fault) target
+	Sensor::setInvalidMockValue(SensorType::AcceleratorPedal);
+	etb.getSetpoint();
+	EXPECT_TRUE(etb.getLocalPedalShaping().forceRemote);
+}

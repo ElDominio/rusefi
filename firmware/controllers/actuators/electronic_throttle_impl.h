@@ -84,6 +84,10 @@ public:
 		return etbErrorCode != (int8_t)EtbStatus::None;
 	}
 
+	EtbLocalPedalShaping getLocalPedalShaping() const override {
+		return m_localPedalShaping;
+	}
+
 	// Lua throttle adjustment
 	void setLuaAdjustment(percent_t adjustment) override;
 	float getLuaAdjustment() const;
@@ -122,6 +126,9 @@ private:
 
 	// Pedal -> target map
 	const ValueProvider3D* m_pedalProvider = nullptr;
+
+	// Rebuilt by every getSetpointEtb() call - see EtbLocalPedalShaping (electronic_throttle.h).
+	EtbLocalPedalShaping m_localPedalShaping;
 
 	float m_idlePosition = 0;
 

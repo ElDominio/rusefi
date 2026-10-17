@@ -33,6 +33,7 @@
 #include "can_msg_tx.h"
 #include "electronic_throttle.h"
 #include "tps.h"
+#include "rusefi/crc.h"
 
 size_t getExternalEtbBus() {
 	return (size_t)engineConfiguration->canEtbBusIndex;
@@ -78,7 +79,23 @@ static_assert(sizeof(EtbCanGains2Frame) == 8);
 static_assert(sizeof(EtbCanTargetFrame) == 8);
 static_assert(sizeof(EtbCanCalFrame) == 8);
 static_assert(sizeof(EtbCanLimitsFrame) == 8);
+struct EtbCanShapingFrame {
+	int16_t mult;
+	int16_t add;
+	uint16_t maxLimit;
+	uint8_t rpm;
+	uint8_t flags;
+};
+struct EtbCanPedalConfigFrame {
+	int16_t idleThreshold;
+	uint16_t minPosition;
+	uint8_t flags;
+	uint8_t reserved[3];
+};
+
 static_assert(sizeof(EtbCanBiasFrame) == 8);
+static_assert(sizeof(EtbCanShapingFrame) == 8);
+static_assert(sizeof(EtbCanPedalConfigFrame) == 8);
 
 CanDcMotor externalEtbCanMotor;
 
@@ -265,6 +282,183 @@ void sendExternalEtbCalibration() {
 		voltsToCanEtbBoardRaw(engineConfiguration->throttlePedalSecondaryWOTVoltage));
 }
 
+// Local pedal target (can_etb.h): the affine correction the board applies on top of its own
+// pedalToTpsTable lookup, from throttle 1's EtbLocalPedalShaping. Sent every time ETB_TARGET is -
+// it carries the rev limiter/limp/traction ceiling, which shouldn't lag any more than ETB_TARGET
+// itself does. The board times it out the same way it times out ETB_TARGET, falling back to
+// remote operation.
+void sendExternalEtbShaping() {
+	auto controller = engine->etbControllers[0];
+	if (!controller || !controller->isEtbMode()) {
+		return;
+	}
+
+	EtbLocalPedalShaping shaping = controller->getLocalPedalShaping();
+	// Same conditions sendExternalEtbTarget() goes quiet for - if rusEFI isn't commanding a normal
+	// target right now, the board mustn't be computing one on its own either.
+	for (int i = 0; i < ETB_COUNT; i++) {
+		auto etb = engine->etbControllers[i];
+		if (etb && etb->isEtbMode() && (etb->isAutocalOrBenchTestActive() || etb->isEtbFaulted())) {
+			shaping.forceRemote = true;
+		}
+	}
+	if (engineConfiguration->pauseEtbControl || engine->etbAutoTune) {
+		shaping.forceRemote = true;
+	}
+
+	CanTxTyped<EtbCanShapingFrame> m(CanCategory::ETB, CAN_ID_ETB_SHAPING, true, getExternalEtbBus());
+	m->mult = (int16_t)(clampF(-32.0f, shaping.mult, 32.0f) * 1000.0f);
+	m->add = (int16_t)(clampF(-300.0f, shaping.add, 300.0f) * 100.0f);
+	m->maxLimit = (uint16_t)(clampF(0, shaping.maxLimit, 100) * 100.0f);
+	m->rpm = (uint8_t)clampF(0, Sensor::getOrZero(SensorType::Rpm) / 50.0f, 255);
+	m->flags = shaping.forceRemote ? ETB_SHAPING_FLAG_FORCE_REMOTE : 0;
+}
+
+void sendExternalEtbPedalConfig() {
+	CanTxTyped<EtbCanPedalConfigFrame> m(CanCategory::ETB, CAN_ID_ETB_PEDAL_CONFIG, true, getExternalEtbBus());
+	// Same threshold the idle controller uses to decide "pedal pressed, out of idle" (it compares
+	// DriverThrottleIntent, i.e. the pedal on an ETB setup) - so the board hands over to its local
+	// target at the same point rusEFI stops treating the engine as idling.
+	m->idleThreshold = (int16_t)(engineConfiguration->idlePidDeactivationTpsThreshold * 100);
+	m->minPosition = (uint16_t)(engineConfiguration->etbMinimumPosition * 100.0f);
+	// In external CAN ETB mode both pedal channels are virtual, so RedundantSensor always averages
+	// them - except Ford-style PPS, whose combination the board doesn't replicate; PEDAL1 alone is
+	// its closest approximation.
+	bool pedal2Redundant = Sensor::hasSensor(SensorType::AcceleratorPedalSecondary)
+		&& !engineConfiguration->useFordRedundantPps;
+	m->flags = pedal2Redundant ? ETB_PEDAL_CONFIG_FLAG_PEDAL2_REDUNDANT : 0;
+	m->reserved[0] = m->reserved[1] = m->reserved[2] = 0;
+}
+
+static void buildPedalTableBytes(uint8_t (&out)[ETB_PEDAL_TABLE_BYTES]) {
+	static_assert(sizeof(config->pedalToTpsPedalBins) == PEDAL_TO_TPS_SIZE);
+	static_assert(sizeof(config->pedalToTpsRpmBins) == PEDAL_TO_TPS_RPM_SIZE);
+	static_assert(sizeof(config->pedalToTpsTable) == PEDAL_TO_TPS_SIZE * PEDAL_TO_TPS_RPM_SIZE);
+	// Raw config bytes, unscaled (rpm bins stay in RPM/100) - the board scales them itself.
+	memcpy(out, config->pedalToTpsPedalBins, PEDAL_TO_TPS_SIZE);
+	memcpy(out + PEDAL_TO_TPS_SIZE, config->pedalToTpsRpmBins, PEDAL_TO_TPS_RPM_SIZE);
+	memcpy(out + PEDAL_TO_TPS_SIZE + PEDAL_TO_TPS_RPM_SIZE, config->pedalToTpsTable, sizeof(config->pedalToTpsTable));
+}
+
+static uint32_t currentPedalTableCrc() {
+	uint8_t bytes[ETB_PEDAL_TABLE_BYTES];
+	buildPedalTableBytes(bytes);
+	return crc32(bytes, sizeof(bytes));
+}
+
+// Table transfer: BEGIN, ceil(80/7) = 12 DATA frames, END - one frame per 10ms service call, then
+// wait for the board's ETB_LOCAL_STATUS to report the new CRC. The board's flash save happens after
+// that and doesn't hold up confirmation (it reports the table as active as soon as the CRC checks).
+static constexpr int pedalTableMaxAttempts = 3;
+static constexpr float pedalTableConfirmTimeoutSec = 0.5f;
+
+enum class PedalTableTxPhase : uint8_t { Idle, Sending, AwaitingConfirm };
+
+static struct {
+	PedalTableTxPhase phase = PedalTableTxPhase::Idle;
+	uint8_t bytes[ETB_PEDAL_TABLE_BYTES];
+	uint32_t crc = 0;
+	int nextFrame = 0; // 0 = BEGIN, 1..N = DATA, N+1 = END
+	int attempts = 0;
+	bool lastAttemptFailed = false;
+	Timer confirmTimer;
+} pedalTableTx;
+
+static volatile bool pedalTableSendRequested = false;
+static volatile uint32_t boardPedalTableCrc = 0;
+
+void requestExternalEtbPedalTableSend() {
+	pedalTableSendRequested = true;
+}
+
+static constexpr int pedalTableDataFrames = (ETB_PEDAL_TABLE_BYTES + ETB_TABLE_DATA_BYTES_PER_FRAME - 1) / ETB_TABLE_DATA_BYTES_PER_FRAME;
+
+static void sendPedalTableCtrl(uint8_t cmd) {
+	CanTxMessage m(CanCategory::ETB, CAN_ID_ETB_TABLE_CTRL, 8, getExternalEtbBus(), true);
+	m[ETB_TABLE_CTRL_OFFSET_CMD] = cmd;
+	uint32_t crc = cmd == ETB_TABLE_CTRL_CMD_END ? pedalTableTx.crc : 0;
+	for (int i = 0; i < 4; i++) {
+		m[ETB_TABLE_CTRL_OFFSET_CRC + i] = (uint8_t)(crc >> (8 * i));
+	}
+	m[ETB_TABLE_CTRL_OFFSET_LENGTH] = ETB_PEDAL_TABLE_BYTES;
+	m[6] = 0;
+	m[7] = 0;
+}
+
+static void sendPedalTableData(int dataFrameIndex) {
+	int offset = dataFrameIndex * ETB_TABLE_DATA_BYTES_PER_FRAME;
+	int count = std::min(ETB_TABLE_DATA_BYTES_PER_FRAME, ETB_PEDAL_TABLE_BYTES - offset);
+	CanTxMessage m(CanCategory::ETB, CAN_ID_ETB_TABLE_DATA, 1 + count, getExternalEtbBus(), true);
+	m[0] = (uint8_t)offset;
+	for (int i = 0; i < count; i++) {
+		m[1 + i] = pedalTableTx.bytes[offset + i];
+	}
+}
+
+void serviceExternalEtbPedalTableTransfer() {
+	if (pedalTableSendRequested) {
+		pedalTableSendRequested = false;
+		// Snapshot now: a TS edit mid-transfer must not tear the table the CRC was computed over.
+		buildPedalTableBytes(pedalTableTx.bytes);
+		pedalTableTx.crc = crc32(pedalTableTx.bytes, sizeof(pedalTableTx.bytes));
+		pedalTableTx.attempts = 0;
+		pedalTableTx.lastAttemptFailed = false;
+		pedalTableTx.nextFrame = 0;
+		pedalTableTx.phase = PedalTableTxPhase::Sending;
+	}
+
+	switch (pedalTableTx.phase) {
+	case PedalTableTxPhase::Idle:
+		return;
+	case PedalTableTxPhase::Sending:
+		if (pedalTableTx.nextFrame == 0) {
+			sendPedalTableCtrl(ETB_TABLE_CTRL_CMD_BEGIN);
+		} else if (pedalTableTx.nextFrame <= pedalTableDataFrames) {
+			sendPedalTableData(pedalTableTx.nextFrame - 1);
+		} else {
+			sendPedalTableCtrl(ETB_TABLE_CTRL_CMD_END);
+			pedalTableTx.confirmTimer.reset();
+			pedalTableTx.phase = PedalTableTxPhase::AwaitingConfirm;
+			return;
+		}
+		pedalTableTx.nextFrame++;
+		return;
+	case PedalTableTxPhase::AwaitingConfirm:
+		if (boardPedalTableCrc == pedalTableTx.crc) {
+			pedalTableTx.phase = PedalTableTxPhase::Idle;
+		} else if (pedalTableTx.confirmTimer.hasElapsedSec(pedalTableConfirmTimeoutSec)) {
+			if (++pedalTableTx.attempts < pedalTableMaxAttempts) {
+				pedalTableTx.nextFrame = 0;
+				pedalTableTx.phase = PedalTableTxPhase::Sending;
+			} else {
+				pedalTableTx.lastAttemptFailed = true;
+				pedalTableTx.phase = PedalTableTxPhase::Idle;
+			}
+		}
+		return;
+	}
+}
+
+void onExternalEtbBoardPedalTableCrc(uint32_t boardCrc) {
+	boardPedalTableCrc = boardCrc;
+
+#if EFI_TUNER_STUDIO
+	EtbCanPedalTableState state;
+	if (pedalTableTx.phase != PedalTableTxPhase::Idle) {
+		state = EtbCanPedalTableState::Sending;
+	} else if (boardCrc == currentPedalTableCrc()) {
+		state = EtbCanPedalTableState::Synced;
+	} else if (pedalTableTx.lastAttemptFailed) {
+		state = EtbCanPedalTableState::SendFailed;
+	} else if (boardCrc == 0) {
+		state = EtbCanPedalTableState::NoTable;
+	} else {
+		state = EtbCanPedalTableState::OutOfDate;
+	}
+	engine->outputChannels.canEtbPedalTableState = (uint8_t)state;
+#endif // EFI_TUNER_STUDIO
+}
+
 #else // !(EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB)
 
 // Stubs so electronic_throttle.cpp/.h don't need their own EFI_CAN_SUPPORT/EFI_EXTERNAL_CAN_ETB
@@ -284,5 +478,10 @@ void sendExternalEtbBiasCurve() {}
 void sendExternalEtbCalTps(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void sendExternalEtbCalPedal(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void sendExternalEtbCalibration() {}
+void sendExternalEtbShaping() {}
+void sendExternalEtbPedalConfig() {}
+void requestExternalEtbPedalTableSend() {}
+void serviceExternalEtbPedalTableTransfer() {}
+void onExternalEtbBoardPedalTableCrc(uint32_t) {}
 
 #endif // EFI_CAN_SUPPORT && EFI_EXTERNAL_CAN_ETB

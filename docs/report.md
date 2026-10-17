@@ -7101,3 +7101,35 @@ Follow-ups:
   alphax-2chan F4 OK, hellen121nissan F4 OK (ram0 at 100.00% on both),
   alphax-4chan_f7 OK, alphax-4K-GDI OK. Other boards not rebuilt after this
   change.
+
+
+## 2026-10-17 - External CAN ETB: local pedal target
+
+- Problem (user): with the pedal wired to the CH32 board, the remote-only target
+  is pedal -> ETB_RAW (10Hz) -> getSetpointEtb() -> ETB_TARGET (50Hz), 20-120ms
+  stale. Design agreed with the user: the board keeps its own copy of
+  pedalToTpsTable and, above idlePidDeactivationTpsThreshold (hysteresis 10% of
+  the threshold, no new settings), computes
+  clamp(table(pedal, rpm) * mult + add, etbMinimumPosition, maxLimit) itself.
+  Below the threshold it tracks ETB_TARGET as before.
+- rusEFI side: EtbLocalPedalShaping (electronic_throttle.h) built step by step
+  in getSetpointEtb() (additive steps -> add, sport/eco -> mult, limp/rev
+  limiter/etbMaximumPosition -> maxLimit, blipper/upshift hold/cranking/
+  autotune/invalid pedal -> forceRemote). New frames base+16..20 in can_etb.h:
+  ETB_SHAPING (20ms, with ETB_TARGET), ETB_PEDAL_CONFIG (250ms),
+  ETB_TABLE_CTRL/DATA (TS button only, one frame per free 10ms slot, confirmed
+  by the board's reported CRC, 3 attempts), ETB_LOCAL_STATUS (board -> rusEFI).
+- TunerStudio: TS_ETB_SEND_PEDAL_TABLE / cmd_etb_send_pedal_table. With
+  enableExternalCanEtb, the "ETB pedal target" menu entry opens
+  pedalToTpsCanEtbDialog (table + "Send to CAN ETB" + board table status).
+  New output channels canEtbPedalTableState, canEtbLocalPedalActive,
+  canEtbLocalTarget.
+- Decisions (user): table sent only on the button and stored in the board's
+  flash; pedal channel plausibility stays on rusEFI (a pedal fault can drive the
+  local target until rusEFI's FORCE_REMOTE lands, ~100-300ms, judged
+  acceptable); shaping at the existing 20ms rate.
+- Board side: external-etb `local-pedal-target` branch (pedal_table.c).
+- Validation: paralela-f427 firmware build OK (clean build - stale .dep from an
+  alphax-beta build referenced a ChibiOS file this branch's submodule doesn't
+  have); unit_tests 1762/1762 incl. new etb.localPedalShapingMatchesSetpoint /
+  etb.localPedalShapingForcesRemote. Not bench-verified.

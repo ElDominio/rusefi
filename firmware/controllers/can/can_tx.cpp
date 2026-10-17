@@ -172,9 +172,18 @@ void CanWrite::PeriodicTask(efitick_t) {
 			// Calibration changes rarely (only on auto-calibrate or a pedal "grab" + Burn) but
 			// needs the same periodic resend as gains: the board forgets it on its own reset.
 			sendExternalEtbCalibration();
+			// Idle threshold / min position / pedal channel config for the board's local pedal
+			// target - configuration, same resend reasoning.
+			sendExternalEtbPedalConfig();
 		}
 		if (cycle.isInterval(CI::_20ms)) {
 			sendExternalEtbTarget();
+			// Local pedal target shaping rides with the target - see can_etb.h.
+			sendExternalEtbShaping();
+		} else if (cycle.isInterval(CI::_10ms) && !cycle.isInterval(CI::_250ms)) {
+			// Pedal table transfer (TS button only): one frame per call, on 10ms slots that carry
+			// no other ETB traffic - the board's RX FIFO is 3 frames deep.
+			serviceExternalEtbPedalTableTransfer();
 		}
 	}
 #endif // EFI_EXTERNAL_CAN_ETB

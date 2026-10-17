@@ -348,6 +348,7 @@ typedef enum {
 	TS_ETB_BENCH_TEST_0 = 0x24,
 	TS_ETB_BENCH_TEST_1 = 0x25,
 	TS_DTC_MANAGER_SHOT = 0x26,
+	TS_ETB_SEND_PEDAL_TABLE = 0x27,
 } ts_14_command;
 
 typedef enum {

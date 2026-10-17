@@ -41,6 +41,7 @@
 #include "basic_configuration.h"
 #include "main_trigger_callback.h"
 #include "electronic_throttle.h"
+#include "can_etb.h"
 #include "malfunction_central.h"
 #include "trigger_emulator_algo.h"
 #include "vvt.h"
@@ -667,6 +668,12 @@ static void handleCommandX14(uint16_t index) {
 		return;
 	case TS_ETB_BENCH_TEST_1:
 		etbBenchTestStart(1);
+		return;
+	case TS_ETB_SEND_PEDAL_TABLE:
+		// External CAN ETB: push pedalToTpsTable to the board for its local pedal target (can_etb.h).
+		if (isExternalCanEtbEnabled()) {
+			requestExternalEtbPedalTableSend();
+		}
 		return;
 	case TS_ETB_START_AUTOTUNE:
 			engine->etbAutoTune = true;
