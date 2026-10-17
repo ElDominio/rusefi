@@ -706,9 +706,6 @@ static void updateFuelInfo(float rpm) {
 	updateFuelResults();
 	updateOilLifeMonitor();
 	updateFuelEconomy(rpm);
-#if EFI_ENGINE_CONTROL
-	engine->outputChannels.veValue = engine->engineState.currentVe;
-#endif // EFI_ENGINE_CONTROL
 }
 
 static void updateIgnition(float rpm) {
@@ -721,10 +718,6 @@ static void updateFlags() {
 	engine->outputChannels.isO2HeaterOn = enginePins.o2heater.getLogicValue();
 	// todo: eliminate state copy logic by giving DfcoController it's owm xxx.txt and leveraging LiveData
 	engine->outputChannels.dfcoActive = engine->module<DfcoController>()->cutFuel();
-
-#if EFI_LAUNCH_CONTROL
-	engine->outputChannels.launchTriggered = engine->launchController.isLaunchCondition;
-#endif
 
 #if EFI_PROD_CODE
 	engine->outputChannels.isTriggerError = isTriggerErrorNow();
