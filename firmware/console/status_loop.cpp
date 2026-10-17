@@ -692,8 +692,6 @@ static void updateFuelInfo(float rpm) {
 	const auto& wallFuel = engine->injectionEvents.elements[0].getWallFuel();
 	engine->outputChannels.wallFuelAmount = wallFuel.getWallFuel() * 1000;			// Convert grams to mg
 	engine->outputChannels.wallFuelCorrectionValue = wallFuel.wallFuelCorrection * 1000;	// Convert grams to mg
-
-	engine->outputChannels.veValue = engine->engineState.currentVe;
 #endif // EFI_ENGINE_CONTROL
 }
 
@@ -707,10 +705,6 @@ static void updateFlags() {
 	engine->outputChannels.isO2HeaterOn = enginePins.o2heater.getLogicValue();
 	// todo: eliminate state copy logic by giving DfcoController it's owm xxx.txt and leveraging LiveData
 	engine->outputChannels.dfcoActive = engine->module<DfcoController>()->cutFuel();
-
-#if EFI_LAUNCH_CONTROL
-	engine->outputChannels.launchTriggered = engine->launchController.isLaunchCondition;
-#endif
 
 #if EFI_PROD_CODE
 	engine->outputChannels.isTriggerError = isTriggerErrorNow();
