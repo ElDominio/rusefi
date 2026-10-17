@@ -4,6 +4,7 @@
 BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 
 #we are low on flash
+MODULE_DTC_MANAGER = no
 
 # Add them all together
 DDEFS += -DEFI_SOFTWARE_KNOCK=TRUE -DSTM32_ADC_USE_ADC3=TRUE
