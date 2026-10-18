@@ -80,6 +80,7 @@ TESTS_SRC_CPP = \
 	tests/ignition_injection/test_hd_cranking.cpp \
 	tests/ignition_injection/test_hd_cranking2.cpp \
 	tests/ignition_injection/test_ignition_scheduling.cpp \
+	tests/ignition_injection/test_burst_knock.cpp \
 	tests/ignition_injection/test_fuelCut.cpp \
 	tests/ignition_injection/test_pops_and_bangs.cpp \
 	tests/ignition_injection/test_eco_mode.cpp \

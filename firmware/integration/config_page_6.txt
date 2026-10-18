@@ -12,8 +12,6 @@
 #define UNITS_KMH_TO_MPH 0.62137119
 #define LUA_LIMITER_CURVE_SIZE 8
 #define LAUNCH_POWER_RAMP_CURVE_SIZE 8
-#define BURST_KNOCK_RPM_SIZE 8
-#define BURST_KNOCK_TPS_RATE_SIZE 8
 #define WOT_ENRICHMENT_SIZE 8
 #define SPORT_PEDAL_SIZE 8
 #define INJ_CURVE_SIZE 12
@@ -365,16 +363,6 @@ struct_no_prefix page6_s
 	float[LAUNCH_POWER_RAMP_CURVE_SIZE] launchPowerRampTimeBins;Launch Power Ramp: elapsed time since launch release (curve X).;"s", 1, 0, 0, 5, 1
 	float[LAUNCH_POWER_RAMP_CURVE_SIZE] launchPowerRampRetardValues;Launch Power Ramp: ignition timing removed at each time point (curve Y).;"deg", 1, 0, 0, 30, 1
 
-	! --- Burst Knock (transient ignition timing pull) ---
-	! Timing-side mirror of the TPS/TPS acceleration fuel enrichment. On a throttle-stab transient
-	! (reuses the TPS accel-enrichment delta/threshold) this pulls ignition timing per the
-	! TPS-rate(Y) x RPM(X) table, holds it for the duration of the stab, then decays the pull
-	! linearly back to zero over burstKnockDecayTime. Feed-forward knock margin during tip-in.
-	bit burstKnockEnabled,"enabled","disabled";Burst Knock: master enable. Pulls ignition timing on a TPS-rate transient, then decays it back to zero.
-	uint8_t autoscale burstKnockDecayTime;Burst Knock: time over which the pulled timing linearly decays back to zero after the transient ends.;"s", 0.1, 0, 0, 10, 1
-	float[BURST_KNOCK_RPM_SIZE] burstKnockRpmBins;Burst Knock: RPM axis (table X).;"rpm", 1, 0, 0, 15000, 0
-	float[BURST_KNOCK_TPS_RATE_SIZE] burstKnockTpsRateBins;Burst Knock: TPS rate-of-change axis (table Y).;"%/s", 1, 0, 0, 30000, 0
-	float[BURST_KNOCK_TPS_RATE_SIZE x BURST_KNOCK_RPM_SIZE] burstKnockRetardTable;Burst Knock: ignition timing removed (deg) at each TPS-rate x RPM cell.;"deg", 1, 0, 0, 30, 1
 
 	! --- WOT Time Enrichment (richen target AFR after prolonged WOT) ---
 	! Once the engine is held at Wide Open Throttle (Engine SM WOT state), a timer counts the
@@ -498,28 +486,6 @@ struct_no_prefix page6_s
 	float[INJ_CURVE_SIZE] injectorSmallPulseCurveBins;Injector % Correction Curve: effective pulsewidth axis (ms). The last bin is the cutoff — no correction above it.;"ms", 1, 0, 0, 10, 3
 	float[INJ_CURVE_SIZE] injectorSmallPulseCurveValues;Injector % Correction Curve: percent adder at each effective PW. Example: 41.6 adds 41.6%% of the effective PW. Set all to 0 to disable while keeping the mode selected.;"%", 1, 0, -100, 500, 1
 
-	! --- Rolling Launch Control (EFI_ROLLING_LAUNCH) ---
-	! A driver-held button (hardware switch and/or the setRollingLaunchTrigger Lua call) that, while
-	! the car is moving (VSS >= rollingLaunchMinVss) and above rollingLaunchMinArmRpm, snapshots the
-	! current RPM at the press edge and holds the engine there via the shared hard spark limiter so
-	! the turbo can be spooled. The hold ceiling is capturedRpm + rollingLaunchRpmWindow, clamped to
-	! rollingLaunchMaxRpm. While held it also pulls a flat rollingLaunchTimingRetard and adds
-	! rollingLaunchFuelAdderPercent fuel. On release the hold ends immediately and the pulled timing
-	! decays linearly back to zero over rollingLaunchRampOutTime so boost is eased in, not slammed.
-	! Requires EFI_LAUNCH_CONTROL (shares the hard spark limiter).
-	bit rollingLaunchEnabled,"enabled","disabled";Rolling Launch: master enable. Holds engine RPM at a captured target while a button is held and the car is moving, to spool the turbo.
-
-	switch_input_pin_e rollingLaunchActivatePin;Rolling Launch: hardware switch input pin. Active state (per the pin mode below) engages the hold. Also OR-ed with the setRollingLaunchTrigger Lua call.
-	pin_input_mode_e rollingLaunchActivatePinMode;
-
-	uint8_t rollingLaunchTimingRetard;Rolling Launch: flat ignition timing pulled (retarded) while the hold is active, to build boost.;"deg", 1, 0, 0, 30, 0
-	uint8_t rollingLaunchFuelAdderPercent;Rolling Launch: extra fuel added (richer) while the hold is active.;"%", 1, 0, 0, 50, 0
-	uint8_t autoscale rollingLaunchRampOutTime;Rolling Launch: time over which the pulled timing decays linearly back to zero after the button is released.;"s", 0.1, 0, 0, 10, 1
-
-	uint16_t rollingLaunchRpmWindow;Rolling Launch: RPM added to the captured (press-edge) RPM to set the hold target. e.g. press at 3500 with 500 here holds at 4000.;"rpm", 1, 0, 0, 4000, 0
-	uint16_t rollingLaunchMinArmRpm;Rolling Launch: minimum engine RPM required at the press edge to arm. Prevents engaging while lugging.;"rpm", 1, 0, 0, 15000, 0
-	uint16_t rollingLaunchMaxRpm;Rolling Launch: absolute ceiling the captured hold target is clamped to, regardless of where the button is pressed (over-rev safety).;"rpm", 1, 0, 0, 15000, 0
-	uint16_t rollingLaunchMinVss;Rolling Launch: minimum vehicle speed required to arm. This is the "rolling" gate -- below it the button does nothing.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
 
 	! --- Intake Manifold Runner Control (EFI_IMRC) ---
 	! Controls solenoid-driven or H-Bridge-driven intake manifold runners based on RPM, TPS, and MAP

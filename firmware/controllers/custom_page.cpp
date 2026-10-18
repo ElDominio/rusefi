@@ -95,16 +95,6 @@ void customPageSetDefaults() {
 	d.misfireWindowStart       = 20;   // expansion stroke: TDC + 20 deg
 	d.misfireWindowEnd         = 120;  //                   TDC + 120 deg
 
-	// Burst Knock (transient ignition timing pull) — disabled by default; seed usable axes.
-	d.burstKnockEnabled = false;
-	d.burstKnockDecayTime = 1.0f; // pull decays back to zero over 1 s
-	for (size_t i = 0; i < efi::size(d.burstKnockRpmBins); i++) {
-		d.burstKnockRpmBins[i] = 800 + i * 800;      // 800 .. 6400 rpm
-	}
-	for (size_t i = 0; i < efi::size(d.burstKnockTpsRateBins); i++) {
-		d.burstKnockTpsRateBins[i] = i * 150;        // 0 .. 1050 %/s
-	}
-	// burstKnockRetardTable left at zero (no pull) until the user tunes it.
 
 	// WOT Time Enrichment — disabled by default; seed a 0..30 s time axis, no enrichment yet.
 	d.wotEnrichmentEnabled = false;
@@ -280,17 +270,6 @@ void customPageSetDefaults() {
 	d.cltEstRadiatorReferenceTemp = 25;         // deg C -- "typical" calibration air temp
 	d.cltEstRadiatorEffectivenessIatGain = 0.0f;
 
-	// Rolling Launch Control — disabled by default; sane gates so it is usable once enabled.
-	d.rollingLaunchEnabled        = false;
-	d.rollingLaunchActivatePin    = Gpio::Unassigned;
-	d.rollingLaunchActivatePinMode = PI_DEFAULT;
-	d.rollingLaunchRpmWindow      = 500;   // hold target = captured RPM + 500
-	d.rollingLaunchMinArmRpm      = 2500;  // do not arm while lugging below 2500 RPM
-	d.rollingLaunchMaxRpm         = 7000;  // absolute over-rev ceiling for the captured target
-	d.rollingLaunchMinVss         = 10;    // must be rolling (>= 10 km/h) to arm
-	d.rollingLaunchTimingRetard   = 10;    // 10 deg pulled while held to build boost
-	d.rollingLaunchFuelAdderPercent = 5;   // 5% richer while held
-	d.rollingLaunchRampOutTime    = 1.0f;  // pulled timing decays to zero over 1 s on release
 
 	// Weighted Engine Oil Life Monitor — disabled by default; conservative starting multipliers.
 	d.oilLifeMonitorEnabled = false;

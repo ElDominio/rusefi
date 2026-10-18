@@ -1,11 +1,6 @@
 #include "pch.h"
-#include "custom_page.h"
 #include "burst_knock.h"
 #include "accel_enrichment.h"
-
-// Burst Knock: on a TPS-rate transient (reuses the TPS accel-enrichment delta/threshold) pull
-// ignition timing per the TPS-rate(Y) x RPM(X) table, hold it for the duration of the stab, then
-// decay the pull linearly back to zero over burstKnockDecayTime.
 
 static BurstKnock& getBurst() {
 	return engine->module<BurstKnock>().unmock();
@@ -15,86 +10,208 @@ static TpsAccelEnrichment& getAe() {
 	return engine->module<TpsAccelEnrichment>().unmock();
 }
 
-// Fill the whole retard table with a flat value so any rate/rpm cell yields the same pull.
-static void setupBurst(float flatRetardDeg, float decaySec) {
-	auto* d = getCustomPage();
-	d->burstKnockEnabled = true;
-	d->burstKnockDecayTime = decaySec;
-
-	for (size_t i = 0; i < efi::size(d->burstKnockRpmBins); i++) {
-		d->burstKnockRpmBins[i] = i * 1000; // 0..7000 rpm
-	}
-	for (size_t i = 0; i < efi::size(d->burstKnockTpsRateBins); i++) {
-		d->burstKnockTpsRateBins[i] = i * 200; // 0..1400 %/s
-	}
-	for (size_t y = 0; y < efi::size(d->burstKnockTpsRateBins); y++) {
-		for (size_t x = 0; x < efi::size(d->burstKnockRpmBins); x++) {
-			d->burstKnockRetardTable[y][x] = flatRetardDeg;
-		}
-	}
-
-	// lookback = 1s makes the table Y value (tpsRate = deltaTps / lookback) equal deltaTps.
-	engineConfiguration->tpsAccelLookback = 1.0f;
+static void setupBurst(float retard = 10, float decay = 2) {
+	engineConfiguration->burstKnockEnabled = true;
+	engineConfiguration->burstKnockDecayTime = decay;
+	setLinearCurve(engineConfiguration->burstKnockRpmBins, 0, 7000);
+	setLinearCurve(engineConfiguration->burstKnockTpsRateBins, 0, 1400);
+	setTable(engineConfiguration->burstKnockRetardTable, retard);
+	engineConfiguration->tpsAccelLookback = 1;
 	Sensor::setMockValue(SensorType::Rpm, 3000);
 }
 
-// Drive the accel-enrichment state the burst module reads, then run the slow callback.
-static void feedTransient(float deltaTps, bool aboveThreshold) {
-	auto& ae = getAe();
-	ae.deltaTps = deltaTps;
-	ae.isAboveAccelThreshold = aboveThreshold;
+static void feedTransient(float delta, bool aboveThreshold) {
+	getAe().deltaTps = delta;
+	getAe().isAboveAccelThreshold = aboveThreshold;
 	getBurst().onSlowCallback();
 }
 
-TEST(BurstKnock, pullsTimingOnTransientThenDecays) {
+TEST(BurstKnock, DefaultsAreDisabledWithZeroTable) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupBurst(/*retard*/ 10.0f, /*decay*/ 2.0f);
+	EXPECT_FALSE(engineConfiguration->burstKnockEnabled);
+	EXPECT_FLOAT_EQ(engineConfiguration->burstKnockDecayTime, 1);
+	for (size_t y = 0; y < BURST_KNOCK_TPS_RATE_SIZE; y++) {
+		EXPECT_FLOAT_EQ(engineConfiguration->burstKnockTpsRateBins[y], y * 150);
+		for (size_t x = 0; x < BURST_KNOCK_RPM_SIZE; x++) {
+			EXPECT_FLOAT_EQ(engineConfiguration->burstKnockRpmBins[x], 800 + x * 800);
+			EXPECT_FLOAT_EQ(engineConfiguration->burstKnockRetardTable[y][x], 0);
+		}
+	}
+	feedTransient(300, true);
+	EXPECT_FALSE(getBurst().isBurstKnockActive);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 0);
+}
 
-	// Throttle stab above threshold -> full table pull, held.
-	feedTransient(/*deltaTps*/ 300, /*above*/ true);
+TEST(BurstKnock, PullsTimingThenDecaysFromLastTransientSample) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBurst();
+	feedTransient(300, true);
+	ASSERT_TRUE(getBurst().isBurstKnockActive);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 10);
+
+	eth.moveTimeForwardSec(0.5f);
+	feedTransient(0, false);
+	EXPECT_NEAR(getBurst().getTimingRetard(), 7.5f, 0.001f);
+	eth.moveTimeForwardSec(0.5f);
+	getBurst().onSlowCallback();
+	EXPECT_NEAR(getBurst().getTimingRetard(), 5, 0.001f);
+	eth.moveTimeForwardSec(1);
+	getBurst().onSlowCallback();
+	EXPECT_FALSE(getBurst().isBurstKnockActive);
+	EXPECT_FLOAT_EQ(getBurst().burstKnockRetard, 0);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 0);
+}
+
+TEST(BurstKnock, TransientRefreshesTableValueAndDecayTimer) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBurst();
+	feedTransient(300, true);
+	eth.moveTimeForwardSec(5);
+	feedTransient(300, true);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 10);
+
+	// Track the current table value, even when it drops during a sustained transient.
+	setTable(engineConfiguration->burstKnockRetardTable, 6);
+	feedTransient(300, true);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 6);
+	eth.moveTimeForwardSec(1);
+	feedTransient(0, false);
+	EXPECT_NEAR(getBurst().getTimingRetard(), 3, 0.001f);
+
+	// A new transient during decay restores full table retard and restarts the timer.
+	feedTransient(300, true);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 6);
+	eth.moveTimeForwardSec(0.5f);
+	feedTransient(0, false);
+	EXPECT_NEAR(getBurst().getTimingRetard(), 4.5f, 0.001f);
+}
+
+TEST(BurstKnock, DisablingClearsRetardAndTelemetry) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBurst();
+	feedTransient(300, true);
+	ASSERT_TRUE(getBurst().isBurstKnockActive);
+	engineConfiguration->burstKnockEnabled = false;
+	feedTransient(300, true);
+	EXPECT_FALSE(getBurst().isBurstKnockActive);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 0);
+	EXPECT_FLOAT_EQ(getBurst().burstKnockRetard, 0);
+	EXPECT_FLOAT_EQ(getBurst().burstKnockTpsRate, 0);
+
+	engineConfiguration->burstKnockEnabled = true;
+	feedTransient(0, false);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 0);
+}
+
+TEST(BurstKnock, ZeroOrNegativeCellsNeverAdvanceTiming) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBurst();
+	for (float retard : {0.0f, -5.0f}) {
+		setTable(engineConfiguration->burstKnockRetardTable, retard);
+		feedTransient(300, true);
+		EXPECT_FALSE(getBurst().isBurstKnockActive);
+		EXPECT_FLOAT_EQ(getBurst().burstKnockRetard, 0);
+		EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 0);
+	}
+}
+
+TEST(BurstKnock, ZeroDecayReleasesImmediatelyAfterTransient) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBurst(10, 0);
+	feedTransient(300, true);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 10);
+	feedTransient(0, false);
+	EXPECT_FALSE(getBurst().isBurstKnockActive);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 0);
+}
+
+TEST(BurstKnock, InterpolatesRpmAndTpsRateWithLookbackFloor) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBurst();
+	for (size_t y = 0; y < BURST_KNOCK_TPS_RATE_SIZE; y++) {
+		for (size_t x = 0; x < BURST_KNOCK_RPM_SIZE; x++) {
+			engineConfiguration->burstKnockRetardTable[y][x] = x + 2 * y;
+		}
+	}
+	Sensor::setMockValue(SensorType::Rpm, 2500);
+	engineConfiguration->tpsAccelLookback = 0.2f;
+	feedTransient(60, true);
+	EXPECT_NEAR(getBurst().burstKnockTpsRate, 300, 0.001f);
+	EXPECT_NEAR(getBurst().getTimingRetard(), 5.5f, 0.001f);
+
+	engineConfiguration->tpsAccelLookback = 0;
+	feedTransient(0.3f, true);
+	EXPECT_NEAR(getBurst().burstKnockTpsRate, 300, 0.001f);
+	EXPECT_NEAR(getBurst().getTimingRetard(), 5.5f, 0.001f);
+}
+
+TEST(BurstKnock, UsesRealAccelEnrichmentThresholdAndHistory) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBurst();
+	engineConfiguration->tpsAccelLookback = 0.2f;
+	engineConfiguration->tpsAccelEnrichmentThreshold = 5;
+	getAe().onConfigurationChange(nullptr);
+	for (int i = 0; i < 4; i++) {
+		getAe().onNewValue(0);
+	}
+	getAe().onNewValue(5);
+	getBurst().onSlowCallback();
+	EXPECT_FALSE(getBurst().isBurstKnockActive); // Threshold is strictly greater than.
+	getAe().onNewValue(25);
+	getBurst().onSlowCallback();
 	EXPECT_TRUE(getBurst().isBurstKnockActive);
-	EXPECT_NEAR(getBurst().getTimingRetard(), 10.0f, 0.1f);
+	EXPECT_FLOAT_EQ(getAe().deltaTps, 20);
+	EXPECT_NEAR(getBurst().burstKnockTpsRate, 100, 0.001f);
+	EXPECT_FLOAT_EQ(getBurst().getTimingRetard(), 10);
 
-	// Transient ends; decay begins. Halfway through (1s of 2s) -> ~5 deg.
-	feedTransient(/*deltaTps*/ 0, /*above*/ false);
-	eth.moveTimeForwardSec(1.0f);
+	// Stable TPS eventually ages the jump out of AE's shared buffer.
+	for (int i = 0; i < 4; i++) {
+		getAe().onNewValue(25);
+	}
+	ASSERT_FALSE(getAe().isAboveAccelThreshold);
+	eth.moveTimeForwardSec(1);
 	getBurst().onSlowCallback();
-	EXPECT_NEAR(getBurst().getTimingRetard(), 5.0f, 0.2f);
+	EXPECT_NEAR(getBurst().getTimingRetard(), 5, 0.001f);
+}
 
-	// Past the decay window (>2s) -> deactivates, no pull.
-	eth.moveTimeForwardSec(1.5f);
+TEST(BurstKnock, SubtractsRelativeRetardFromRunningAdvance) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBurst();
+	engine->rpmCalculator.setRpmValue(3000);
+	engineConfiguration->timingMode = TM_DYNAMIC;
+	setTable(config->ignitionTable, 25);
+	float baseline = engine->ignitionState.getWrappedAdvance(3000, 50);
+	feedTransient(300, true);
+	EXPECT_NEAR(engine->ignitionState.getWrappedAdvance(3000, 50), baseline - 10, 0.001f);
+	eth.moveTimeForwardSec(1);
+	feedTransient(0, false);
+	EXPECT_NEAR(engine->ignitionState.getWrappedAdvance(3000, 50), baseline - 5, 0.001f);
+}
+
+TEST(BurstKnock, PreservesFixedTimingAndCrankingCorrectionSwitch) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setupBurst();
+	feedTransient(300, true);
+	engineConfiguration->timingMode = TM_FIXED;
+	engineConfiguration->fixedTiming = 15;
+	EXPECT_FLOAT_EQ(engine->ignitionState.getWrappedAdvance(3000, 50), 15);
+
+	engineConfiguration->timingMode = TM_DYNAMIC;
+	engine->rpmCalculator.setRpmValue(200);
+	ASSERT_TRUE(engine->rpmCalculator.isCranking());
+	engineConfiguration->useSeparateAdvanceForCranking = true;
+	for (auto& advance : config->crankingAdvance) {
+		advance = 20;
+	}
+	engineConfiguration->useAdvanceCorrectionsForCranking = false;
+	float baseline = engine->ignitionState.getWrappedAdvance(200, 50);
+	engineConfiguration->burstKnockEnabled = false;
 	getBurst().onSlowCallback();
-	EXPECT_FALSE(getBurst().isBurstKnockActive);
-	EXPECT_NEAR(getBurst().getTimingRetard(), 0.0f, 1e-3);
-}
+	EXPECT_FLOAT_EQ(engine->ignitionState.getWrappedAdvance(200, 50), baseline);
 
-TEST(BurstKnock, holdsPeakWhileTransientPersists) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupBurst(10.0f, 2.0f);
-
+	engineConfiguration->useAdvanceCorrectionsForCranking = true;
+	baseline = engine->ignitionState.getWrappedAdvance(200, 50);
+	engineConfiguration->burstKnockEnabled = true;
 	feedTransient(300, true);
-	// Time passes but the stab is still in progress: the timer stays pinned, retard held at peak.
-	eth.moveTimeForwardSec(5.0f);
-	feedTransient(300, true);
-	EXPECT_TRUE(getBurst().isBurstKnockActive);
-	EXPECT_NEAR(getBurst().getTimingRetard(), 10.0f, 0.1f);
-}
-
-TEST(BurstKnock, disabledDoesNothing) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupBurst(10.0f, 2.0f);
-	getCustomPage()->burstKnockEnabled = false;
-
-	feedTransient(300, true);
-	EXPECT_FALSE(getBurst().isBurstKnockActive);
-	EXPECT_NEAR(getBurst().getTimingRetard(), 0.0f, 1e-3);
-}
-
-TEST(BurstKnock, zeroTableCellNeverActivates) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupBurst(/*retard*/ 0.0f, /*decay*/ 2.0f);
-
-	feedTransient(300, true);
-	EXPECT_FALSE(getBurst().isBurstKnockActive);
-	EXPECT_NEAR(getBurst().getTimingRetard(), 0.0f, 1e-3);
+	EXPECT_NEAR(engine->ignitionState.getWrappedAdvance(200, 50), baseline - 10, 0.001f);
 }
