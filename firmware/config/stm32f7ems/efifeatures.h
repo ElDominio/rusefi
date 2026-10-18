@@ -149,7 +149,7 @@
 #define EFI_CONSOLE_RX_BRAIN_PIN Gpio::D9
 #endif
 
-// see also EFI_EMBED_INI_MSD which is disabled above
+// Boards that enable EFI_EMBED_INI_MSD use compressed images by default.
 #ifndef EFI_USE_COMPRESSED_INI_MSD
 #define EFI_USE_COMPRESSED_INI_MSD TRUE
 #endif
