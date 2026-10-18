@@ -5,42 +5,75 @@
  */
 
 #include "pch.h"
-#include "custom_page.h"
 #include "rolling_launch.h"
+#include "io_pins.h"
 
-#if EFI_ROLLING_LAUNCH
+#if EFI_LAUNCH_CONTROL
+
+void RollingLaunchControl::setDefaultConfiguration() {
+	engineConfiguration->rollingLaunchEnabled = false;
+	engineConfiguration->rollingLaunchActivatePin = Gpio::Unassigned;
+	engineConfiguration->rollingLaunchActivatePinMode = PI_DEFAULT;
+	engineConfiguration->rollingLaunchRpmWindow = 500;
+	engineConfiguration->rollingLaunchMinArmRpm = 2500;
+	engineConfiguration->rollingLaunchMaxRpm = 7000;
+	engineConfiguration->rollingLaunchMinVss = 10;
+	engineConfiguration->rollingLaunchTimingRetard = 10;
+	engineConfiguration->rollingLaunchFuelAdderPercent = 5;
+	engineConfiguration->rollingLaunchRampOutTime = 1.0f;
+}
+
+void RollingLaunchControl::reset() {
+	isRollingLaunchArmed = false;
+	isRollingLaunchActive = false;
+	rollingLaunchSwitchState = false;
+	isRollingLaunchRampActive = false;
+	rollingLaunchSparkSkipRatio = 0;
+	rollingLaunchTimingRetardOut = 0;
+	rollingLaunchRampElapsed = 0;
+	capturedRpm = 0;
+	rollingLaunchTargetRpm = 0;
+	m_prevArmed = false;
+	m_rampStartRetard = 0;
+}
+
+void RollingLaunchControl::onEngineStop() {
+	reset();
+}
+
+void RollingLaunchControl::onConfigurationChange(engine_configuration_s const* /*previousConfig*/) {
+	// A burn may change the captured window or the trigger pin. Re-arm using the new settings.
+	reset();
+}
 
 void RollingLaunchControl::onSlowCallback() {
-	auto cfg = getCustomPage();
+	auto cfg = engineConfiguration;
 
 	if (!cfg->rollingLaunchEnabled) {
-		isRollingLaunchArmed = false;
-		isRollingLaunchActive = false;
-		rollingLaunchSwitchState = false;
-		isRollingLaunchRampActive = false;
-		rollingLaunchSparkSkipRatio = 0;
-		rollingLaunchTimingRetardOut = 0;
-		rollingLaunchRampElapsed = 0;
-		capturedRpm = 0;
-		rollingLaunchTargetRpm = 0;
-		m_prevArmed = false;
+		reset();
 		return;
 	}
 
-	const float rpm = Sensor::getOrZero(SensorType::Rpm);
-	const float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
+	const auto rpmSensor = Sensor::get(SensorType::Rpm);
+	const auto vssSensor = Sensor::get(SensorType::VehicleSpeed);
+	const float rpm = rpmSensor.value_or(0);
+	const float vss = vssSensor.value_or(0);
 
 	// Activation is the hardware switch OR the Lua trigger (setRollingLaunchTrigger).
-#if EFI_PROD_CODE
-	if (isBrainPinValid(cfg->rollingLaunchActivatePin)) {
-		rollingLaunchSwitchState = efiReadPin(cfg->rollingLaunchActivatePin, cfg->rollingLaunchActivatePinMode);
-	}
-#endif // EFI_PROD_CODE
+#if EFI_GPIO_HARDWARE
+	rollingLaunchSwitchState = isBrainPinValid(cfg->rollingLaunchActivatePin)
+		&& efiReadPin(cfg->rollingLaunchActivatePin, cfg->rollingLaunchActivatePinMode);
+#else
+	rollingLaunchSwitchState = false;
+#endif
 	isRollingLaunchActive = rollingLaunchSwitchState || luaRollingLaunchState;
 
 	// Arm only while moving (min VSS) and above the minimum engagement RPM. The VSS gate is what
 	// makes this "rolling" rather than a standstill 2-step.
 	const bool armed = isRollingLaunchActive
+		&& rpmSensor.Valid && vssSensor.Valid
+		&& std::isfinite(rpm) && std::isfinite(vss)
+		&& rpm > 0
 		&& rpm >= cfg->rollingLaunchMinArmRpm
 		&& vss >= cfg->rollingLaunchMinVss;
 
@@ -59,11 +92,11 @@ void RollingLaunchControl::onSlowCallback() {
 		rollingLaunchRampElapsed = 0;
 
 		// Soft spark cut ramps in across [capturedRpm, targetRpm] so the ceiling is approached,
-		// not slammed. A non-positive window degenerates to a hard cut at the captured RPM.
+		// not slammed. A collapsed window cuts at the capped target even if capture was above it.
 		if (rollingLaunchTargetRpm > capturedRpm) {
 			rollingLaunchSparkSkipRatio = interpolateClamped(capturedRpm, 0.0f, rollingLaunchTargetRpm, 1.0f, rpm);
 		} else {
-			rollingLaunchSparkSkipRatio = (rpm >= capturedRpm) ? 1.0f : 0.0f;
+			rollingLaunchSparkSkipRatio = (rpm >= rollingLaunchTargetRpm) ? 1.0f : 0.0f;
 		}
 
 		rollingLaunchTimingRetardOut = cfg->rollingLaunchTimingRetard;
@@ -104,19 +137,11 @@ float RollingLaunchControl::getFuelCoefficient() const {
 	if (!isRollingLaunchArmed) {
 		return 1.0f;
 	}
-	return 1.0f + getCustomPage()->rollingLaunchFuelAdderPercent / 100.0f;
+	return 1.0f + engineConfiguration->rollingLaunchFuelAdderPercent / 100.0f;
 }
 
 float RollingLaunchControl::getTimingRetard() const {
 	return rollingLaunchTimingRetardOut;
 }
 
-#else // !EFI_ROLLING_LAUNCH
-
-// Rolling Launch Control compiled out (board set -DEFI_ROLLING_LAUNCH=FALSE).
-void RollingLaunchControl::onSlowCallback() { }
-float RollingLaunchControl::getSparkSkipRatio() const { return 0; }
-float RollingLaunchControl::getFuelCoefficient() const { return 1; }
-float RollingLaunchControl::getTimingRetard() const { return 0; }
-
-#endif // EFI_ROLLING_LAUNCH
+#endif // EFI_LAUNCH_CONTROL

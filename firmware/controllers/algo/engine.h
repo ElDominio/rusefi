@@ -31,6 +31,7 @@
 #include "idle_thread.h"
 #include "injector_model.h"
 #include "launch_control.h"
+#include "rolling_launch.h"
 #include "shift_torque_reduction_controller.h"
 #include "nitrous_controller.h"
 #include "engine_state_machine.h"
@@ -155,9 +156,6 @@ using AlphaXModuleList = type_list<
 #if EFI_LAUNCH_POWER_RAMP
     LaunchPowerRamp,
 #endif // EFI_LAUNCH_POWER_RAMP
-#if EFI_ROLLING_LAUNCH
-    RollingLaunchControl,
-#endif // EFI_ROLLING_LAUNCH
 #if EFI_BURST_KNOCK
     BurstKnock,
 #endif // EFI_BURST_KNOCK
@@ -266,6 +264,7 @@ public:
         TpsAccelEnrichment,
 #if EFI_LAUNCH_CONTROL
         NitrousController,
+        RollingLaunchControl,
 #endif // EFI_LAUNCH_CONTROL
 #if EFI_LTFT_CONTROL
         LongTermFuelTrim,

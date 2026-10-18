@@ -175,6 +175,7 @@ TESTS_SRC_CPP = \
 	tests/test_dwell_corner_case_issue_796.cpp \
 	tests/test_idle_controller.cpp \
 	tests/test_launch.cpp \
+	tests/test_rolling_launch.cpp \
 	tests/test_fuel_map.cpp \
 	tests/test_vvt_corrections.cpp \
 	tests/test_gear_detector.cpp \

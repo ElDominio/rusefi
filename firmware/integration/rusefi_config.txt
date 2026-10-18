@@ -2101,6 +2101,7 @@ end_struct
 
 ! end of engine_configuration_s
 include_file controllers/modules/gear_detector/gear_detector_engineConfiguration.txt
+include_file controllers/modules/rolling_launch/rolling_launch_engineConfiguration.txt
 end_struct
 
 ! note that this magic field name is used by LiveDataParserPanel

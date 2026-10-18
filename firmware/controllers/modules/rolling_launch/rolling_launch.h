@@ -2,8 +2,8 @@
  * @file rolling_launch.h
  *
  * Rolling Launch Control: a driver-held button that, while the car is moving, holds the engine
- * at a captured RPM target (via the shared hard spark limiter) so the turbo can be spooled, then
- * releases immediately on button-up with a flat timing ramp-out so boost is eased in, not slammed.
+ * at a captured RPM target (via a graded spark-skip request) so the turbo can be spooled, then
+ * releases on button-up at the next slow callback with a flat timing ramp-out so boost is eased in, not slammed.
  *
  * This is NOT the off-throttle antilag_system (ALS). It is a launch-control variant: on-throttle,
  * holds an RPM ceiling captured at the moment the button is pressed.
@@ -18,7 +18,10 @@ class RollingLaunchControl : public rolling_launch_state_s, public EngineModule 
 public:
 	using interface_t = RollingLaunchControl;
 
+	void setDefaultConfiguration() override;
 	void onSlowCallback() override;
+	void onEngineStop() override;
+	void onConfigurationChange(engine_configuration_s const* previousConfig) override;
 
 	// Spark-cut ratio summed into the shared hardSparkLimiter to hold the captured RPM ceiling.
 	float getSparkSkipRatio() const;
@@ -28,6 +31,7 @@ public:
 	float getTimingRetard() const;
 
 private:
+	void reset();
 	Timer m_rampTimer;
 	bool m_prevArmed = false;
 	float m_rampStartRetard = 0;
