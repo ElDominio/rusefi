@@ -199,7 +199,7 @@ void GearDetector::computeSlip() {
 	m_slipPercent = 0;
 	m_slipValid = false;
 
-	if (!engineConfiguration->transmissionSlipDetectionEnabled || m_currentGear == 0) {
+	if (!engineConfiguration->transmissionSlipDetectionEnabled || m_currentGear == 0 || !std::isfinite(m_gearboxRatio)) {
 		return;
 	}
 
@@ -218,7 +218,7 @@ void GearDetector::computeSlip() {
 	// class of issue as getDriveshaftRpm()'s hardcoded <3kph floor on the wheel-speed path, but
 	// user-configurable here since the OSS-direct path has no such floor of its own.
 	auto vss = Sensor::get(SensorType::VehicleSpeed);
-	if (!vss.Valid || vss.Value < engineConfiguration->transmissionSlipMinVss) {
+	if (!vss.Valid || !std::isfinite(vss.Value) || vss.Value < engineConfiguration->transmissionSlipMinVss) {
 		return;
 	}
 
@@ -227,13 +227,13 @@ void GearDetector::computeSlip() {
 			: SensorType::Rpm;
 
 	auto actualRpm = Sensor::get(rpmSourceType);
-	if (!actualRpm.Valid) {
+	if (!actualRpm.Valid || !std::isfinite(actualRpm.Value) || actualRpm.Value < 0) {
 		return;
 	}
 
 	// Ideal (no-slip) RPM for the Detected Gear given the current driveshaft speed.
 	float expectedRpm = getRpmInGear(m_currentGear);
-	if (expectedRpm <= 0) {
+	if (!std::isfinite(expectedRpm) || expectedRpm <= 0) {
 		return;
 	}
 

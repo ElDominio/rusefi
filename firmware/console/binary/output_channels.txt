@@ -330,7 +330,6 @@ int16_t rpmAcceleration;dRPM;"RPM acceleration/Rate of Change/ROC",1, 0, 0, 5, 2
 	uint16_t auxSpeed2;Aux speed 2;"s",1, 0, 0, 0, 0
 
 	uint16_t ISSValue;@@GAUGE_NAME_ISS@@;"RPM",1, 0, 0, 8000, 0
-	uint16_t outputShaftSpeedValue;Output Shaft Speed;"RPM",1, 0, 0, 8000, 0
 
 	uint16_t wheelSpeedFront;Front Axle Speed;"km/h",1, 0, 0, 0, 0
 	uint16_t wheelSpeedRear;Rear Axle Speed;"km/h",1, 0, 0, 0, 0
@@ -532,4 +531,7 @@ float mapFast
 	uint8_t engine;Engine;"", 1, 0, 0, 255, 0
 	! SD_MODE from mmc_card.h: 0 idle, 1 ECU, 2 PC, 3 unmounted, 4 formatting.
 	uint8_t sdCardMode;SD: Mount mode;"code", 1, 0, 0, 4, 0
+	float outputShaftSpeed;Output Shaft Speed;"RPM", 1, 0, 0, 30000, 0
+	float transmissionSlipPercent;@@GAUGE_NAME_TRANS_SLIP@@;"%", 1, 0, -100, 1000, 1
+	bit transmissionSlipValid;Transmission slip valid
 end_struct

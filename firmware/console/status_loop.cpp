@@ -513,6 +513,7 @@ static void updateVehicleSpeed() {
 	engine->outputChannels.speedToRpmRatio = engine->module<GearDetector>()->getGearboxRatio();
 	engine->outputChannels.detectedGear = Sensor::getOr(SensorType::DetectedGear, gear_e::INVALID);
 	engine->outputChannels.transmissionSlipPercent = engine->module<GearDetector>()->getSlipPercent();
+	engine->outputChannels.transmissionSlipValid = engine->module<GearDetector>()->isSlipValid();
 #endif
 #endif /* EFI_VEHICLE_SPEED */
 }
@@ -625,9 +626,9 @@ static void updateMiscSensors() {
 	engine->outputChannels.wastegatePositionSensor = Sensor::getOrZero(SensorType::WastegatePosition);
 
 	engine->outputChannels.ISSValue = Sensor::getOrZero(SensorType::InputShaftSpeed);
+	engine->outputChannels.outputShaftSpeed = Sensor::getOrZero(SensorType::OutputShaftSpeed);
 	engine->outputChannels.auxSpeed1 = Sensor::getOrZero(SensorType::AuxSpeed1);
 	engine->outputChannels.auxSpeed2 = Sensor::getOrZero(SensorType::AuxSpeed2);
-	engine->outputChannels.outputShaftSpeedValue = Sensor::getOrZero(SensorType::OutputShaftSpeed);
 	engine->outputChannels.wheelSpeedFront = Sensor::getOrZero(SensorType::WheelSpeedFront);
 	engine->outputChannels.wheelSpeedRear = Sensor::getOrZero(SensorType::WheelSpeedRear);
 

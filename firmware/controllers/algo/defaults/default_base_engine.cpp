@@ -375,6 +375,9 @@ void setDefaultBaseEngine() {
   engineConfiguration->ltft.correctionEnabled = true;
 
 	engineConfiguration->compressionRatio = 9;
+	engineConfiguration->ossFilterReciprocal = 3;
+	engineConfiguration->outputShaftSpeedSensorTeeth = 1;
+	engineConfiguration->transmissionSlipMinVss = 5;
 	engineConfiguration->acLowRpmLimit = 500;
 
 	engineConfiguration->mafFilterParameter = 1;

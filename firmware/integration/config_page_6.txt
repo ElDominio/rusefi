@@ -681,10 +681,6 @@ struct_no_prefix page6_s
 
 	uint8_t wheelSpeedMaxAccelPercent;Wheel Speed Sensors: shared glitch-rejection filter -- reject a reading implying more than this %/sec change, and dead-reckon from the last known rate instead. One shared threshold used independently by Output Shaft Speed, Front Axle (Physical Pin) and Rear Axle (Physical Pin). 0 disables.;"%/sec", 1, 0, 0, 200, 0
 
-	wheel_speed_sensor_mode_e ossMode;Output Shaft Speed: input mode.
-	switch_input_pin_e outputShaftSpeedSensorPin;Output Shaft Speed: hardware pulse input pin (e.g. a transmission-mounted hall sensor). Physical Pin mode only.
-	uint8_t outputShaftSpeedSensorTeeth;Output Shaft Speed: number of sensor pulses per output-shaft revolution. Physical Pin mode only.;"", 1, 0, 1, 255, 0
-	uint8_t ossFilterReciprocal;Output Shaft Speed: low-pass filter reciprocal (higher = more filtering, averaged over more teeth). Physical Pin mode only.;"", 1, 0, 3, 200, 0
 
 	wheel_speed_sensor_mode_e wheelSpeedFrontMode;Front Axle Speed: input mode.
 	switch_input_pin_e wheelSpeedFrontPin;Front Axle Speed: hardware pulse input pin. Physical Pin mode only.

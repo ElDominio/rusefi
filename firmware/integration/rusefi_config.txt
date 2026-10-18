@@ -1685,7 +1685,6 @@ tChargeMode_e tChargeMode;
 
     uint16_t[TCU_GEAR_COUNT iterate] autoscale gearRatio;;"ratio", 0.01, 0, 0, 30, 2
 
-	uint8_t transmissionSlipMinVss;Below this vehicle speed, Slip Detection is considered invalid (the driveshaft-RPM ratio math is unstable near a stop, div/0-adjacent) -- no gauge reading, no closed-loop trim update. See 'Slip Detection' above.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, {useMetricOnInterface ? 0 : 0}, {useMetricOnInterface ? 100 : 62}, 0
 
 uint16_t vvtActivationDelayMs;We need to give engine time to build oil pressure without diverting it to VVT;"ms", 1, 0, 0, 65000, 0
 
@@ -2101,6 +2100,7 @@ end_struct
 	uint8_t dwellDutyPercent;Dwell Duty Mode: percentage of the inter-spark interval used as coil dwell time. 50 = half the interval between pulses (standard TFI target).;"%", 1, 0, 1, 90, 0
 
 ! end of engine_configuration_s
+include_file controllers/modules/gear_detector/gear_detector_engineConfiguration.txt
 end_struct
 
 ! note that this magic field name is used by LiveDataParserPanel
