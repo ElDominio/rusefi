@@ -1,8 +1,6 @@
 #include "pch.h"
-#include "custom_page.h"
 
 #include "engine_state_machine.h"
-#include "dfco.h"
 
 // Default cranking RPM threshold used by TEST_ENGINE
 static constexpr float TEST_CRANKING_RPM = 400.0f;
@@ -10,8 +8,8 @@ static constexpr float TEST_RUNNING_RPM  = 800.0f;
 
 static void setupSmConfig() {
 	engineConfiguration->useEngineStateMachine = true;
-	getCustomPage()->smWotTpsThreshold = 90;
-	getCustomPage()->smTransientHoldTimeMs = 0; // no hold-off by default in tests
+	engineConfiguration->smWotTpsThreshold = 90;
+	engineConfiguration->smTransientHoldTimeMs = 0; // no hold-off by default in tests
 	// Lower AE threshold so tests can trigger Transient with small TPS steps on Tps1
 	engineConfiguration->tpsAccelEnrichmentThreshold = 5.0f;
 }
@@ -20,12 +18,12 @@ static void setupSmConfig() {
 // At threshold (500 RPM/s or 5 km/h/s), gain=20 %/s → 1%/callback @50ms.
 // Strong signals (4× threshold) build ±80 % in 20 callbacks; flat signal decays to 0.
 static void setupAccumulatorConfig() {
-	getCustomPage()->smAccelRateThreshold           = 500;
-	getCustomPage()->smDecelRateThreshold           = 500;
-	getCustomPage()->smAccumulatorGain              = 20.0f;
-	getCustomPage()->smAccumulatorDecayRate         = 10.0f;
-	getCustomPage()->smAccumulatorUpshiftThreshold  = 40;
-	getCustomPage()->smAccumulatorDownshiftThreshold = 40;
+	engineConfiguration->smAccelRateThreshold           = 500;
+	engineConfiguration->smDecelRateThreshold           = 500;
+	engineConfiguration->smAccumulatorGain              = 20.0f;
+	engineConfiguration->smAccumulatorDecayRate         = 10.0f;
+	engineConfiguration->smAccumulatorUpshiftThreshold  = 40;
+	engineConfiguration->smAccumulatorDownshiftThreshold = 40;
 }
 
 static EngineStateMachine& getSm() {
@@ -150,7 +148,7 @@ TEST(EngineStateMachine, transientState) {
 TEST(EngineStateMachine, transientHoldoff) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smTransientHoldTimeMs = 100; // hold Transient for 100 ms (2 ticks) after AE drops
+	engineConfiguration->smTransientHoldTimeMs = 100; // hold Transient for 100 ms (2 ticks) after AE drops
 
 	// Use a 2-entry AE buffer so delta from the step scrolls out on the very next stable callback
 	engine->module<TpsAccelEnrichment>()->setLength(2);
@@ -276,6 +274,7 @@ TEST(EngineStateMachine, flatShiftSetsUpshiftAndTorqueReduction) {
 	enterRunning(3000.0f, 95.0f);
 
 	// Simulate flat-shift torque reduction engaging
+	engineConfiguration->torqueReductionEnabled = true;
 	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
 
 	engine->periodicSlowCallback();
@@ -293,6 +292,7 @@ TEST(EngineStateMachine, flatShiftClearsWhenInactive) {
 	setupSmConfig();
 	enterRunning(3000.0f, 95.0f);
 
+	engineConfiguration->torqueReductionEnabled = true;
 	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
 	engine->periodicSlowCallback();
 	EXPECT_TRUE(getSm().engineSmIsUpshifting);
@@ -300,60 +300,6 @@ TEST(EngineStateMachine, flatShiftClearsWhenInactive) {
 	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = false;
 	engine->periodicSlowCallback();
 	EXPECT_FALSE(getSm().engineSmIsUpshifting);
-	EXPECT_FALSE(getSm().engineSmIsTorqueReduction);
-}
-
-// ---- Traction control torque reduction ----
-
-TEST(EngineStateMachine, tractionControlSetsTorqueReduction) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-
-	// Configure a non-zero ETB drop (positive table value = throttle % removed) across the whole
-	// traction-control table, then reload the controller's Map3D tables from the freshly-written config.
-	for (size_t s = 0; s < efi::size(engineConfiguration->tractionControlEtbDrop); s++) {
-		for (size_t v = 0; v < efi::size(engineConfiguration->tractionControlEtbDrop[0]); v++) {
-			engineConfiguration->tractionControlEtbDrop[s][v] = 10;
-		}
-	}
-	engineConfiguration->tractionControlYAxisSource = TC_Y_AXIS_WHEEL_SLIP;
-	engineConfiguration->tractionControlHoldTime = 0;
-	engineConfiguration->tractionControlDecayTime = 0;
-	engine->tractionController.init();
-
-	enterRunning(3000.0f, 50.0f);
-
-	// Feed slip / speed so the table returns its (non-zero) ETB drop
-	Sensor::setMockValue(SensorType::WheelSlipRatio, 1.1f);
-	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0f);
-
-	// Fast callback computes the applied traction-control corrections; slow callback runs the SM
-	engine->periodicFastCallback();
-	EXPECT_TRUE(engine->tractionController.isActive());
-
-	engine->periodicSlowCallback();
-	auto& sm = getSm();
-	EXPECT_TRUE(sm.engineSmIsTorqueReduction);
-	// Traction control is not a gear shift — it must not raise the shift-direction bits
-	EXPECT_FALSE(sm.engineSmIsUpshifting);
-	EXPECT_FALSE(sm.engineSmIsDownshifting);
-}
-
-TEST(EngineStateMachine, torqueReductionClearsWhenTractionInactive) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-
-	// Leave the traction-control table at its default (all zero) → no correction applied
-	engine->tractionController.init();
-	enterRunning(3000.0f, 50.0f);
-
-	Sensor::setMockValue(SensorType::WheelSlipRatio, 1.1f);
-	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0f);
-
-	engine->periodicFastCallback();
-	EXPECT_FALSE(engine->tractionController.isActive());
-
-	engine->periodicSlowCallback();
 	EXPECT_FALSE(getSm().engineSmIsTorqueReduction);
 }
 
@@ -393,6 +339,7 @@ TEST(EngineStateMachine, overlayPriorityUpshiftBeatsLaunch) {
 	setupSmConfig();
 	enterRunning(3000.0f, 95.0f);
 
+	engineConfiguration->torqueReductionEnabled = true;
 	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
 	engine->launchController.isLaunchCondition = true;
 
@@ -406,9 +353,9 @@ TEST(EngineStateMachine, overlayPriorityUpshiftBeatsLaunch) {
 static void setupShiftDetectionConfig() {
 	setupSmConfig();
 	// Both directions mapped to Clutch Down switch, RPM Rate accumulator mode
-	getCustomPage()->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
 	setupAccumulatorConfig();
 }
 
@@ -514,9 +461,9 @@ TEST(EngineStateMachine, shiftClearedOnTimeout) {
 
 static void setupRpmRateModeConfig() {
 	setupSmConfig();
-	getCustomPage()->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
 	setupAccumulatorConfig(); // sets rate thresholds and accumulator params
 }
 
@@ -576,8 +523,8 @@ TEST(EngineStateMachine, noShiftBitsWithoutClutchSwitch) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
 	// No clutch switch configured (default = None)
-	getCustomPage()->smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
-	getCustomPage()->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
 	enterRunning();
 
 	engine->engineState.lua.clutchDownState = true;
@@ -604,7 +551,7 @@ TEST(EngineStateMachine, noShiftBitsWithoutClutchSwitch) {
 TEST(EngineStateMachine, accumulatorSnapsToZeroAfterSustainedAcceleration) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupRpmRateModeConfig();
-	getCustomPage()->smAccumulatorSnapTimeMs = 250; // 5 callbacks @ 50 ms
+	engineConfiguration->smAccumulatorSnapTimeMs = 250; // 5 callbacks @ 50 ms
 
 	// Build a strongly negative accumulator via a sustained decel (falling RPM, TPS closed) --
 	// same setup as downshiftDetectedRpmMode, ~ -70 % after 20 callbacks.
@@ -624,7 +571,7 @@ TEST(EngineStateMachine, accumulatorSnapsToZeroAfterSustainedAcceleration) {
 TEST(EngineStateMachine, accumulatorDoesNotSnapWhenDisabled) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupRpmRateModeConfig();
-	getCustomPage()->smAccumulatorSnapTimeMs = 0; // disabled (legacy decay/cross-only behavior)
+	engineConfiguration->smAccumulatorSnapTimeMs = 0; // disabled (legacy decay/cross-only behavior)
 
 	enterRunning(4000.0f, 0.0f);
 	seedRampedRpm(4000.0f, -100.0f, 20, 0.0f);
@@ -641,7 +588,7 @@ TEST(EngineStateMachine, accumulatorDoesNotSnapWhenDisabled) {
 TEST(EngineStateMachine, accumulatorSnapsToZeroAfterSustainedOverrun) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupRpmRateModeConfig();
-	getCustomPage()->smAccumulatorSnapTimeMs = 250; // 5 callbacks @ 50 ms
+	engineConfiguration->smAccumulatorSnapTimeMs = 250; // 5 callbacks @ 50 ms
 
 	// Force Overrun to be reachable regardless of the real IdleController's own settle timing --
 	// same technique as overrunWhenDfcoConditionsMet.
@@ -682,10 +629,8 @@ TEST(EngineStateMachine, rpmRateWindowInvariantOnLinearRamp) {
 	{
 		EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 		setupSmConfig();
-		// The rate calc only runs once a shift-detection direction is configured -- see
-		// updateShiftDetection()'s "no direction configured" early-out.
-		getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-		getCustomPage()->smRpmRateWindowMs = 50; // one tick
+		engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+		engineConfiguration->smRpmRateWindowMs = 50; // one tick
 		enterRunning();
 
 		// 100 RPM/tick @ 50 ms/tick == 2000 RPM/s.
@@ -695,8 +640,8 @@ TEST(EngineStateMachine, rpmRateWindowInvariantOnLinearRamp) {
 	{
 		EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 		setupSmConfig();
-		getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-		getCustomPage()->smRpmRateWindowMs = 500; // ten ticks
+		engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+		engineConfiguration->smRpmRateWindowMs = 500; // ten ticks
 		enterRunning();
 
 		seedRampedRpm(2000.0f, 100.0f, 12, 50.0f); // extra ticks so a full window elapses
@@ -715,8 +660,8 @@ TEST(EngineStateMachine, rpmRateWindowInvariantOnLinearRamp) {
 TEST(EngineStateMachine, rpmRateHoldsUntilWindowElapsesThenUpdates) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smRpmRateWindowMs = 200; // four 50 ms ticks
+	engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smRpmRateWindowMs = 200; // four 50 ms ticks
 
 	// First-ever sample: no reference yet, rate reads 0 and anchors here.
 	engine->rpmCalculator.setRpmValue(2000.0f);
@@ -745,8 +690,8 @@ TEST(EngineStateMachine, rpmRateHoldsUntilWindowElapsesThenUpdates) {
 TEST(EngineStateMachine, shorterWindowRecomputesMoreOften) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smRpmRateWindowMs = 100; // two 50 ms ticks
+	engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smRpmRateWindowMs = 100; // two 50 ms ticks
 
 	engine->rpmCalculator.setRpmValue(2000.0f);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
@@ -771,8 +716,8 @@ TEST(EngineStateMachine, rpmRateWindowZeroMatchesOneTickWindow) {
 	{
 		EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 		setupSmConfig();
-		getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-		getCustomPage()->smRpmRateWindowMs = 0;
+		engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+		engineConfiguration->smRpmRateWindowMs = 0;
 		enterRunning(2000.0f, 50.0f);
 		seedHistory(6, 2000.0f, 50.0f);
 		engine->rpmCalculator.setRpmValue(2500.0f);
@@ -782,8 +727,8 @@ TEST(EngineStateMachine, rpmRateWindowZeroMatchesOneTickWindow) {
 	{
 		EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 		setupSmConfig();
-		getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-		getCustomPage()->smRpmRateWindowMs = 50;
+		engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+		engineConfiguration->smRpmRateWindowMs = 50;
 		enterRunning(2000.0f, 50.0f);
 		seedHistory(6, 2000.0f, 50.0f);
 		engine->rpmCalculator.setRpmValue(2500.0f);
@@ -797,8 +742,8 @@ TEST(EngineStateMachine, rpmRateWindowZeroMatchesOneTickWindow) {
 TEST(EngineStateMachine, rpmRateZeroBeforeEnoughHistory) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smRpmRateWindowMs = 500;
+	engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smRpmRateWindowMs = 500;
 
 	engine->rpmCalculator.setRpmValue(2000.0f);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
@@ -812,9 +757,9 @@ TEST(EngineStateMachine, rpmRateZeroBeforeEnoughHistory) {
 TEST(EngineStateMachine, acceleratingStateEnteredOnConfiguredRate) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smAccelRateThreshold = 500; // RPM/s
-	getCustomPage()->smRpmRateWindowMs = 100;
+	engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smAccelRateThreshold = 500; // RPM/s
+	engineConfiguration->smRpmRateWindowMs = 100;
 	enterRunning(2000.0f, 50.0f);
 
 	// 100 RPM/tick @ 50 ms/tick == 2000 RPM/s, comfortably above the 500 RPM/s threshold.
@@ -841,10 +786,10 @@ TEST(EngineStateMachine, acceleratingHoldsAfterRateDrops) {
 	// m_lastRpmRate is only ever computed inside updateShiftAccumulator(), which
 	// updateShiftDetection() skips entirely unless a clutch switch is configured -- so a switch
 	// must be wired even though these tests don't exercise shift detection itself.
-	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smAccelRateThreshold = 500; // RPM/s
-	getCustomPage()->smRpmRateWindowMs = 50;     // recompute every tick (one slow-callback tick)
-	getCustomPage()->smAccelHoldMs = 120;
+	engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smAccelRateThreshold = 500; // RPM/s
+	engineConfiguration->smRpmRateWindowMs = 50;     // recompute every tick (one slow-callback tick)
+	engineConfiguration->smAccelHoldMs = 120;
 
 	engine->rpmCalculator.setRpmValue(2000.0f);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
@@ -880,10 +825,10 @@ TEST(EngineStateMachine, acceleratingHoldResetsOnReTrigger) {
 	// m_lastRpmRate is only ever computed inside updateShiftAccumulator(), which
 	// updateShiftDetection() skips entirely unless a clutch switch is configured -- so a switch
 	// must be wired even though these tests don't exercise shift detection itself.
-	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smAccelRateThreshold = 500; // RPM/s
-	getCustomPage()->smRpmRateWindowMs = 50;
-	getCustomPage()->smAccelHoldMs = 120;
+	engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smAccelRateThreshold = 500; // RPM/s
+	engineConfiguration->smRpmRateWindowMs = 50;
+	engineConfiguration->smAccelHoldMs = 120;
 
 	engine->rpmCalculator.setRpmValue(2000.0f);
 	Sensor::setMockValue(SensorType::DriverThrottleIntent, 50.0f);
@@ -928,10 +873,10 @@ TEST(EngineStateMachine, overrunBreaksAcceleratingHoldImmediately) {
 	// m_lastRpmRate is only ever computed inside updateShiftAccumulator(), which
 	// updateShiftDetection() skips entirely unless a clutch switch is configured -- so a switch
 	// must be wired even though these tests don't exercise shift detection itself.
-	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smAccelRateThreshold = 500; // RPM/s
-	getCustomPage()->smRpmRateWindowMs = 50;
-	getCustomPage()->smAccelHoldMs = 200; // long hold relative to the steps below
+	engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smAccelRateThreshold = 500; // RPM/s
+	engineConfiguration->smRpmRateWindowMs = 50;
+	engineConfiguration->smAccelHoldMs = 200; // long hold relative to the steps below
 
 	MockIdleController mockIdle;
 	engine->module<IdleController>().set(&mockIdle);
@@ -958,122 +903,14 @@ TEST(EngineStateMachine, overrunBreaksAcceleratingHoldImmediately) {
 	EXPECT_EQ(EngineStateMachineState::Coasting, runAndGetState()); // t=150 ms
 }
 
-// ---- Eco Mode settle holdoff ----
-//
-// Eco Mode's own actuation (ecoThrottleMult / VVT override) is a real RPM-rate transient once
-// engineSmIsEcoMode flips, but it isn't driver-initiated. determineState() must not misread that
-// transient as Accelerating right after the edge, or eco would immediately bounce itself back
-// off. m_ecoSettleHoldTimer (armed for smTransientHoldTimeMs on the edge)
-// suppresses the RPM-rate check for that window, then lets real detection resume.
-TEST(EngineStateMachine, ecoEngageSuppressesFalseAcceleratingDuringSettleHoldoff) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-	// m_lastRpmRate is only ever computed inside updateShiftAccumulator(), which
-	// updateShiftDetection() skips entirely unless a clutch switch is configured.
-	getCustomPage()->smUpshiftClutchSwitch       = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smAccelRateThreshold        = 500; // RPM/s
-	getCustomPage()->smRpmRateWindowMs           = 50;  // one tick
-	getCustomPage()->smTransientHoldTimeMs       = 150;  // settle window after the eco edge (3 ticks @ 50 ms)
-
-	getCustomPage()->ecoModeEnabled      = true;
-	getCustomPage()->ecoModeCruisingTime = 0; // engage as soon as Cruising is seen
-	getCustomPage()->ecoModeMapLimit     = 0;
-	getCustomPage()->ecoModeMinVss       = 0;
-	getCustomPage()->ecoModeSwitchMode   = eco_mode_switch_mode_e::Off;
-
-	MockIdleController mockIdle;
-	engine->module<IdleController>().set(&mockIdle);
-	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
-
-	enterRunning(2000.0f, 50.0f);
-	auto& sm = getSm();
-	ASSERT_EQ(EngineStateMachineState::Cruising, sm.getCurrentState());
-	ASSERT_TRUE(sm.engineSmIsEcoMode); // engaged this tick -> settle holdoff armed
-
-	// Eco's own actuation now drives an RPM ramp comfortably above smAccelRateThreshold, standing
-	// in for the ecoThrottleMult/VVT step. Despite the ramp, the settle-holdoff ticks must not
-	// read it as Accelerating, so eco must not drop.
-	float rpm = 2000.0f;
-	for (int i = 0; i < 3; i++) {
-		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
-		rpm += 200.0f;
-		engine->rpmCalculator.setRpmValue(rpm);
-		engine->periodicSlowCallback();
-		EXPECT_NE(EngineStateMachineState::Accelerating, sm.getCurrentState());
-		EXPECT_TRUE(sm.engineSmIsEcoMode);
-	}
-
-	// Once the holdoff is exhausted, a persisting high rate is (correctly) detected as real
-	// Accelerating, and eco drops -- the suppression is a brief settle window, not a permanent
-	// blind spot.
-	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
-	rpm += 200.0f;
-	engine->rpmCalculator.setRpmValue(rpm);
-	engine->periodicSlowCallback();
-	EXPECT_EQ(EngineStateMachineState::Accelerating, sm.getCurrentState());
-	EXPECT_FALSE(sm.engineSmIsEcoMode);
-}
-
-// A disengage caused by a genuine, already-detected Accelerating/Decelerating must NOT arm the
-// settle holdoff -- that's real driver input, not eco noise, and suppressing further detection
-// would blind the state machine to the driver's continued acceleration.
-TEST(EngineStateMachine, genuineAccelerationDropsEcoWithoutArmingHoldoff) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-	getCustomPage()->smUpshiftClutchSwitch       = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smAccelRateThreshold        = 500; // RPM/s
-	getCustomPage()->smRpmRateWindowMs           = 50;  // one tick
-	getCustomPage()->smTransientHoldTimeMs       = 150;
-
-	getCustomPage()->ecoModeEnabled      = true;
-	getCustomPage()->ecoModeCruisingTime = 0;
-	getCustomPage()->ecoModeMapLimit     = 0;
-	getCustomPage()->ecoModeMinVss       = 0;
-	getCustomPage()->ecoModeSwitchMode   = eco_mode_switch_mode_e::Off;
-
-	MockIdleController mockIdle;
-	engine->module<IdleController>().set(&mockIdle);
-	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Running));
-
-	enterRunning(2000.0f, 50.0f);
-	auto& sm = getSm();
-	ASSERT_TRUE(sm.engineSmIsEcoMode); // engaging itself arms a 3-tick settle holdoff
-
-	// Burn through the initial engage-edge settle holdoff with a hard, sustained ramp -- once it
-	// expires (4 ticks: 3 suppressed + 1 that sees the now-stale-but-still-high rate), the ramp is
-	// (correctly) detected as real Accelerating and eco drops.
-	float rpm = 2000.0f;
-	for (int i = 0; i < 3; i++) {
-		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
-		rpm += 400.0f;
-		engine->rpmCalculator.setRpmValue(rpm);
-		engine->periodicSlowCallback();
-	}
-	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
-	rpm += 400.0f;
-	engine->rpmCalculator.setRpmValue(rpm);
-	engine->periodicSlowCallback();
-	EXPECT_EQ(EngineStateMachineState::Accelerating, sm.getCurrentState());
-	EXPECT_FALSE(sm.engineSmIsEcoMode);
-
-	// The very next tick, RPM keeps climbing at the same hard rate -- if this disengage had
-	// (incorrectly) armed a new settle holdoff, this tick would be masked back to Cruising/Idle
-	// instead of staying Accelerating.
-	advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
-	rpm += 400.0f;
-	engine->rpmCalculator.setRpmValue(rpm);
-	engine->periodicSlowCallback();
-	EXPECT_EQ(EngineStateMachineState::Accelerating, sm.getCurrentState());
-}
-
 // ---- Clutch-Up-only shift detection (single switch, no Clutch-Down wired) ----
 
 static void setupClutchUpOnlyConfig() {
 	setupSmConfig();
-	getCustomPage()->smUpshiftClutchSwitch         = sm_clutch_switch_e::ClutchUp;
-	getCustomPage()->smDownshiftClutchSwitch       = sm_clutch_switch_e::None;
-	getCustomPage()->smShiftDetectionMode          = sm_shift_detection_mode_e::RpmRate;
-	getCustomPage()->smSecondClutchSwitchAvailable = false;
+	engineConfiguration->smUpshiftClutchSwitch         = sm_clutch_switch_e::ClutchUp;
+	engineConfiguration->smDownshiftClutchSwitch       = sm_clutch_switch_e::None;
+	engineConfiguration->smShiftDetectionMode          = sm_shift_detection_mode_e::RpmRate;
+	engineConfiguration->smSecondClutchSwitchAvailable = false;
 	setupAccumulatorConfig();
 }
 
@@ -1142,7 +979,7 @@ TEST(EngineStateMachine, clutchUpOnlyClosesOnRisingEdge) {
 TEST(EngineStateMachine, secondSwitchOpensEarlyOnComplementaryFallingEdge) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupShiftDetectionConfig(); // up & down both ClutchDown
-	getCustomPage()->smSecondClutchSwitchAvailable = true;
+	engineConfiguration->smSecondClutchSwitchAvailable = true;
 	enterRunning();
 
 	engine->engineState.lua.clutchUpState   = true;
@@ -1161,9 +998,9 @@ TEST(EngineStateMachine, secondSwitchOpensEarlyOnComplementaryFallingEdge) {
 
 static void setupSecondSwitchUpPrimaryConfig() {
 	setupSmConfig();
-	getCustomPage()->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchUp;
-	getCustomPage()->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
-	getCustomPage()->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchUp;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
+	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
 	setupAccumulatorConfig();
 }
 
@@ -1172,7 +1009,7 @@ static void setupSecondSwitchUpPrimaryConfig() {
 TEST(EngineStateMachine, secondSwitchClosesEarlyOnComplementaryFallingEdge) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSecondSwitchUpPrimaryConfig();
-	getCustomPage()->smSecondClutchSwitchAvailable = true;
+	engineConfiguration->smSecondClutchSwitchAvailable = true;
 	enterRunning();
 
 	engine->engineState.lua.clutchUpState   = true;
@@ -1199,7 +1036,7 @@ TEST(EngineStateMachine, secondSwitchClosesEarlyOnComplementaryFallingEdge) {
 TEST(EngineStateMachine, withoutSecondSwitchFlagComplementaryEdgeDoesNotCloseEarly) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSecondSwitchUpPrimaryConfig();
-	getCustomPage()->smSecondClutchSwitchAvailable = false;
+	engineConfiguration->smSecondClutchSwitchAvailable = false;
 	enterRunning();
 
 	engine->engineState.lua.clutchUpState   = true;
@@ -1232,6 +1069,7 @@ TEST(EngineStateMachine, flatShiftOverridesClutchDetection) {
 	seedHistory(10, 3000.0f, 2.0f); // accumulator stays 0 (flat RPM) — no direction confirmed
 
 	// Flat shift active — must win regardless of accumulator state
+	engineConfiguration->torqueReductionEnabled = true;
 	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
 	engine->engineState.lua.clutchDownState = true;
 	engine->periodicSlowCallback();
@@ -1245,15 +1083,15 @@ TEST(EngineStateMachine, flatShiftOverridesClutchDetection) {
 
 static void setupVssRateModeConfig() {
 	setupSmConfig();
-	getCustomPage()->smUpshiftClutchSwitch    = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smDownshiftClutchSwitch  = sm_clutch_switch_e::ClutchDown;
-	getCustomPage()->smShiftDetectionMode     = sm_shift_detection_mode_e::VssRate;
-	getCustomPage()->smAccelRateThreshold     = 5;  // km/h per second
-	getCustomPage()->smDecelRateThreshold     = 5;
-	getCustomPage()->smAccumulatorGain              = 20.0f;
-	getCustomPage()->smAccumulatorDecayRate         = 10.0f;
-	getCustomPage()->smAccumulatorUpshiftThreshold  = 40;
-	getCustomPage()->smAccumulatorDownshiftThreshold = 40;
+	engineConfiguration->smUpshiftClutchSwitch    = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smDownshiftClutchSwitch  = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smShiftDetectionMode     = sm_shift_detection_mode_e::VssRate;
+	engineConfiguration->smAccelRateThreshold     = 5;  // km/h per second
+	engineConfiguration->smDecelRateThreshold     = 5;
+	engineConfiguration->smAccumulatorGain              = 20.0f;
+	engineConfiguration->smAccumulatorDecayRate         = 10.0f;
+	engineConfiguration->smAccumulatorUpshiftThreshold  = 40;
+	engineConfiguration->smAccumulatorDownshiftThreshold = 40;
 }
 
 // Seed the history buffer with linearly ramping VSS, mirroring seedRampedRpm.
@@ -1271,7 +1109,7 @@ static void seedRampedVss(float startVss, float vssPerCallback, int callbacks, f
 TEST(EngineStateMachine, vssRateModeBlockedBelowMinVss) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupVssRateModeConfig();
-	getCustomPage()->smShiftMinVss = 15; // require at least 15 km/h
+	engineConfiguration->smShiftMinVss = 15; // require at least 15 km/h
 	enterRunning();
 
 	// Speed stays below 15 km/h throughout (0.5 to 10.0 km/h) — accumulator decays the whole time.
@@ -1290,7 +1128,7 @@ TEST(EngineStateMachine, vssRateModeBlockedBelowMinVss) {
 TEST(EngineStateMachine, vssRateModeAllowedAboveMinVss) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupVssRateModeConfig();
-	getCustomPage()->smShiftMinVss = 0;
+	engineConfiguration->smShiftMinVss = 0;
 	enterRunning();
 
 	// Start at 0.5 km/h so the first callback already has a non-zero rate vs. the initial 0.
@@ -1331,7 +1169,7 @@ TEST(EngineStateMachine, latchDefaultIsZeroAndClearsInstantly) {
 TEST(EngineStateMachine, clutchUpForceOffOverridesActiveLatch) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupClutchUpOnlyConfig();
-	getCustomPage()->smShiftLatchTimeMs = 200;
+	engineConfiguration->smShiftLatchTimeMs = 200;
 	enterRunning();
 
 	engine->engineState.lua.clutchUpState = true;
@@ -1357,9 +1195,9 @@ TEST(EngineStateMachine, clutchUpForceOffOverridesActiveLatch) {
 TEST(EngineStateMachine, clutchUpForceOffSurvivesSubsequentRelatchAttempt) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupClutchUpOnlyConfig();
-	getCustomPage()->smSecondClutchSwitchAvailable = true;
-	getCustomPage()->smShiftLatchTimeMs = 100;
-	getCustomPage()->smRelatchOnClutchDown = true;
+	engineConfiguration->smSecondClutchSwitchAvailable = true;
+	engineConfiguration->smShiftLatchTimeMs = 100;
+	engineConfiguration->smRelatchOnClutchDown = true;
 	enterRunning();
 
 	engine->engineState.lua.clutchUpState   = true;
@@ -1385,14 +1223,14 @@ TEST(EngineStateMachine, clutchUpForceOffSurvivesSubsequentRelatchAttempt) {
 
 static void setupRelatchConfig() {
 	setupClutchUpOnlyConfig();
-	getCustomPage()->smSecondClutchSwitchAvailable = true;
-	getCustomPage()->smShiftLatchTimeMs = 100;
+	engineConfiguration->smSecondClutchSwitchAvailable = true;
+	engineConfiguration->smShiftLatchTimeMs = 100;
 }
 
 TEST(EngineStateMachine, repeatedConfirmationDoesNotExtendLatchWithoutRelatch) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupRelatchConfig();
-	getCustomPage()->smRelatchOnClutchDown = false;
+	engineConfiguration->smRelatchOnClutchDown = false;
 	enterRunning();
 
 	engine->engineState.lua.clutchUpState   = true;
@@ -1431,7 +1269,7 @@ TEST(EngineStateMachine, repeatedConfirmationDoesNotExtendLatchWithoutRelatch) {
 TEST(EngineStateMachine, relatchOnClutchDownExtendsLatch) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupRelatchConfig();
-	getCustomPage()->smRelatchOnClutchDown = true;
+	engineConfiguration->smRelatchOnClutchDown = true;
 	enterRunning();
 
 	engine->engineState.lua.clutchUpState   = true;
@@ -1469,33 +1307,6 @@ TEST(EngineStateMachine, relatchOnClutchDownExtendsLatch) {
 
 // ---- Shifting states block the overrun (DFCO) fuel cut ----
 
-TEST(EngineStateMachine, shiftingBlocksOverrunFuelCut) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupShiftDetectionConfig(); // up & down both ClutchDown, RPM accumulator
-	// Anchor the RPM-rate calc at the ramp's actual starting RPM (4000) -- see
-	// downshiftDetectedAccumulator for why.
-	enterRunning(4000.0f, 2.0f);
-
-	engineConfiguration->coastingFuelCutEnabled = true;
-	engineConfiguration->coastingFuelCutTps     = 5;
-	engineConfiguration->coastingFuelCutRpmHigh = 1500;
-	engineConfiguration->coastingFuelCutVssHigh = 0;
-	engineConfiguration->coastingFuelCutClt     = 40.0f;
-	Sensor::setMockValue(SensorType::Clt, 80.0f);
-
-	// Falling RPM + closed throttle → downshift accumulator builds, DFCO conditions met.
-	// End RPM = 4000 - 100*20 = 2000 > 1500 (coastingFuelCutRpmHigh), TPS=2% < 5%.
-	seedRampedRpm(4000.0f, -100.0f, 20, 2.0f);
-
-	engine->engineState.lua.clutchDownState = true;
-	engine->periodicSlowCallback();
-	engine->periodicFastCallback(); // runs DfcoController::update()
-
-	EXPECT_TRUE(getSm().engineSmIsDownshifting);
-	EXPECT_FALSE(eth.engine.module<DfcoController>().unmock().cutFuel())
-		<< "overrun fuel cut must be blocked while a shift is in progress";
-}
-
 TEST(EngineStateMachine, liveDataFieldsPopulated) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
@@ -1512,161 +1323,13 @@ TEST(EngineStateMachine, liveDataFieldsPopulated) {
 	EXPECT_FALSE(sm.engineSmIsWot);
 }
 
-// ---- Limp Mode overlay ----
-
-// Sync LimpManager transient state by running its fast-callback logic.
-static void updateLimpManager() {
-	getLimpManager()->updateState(engine->rpmCalculator.getCachedRpm(), getTimeNowNt());
-}
-
-// Limp mode is a dedicated latch (reportLimpCondition), NOT derived from generic cuts.
-TEST(EngineStateMachine, limpLatchOverlay) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-	enterRunning(2000.0f, 50.0f);
-
-	// No latch → Limp bit clear, primary state shown
-	engine->periodicSlowCallback();
-	auto& sm = getSm();
-	EXPECT_FALSE(sm.engineSmIsLimp);
-
-	// Latch limp → Limp bit set, display overrides to Limp (12)
-	sm.reportLimpCondition();
-	engine->periodicSlowCallback();
-	EXPECT_TRUE(sm.engineSmIsLimp);
-	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), sm.engineSmCurrentState);
-
-	// Latch is sticky — stays set on subsequent callbacks (until power cycle)
-	engine->periodicSlowCallback();
-	EXPECT_TRUE(sm.engineSmIsLimp);
-}
-
-// A normal fuel/ignition cut (e.g. the rev limit or a Lua cut) must NOT enter limp mode.
-TEST(EngineStateMachine, ordinaryCutDoesNotEnterLimp) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-	enterRunning(2000.0f, 50.0f);
-
-	engine->engineState.lua.luaFuelCut = true;
-	engine->engineState.lua.luaIgnCut = true;
-	updateLimpManager();
-	engine->periodicSlowCallback();
-
-	auto& sm = getSm();
-	EXPECT_FALSE(sm.engineSmIsLimp);
-}
-
-// An ETB jam latches limp mode through the state machine when the SM is enabled.
-TEST(EngineStateMachine, etbJamLatchesLimp) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-	enterRunning(2000.0f, 50.0f);
-
-	getLimpManager()->reportEtbJammed();
-	engine->periodicSlowCallback();
-
-	auto& sm = getSm();
-	EXPECT_TRUE(sm.engineSmIsLimp);
-	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), sm.engineSmCurrentState);
-}
-
-TEST(EngineStateMachine, limpPriorityOverUpshifting) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-	enterRunning(3000.0f, 95.0f);
-
-	engine->shiftTorqueReductionController.isFlatShiftConditionSatisfied = true;
-	getSm().reportLimpCondition();
-
-	engine->periodicSlowCallback();
-	// Limp (12) must beat Upshifting (10) in the display integer
-	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), getSm().engineSmCurrentState);
-}
-
-// ---- Sport Mode ----
-
-TEST(EngineStateMachine, sportModeOffByDefault) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-	enterRunning();
-
-	getCustomPage()->smSportModeActivationMode = SPORT_MODE_OFF;
-	engine->periodicSlowCallback();
-
-	EXPECT_FALSE(getSm().engineSmIsSportMode);
-}
-
-TEST(EngineStateMachine, sportModeLuaGaugeActivation) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-	enterRunning();
-
-	getCustomPage()->smSportModeActivationMode = SPORT_MODE_LUA_GAUGE;
-	getCustomPage()->smSportModeLuaGauge = LUA_GAUGE_1;
-	getCustomPage()->smSportModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND; // assert when value >= threshold
-	getCustomPage()->smSportModeLuaGaugeThreshold = 0.5f;
-
-	Sensor::setMockValue(SensorType::LuaGauge1, 0.0f);
-	engine->periodicSlowCallback();
-	EXPECT_FALSE(getSm().engineSmIsSportMode);
-
-	Sensor::setMockValue(SensorType::LuaGauge1, 1.0f);
-	engine->periodicSlowCallback();
-	EXPECT_TRUE(getSm().engineSmIsSportMode);
-}
-
-TEST(EngineStateMachine, limpOutVotesSportMode) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-	enterRunning();
-
-	getCustomPage()->smSportModeActivationMode = SPORT_MODE_LUA_GAUGE;
-	getCustomPage()->smSportModeLuaGauge = LUA_GAUGE_1;
-	getCustomPage()->smSportModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
-	getCustomPage()->smSportModeLuaGaugeThreshold = 0.5f;
-	Sensor::setMockValue(SensorType::LuaGauge1, 1.0f); // would otherwise assert Sport Mode
-
-	getSm().reportLimpCondition();
-	engine->periodicSlowCallback();
-
-	EXPECT_TRUE(getSm().engineSmIsLimp);
-	EXPECT_FALSE(getSm().engineSmIsSportMode);
-}
-
-TEST(EngineStateMachine, ghostCamActivatesViaSportMode) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	setupSmConfig();
-
-	MockIdleController mockIdle;
-	engine->module<IdleController>().set(&mockIdle);
-	ON_CALL(mockIdle, getCurrentPhase()).WillByDefault(Return(IIdleController::Phase::Idling));
-	engine->rpmCalculator.setRpmValue(TEST_RUNNING_RPM);
-	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0.0f);
-
-	getCustomPage()->ghostCamEnabled = true;
-	getCustomPage()->ghostCamActivationSource = true; // 1 = Sport Mode
-	getCustomPage()->ghostCamCltMin = -40;
-	getCustomPage()->smSportModeActivationMode = SPORT_MODE_LUA_GAUGE;
-	getCustomPage()->smSportModeLuaGauge = LUA_GAUGE_1;
-	getCustomPage()->smSportModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
-	getCustomPage()->smSportModeLuaGaugeThreshold = 0.5f;
-
-	Sensor::setMockValue(SensorType::LuaGauge1, 0.0f);
-	engine->periodicSlowCallback();
-	EXPECT_FALSE(getSm().engineSmIsGhostCam);
-
-	Sensor::setMockValue(SensorType::LuaGauge1, 1.0f);
-	engine->periodicSlowCallback();
-	EXPECT_TRUE(getSm().engineSmIsGhostCam);
-}
-
 // ---- Temperature overlay ----
 
 TEST(EngineStateMachine, tempOverlay_cold) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smColdTempThreshold = 60;
-	getCustomPage()->smHotTempThreshold  = 100;
+	engineConfiguration->smColdTempThreshold = 60;
+	engineConfiguration->smHotTempThreshold  = 100;
 	enterRunning();
 
 	Sensor::setMockValue(SensorType::Clt, 30.0f);
@@ -1681,8 +1344,8 @@ TEST(EngineStateMachine, tempOverlay_cold) {
 TEST(EngineStateMachine, tempOverlay_operating) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smColdTempThreshold = 60;
-	getCustomPage()->smHotTempThreshold  = 100;
+	engineConfiguration->smColdTempThreshold = 60;
+	engineConfiguration->smHotTempThreshold  = 100;
 	enterRunning();
 
 	Sensor::setMockValue(SensorType::Clt, 80.0f);
@@ -1697,8 +1360,8 @@ TEST(EngineStateMachine, tempOverlay_operating) {
 TEST(EngineStateMachine, tempOverlay_hot) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smColdTempThreshold = 60;
-	getCustomPage()->smHotTempThreshold  = 100;
+	engineConfiguration->smColdTempThreshold = 60;
+	engineConfiguration->smHotTempThreshold  = 100;
 	enterRunning();
 
 	Sensor::setMockValue(SensorType::Clt, 110.0f);
@@ -1728,8 +1391,8 @@ TEST(EngineStateMachine, tempOverlay_noSensor_treatsAsOperating) {
 TEST(EngineStateMachine, tempOverlay_exactlyAtColdThreshold_isNotCold) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
-	getCustomPage()->smColdTempThreshold = 60;
-	getCustomPage()->smHotTempThreshold  = 100;
+	engineConfiguration->smColdTempThreshold = 60;
+	engineConfiguration->smHotTempThreshold  = 100;
 	enterRunning();
 
 	// Exactly at the threshold is Operating, not Cold (strict less-than)

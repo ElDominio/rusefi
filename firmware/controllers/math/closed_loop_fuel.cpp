@@ -42,9 +42,7 @@ ft_region_e ShortTermFuelTrim::regionForSmState(EngineStateMachineState state) {
 }
 
 ft_region_e ShortTermFuelTrim::computeStftBin(float rpm, float load, stft_s& cfg) {
-	// State-based selection: when the Engine State Machine is enabled and "state based STFT"
-	// is on, the live SM state picks the region instead of the RPM/load thresholds below.
-	if (engineConfiguration->useEngineStateMachine && getCustomPage()->stateBasedStft) {
+	if (engineConfiguration->useEngineStateMachine && engineConfiguration->stateBasedStft) {
 		return regionForSmState(engine->module<EngineStateMachine>().unmock().getCurrentState());
 	}
 

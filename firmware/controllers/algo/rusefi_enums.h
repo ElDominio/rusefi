@@ -1098,6 +1098,18 @@ enum class dfco_fuel_cut_mode_e : uint8_t {
 	Both    = 2,
 };
 
+// Engine state machine shift settings; values match the tuning schema.
+enum class sm_clutch_switch_e : uint8_t {
+	None = 0,
+	ClutchUp = 1,
+	ClutchDown = 2,
+};
+
+enum class sm_shift_detection_mode_e : uint8_t {
+	RpmRate = 0,
+	VssRate = 1,
+};
+
 enum class SDLoggerMode : uint8_t {
 	None = 0,
 	Mlg = 1,
