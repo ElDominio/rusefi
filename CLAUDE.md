@@ -50,6 +50,12 @@ Firmware and unit-test builds keep dependency files in `firmware/.dep/` and `uni
 **Bringing up a brand new board directory**: a fresh `connectors/connectors.yaml` with no sibling `connectors/generated_*` files yet will fail the very first build with `No rule to make target 'generated_ts_name_by_pin.cpp'` - the `$(CONFIG_FILES): .config-sentinel` rule in `rusefi_config.mk` that would normally regenerate `connectors/generated_board_pin_names.h`/`generated_outputs.h`/`generated_ts_name_by_pin.cpp` (via `gen_config_board.sh` -> `PinoutLogic.java`) doesn't get triggered correctly on that first pass. Fix once with an explicit `cd firmware && bash gen_config_board.sh ./config/boards/<board> <short-name>`; after that, normal builds keep them in sync automatically. Note `git ls-files` shows these three `connectors/generated_*` files, plus `controllers/generated/{engine_configuration_generated_structures,rusefi_generated}_<board>.h` and `tunerstudio/generated/rusefi_<board>.ini`, already checked into git for every existing board - but per "Do not attempt to commit any generated files" above, don't stage newly (re)generated copies of these yourself; leave that for the human, same as any other generated-file diff produced by a build.
 After ChibiOS build-rule changes, validate generated-header dependencies with an empty `DEPDIR` (a fresh directory under `/tmp` is sufficient). Existing compiler-generated `.dep` files can hide missing explicit Makefile prerequisites: an incremental build generates the RAM disk correctly while a clean CI build compiles against its checked-in placeholder header.
 
+On STM32F4, a linker error at `.heap_ccm` saying `cannot move location counter
+backwards` from an address above `0x10010000` means static data exceeds the
+64 KiB CCM RAM region, not flash. Inspect both SRAM and CCM before removing
+features. `PERSISTENT_LOCATION=` places the settings container in main SRAM;
+the Lua configuration page stays in CCM and Lua can allocate from both heaps.
+
 ### Unit Tests
 
 The host build shadows `firmware/hw_layer/adc/adc_inputs.h` with
