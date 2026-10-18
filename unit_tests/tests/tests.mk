@@ -131,6 +131,7 @@ TESTS_SRC_CPP = \
 	tests/nitrous_control/test_nitrous_ignition_retard.cpp \
 	tests/engine_state_machine/test_engine_state_machine.cpp \
 	tests/engine_state_machine/test_operating_modes.cpp \
+	tests/ignition_injection/test_wot_enrichment.cpp \
 	tests/test_misfire_detection.cpp \
 	tests/test_oil_life_monitor.cpp \
 	tests/test_launch_power_ramp.cpp \
