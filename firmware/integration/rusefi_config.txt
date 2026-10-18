@@ -1523,11 +1523,6 @@ custom stepper_num_micro_steps_e 1 bits, U08,	@OFFSET@,	[0:3], @@stepper_num_mic
 
 	pid_s[CAMS_PER_BANK iterate] auxPid;VVT output PID\nTODO: rename to vvtPid
 
-	int16_t vvtIntake_iTermMin;VVT intake cam PID: iTerm min value;"", 1, 0, -30000, 30000, 0
-	int16_t vvtIntake_iTermMax;VVT intake cam PID: iTerm max value;"", 1, 0, -30000, 30000, 0
-	int16_t vvtExhaust_iTermMin;VVT exhaust cam PID: iTerm min value;"", 1, 0, -30000, 30000, 0
-	int16_t vvtExhaust_iTermMax;VVT exhaust cam PID: iTerm max value;"", 1, 0, -30000, 30000, 0
-
 	float[8 iterate] injectorCorrectionPolynomial;;"", 1, 0, -1000, 1000, 4
 #define PRIME_CURVE_COUNT 8
 ! Ethanol axis size for the opt-in 2D priming-pulse flex table (primeFlexTable). 4 rows keeps RAM low.
@@ -2105,6 +2100,7 @@ include_file controllers/modules/rolling_launch/rolling_launch_engineConfigurati
 include_file controllers/modules/burst_knock/burst_knock_engineConfiguration.txt
 include_file controllers/modules/engine_state_machine/engine_state_machine_engineConfiguration.txt
 include_file controllers/modules/wot_enrichment/wot_enrichment_engineConfiguration.txt
+include_file controllers/actuators/vvt_advanced_engineConfiguration.txt
 end_struct
 
 ! note that this magic field name is used by LiveDataParserPanel

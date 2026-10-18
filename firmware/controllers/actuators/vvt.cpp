@@ -51,8 +51,17 @@ void VvtController::onFastCallback() {
 }
 
 void VvtController::onConfigurationChange(engine_configuration_s const * previousConfig) {
-	if (!previousConfig || !m_pid.isSame(&previousConfig->auxPid[m_cam])) {
+	// Advanced curve/bound changes must not carry an integral trim from the old tune.
+	if (!previousConfig || !m_pid.isSame(&previousConfig->auxPid[m_cam])
+		|| engineConfiguration->vvtAdvancedModeEnabled
+		|| previousConfig->vvtAdvancedModeEnabled != engineConfiguration->vvtAdvancedModeEnabled
+		|| previousConfig->vvtIntake_iTermMin != engineConfiguration->vvtIntake_iTermMin
+		|| previousConfig->vvtIntake_iTermMax != engineConfiguration->vvtIntake_iTermMax
+		|| previousConfig->vvtExhaust_iTermMin != engineConfiguration->vvtExhaust_iTermMin
+		|| previousConfig->vvtExhaust_iTermMax != engineConfiguration->vvtExhaust_iTermMax) {
 		m_pid.reset();
+		m_targetHysteresis = Hysteresis();
+		vvtDistance = 0;
 	}
 }
 
@@ -122,21 +131,14 @@ expected<angle_t> VvtController::getSetpoint() {
 	// - Avoid integrator windup from trying to jam the cam against the stop
 	// - Many VVT implementations don't like being controlled near the stop,
 	//       as this can cause problems with the lock pin jamming.
-	// Advanced Mode's duty comes purely from the oil-pressure feedforward + gain-scheduled PID
-	// math (see getClosedLoop), so there's no fixed near-zero duty to guard against -- let the
-	// math run for every target value, including 0.
 	bool allowCamControl = true;
-#if EFI_VVT_ADVANCED_MODE
-	if (!getCustomPage()->vvtAdvancedModeEnabled) {
-#endif // EFI_VVT_ADVANCED_MODE
+	if (!engineConfiguration->vvtAdvancedModeEnabled) {
 		if (shouldInvertVvt(m_cam)) {
 			allowCamControl = m_targetHysteresis.test(target < -3, target > -1);
 		} else {
 			allowCamControl = m_targetHysteresis.test(target > 3, target < 1);
 		}
-#if EFI_VVT_ADVANCED_MODE
 	}
-#endif // EFI_VVT_ADVANCED_MODE
 
 	if (!allowCamControl) {
 		return unexpected;
@@ -153,80 +155,41 @@ expected<percent_t> VvtController::getOpenLoop(angle_t target) {
 	return 0;
 }
 
-#if EFI_VVT_ADVANCED_MODE
-// VVT Advanced Mode: base duty vs. oil pressure, per cam type (0=intake, 1=exhaust). This is the
-// feedforward baseline -- oil pressure is what actually moves the cam, so duty tracks it directly
-// rather than being layered under a separate multiplier. With no oil pressure sensor configured,
-// Sensor::getOrZero reads 0 and the curve is evaluated at its leftmost (0 kPa) bin.
-static float getVvtAdvancedBaseDuty(int camIndex) {
-	float oilPressure = Sensor::getOrZero(SensorType::OilPressure);
-	page6_s* cfg = getCustomPage();
-	if (camIndex == 0) {
-		return interpolate2d(oilPressure, cfg->vvtAdvOilPressureBinsIntake, cfg->vvtAdvDutyIntake);
-	} else {
-		return interpolate2d(oilPressure, cfg->vvtAdvOilPressureBinsExhaust, cfg->vvtAdvDutyExhaust);
-	}
-}
-
-// VVT Advanced Mode: PID P factor vs. signed distance-from-target, per cam type. Replaces the
-// fixed pid_s.pFactor (auxPid[cam].pFactor, never used while Advanced Mode is enabled) so
-// correction strength can be shaped by how far off target the cam currently is.
-static float getVvtAdvancedPFactor(int camIndex, float distance) {
-	page6_s* cfg = getCustomPage();
-	if (camIndex == 0) {
-		return interpolate2d(distance, cfg->vvtAdvDistanceBinsIntake, cfg->vvtAdvPFactorIntake);
-	} else {
-		return interpolate2d(distance, cfg->vvtAdvDistanceBinsExhaust, cfg->vvtAdvPFactorExhaust);
-	}
-}
-#endif // EFI_VVT_ADVANCED_MODE
-
 expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observation) {
 	// User labels say "advance" and "retard"
 	// "advance" means that additional solenoid duty makes indicated VVT position more positive
 	// "retard" means that additional solenoid duty makes indicated VVT position more negative
 	bool isInverted = shouldInvertVvt(m_cam);
 	m_pid.setErrorAmplification(isInverted ? -1.0f : 1.0f);
+	m_pid.iTermMin = m_cam == 0 ? engineConfiguration->vvtIntake_iTermMin : engineConfiguration->vvtExhaust_iTermMin;
+	m_pid.iTermMax = m_cam == 0 ? engineConfiguration->vvtIntake_iTermMax : engineConfiguration->vvtExhaust_iTermMax;
 
-	m_pid.iTermMin = (m_cam == 0) ? engineConfiguration->vvtIntake_iTermMin : engineConfiguration->vvtExhaust_iTermMin;
-	m_pid.iTermMax = (m_cam == 0) ? engineConfiguration->vvtIntake_iTermMax : engineConfiguration->vvtExhaust_iTermMax;
-
-#if EFI_VVT_ADVANCED_MODE
-	if (getCustomPage()->vvtAdvancedModeEnabled) {
-		// Signed distance uses the same sign convention as the PID error above, so curve tuning
-		// doesn't depend on the solenoid inversion setting.
+	// [tag:vvt_advanced_control] The signed error selects P after direction inversion.
+	// Oil-pressure duty replaces the fixed offset; PID trim runs continuously.
+	// The two cam types have separate curves shared across banks.
+	if (engineConfiguration->vvtAdvancedModeEnabled) {
 		float distance = (target - observation) * (isInverted ? -1.0f : 1.0f);
 		vvtDistance = distance;
-
-		// The oil-pressure duty curve is always the feedforward baseline.
-		float feedforward = getVvtAdvancedBaseDuty(m_cam);
-
-		// Gain-scheduled P factor for the trim below -- replaces the fixed auxPid[cam].pFactor.
-		float pFactor = getVvtAdvancedPFactor(m_cam, distance);
-
-		// The PID always runs on top of the feedforward. Its raw P+I+D trim (with the constant
-		// "Hold Duty" offset removed -- Hold Duty is never used in Advanced Mode) is added to the
-		// oil-pressure duty curve. If I trim isn't wanted (the feedforward curve alone should hold
-		// position once on target), set the fixed auxPid iFactor to 0.
+		float oilPressure = Sensor::getOrZero(SensorType::OilPressure);
+		float feedforward = m_cam == 0
+			? interpolate2d(oilPressure, engineConfiguration->vvtAdvOilPressureBinsIntake, engineConfiguration->vvtAdvDutyIntake)
+			: interpolate2d(oilPressure, engineConfiguration->vvtAdvOilPressureBinsExhaust, engineConfiguration->vvtAdvDutyExhaust);
+		float pFactor = m_cam == 0
+			? interpolate2d(distance, engineConfiguration->vvtAdvDistanceBinsIntake, engineConfiguration->vvtAdvPFactorIntake)
+			: interpolate2d(distance, engineConfiguration->vvtAdvDistanceBinsExhaust, engineConfiguration->vvtAdvPFactorExhaust);
 		float dTime = MS2SEC(GET_PERIOD_LIMITED(&engineConfiguration->auxPid[m_cam]));
-		float rawPid = m_pid.getUnclampedOutputWithPFactor(target, observation, dTime, pFactor) - m_pid.getOffset();
-		float output = feedforward + rawPid;
-
-		output = clampF(engineConfiguration->auxPid[m_cam].minValue, output, engineConfiguration->auxPid[m_cam].maxValue);
-
-		// Keep the PID status telemetry reflecting the actual commanded duty.
+		float trim = m_pid.getUnclampedOutputWithPFactor(target, observation, dTime, pFactor) - m_pid.getOffset();
+		float output = clampF(engineConfiguration->auxPid[m_cam].minValue, feedforward + trim,
+			engineConfiguration->auxPid[m_cam].maxValue);
 		m_pid.output = output;
-
 #if EFI_TUNER_STUDIO
 		m_pid.postState(engine->outputChannels.vvtStatus[index]);
-		// postState() reports pTerm via the fixed (unused in Advanced Mode) auxPid[cam].pFactor --
-		// override with the actual gain-scheduled P term applied above.
 		engine->outputChannels.vvtStatus[index].pTerm = pFactor * m_pid.getPrevError();
-#endif /* EFI_TUNER_STUDIO */
-
+#endif
 		return output;
 	}
-#endif // EFI_VVT_ADVANCED_MODE
+
+	vvtDistance = 0;
 
 	float retVal = m_pid.getOutput(target, observation);
 
