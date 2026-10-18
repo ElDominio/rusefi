@@ -28,9 +28,7 @@ private:
 	bool m_isMapPredictionActive = false;
 	bool m_awaitingThrottleRelease = false;
 	Timer m_predictionTimer;
-	// Started once when prediction first latches and never reset by the rising-TPS
-	// retrigger below; enforces a hard cap so we never substitute the estimate for
-	// the real MAP sensor longer than blendDuration, even through a sustained tip-in.
+	// Starts with a new event; rising-TPS blend restarts leave this timer running.
 	Timer m_sessionTimer;
 	float m_initialPredictedMap = 0;
 	float m_tpsPeak = 0;
