@@ -149,9 +149,7 @@ EnginePins::EnginePins() :
 		fanRelay2("Fan Relay 2", CONFIG_PIN_OFFSETS(fan2)),
 		acRelay("A/C Relay", CONFIG_PIN_OFFSETS(acRelay)),
 		fuelPumpRelay("Fuel pump Relay", CONFIG_PIN_OFFSETS(fuelPump)),
-#if EFI_ADVANCED_FUEL_PUMP
 		fuelPumpRelay2("Fuel pump Relay 2", CONFIG_PIN_OFFSETS(fuelPump2)),
-#endif
 		nitrousRelay("Nitrous Relay", CONFIG_PIN_OFFSETS(nitrousRelay)),
 		vvlRelay("VVL Relay", CONFIG_PIN_OFFSETS(vvlRelay)),
 		cdvSolenoid("CDV Solenoid", CONFIG_PIN_OFFSETS(cdvSolenoid)),
@@ -926,9 +924,7 @@ void turnAllPinsOff() {
 	}
 	enginePins.mainRelay.setValue(false);
 	enginePins.fuelPumpRelay.setValue(false);
-#if EFI_ADVANCED_FUEL_PUMP
 	enginePins.fuelPumpRelay2.setValue(false);
-#endif
 	enginePins.checkEnginePin.setValue(true); // yes this one can go ON
 #if EFI_PROD_CODE && HW_HELLEN
   hellenDisableEnSilently();

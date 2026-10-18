@@ -6,49 +6,42 @@
 
 #include "engine_module.h"
 #include "fuel_pump_control_generated.h"
-#include <rusefi/timer.h>
-
-#if EFI_ADVANCED_FUEL_PUMP
 #include "closed_loop_controller.h"
 #include "efi_pid.h"
+#include "pwm_generator_logic.h"
+#include <rusefi/timer.h>
+#include <optional>
 
-void initFuelPumpPwm();
-#endif
-
-class FuelPumpController : public EngineModule,
-                           public fuel_pump_control_s
-#if EFI_ADVANCED_FUEL_PUMP
-                         , public ClosedLoopController<float, percent_t>
-#endif
-{
+class FuelPumpController : public EngineModule, public fuel_pump_control_s,
+                           public ClosedLoopController<float, percent_t> {
 public:
-#if EFI_ADVANCED_FUEL_PUMP
-	FuelPumpController();
-#endif
-
+	void setDefaultConfiguration() override;
 	void onSlowCallback() override;
-	void onIgnitionStateChanged(bool ignitionOn) override;
-
-#if EFI_ADVANCED_FUEL_PUMP
 	void onFastCallback() override;
-	void onConfigurationChange(engine_configuration_s const* prev) override;
+	void onIgnitionStateChanged(bool ignitionOn) override;
+	void onConfigurationChange(engine_configuration_s const* previous) override;
 
-	// ClosedLoopController interface — used in PWM mode
-	expected<float>     getSetpoint() override;
-	expected<float>     observePlant() override;
+	void initHardware();
+	void stopHardware();
+	bool isHardwareConfigurationChanged(engine_configuration_s const* previous) const;
+
+	expected<float> getSetpoint() override;
+	expected<float> observePlant() override;
 	expected<percent_t> getOpenLoop(float target) override;
-	expected<percent_t> getClosedLoop(float setpoint, float observation) override;
-	void                setOutput(expected<percent_t> output) override;
-#endif
+	expected<percent_t> getClosedLoop(float target, float pressure) override;
+	void setOutput(expected<percent_t> output) override;
 
 private:
-	Timer m_ignOnTimer;
-
-#if EFI_ADVANCED_FUEL_PUMP
-	Pid   m_fuelPumpPid;
-	bool  m_secondaryPumpOn = false;
-	bool  m_reliefActive = false;
-
+	void resetFeedback();
 	void updateDualRelay();
-#endif
+	bool hasValidDutyLimits() const;
+
+	Timer m_ignOnTimer;
+	Pid m_pid;
+	std::optional<SimplePwm> m_pwm;
+	fuel_pump_mode_e m_mode = fuel_pump_mode_e::Single;
+	bool m_hardwareInitialized = false;
 };
+
+void initFuelPump();
+void stopFuelPump();

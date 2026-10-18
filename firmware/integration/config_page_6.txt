@@ -48,7 +48,6 @@ custom limiter_adder_source_e 1 bits, U08, @OFFSET@, [0:0], @@limiter_adder_sour
 #define oil_life_temp_source_e_enum "Oil Temp (EOT)", "Coolant Temp (CLT)"
 custom oil_life_temp_source_e 1 bits, U08, @OFFSET@, [0:1], @@oil_life_temp_source_e_enum@@
 
-custom fuel_pump_mode_e 1 bits, U08, @OFFSET@, [0:1], "Single", "Dual", "PWM"
 
 #define imrc_mode_e_enum "Disabled", "Solenoid", "H-Bridge"
 custom imrc_mode_e 1 bits, U08, @OFFSET@, [0:1], @@imrc_mode_e_enum@@
@@ -292,38 +291,7 @@ struct_no_prefix page6_s
 	lua_gauge_e luaLimiterGaugeSelect;Lua gauge used as the limiter input axis (LuaGauge source only).
 	limiter_adder_source_e limiterAdderSource;Limiter Adders: input source. LuaGauge interpolates the curves below off a Lua gauge value. Sport Mode applies a single flat adder while Sport Mode is active.
 
-	! --- Advanced / PWM Fuel Pump (relay pins stay in page 1) ---
-	fuel_pump_mode_e fuelPumpMode;Fuel pump output mode: Single relay, Dual relay with secondary activation, or PWM pressure control
-	uint16_t secondaryFpActivationRpm;Secondary pump activates above this RPM (Dual mode);"rpm", 1, 0, 0, 8000, 0
-	uint16_t secondaryFpActivationLoad;Secondary pump activates above this fueling load (Dual mode). In Speed Density mode this is MAP in kPa - set above 100 kPa to use boost as the trigger threshold.;"kPa", 1, 0, 0, @@MAP_UPPER_LIMIT@@, 0
-	uint16_t secondaryFpRpmHysteresis;Secondary pump deactivates when RPM drops this far below activation threshold (Dual mode);"rpm", 1, 0, 0, 2000, 0
-	uint16_t secondaryFpLoadHysteresis;Secondary pump deactivates when load drops this far below activation threshold (Dual mode);"kPa", 1, 0, 0, @@MAP_UPPER_LIMIT@@, 0
-	uint8_t secondaryFpActivationTps;Secondary pump activates above this TPS (Dual mode);"%", 1, 0, 0, 100, 0
-	uint8_t secondaryFpTpsHysteresis;Secondary pump deactivates when TPS drops this far below activation threshold (Dual mode);"%", 1, 0, 0, 50, 0
-	uint16_t fuelPumpPwmFrequency;Fuel pump PWM frequency (PWM mode);"Hz", 1, 0, 10, 3000, 0
-	uint8_t fuelPumpMinDuty;Minimum PWM duty - keeps pump spinning at low demand (PWM mode);"%", 1, 0, 0, 100, 0
-	uint8_t fuelPumpMaxDuty;Maximum PWM duty - also held during prime (PWM mode);"%", 1, 0, 0, 100, 0
-	int16_t fuelPump_iTermMin;PID integrator lower limit (PWM mode);"", 1, 0, -30000, 30000, 0
-	int16_t fuelPump_iTermMax;PID integrator upper limit (PWM mode);"", 1, 0, -30000, 30000, 0
 
-	! --- Aggressive Pressure Relief (PWM mode, returnless fuel systems) ---
-	! On a returnless system the pump can only add fuel to the rail, never remove it - once
-	! demand drops, excess pressure can only bleed off as the injectors consume it down, and
-	! at low injected mass that happens too slowly for the PID's I-term to usefully chase
-	! (it just winds down against a pump that already has no authority to help, then overshoots
-	! low once pressure finally catches up). While this is enabled and injected fuel mass is
-	! below fuelPumpReliefMaxInjectedMass, relief engages once pressure rises more than
-	! fuelPumpReliefEngageOverpressure above target - pump duty is held at fuelPumpMinDuty
-	! (bypassing PID output, PID reset) so pressure drains via consumption alone. Once engaged,
-	! relief stays latched (hysteresis) until pressure falls back to within
-	! fuelPumpReliefRecoverOverpressure of target, at which point normal PID control resumes.
-	! fuelPumpReliefRecoverOverpressure should be set lower than fuelPumpReliefEngageOverpressure
-	! (0 = resume only once pressure is back at or below target) to avoid chattering in/out of
-	! relief right at the engage point.
-	bit fuelPumpAggressiveRelief,"enabled","disabled";Aggressive Pressure Relief: master enable (PWM mode, intended for returnless fuel systems - see comment above).
-	uint16_t fuelPumpReliefMaxInjectedMass;Aggressive Pressure Relief: only engages while injected fuel mass per cycle is below this (low consumption = pressure won't drop fast regardless of pump duty).;"mg", 1, 0, 0, 2000, 0
-	uint16_t fuelPumpReliefEngageOverpressure;Aggressive Pressure Relief: pressure must exceed target by more than this to engage relief.;"kPa", 1, 0, 0, 500, 0
-	uint16_t fuelPumpReliefRecoverOverpressure;Aggressive Pressure Relief: once engaged, relief stays on until pressure is back within this much of target (should be less than the engage value above).;"kPa", 1, 0, 0, 500, 0
 
 	! --- Launch Power Ramp (Advanced) ---
 	! After launch control releases at WOT (car leaves the line), retard ignition timing per the

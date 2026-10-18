@@ -1039,12 +1039,6 @@ typedef enum __attribute__((__packed__)) {
 	ftRegionCruise = 3,
 } ft_region_e;
 
-typedef enum __attribute__ ((__packed__)) {
-	FP_MODE_SINGLE = 0,
-	FP_MODE_DUAL   = 1,
-	FP_MODE_PWM    = 2,
-} fuel_pump_mode_e;
-
 // Values must match oil_life_temp_source_e_enum order in config_page_6.txt
 enum class oil_life_temp_source_e : uint8_t {
 	OilTemp = 0,
@@ -1094,6 +1088,12 @@ enum class dfco_fuel_cut_mode_e : uint8_t {
 	Overrun = 0,
 	Decel = 1,
 	Both = 2,
+};
+
+enum class fuel_pump_mode_e : uint8_t {
+	Single = 0,
+	Dual = 1,
+	Pwm = 2,
 };
 
 enum class SDLoggerMode : uint8_t {

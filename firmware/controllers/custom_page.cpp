@@ -136,14 +136,6 @@ void customPageSetDefaults() {
 	d.popsAndBangsCutPercent = 60;
 	d.popsAndBangsCutDurationMs = 100;
 
-	// Advanced / PWM Fuel Pump — default to single relay so initFuelPumpPwm() returns
-	// early and never hands the pin to the SimplePwm scheduler.
-	d.fuelPumpMode = FP_MODE_SINGLE;
-	d.fuelPumpMinDuty = 0;
-	d.fuelPumpMaxDuty = 100;
-	d.fuelPumpPwmFrequency = 100;
-	d.fuelPump_iTermMin = -30;
-	d.fuelPump_iTermMax = 30;
 
 	// Check Engine Triggering — all checks disabled by default; each check is worth 1 point.
 	d.tpsCircuitCelEnable = false;
