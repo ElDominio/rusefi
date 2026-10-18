@@ -87,10 +87,8 @@ struct EtbCanShapingFrame {
 	uint8_t flags;
 };
 struct EtbCanPedalConfigFrame {
-	int16_t idleThreshold;
-	uint16_t minPosition;
 	uint8_t flags;
-	uint8_t reserved[3];
+	uint8_t reserved[7];
 };
 
 static_assert(sizeof(EtbCanBiasFrame) == 8);
@@ -169,6 +167,8 @@ void sendExternalEtbBiasCurve() {
 	}
 }
 
+static void sendExternalEtbShaping(uint8_t targetSeq);
+
 void sendExternalEtbTarget() {
 	auto controller = engine->etbControllers[0];
 	if (!controller || !controller->isEtbMode()) {
@@ -213,11 +213,17 @@ void sendExternalEtbTarget() {
 	// EtbCanMode::Autotune's comment (can_etb.h) - board-side not yet implemented.
 	bool autotuneRequested = engine->etbAutoTune && Sensor::getOrZero(SensorType::Rpm) == 0;
 
-	CanTxTyped<EtbCanTargetFrame> m(CanCategory::ETB, CAN_ID_ETB_TARGET, true, getExternalEtbBus());
-	m->targetPosition = target.Value;
-	m->benchDutyRaw = 0; // unused when mode == Normal or Autotune
-	m->mode = (uint8_t)(autotuneRequested ? EtbCanMode::Autotune : EtbCanMode::Normal);
-	m->sequence = targetSeq++;
+	uint8_t seq = targetSeq++;
+	{
+		// Scoped: CanTxTyped transmits on destruction, and ETB_TARGET has to go out before the
+		// ETB_SHAPING that pairs with it.
+		CanTxTyped<EtbCanTargetFrame> m(CanCategory::ETB, CAN_ID_ETB_TARGET, true, getExternalEtbBus());
+		m->targetPosition = target.Value;
+		m->benchDutyRaw = 0; // unused when mode == Normal or Autotune
+		m->mode = (uint8_t)(autotuneRequested ? EtbCanMode::Autotune : EtbCanMode::Normal);
+		m->sequence = seq;
+	}
+	sendExternalEtbShaping(seq);
 }
 
 void sendExternalEtbCalTps(uint16_t rawMin1, uint16_t rawMax1, uint16_t rawMin2, uint16_t rawMax2) {
@@ -282,27 +288,26 @@ void sendExternalEtbCalibration() {
 		voltsToCanEtbBoardRaw(engineConfiguration->throttlePedalSecondaryWOTVoltage));
 }
 
-// Local pedal target (can_etb.h): the affine correction the board applies on top of its own
-// pedalToTpsTable lookup, from throttle 1's EtbLocalPedalShaping. Sent every time ETB_TARGET is -
-// it carries the rev limiter/limp/traction ceiling, which shouldn't lag any more than ETB_TARGET
-// itself does. The board times it out the same way it times out ETB_TARGET, falling back to
-// remote operation.
-void sendExternalEtbShaping() {
-	auto controller = engine->etbControllers[0];
-	if (!controller || !controller->isEtbMode()) {
-		return;
-	}
+static volatile uint32_t boardPedalTableCrc = 0;
+static uint32_t currentPedalTableCrc();
 
-	EtbLocalPedalShaping shaping = controller->getLocalPedalShaping();
-	// Same conditions sendExternalEtbTarget() goes quiet for - if rusEFI isn't commanding a normal
-	// target right now, the board mustn't be computing one on its own either.
-	for (int i = 0; i < ETB_COUNT; i++) {
-		auto etb = engine->etbControllers[i];
-		if (etb && etb->isEtbMode() && (etb->isAutocalOrBenchTestActive() || etb->isEtbFaulted())) {
-			shaping.forceRemote = true;
-		}
+// Local pedal target (can_etb.h): the affine correction the board applies on top of its own
+// pedalToTpsTable lookup, from throttle 1's EtbLocalPedalShaping. Only ever sent right after an
+// ETB_TARGET, tagged with that frame's sequence: the board combines the two as max(target, local),
+// so a ceiling (rev limiter/limp/traction) older than the target it's paired with would override a
+// reduction rusEFI already made - the board refuses shaping that doesn't belong to its current
+// target. sendExternalEtbTarget()'s own early returns (bench/autocal/fault/pause/no setpoint) cover
+// every case where rusEFI isn't commanding a normal target.
+static void sendExternalEtbShaping(uint8_t targetSeq) {
+	EtbLocalPedalShaping shaping = engine->etbControllers[0]->getLocalPedalShaping();
+	if (engine->etbAutoTune) {
+		shaping.forceRemote = true;
 	}
-	if (engineConfiguration->pauseEtbControl || engine->etbAutoTune) {
+	// The board's table must be the tune's table. With max(), a cell lowered in TunerStudio but not
+	// yet sent would otherwise be silently ignored (the board's higher value keeps winning) until the
+	// next Send. Board CRC comes from ETB_LOCAL_STATUS at 10Hz - after an edit this forces remote
+	// immediately, and after a Send it releases once the board reports the new CRC.
+	if (boardPedalTableCrc == 0 || boardPedalTableCrc != currentPedalTableCrc()) {
 		shaping.forceRemote = true;
 	}
 
@@ -311,23 +316,19 @@ void sendExternalEtbShaping() {
 	m->add = (int16_t)(clampF(-300.0f, shaping.add, 300.0f) * 100.0f);
 	m->maxLimit = (uint16_t)(clampF(0, shaping.maxLimit, 100) * 100.0f);
 	m->rpm = (uint8_t)clampF(0, Sensor::getOrZero(SensorType::Rpm) / 50.0f, 255);
-	m->flags = shaping.forceRemote ? ETB_SHAPING_FLAG_FORCE_REMOTE : 0;
+	m->flags = (uint8_t)((shaping.forceRemote ? ETB_SHAPING_FLAG_FORCE_REMOTE : 0)
+		| ((targetSeq & ETB_SHAPING_SEQ_MASK) << ETB_SHAPING_SEQ_SHIFT));
 }
 
 void sendExternalEtbPedalConfig() {
 	CanTxTyped<EtbCanPedalConfigFrame> m(CanCategory::ETB, CAN_ID_ETB_PEDAL_CONFIG, true, getExternalEtbBus());
-	// Same threshold the idle controller uses to decide "pedal pressed, out of idle" (it compares
-	// DriverThrottleIntent, i.e. the pedal on an ETB setup) - so the board hands over to its local
-	// target at the same point rusEFI stops treating the engine as idling.
-	m->idleThreshold = (int16_t)(engineConfiguration->idlePidDeactivationTpsThreshold * 100);
-	m->minPosition = (uint16_t)(engineConfiguration->etbMinimumPosition * 100.0f);
 	// In external CAN ETB mode both pedal channels are virtual, so RedundantSensor always averages
 	// them - except Ford-style PPS, whose combination the board doesn't replicate; PEDAL1 alone is
 	// its closest approximation.
 	bool pedal2Redundant = Sensor::hasSensor(SensorType::AcceleratorPedalSecondary)
 		&& !engineConfiguration->useFordRedundantPps;
 	m->flags = pedal2Redundant ? ETB_PEDAL_CONFIG_FLAG_PEDAL2_REDUNDANT : 0;
-	m->reserved[0] = m->reserved[1] = m->reserved[2] = 0;
+	memset(m->reserved, 0, sizeof(m->reserved));
 }
 
 static void buildPedalTableBytes(uint8_t (&out)[ETB_PEDAL_TABLE_BYTES]) {
@@ -365,7 +366,6 @@ static struct {
 } pedalTableTx;
 
 static volatile bool pedalTableSendRequested = false;
-static volatile uint32_t boardPedalTableCrc = 0;
 
 void requestExternalEtbPedalTableSend() {
 	pedalTableSendRequested = true;
@@ -478,7 +478,6 @@ void sendExternalEtbBiasCurve() {}
 void sendExternalEtbCalTps(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void sendExternalEtbCalPedal(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void sendExternalEtbCalibration() {}
-void sendExternalEtbShaping() {}
 void sendExternalEtbPedalConfig() {}
 void requestExternalEtbPedalTableSend() {}
 void serviceExternalEtbPedalTableTransfer() {}

@@ -368,7 +368,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 
 	// Autotune runs with 50% target position
 	if (m_isAutotune) {
-		m_localPedalShaping = {};
+		publishLocalPedalShaping({});
 		return 50.0f;
 	}
 
@@ -380,7 +380,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// If the pedal map hasn't been set, we can't provide a setpoint.
 	if (!m_pedalProvider) {
     state = (uint8_t)EtbState::NoPedal;
-		m_localPedalShaping = {};
+		publishLocalPedalShaping({});
 		return unexpected;
 	}
 
@@ -396,7 +396,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	constexpr float crankingTpsTargetVssToleranceKph = 2.0f;
 	if (engineConfiguration->crankingTpsTargetEnabled && engine->rpmCalculator.isCranking()
 			&& Sensor::getOrZero(SensorType::VehicleSpeed) < crankingTpsTargetVssToleranceKph) {
-		m_localPedalShaping = {};
+		publishLocalPedalShaping({});
 		return clampPercentValue(engineConfiguration->cranking.tpsTarget);
 	}
 
@@ -576,7 +576,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	m_adjustedTarget = targetPosition;
 
 	shaping.maxLimit = std::min(shaping.maxLimit, maxPosition);
-	m_localPedalShaping = shaping;
+	publishLocalPedalShaping(shaping);
 
 	return targetPosition;
 }

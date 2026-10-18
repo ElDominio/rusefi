@@ -1229,14 +1229,15 @@ TEST(etb, tractionControlHoldAndDecay) {
 
 
 
-// External CAN ETB local pedal target: the board recomputes the setpoint from its own pedal-table
-// lookup as clamp(table * mult + add, etbMinimumPosition, maxLimit) - see EtbLocalPedalShaping
-// (electronic_throttle.h) and the board's main.c select_normal_target(). It must land on the same
-// value getSetpointEtb() does.
+// External CAN ETB local pedal target: the board computes its own candidate from its pedal-table
+// lookup as clamp(table * mult + add, 0, maxLimit) and tracks max(ETB_TARGET, candidate) - see
+// EtbLocalPedalShaping (electronic_throttle.h) and the board's main.c select_normal_target(). With
+// no latency in between, that must land exactly on getSetpointEtb(): the candidate equals the
+// setpoint wherever etbMinimumPosition isn't the binding floor, and never exceeds it (which would
+// make the board open past what rusEFI wants).
 static float boardLocalPedalTarget(const EtbLocalPedalShaping& shaping, float table) {
 	float target = clampF(0, table * shaping.mult + shaping.add, 100);
-	target = std::min(target, shaping.maxLimit);
-	return std::max(target, (float)engineConfiguration->etbMinimumPosition);
+	return std::min(target, shaping.maxLimit);
 }
 
 TEST(etb, localPedalShapingMatchesSetpoint) {
@@ -1262,13 +1263,19 @@ TEST(etb, localPedalShapingMatchesSetpoint) {
 	etb.setIdlePosition(40);
 	etb.setLuaAdjustment(3);
 	engineConfiguration->etbMaximumPosition = 75;
+	// Above idle 4% + Lua 3% at pedal 0, so pedal 0 exercises the floor
+	engineConfiguration->etbMinimumPosition = 10;
 
-	for (float pedal : {5.0f, 25.0f, 50.0f, 80.0f, 100.0f}) {
+	for (float pedal : {0.0f, 5.0f, 25.0f, 50.0f, 80.0f, 100.0f}) {
 		Sensor::setMockValue(SensorType::AcceleratorPedal, pedal, true);
 		float setpoint = etb.getSetpoint().value_or(-1);
 		EtbLocalPedalShaping shaping = etb.getLocalPedalShaping();
 		EXPECT_FALSE(shaping.forceRemote) << "pedal " << pedal;
-		EXPECT_NEAR(setpoint, boardLocalPedalTarget(shaping, pedal * 0.8f), 1e-3) << "pedal " << pedal;
+		float local = boardLocalPedalTarget(shaping, pedal * 0.8f);
+		EXPECT_LE(local, setpoint + 1e-3) << "pedal " << pedal;
+		if (setpoint > engineConfiguration->etbMinimumPosition + 1e-3) {
+			EXPECT_NEAR(setpoint, local, 1e-3) << "pedal " << pedal;
+		}
 	}
 }
 

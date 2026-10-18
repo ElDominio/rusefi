@@ -85,6 +85,9 @@ public:
 	}
 
 	EtbLocalPedalShaping getLocalPedalShaping() const override {
+		// Written from the ETB thread, read from the CAN TX thread - copy under lock so the board
+		// never gets e.g. a new forceRemote=false next to an old mult.
+		chibios_rt::CriticalSectionLocker csl;
 		return m_localPedalShaping;
 	}
 
@@ -128,6 +131,10 @@ private:
 	const ValueProvider3D* m_pedalProvider = nullptr;
 
 	// Rebuilt by every getSetpointEtb() call - see EtbLocalPedalShaping (electronic_throttle.h).
+	void publishLocalPedalShaping(const EtbLocalPedalShaping& shaping) {
+		chibios_rt::CriticalSectionLocker csl;
+		m_localPedalShaping = shaping;
+	}
 	EtbLocalPedalShaping m_localPedalShaping;
 
 	float m_idlePosition = 0;

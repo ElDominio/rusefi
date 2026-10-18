@@ -7133,3 +7133,28 @@ Follow-ups:
   alphax-beta build referenced a ChibiOS file this branch's submodule doesn't
   have); unit_tests 1762/1762 incl. new etb.localPedalShapingMatchesSetpoint /
   etb.localPedalShapingForcesRemote. Not bench-verified.
+
+## 2026-10-18 - External CAN ETB: local pedal target reworked to max(ECU target, local)
+
+- Design change (user): instead of switching local/remote at
+  idlePidDeactivationTpsThreshold, the board always tracks
+  max(ETB_TARGET, clamp(table(pedal, rpm) * mult + add, 0, maxLimit)). rusEFI's
+  target is the floor - it already carries idle, overrun and
+  etbMinimumPosition - so no idle RPM table, threshold, hysteresis or minimum
+  needs sending, and the board can only open sooner than rusEFI, never close
+  below it. ETB_PEDAL_CONFIG now carries just the pedal-channel flags.
+- Race fixes that max() made necessary:
+  - ETB_SHAPING is now sent from sendExternalEtbTarget() right after the target
+    and carries the low 7 bits of its sequence (flags bits 1-7); the board uses
+    shaping only when it is at most one sequence behind its current target, so a
+    lost shaping frame can't keep a stale (higher) ceiling over a rev-limit/TC
+    reduction - it falls back to ETB_TARGET alone.
+  - forceRemote while the board's table CRC doesn't match the tune (otherwise a
+    cell lowered in TS but not sent would be silently ignored by max()).
+  - EtbLocalPedalShaping is published/read under CriticalSectionLocker (ETB
+    thread writes, CAN TX thread reads).
+- TS: canEtbLocalPedalActive now means "board target leading" (local > ECU).
+- Validation: paralela-f427 firmware build OK; unit_tests 1762/1762
+  (etb.localPedalShapingMatchesSetpoint now also checks the local candidate
+  never exceeds the setpoint and covers the etbMinimumPosition floor). Not
+  bench-verified.
