@@ -348,7 +348,7 @@ Usages:
 
   - name: engine_state_machine_state
     java: EngineStateMachine.java
-    folder: controllers/algo
+    folder: controllers/modules/engine_state_machine
     prepend: integration/rusefi_config_shared.txt
     output_name: esm
     engineModule: EngineStateMachine

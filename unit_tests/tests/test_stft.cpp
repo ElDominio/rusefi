@@ -122,12 +122,12 @@ TEST(ClosedLoopFuel, StateBasedSelectionOverridesThresholds) {
 
 	// With state-based STFT off, RPM/load thresholds pick the region (idle here).
 	engineConfiguration->useEngineStateMachine = true;
-	getCustomPage()->stateBasedStft = false;
+	engineConfiguration->stateBasedStft = false;
 	EXPECT_EQ(ftRegionIdle, stft.computeStftBin(1000, 10, cfg));
 
 	// With state-based STFT on, the SM state wins regardless of RPM/load. The SM defaults to
 	// the Off state, which maps to the main cruise cell.
-	getCustomPage()->stateBasedStft = true;
+	engineConfiguration->stateBasedStft = true;
 	EXPECT_EQ(ftRegionCruise, stft.computeStftBin(1000, 10, cfg));
 }
 
@@ -511,3 +511,25 @@ TEST_F(ShortTermFuelTrimBehavior, IntegrationUsesTargetLambdaAndClampsTimeConsta
 }
 
 } // namespace
+
+TEST(ClosedLoopFuel, StateBasedSelectionAndFallback) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	auto& sm = engine->module<EngineStateMachine>().unmock();
+	auto& stft = engine->module<ShortTermFuelTrim>().unmock();
+	auto& cfg = engineConfiguration->stft;
+	cfg.maxIdleRegionRpm = 1500;
+	cfg.minPowerLoad = 80;
+	cfg.maxOverrunLoad = 30;
+	engineConfiguration->useEngineStateMachine = true;
+	engineConfiguration->stateBasedStft = true;
+	engine->rpmCalculator.setRpmValue(3000);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, 95);
+	sm.onSlowCallback();
+	ASSERT_EQ(sm.getCurrentState(), EngineStateMachineState::WOT);
+	EXPECT_EQ(stft.computeStftBin(1000, 10, cfg), ftRegionPower);
+	engineConfiguration->stateBasedStft = false;
+	EXPECT_EQ(stft.computeStftBin(1000, 10, cfg), ftRegionIdle);
+	engineConfiguration->stateBasedStft = true;
+	engineConfiguration->useEngineStateMachine = false;
+	EXPECT_EQ(stft.computeStftBin(1000, 10, cfg), ftRegionIdle);
+}

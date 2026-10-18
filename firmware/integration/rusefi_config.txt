@@ -1917,7 +1917,6 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit exhaustCutoutKeyOnTestEnabled,"Key-on test","disabled"
 	bit exhaustCutoutEngineOnTestEnabled,"Engine-on test","disabled"
 	bit unusedBit_CutoutWasPwm
-	bit useEngineStateMachine,"enabled","disabled";Centralized Engine State Machine. When enabled, state detection is driven by a single priority-ordered evaluator. When disabled, each controller manages its own state detection.
 	bit cdvControlEnabled,"enabled","disabled"
 	bit cdvUseClutchExit,"enabled","disabled";Deactivate CDV solenoid when clutch pedal is released
 	bit luaLimiterEnabled,"enabled","disabled"
@@ -2057,11 +2056,9 @@ end_struct
 
 	uint16_t launchRpmThreshold;Launch RPM Threshold: when above 0, launch only engages if the activation switch (button/clutch) is pressed at or below this RPM, and stays latched while held - even past this RPM. This lets a standing launch (switch pressed low, revved up) coexist with flat shift / torque reduction (switch blipped high during an upshift). 0 disables the gate (legacy behavior).;"rpm", 1, 0, 0, 20000, 0
 
-! Engine State Machine thresholds + shift detection, and Pops & Bangs settings live in
-! TS page 6 (integration/config_page_6.txt / page6_s). The sm_*/pops_and_bangs_* C++ enums
-! remain defined in controllers/algo/rusefi_enums.h. Only the two enable bits stay here
-! (useEngineStateMachine above, and popsAndBangsEnabled below) since they share bit words
-! with other features.
+! Engine State Machine settings live in controllers/modules/engine_state_machine/engine_state_machine_engineConfiguration.txt.
+! Pops & Bangs settings live in TS page 6 (integration/config_page_6.txt / page6_s); only the
+! enable bit (popsAndBangsEnabled below) stays here since it shares a bit word with other features.
 
 ! Pops and Bangs (antilag on decel / exhaust crackle)
 	bit popsAndBangsEnabled,"enabled","disabled";Enable pops and bangs mode. WARNING: will damage catalytic converters and reduce turbocharger life.
@@ -2102,6 +2099,7 @@ end_struct
 	uint8_t dwellDutyPercent;Dwell Duty Mode: percentage of the inter-spark interval used as coil dwell time. 50 = half the interval between pulses (standard TFI target).;"%", 1, 0, 1, 90, 0
 
 ! end of engine_configuration_s
+include_file controllers/modules/engine_state_machine/engine_state_machine_engineConfiguration.txt
 end_struct
 
 ! note that this magic field name is used by LiveDataParserPanel
