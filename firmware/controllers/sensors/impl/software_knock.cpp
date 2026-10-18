@@ -27,13 +27,6 @@
 #include "error_handling.h"
 #include "adc_onchip.h"
 
-// KNOCK_SPECTROGRAM is a tristate DDEFS value (TRUE/FALSE), not a plain #define marker -
-// boards disable it with `-DKNOCK_SPECTROGRAM=FALSE`, so every check below must be `#if`,
-// never `#ifdef` (which is true for ANY defined value, including FALSE).
-#ifndef KNOCK_SPECTROGRAM
-#define KNOCK_SPECTROGRAM FALSE
-#endif
-
 #if KNOCK_SPECTROGRAM
 #include "fft/fft.hpp"
 
