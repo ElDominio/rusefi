@@ -297,7 +297,6 @@ void LuaThread::ThreadTask() {
 static LuaThread luaThread;
 
 void startLua() {
-	luaHeapInit();
 
 #if EFI_CAN_SUPPORT
 	initLuaCanRx();
