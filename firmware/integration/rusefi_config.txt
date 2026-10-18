@@ -946,7 +946,7 @@ spi_device_e digitalPotentiometerSpiDevice;Digital Potentiometer is used by stoc
 	! bit 13
 	bit stepperForceParkingEveryRestart,"yes","no"
 	bit isFasterEngineSpinUpEnabled,"enabled","disabled";If enabled, RPM is estimated from ~90 degrees of rotation using tooth timestamps collected even before trigger sync, and fuel/ignition scheduling starts as soon as the trigger syncs (sequential ignition temporarily runs as wasted spark until full phase sync). As soon as the trigger syncs plus 90 degrees rotation, fuel and ignition events will occur. If disabled, worst case may require up to 4 full crank rotations before any events are scheduled.
-	bit coastingFuelCutEnabled,"enabled","disabled";This setting disables fuel injection while the engine is in overrun, this is useful as a fuel saving measure and to prevent back firing.
+	bit coastingFuelCutEnabled,"enabled","disabled";Enable fuel cutoff in the selected Overrun, Decel or Both mode. Coolant, MAP, tuning and Lua guards apply to every mode.
 	bit useIacTableForCoasting,"enabled","disabled";Override the IAC position during overrun conditions to help reduce engine breaking, this can be helpful for large engines in light weight cars or engines that have trouble returning to idle.
 	bit useNoiselessTriggerDecoder,"yes","no"
 	bit useIdleTimingPidControl,"yes","no"
@@ -1913,7 +1913,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit luaLimiterEnabled,"enabled","disabled"
 	bit cdvSmartMode,"Smart","Simple";Clutch Delay Valve activation mode. Simple: activate on launch/pre-launch entry. Smart: also require clutch pressure to be inside the configured window (cdvSmartMinPressure/cdvSmartMaxPressure) before activating, and deactivate immediately on leaving the window.
 	bit cutEtbOnRpmLimit,"enabled","disabled";Uses Electronic Throttle Limiting (a PID) to try to hold engine RPM about 50rpm below the hard RPM limit, instead of (or in addition to) cutting fuel/spark at the limit. This is a real distinction from the hard RPM limit: the hard limit only cuts, while this tries to actively manage throttle to stay just under it.
-	bit coastingFuelCutRequiresGear,"enabled","disabled";When enabled, overrun fuel cut will not engage while the transmission is in neutral (DetectedGear sensor reads neutral).\nRequires the gear ratio table (Total Gear Count / gear ratios) to be configured: if it is not set up, the detected gear always reads neutral and fuel cut will never engage.
+	bit unusedBit_wasCoastingFuelCutRequiresGear
 	bit eotFromIatCht,"yes","no";Use CHT/IAT sensors to estimate oil temperature (EOT) via first-order thermal model. Disable if a real oil temp sensor is wired.
 	bit primeOnTriggerTeeth,"Trigger teeth","Fixed delay";When enabled, the priming pulse fires after 'primingTriggerTeeth' raw primary trigger teeth are seen since ignition-on, instead of after the fixed 'primingDelay'. Tooth counting does not require trigger sync, and (like the fixed-delay mode) the pulse still only fires once per key cycle.
 	bit gearDetectionUseOutputShaftSpeed,"Output Shaft Speed","Main Vehicle Speed";Gear Setup's driveshaft speed reference. Main Vehicle Speed converts SensorType::VehicleSpeed back to driveshaft RPM via driveWheelRevPerKm/finalGearRatio. Output Shaft Speed uses the OSS sensor's RPM directly (it is already measured at the transmission output, no conversion needed) -- requires Output Shaft Speed to be configured under Drivetrain Sensors.
@@ -1964,9 +1964,6 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	uint8_t dfcoRetardDeg;Retard timing by this amount during DFCO. Smooths the transition back from fuel cut. After fuel is restored, ramp timing back in over the period specified.;"deg", 1, 0, 0, 30, 0
 	uint8_t autoscale dfcoRetardRampInTime;Smooths the transition back from fuel cut. After fuel is restored, ramp timing back in over the period specified.;"s", 0.1, 0, 0, 1, 1
 
-	#define dfco_fuel_cut_mode_e_enum "Overrun", "Decel", "Both"
-	custom dfco_fuel_cut_mode_e 1 bits, U08, @OFFSET@, [0:1], @@dfco_fuel_cut_mode_e_enum@@
-	dfco_fuel_cut_mode_e dfcoFuelCutMode;Selects when fuel cut is active. Overrun: TPS-closed + RPM above threshold (traditional DFCO). Decel: engine RPM is dropping faster than smDecelRateThreshold (works without VSS). Both: either condition triggers fuel cut.
 
 	output_pin_e nitrousRelayPin;
 	pin_output_mode_e nitrousRelayPinMode;
@@ -2101,6 +2098,11 @@ include_file controllers/modules/burst_knock/burst_knock_engineConfiguration.txt
 include_file controllers/modules/engine_state_machine/engine_state_machine_engineConfiguration.txt
 include_file controllers/modules/wot_enrichment/wot_enrichment_engineConfiguration.txt
 include_file controllers/actuators/vvt_advanced_engineConfiguration.txt
+! [tag:state_aware_dfco] Match dfco_fuel_cut_mode_e; zero defaults retain overrun without a gear requirement.
+#define dfco_fuel_cut_mode_e_enum "Overrun", "Decel", "Both", "INVALID"
+custom dfco_fuel_cut_mode_e 1 bits, U08, @OFFSET@, [0:1], @@dfco_fuel_cut_mode_e_enum@@
+dfco_fuel_cut_mode_e dfcoFuelCutMode;Overrun uses the TPS, RPM and vehicle-speed thresholds below. Decel requires Enable Engine State Machine and its Decelerating state, or RPM falling faster than the Decel RPM rate threshold when no vehicle-speed sensor is configured. Decel does not use the overrun TPS/RPM/speed/gear gates. Both accepts either path. Coolant, MAP, tuning and Lua guards apply in all modes. Active state-machine shifts suppress fuel cut.
+bit coastingFuelCutRequiresGear,"enabled","disabled";Require a valid DetectedGear greater than zero for the Overrun path. Neutral, unknown or invalid gear prevents overrun fuel cut. Configure gear detection before enabling. Does not restrict the Decel path.
 end_struct
 
 ! note that this magic field name is used by LiveDataParserPanel

@@ -1077,13 +1077,6 @@ enum class wheel_speed_source_e : uint8_t {
 	AuxSpeed2 = 6,
 };
 
-// Values must match dfco_fuel_cut_mode_e_enum order in rusefi_config.txt
-enum class dfco_fuel_cut_mode_e : uint8_t {
-	Overrun = 0,
-	Decel   = 1,
-	Both    = 2,
-};
-
 // Engine state machine shift settings; values match the tuning schema.
 enum class sm_clutch_switch_e : uint8_t {
 	None = 0,
@@ -1094,6 +1087,13 @@ enum class sm_clutch_switch_e : uint8_t {
 enum class sm_shift_detection_mode_e : uint8_t {
 	RpmRate = 0,
 	VssRate = 1,
+};
+
+// [tag:state_aware_dfco] Zero preserves traditional overrun behavior in older tunes.
+enum class dfco_fuel_cut_mode_e : uint8_t {
+	Overrun = 0,
+	Decel = 1,
+	Both = 2,
 };
 
 enum class SDLoggerMode : uint8_t {
