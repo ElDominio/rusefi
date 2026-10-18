@@ -47,9 +47,6 @@
 #include "imrc_controller.h"
 #include "cdv_controller.h"
 #include "launch_power_ramp.h"
-#include "rolling_launch.h"
-#include "burst_knock.h"
-#include "wot_enrichment.h"
 #include "oil_life_monitor.h"
 #include "check_engine_light.h"
 #include "ac_control.h"
@@ -88,6 +85,7 @@
 #include "engine_modules_generated.h"
 #include "burst_knock.h"
 #include "engine_state_machine.h"
+#include "wot_enrichment.h"
 #endif
 
 static_assert(MAX_CYLINDER_COUNT > 0);
@@ -158,9 +156,6 @@ using AlphaXModuleList = type_list<
 #if EFI_LAUNCH_POWER_RAMP
     LaunchPowerRamp,
 #endif // EFI_LAUNCH_POWER_RAMP
-#if EFI_WOT_ENRICHMENT
-    WotEnrichment,
-#endif // EFI_WOT_ENRICHMENT
 #if EFI_OIL_LIFE_MONITOR
     OilLifeMonitor,
 #endif // EFI_OIL_LIFE_MONITOR
@@ -276,6 +271,7 @@ public:
 #include "modules_list_generated.h"
 		BurstKnock,
         EngineStateMachine,
+        WotEnrichment,
 
         EngineModule // dummy placeholder so the previous entries can all have commas
     > coreModules{};

@@ -35,8 +35,8 @@ ft_region_e ShortTermFuelTrim::regionForSmState(EngineStateMachineState state) {
 		case EngineStateMachineState::WOT:
 			return ftRegionPower;
 		default:
-			// Cruising plus any state where STFT is inactive anyway (Off, Cranking,
-			// Transient, Launch, shifting, Limp) maps to the main "in the middle" cell.
+			// All remaining primary states use the cruise cell. Existing learning gates
+			// still decide whether that cell can update.
 			return ftRegionCruise;
 	}
 }

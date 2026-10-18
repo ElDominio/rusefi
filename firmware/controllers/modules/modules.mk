@@ -21,6 +21,7 @@ include $(PROJECT_DIR)/controllers/modules/gear_detector/gear_detector.mk
 include $(PROJECT_DIR)/controllers/modules/rolling_launch/rolling_launch.mk
 include $(PROJECT_DIR)/controllers/modules/burst_knock/burst_knock.mk
 include $(PROJECT_DIR)/controllers/modules/engine_state_machine/engine_state_machine.mk
+include $(PROJECT_DIR)/controllers/modules/wot_enrichment/wot_enrichment.mk
 include $(PROJECT_DIR)/controllers/modules/trip_odometer/trip_odometer.mk
 include $(PROJECT_DIR)/controllers/modules/fan_control/fan_control.mk
 include $(PROJECT_DIR)/controllers/modules/map_averaging/map_averaging.mk
@@ -29,9 +30,6 @@ include $(PROJECT_DIR)/controllers/modules/example_module/example_module.mk
 include $(PROJECT_DIR)/controllers/modules/vvl_controller/vvl_controller.mk
 include $(PROJECT_DIR)/controllers/modules/cdv_controller/cdv_controller.mk
 include $(PROJECT_DIR)/controllers/modules/launch_power_ramp/launch_power_ramp.mk
-include $(PROJECT_DIR)/controllers/modules/rolling_launch/rolling_launch.mk
-include $(PROJECT_DIR)/controllers/modules/burst_knock/burst_knock.mk
-include $(PROJECT_DIR)/controllers/modules/wot_enrichment/wot_enrichment.mk
 include $(PROJECT_DIR)/controllers/modules/oil_life_monitor/oil_life_monitor.mk
 include $(PROJECT_DIR)/controllers/modules/check_engine_light/check_engine_light.mk
 include $(PROJECT_DIR)/controllers/modules/malfunction_indicator/malfunction_indicator.mk

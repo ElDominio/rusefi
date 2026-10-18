@@ -398,15 +398,6 @@ const burst_knock_state_s* getLiveData(size_t) {
 }
 
 template<>
-const wot_enrichment_state_s* getLiveData(size_t) {
-#if EFI_WOT_ENRICHMENT
-	return &engine->module<WotEnrichment>().unmock();
-#else
-	return nullptr;
-#endif
-}
-
-template<>
 const check_engine_light_state_s* getLiveData(size_t) {
 #ifdef MODULE_CHECK_ENGINE_LIGHT
 	return &engine->module<CheckEngineLight>().unmock();
@@ -437,4 +428,9 @@ const exhaust_cutout_s* getLiveData(size_t) {
 template<>
 const imrc_controller_s* getLiveData(size_t) {
 	return &engine->module<ImrcController>().unmock();
+}
+
+template<>
+const wot_enrichment_state_s* getLiveData(size_t) {
+	return &engine->module<WotEnrichment>().unmock();
 }

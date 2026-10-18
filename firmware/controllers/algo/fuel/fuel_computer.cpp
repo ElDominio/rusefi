@@ -18,9 +18,7 @@
 #include "fuel_computer.h"
 #include "engine_state_machine.h"
 #include "custom_page.h"
-#if EFI_WOT_ENRICHMENT
 #include "wot_enrichment.h"
-#endif // EFI_WOT_ENRICHMENT
 
 #if EFI_ENGINE_CONTROL
 
@@ -36,12 +34,12 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 	}
 
 	float afr = stoich * lambda;
-
-#if EFI_WOT_ENRICHMENT
-	// WOT time enrichment: add an AFR adder (negative = richer) after prolonged WOT.
-	afr += engine->module<WotEnrichment>().unmock().getAfrAdder();
-	lambda = afr / stoich;   // keep published targetLambda consistent with the adjusted AFR
-#endif // EFI_WOT_ENRICHMENT
+	// Time at WOT changes the AFR target, including the published lambda used by STFT.
+	float adjustedAfr = afr + engine->module<WotEnrichment>().unmock().getAfrAdder();
+	if (std::isfinite(adjustedAfr) && adjustedAfr > 0) {
+		afr = adjustedAfr;
+		lambda = afr / stoich;
+	}
 
 	// Eco Mode: lean the mixture to an absolute target AFR while the economy overlay is active.
 	// Blends in/out over smSlowStateTransitionEnabled's ramp instead of snapping (see

@@ -80,12 +80,6 @@ void customPageSetDefaults() {
 	d.misfireWindowEnd         = 120;  //                   TDC + 120 deg
 
 
-	// WOT Time Enrichment — disabled by default; seed a 0..30 s time axis, no enrichment yet.
-	d.wotEnrichmentEnabled = false;
-	for (size_t i = 0; i < efi::size(d.wotEnrichmentTimeBins); i++) {
-		d.wotEnrichmentTimeBins[i] = i * (30.0f / 7);  // 0 .. 30 s
-	}
-	// wotEnrichmentAfrAdder left at zero (no enrichment) until the user tunes it.
 
 	// Sport Pedal (ETB pedal-to-throttle ratio shaping) — disabled by default; pass-through curve.
 	d.sportPedalActivationMode   = SPORT_PEDAL_OFF;

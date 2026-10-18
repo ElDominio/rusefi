@@ -12,7 +12,6 @@
 #define UNITS_KMH_TO_MPH 0.62137119
 #define LUA_LIMITER_CURVE_SIZE 8
 #define LAUNCH_POWER_RAMP_CURVE_SIZE 8
-#define WOT_ENRICHMENT_SIZE 8
 #define SPORT_PEDAL_SIZE 8
 #define INJ_CURVE_SIZE 12
 #define VVT_ADV_DISTANCE_SIZE 9
@@ -338,13 +337,6 @@ struct_no_prefix page6_s
 	float[LAUNCH_POWER_RAMP_CURVE_SIZE] launchPowerRampRetardValues;Launch Power Ramp: ignition timing removed at each time point (curve Y).;"deg", 1, 0, 0, 30, 1
 
 
-	! --- WOT Time Enrichment (richen target AFR after prolonged WOT) ---
-	! Once the engine is held at Wide Open Throttle (Engine SM WOT state), a timer counts the
-	! elapsed seconds (capped at 30 s). The curve below maps that time to an AFR adder that is
-	! added to the target AFR (negative values richen). The adder resets the moment WOT ends.
-	bit wotEnrichmentEnabled,"enabled","disabled";WOT Enrichment: master enable. Adds an AFR adder to the target after prolonged time at WOT.
-	float[WOT_ENRICHMENT_SIZE] wotEnrichmentTimeBins;WOT Enrichment: elapsed time at WOT (curve X).;"s", 1, 0, 0, 30, 1
-	float[WOT_ENRICHMENT_SIZE] wotEnrichmentAfrAdder;WOT Enrichment: AFR added to target at each time point (negative = richer) (curve Y).;"afr", 1, 0, -10, 10, 1
 
 	! --- Sport Pedal (ETB pedal-to-throttle ratio shaping) ---
 	! Electronic-throttle only. While active, the ETB throttle target is multiplied by an 8-cell
