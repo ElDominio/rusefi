@@ -8,6 +8,7 @@
 #include "linear_func.h"
 #include "tps.h"
 #include "can_etb.h"
+#include "tps_smoothing.h"
 #include "auto_generated_sensor.h"
 #include "defaults.h"
 #include "board_overrides.h"
@@ -33,45 +34,6 @@ float getFuncPairAllowedSplit() {
 	}
 	return 0.5f;
 }
-
-/**
- * @brief ExpAverage wrapper that resets (jumps straight to the raw value) instead of smoothing
- * through a fast transient - see tpsExpAverageResetThreshold/tpsExpAverageResetTimeMs.
- *
- * TPS already runs the fastest ADC-layer filter in the system (200 Hz Biquad) because ETB
- * closed-loop control and TPS accel enrichment need minimal lag; a plain ExpAverage on top of
- * that would still add phase delay to a genuine tip-in/tip-out. Detecting a "too big, too fast"
- * step and resetting the average (ExpAverage::reset() zeroes `current`, so the next
- * initOrAverage() latches directly onto the new value - see exp_average.h) keeps steady-state
- * smoothing while snapping straight through real driver inputs.
- */
-class SmartExpAverage {
-public:
-	float update(float value, float alpha, float resetThreshold, float resetTimeMs) {
-		efitick_t nowNt = getTimeNowNt();
-
-		if (m_hasPrevious
-				&& resetThreshold > 0
-				&& resetTimeMs > 0
-				&& std::abs(value - m_lastRawValue) >= resetThreshold
-				&& (nowNt - m_lastRawTime) < MS2NT(resetTimeMs)) {
-			m_average.reset();
-		}
-
-		m_lastRawValue = value;
-		m_lastRawTime = nowNt;
-		m_hasPrevious = true;
-
-		m_average.setSmoothingFactor(alpha);
-		return m_average.initOrAverage(value);
-	}
-
-private:
-	ExpAverage m_average;
-	float m_lastRawValue = 0;
-	efitick_t m_lastRawTime = 0;
-	bool m_hasPrevious = false;
-};
 
 /**
  * @brief LinearSensorUnit ties together a LinearFunc and a FunctionalSensor for sensor initialization.
@@ -270,8 +232,6 @@ static LinearSensorUnit tps2p(TPS_TS_CONVERSION, SensorType::Tps2Primary);
 static LinearSensorUnit tps2s(TPS_TS_CONVERSION, SensorType::Tps2Secondary);
 
 // Used in case of "normal", non-Ford ETB TPS
-// Registered under the *Unfiltered type - see tps1FilterSensor/tps2FilterSensor below, which apply
-// ExpAverage (tpsExpAverageAlpha) and republish under the plain Tps1/Tps2 type that everything else reads.
 static RedundantPair analogTps1(tps1p, tps1s, SensorType::Tps1Unfiltered);
 static RedundantPair tps2(tps2p, tps2s, SensorType::Tps2Unfiltered);
 
@@ -279,7 +239,7 @@ static RedundantPair tps2(tps2p, tps2s, SensorType::Tps2Unfiltered);
 SentTps sentTps;
 #endif
 
-// Used only in case of weird Ford-style ETB TPS - same *Unfiltered convention as above.
+// Used only in case of weird Ford-style ETB TPS
 static RedundantFordTps fordTps1(SensorType::Tps1Unfiltered, SensorType::Tps1Primary, SensorType::Tps1Secondary);
 static RedundantFordTps fordTps2(SensorType::Tps2Unfiltered, SensorType::Tps2Primary, SensorType::Tps2Secondary);
 static RedundantFordTps
@@ -301,6 +261,23 @@ static ProxySensor driverIntent(SensorType::DriverThrottleIntent);
 static ProxySensor ppsFilterSensor(SensorType::AcceleratorPedal);
 static ProxySensor tps1FilterSensor(SensorType::Tps1);
 static ProxySensor tps2FilterSensor(SensorType::Tps2);
+static SmartExpAverage tps1ExpAverage;
+static SmartExpAverage tps2ExpAverage;
+
+static SensorResult filterTps(SmartExpAverage& average, SensorResult raw) {
+	if (!raw) {
+		average.reset();
+		return raw;
+	}
+	if (!std::isfinite(raw.Value)) {
+		average.reset();
+		return UnexpectedCode::Unknown;
+	}
+	return average.update(raw.Value,
+		engineConfiguration->tpsExpAverageAlpha,
+		engineConfiguration->tpsExpAverageResetThreshold,
+		engineConfiguration->tpsExpAverageResetTimeMs);
+}
 
 // These sensors are TPS-like, so handle them in here too
 static LinearSensorUnit wastegate(1, SensorType::WastegatePosition);
@@ -308,6 +285,8 @@ static LinearSensorUnit idlePos(PACK_MULT_VOLTAGE, SensorType::IdlePosition);
 
 void initTps() {
 	criticalAssertVoid(engineConfiguration != nullptr, "null engineConfiguration");
+	tps1ExpAverage.reset();
+	tps2ExpAverage.reset();
 	percent_t minTpsPps = engineConfiguration->tpsErrorDetectionTooLow;
 	percent_t maxTpsPps = engineConfiguration->tpsErrorDetectionTooHigh;
 
@@ -323,6 +302,7 @@ void initTps() {
 
 #if EFI_SENT_SUPPORT
 		if (isDigitalTps1()) {
+			sentTps.invalidate();
 			sentTps.Register();
 		} else
 #endif
@@ -366,35 +346,22 @@ void initTps() {
 				 minTpsPps,
 				 maxTpsPps});
 
-		tps1FilterSensor.setProxiedSensor(SensorType::Tps1Unfiltered);
-		tps1FilterSensor.setConverter([](SensorResult arg) {
-			if (!arg) {
-				return arg;
-			}
-			static SmartExpAverage tps1ExpAverage;
-			SensorResult result = tps1ExpAverage.update(
-					arg.Value,
-					engineConfiguration->tpsExpAverageAlpha,
-					engineConfiguration->tpsExpAverageResetThreshold,
-					engineConfiguration->tpsExpAverageResetTimeMs);
-			return result;
-		});
-		tps1FilterSensor.Register();
-
-		tps2FilterSensor.setProxiedSensor(SensorType::Tps2Unfiltered);
-		tps2FilterSensor.setConverter([](SensorResult arg) {
-			if (!arg) {
-				return arg;
-			}
-			static SmartExpAverage tps2ExpAverage;
-			SensorResult result = tps2ExpAverage.update(
-					arg.Value,
-					engineConfiguration->tpsExpAverageAlpha,
-					engineConfiguration->tpsExpAverageResetThreshold,
-					engineConfiguration->tpsExpAverageResetTimeMs);
-			return result;
-		});
-		tps2FilterSensor.Register();
+		// Do not reserve resolved TPS slots with no native/raw source: existing Lua/CAN
+		// providers can continue to register Tps1/Tps2 directly in that configuration.
+		if (Sensor::hasSensor(SensorType::Tps1Unfiltered)) {
+			tps1FilterSensor.setProxiedSensor(SensorType::Tps1Unfiltered);
+			tps1FilterSensor.setConverter([](SensorResult raw) {
+				return filterTps(tps1ExpAverage, raw);
+			});
+			tps1FilterSensor.Register();
+		}
+		if (Sensor::hasSensor(SensorType::Tps2Unfiltered)) {
+			tps2FilterSensor.setProxiedSensor(SensorType::Tps2Unfiltered);
+			tps2FilterSensor.setConverter([](SensorResult raw) {
+				return filterTps(tps2ExpAverage, raw);
+			});
+			tps2FilterSensor.Register();
+		}
 
 		float ppsSecondaryMaximum = engineConfiguration->ppsSecondaryMaximum;
 		if (ppsSecondaryMaximum < 20) {
@@ -466,6 +433,10 @@ void initTps() {
 }
 
 void deinitTps() {
+	tps1FilterSensor.unregister();
+	tps2FilterSensor.unregister();
+	tps1ExpAverage.reset();
+	tps2ExpAverage.reset();
 	bool isFordTps = activeConfiguration.useFordRedundantTps;
 	bool isFordPps = activeConfiguration.useFordRedundantPps;
 
@@ -475,6 +446,7 @@ void deinitTps() {
 
 #if EFI_SENT_SUPPORT
 	sentTps.unregister();
+	sentTps.invalidate();
 #endif
 
 	wastegate.deinit();
