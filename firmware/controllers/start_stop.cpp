@@ -81,10 +81,10 @@ static bool isStartCrankingBlocked() {
 		// engine is already running: a button press stops it, that is never blocked here
 		return false;
 	}
-	if (engineConfiguration->crankingCondition == CC_BRAKE && !engine->brakePedalSwitchedState) {
+	if (engineConfiguration->crankingCondition == CC_BRAKE && !engine->engineState.brakePedalState) {
 		return true;
 	}
-	if (engineConfiguration->crankingCondition == CC_CLUTCH && !engine->clutchUpSwitchedState) {
+	if (engineConfiguration->crankingCondition == CC_CLUTCH && !engine->engineState.clutchUpState) {
 		return true;
 	}
 	if (engineConfiguration->crankingCondition == CC_CLUTCH_DOWN && !engine->engineState.clutchDownState) {
