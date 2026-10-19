@@ -100,6 +100,11 @@ static bool isStartCrankingBlocked() {
 }
 
 void slowStartStopButtonCallback() {
+	// Always service an active starter before checks that can reject a new start.
+	if (enginePins.starterControl.getLogicValue()) {
+		disengageStarterIfNeeded();
+	}
+
   if (!isIgnVoltage()) {
     // nothing to crank if we are powered only via USB
     engine->startStopState.timeSinceIgnitionPower.reset();
@@ -149,10 +154,5 @@ void slowStartStopButtonCallback() {
 		}
 	}
 
-    bool isStarterEngaged = enginePins.starterControl.getLogicValue();
-
-	if (isStarterEngaged) {
-	    disengageStarterIfNeeded();
-   	}
 }
 #endif // EFI_SHAFT_POSITION_INPUT
