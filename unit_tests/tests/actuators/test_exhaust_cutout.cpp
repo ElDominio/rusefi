@@ -35,28 +35,41 @@ TEST(ExhaustCutout, sportModeActivation) {
 	EXPECT_TRUE(dut().isCutoutOpen);
 }
 
-// Auto + Sport Mode: RPM/TPS/MAP auto-trigger only takes effect while Sport Mode is active;
+// Auto + Sport Mode: opens when the RPM/TPS/MAP auto-trigger is met OR Sport Mode is active;
 // bypasses the Low/High behavior lookup entirely.
-TEST(ExhaustCutout, autoSportModeRequiresSportModeAndTrigger) {
+TEST(ExhaustCutout, autoSportModeOpensOnTriggerOrSportMode) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	engineConfiguration->exhaustCutoutEnabled = true;
 	auto cfg = getCustomPage();
 	cfg->exhaustCutoutActivationMode = EXHAUST_CUTOUT_AUTO_SPORT_MODE;
 	cfg->exhaustCutoutOpenRpm = 3000;
+	cfg->exhaustCutoutClosingDelayS = 0;
 
-	// Sport Mode on, but RPM below the auto-trigger threshold -> stays closed.
+	// Neither trigger nor Sport Mode -> closed.
 	Sensor::setMockValue(SensorType::Rpm, 2000);
-	setSportMode(true);
+	setSportMode(false);
 	dut().onSlowCallback();
 	EXPECT_FALSE(dut().isCutoutOpen);
 
-	// RPM crosses the threshold while Sport Mode is active -> opens.
+	// RPM above the threshold without Sport Mode -> opens.
 	Sensor::setMockValue(SensorType::Rpm, 3500);
 	dut().onSlowCallback();
+	EXPECT_TRUE(dut().isTriggerRpm);
 	EXPECT_TRUE(dut().isCutoutOpen);
 
-	// Sport Mode turns off, RPM still above threshold -> closes regardless of the auto trigger.
+	// RPM drops below the threshold -> closes.
+	Sensor::setMockValue(SensorType::Rpm, 2000);
+	dut().onSlowCallback();
+	EXPECT_FALSE(dut().isCutoutOpen);
+
+	// Sport Mode alone (RPM below the threshold) -> opens.
+	setSportMode(true);
+	dut().onSlowCallback();
+	EXPECT_FALSE(dut().isTriggerRpm);
+	EXPECT_TRUE(dut().isCutoutOpen);
+
+	// Sport Mode turns off with no trigger -> closes.
 	setSportMode(false);
 	dut().onSlowCallback();
 	EXPECT_FALSE(dut().isCutoutOpen);
@@ -104,4 +117,37 @@ TEST(ExhaustCutout, luaOverrideAppliesOnlyToAutoBehavior) {
 	// Switch input LOW -> Always Closed behavior; override does not apply.
 	dut().onSlowCallback();
 	EXPECT_FALSE(dut().isCutoutOpen);
+}
+
+// H-Bridge output mode: same control logic and status bits as Digital/PWM; OPENING/CLOSING
+// report moving until the motor drive duration elapses.
+TEST(ExhaustCutout, hBridgeModeStatus) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->exhaustCutoutEnabled = true;
+	auto cfg = getCustomPage();
+	cfg->exhaustCutoutOutputMode = EXHAUST_CUTOUT_OUTPUT_HBRIDGE;
+	cfg->exhaustCutoutHBridgeDutyCycle = 100;
+	cfg->exhaustCutoutMoveDurationS = 1;
+	cfg->exhaustCutoutActivationMode = EXHAUST_CUTOUT_SPORT_MODE;
+	cfg->exhaustCutoutBehaviorLow = EXHAUST_CUTOUT_ALWAYS_CLOSED;
+	cfg->exhaustCutoutBehaviorHigh = EXHAUST_CUTOUT_ALWAYS_OPEN;
+	dut().initPins();
+
+	setSportMode(false);
+	dut().onSlowCallback();
+	EXPECT_FALSE(dut().isInputHigh);
+	EXPECT_FALSE(dut().isCutoutOpen);
+
+	setSportMode(true);
+	dut().onSlowCallback();
+	EXPECT_TRUE(dut().isInputHigh);
+	EXPECT_TRUE(dut().targetOpen);
+	EXPECT_TRUE(dut().isCutoutOpen);
+	EXPECT_TRUE(dut().isCutoutMoving);
+
+	advanceTimeUs(1'100'000);
+	dut().onSlowCallback();
+	EXPECT_TRUE(dut().isCutoutOpen);
+	EXPECT_FALSE(dut().isCutoutMoving);
 }

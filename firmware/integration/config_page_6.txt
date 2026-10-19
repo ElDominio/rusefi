@@ -131,7 +131,7 @@ struct_no_prefix page6_s
 
 	! --- Exhaust Cutout Control ---
 	exhaust_cutout_output_mode_e exhaustCutoutOutputMode;Exhaust cutout output type: Digital on/off, PWM, or H-Bridge motor
-	exhaust_cutout_activation_e exhaustCutoutActivationMode;Exhaust cutout activation mode. Switch/Sport Mode pick the input for the behavior below; Auto + Sport Mode bypasses the behavior and auto-opens (RPM/TPS/MAP triggers) only while Sport Mode is active.
+	exhaust_cutout_activation_e exhaustCutoutActivationMode;Exhaust cutout activation mode. Switch/Sport Mode pick the input for the behavior below; Auto + Sport Mode bypasses the behavior and opens when the RPM/TPS/MAP triggers are met OR Sport Mode is active.
 	exhaust_cutout_behavior_e exhaustCutoutBehaviorLow;Cutout behavior when switch is OFF or Sport Mode is inactive (Switch/Sport Mode activation modes only)
 	exhaust_cutout_behavior_e exhaustCutoutBehaviorHigh;Cutout behavior when switch is ON or Sport Mode is active (Switch/Sport Mode activation modes only)
 

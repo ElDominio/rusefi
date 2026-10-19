@@ -7158,3 +7158,29 @@ Follow-ups:
   (etb.localPedalShapingMatchesSetpoint now also checks the local candidate
   never exceeds the setpoint and covers the etbMinimumPosition floor). Not
   bench-verified.
+
+## 2026-10-18 - Exhaust cutout "not working in H-Bridge mode" (investigation)
+
+- Report: all exhaust cutout status indicators stay off in H-Bridge output mode
+  (TS log Mi3000gt/DataLogs/cutouttest.mlg).
+- Finding: not an H-Bridge bug. Tune has Activation Mode = "Auto + Sport Mode"
+  while smSportModeActivationMode = OFF, so Sport Mode is never active and the
+  auto-trigger branch clears every indicator. Log confirms Sport Mode active = 0
+  and all cutout bits 0 for all 331 records. Even with Sport Mode on, the
+  thresholds are ANDed (RPM > 400 and MAP > 40 kPa) and idle MAP was 34.7-36.0.
+- Also noted in the tune: IN1 = PPS1 (PC4), IN2 = ETB PWM - possible conflicts
+  with pedal/ETB use.
+- Added unit test ExhaustCutout.hBridgeModeStatus (status bits + moving flag in
+  H-Bridge mode). ./test.sh ExhaustCutout: 5/5 passed.
+- Open: TS cutout settings dialog draws exhaustCutoutAutoTriggerDialog twice
+  (direct + nested in Behavior) because single-condition panels only
+  enable/disable; proposed fix is the {1}, {visible} panel form. Not applied.
+- Follow-up (same day): user clarified "Auto + Sport Mode" is meant to be an OR -
+  open when the RPM/TPS/MAP triggers are met OR Sport Mode is active (was AND:
+  triggers only evaluated while Sport Mode active). Changed
+  ExhaustCutoutController::onSlowCallback accordingly; the auto-trigger is now
+  always evaluated, so its indicators and hold-open delay work in this mode.
+  Help text updated in config_page_6.txt and tunerstudio.template.ini. Test
+  autoSportModeRequiresSportModeAndTrigger replaced by
+  autoSportModeOpensOnTriggerOrSportMode. ./test.sh ExhaustCutout 5/5,
+  ./test.sh PopsAndBangs 25/25. Not bench-verified.

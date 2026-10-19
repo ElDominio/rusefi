@@ -308,19 +308,13 @@ void ExhaustCutoutController::onSlowCallback() {
 		isTriggerMap = false;
 		isInputHigh = false;
 	} else if (cfg.exhaustCutoutActivationMode == EXHAUST_CUTOUT_AUTO_SPORT_MODE) {
-		// Dedicated mode: auto-trigger (RPM/TPS/MAP) is only evaluated while Sport Mode is active;
-		// bypasses the Low/High behavior lookup entirely.
+		// Dedicated mode: open when the RPM/TPS/MAP auto-trigger is met OR Sport Mode is active;
+		// bypasses the Low/High behavior lookup entirely. The auto-trigger is always evaluated so
+		// its indicators and hold-open delay keep working while Sport Mode holds the cutout open.
 		bool sportModeActive = engine->module<EngineStateMachine>().unmock().engineSmIsSportMode;
 		isInputHigh = sportModeActive;
-		if (sportModeActive) {
-			desiredOpen = evaluateAutoTrigger() || isLuaOverrideActive;
-		} else {
-			desiredOpen = isLuaOverrideActive;
-			isTriggerRpm = false;
-			isTriggerTps = false;
-			isTriggerMap = false;
-			m_tpsHoldTimer.reset();
-		}
+		bool autoTriggered = evaluateAutoTrigger();
+		desiredOpen = autoTriggered || sportModeActive || isLuaOverrideActive;
 	} else {
 		// Normal activation logic
 		isInputHigh = getInputHigh();
