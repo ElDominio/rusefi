@@ -164,20 +164,6 @@ void LimpManager::updateState(float rpm, efitick_t nowNt) {
 		allowFuel.clear(ClearReason::Lua);
 	}
 
-	if (engineConfiguration->kickStartCranking && rpm < KICK_START_MODE_MAX_RPM) {
-		// normal spark scheduling is suppressed: kick-start logic in handleShaftSignal()
-		// fires both coils directly off the trigger edge, see #4569
-		allowSpark.clear(ClearReason::KickStart);
-	}
-
-#if EFI_CRANKING_NO_SPARK
-	if (getCustomPage()->crankingNoSparkEnabled && engine->rpmCalculator.isCranking()) {
-		// External distributor/module (points, HEI, magneto, etc.) fires spark on its own during
-		// cranking; ECU-controlled spark scheduling resumes as soon as cranking ends.
-		allowSpark.clear(ClearReason::CrankingNoSpark);
-	}
-#endif // EFI_CRANKING_NO_SPARK
-
 	updateRevLimit(rpm);
 	if (m_revLimitHysteresis.test(rpm, m_revLimit, resumeRpm)) {
 		if (engineConfiguration->cutFuelOnHardLimit) {
@@ -388,6 +374,20 @@ void LimpManager::updateState(float rpm, efitick_t nowNt) {
 		allowSpark.clear(ClearReason::LaunchCut);
 	}
 #endif // EFI_LAUNCH_CONTROL
+
+	if (engineConfiguration->kickStartCranking && rpm < KICK_START_MODE_MAX_RPM) {
+		// Suppress normal spark scheduling without hiding another ignition cut
+		// from the kick-start path in handleShaftSignal().
+		allowSpark.clear(ClearReason::KickStart);
+	}
+
+#if EFI_CRANKING_NO_SPARK
+	if (getCustomPage()->crankingNoSparkEnabled && engine->rpmCalculator.isCranking()) {
+		// External distributor/module (points, HEI, magneto, etc.) fires spark on its own during
+		// cranking; ECU-controlled spark scheduling resumes as soon as cranking ends.
+		allowSpark.clear(ClearReason::CrankingNoSpark);
+	}
+#endif // EFI_CRANKING_NO_SPARK
 
 	m_transientAllowInjection = allowFuel;
 	m_transientAllowIgnition = allowSpark;
