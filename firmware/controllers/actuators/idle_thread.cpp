@@ -81,9 +81,9 @@ IIdleController::TargetInfo IdleController::getTargetRpm(float clt) {
  * Classifies the current engine operating phase used by the idle controller:
  *   Cranking         - engine not yet running
  *   CrankToIdleTaper - just started, still tapering off cranking IAC position
- *   Idling           - closed-loop idle territory
- *   Coasting         - off-throttle, RPM above idle (engine braking)
- *   Running          - driver is on the throttle or vehicle is moving
+ *   Idling           - closed throttle, within idle RPM range or clutch disengaged
+ *   Coasting         - off-throttle, clutch engaged, RPM above idle (engine braking)
+ *   Running          - driver is on the throttle or vehicle is moving with clutch engaged
  *
  * Hysteresis is applied via IdleEntryRpm / IdleExitRpm so we don't oscillate
  * between Idling and Coasting near the threshold.
@@ -118,6 +118,11 @@ IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController
 	ghostCamBypassesCoasting = engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam;
 #endif // EFI_GHOST_CAM
 
+	// [tag:idle_clutch_disengaged] The engine can return to idle independently of
+	// road speed with the clutch disengaged. This accessor selects the physical
+	// clutch-down input or Lua flag. Keep RPM hysteresis updated for clutch release.
+	const bool clutchDisengaged = getClutchDownState();
+
 	// If rpm too high (but throttle not pressed), we're coasting
 	// ALSO, if still in the cranking taper, disable coasting
   if (rpm > targetRpm.IdleExitRpm) {
@@ -127,7 +132,7 @@ IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController
  	}
 
  	looksLikeCrankToIdle = crankingTaperFraction < 1;
-	if (looksLikeCoasting && !looksLikeCrankToIdle && !ghostCamBypassesCoasting) {
+	if (looksLikeCoasting && !looksLikeCrankToIdle && !ghostCamBypassesCoasting && !clutchDisengaged) {
 		return Phase::Coasting;
 	}
 
@@ -137,7 +142,7 @@ IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController
 	// closed-loop idle authority for as long as VSS stays above maxIdleVss, even though the
 	// engine is producing no ground torque and is just as "idle" as if the car were stopped.
 	auto maxVss = engineConfiguration->maxIdleVss;
-	looksLikeRunning = maxVss != 0 && vss > maxVss;
+	looksLikeRunning = !clutchDisengaged && maxVss != 0 && vss > maxVss;
 	if (looksLikeRunning && engineConfiguration->idleVssGateClutchOverride) {
 		bool clutchOut = !engine->module<EngineStateMachine>().unmock().isTransmissionEngaged();
 		if (clutchOut) {
