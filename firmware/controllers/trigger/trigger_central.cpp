@@ -66,6 +66,11 @@ angle_t TriggerCentral::getVVTPosition(uint8_t bankIndex, uint8_t camIndex) {
 	return vvtPosition[bankIndex][camIndex];
 }
 
+bool TriggerCentral::isVvtPositionFresh(uint8_t bankIndex, uint8_t camIndex) const {
+	return bankIndex < BANKS_COUNT && camIndex < CAMS_PER_BANK
+		&& !vvtPositionUpdateTimer[bankIndex][camIndex].hasElapsedSec(1);
+}
+
 /**
  * @return angle since trigger synchronization point, NOT angle since TDC.
  */
@@ -738,8 +743,10 @@ void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 	// Only record VVT position if we have full engine sync - may be bogus before that point
 	if (tc->triggerState.hasSynchronizedPhase()) {
 		tc->vvtPosition[bankIndex][camIndex] = vvtPosition;
+		tc->vvtPositionUpdateTimer[bankIndex][camIndex].reset(nowNt);
 	} else {
 		tc->vvtPosition[bankIndex][camIndex] = 0;
+		tc->vvtPositionUpdateTimer[bankIndex][camIndex].init();
 	}
 }
 
@@ -1546,6 +1553,12 @@ void TriggerCentral::applyCamGapOverride() {
 }
 
 void TriggerCentral::applyShapesConfiguration() {
+	for (auto& bank : vvtPositionUpdateTimer) {
+		for (auto& timer : bank) {
+			timer.init();
+		}
+	}
+
 	// Re-read config in case it's changed
 	primaryTriggerConfiguration.update();
 	for (int camIndex = 0;camIndex < CAMS_PER_BANK;camIndex++) {
