@@ -44,6 +44,7 @@ Release template (copy/paste this for new release):
 
 ### Fixed
  - Ignition schedule rebuilds now discharge the coil charged before its output mapping changed.
+ - Shift torque reduction ignores invalid sensor readings when selecting spark cut, ignition retard, and time limits.
  - overdwell protection causes Null-pointer deref and crash #9435
  - huge print in Lua walks into memory #10159
  - H723 bootloader fixes
