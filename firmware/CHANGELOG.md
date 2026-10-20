@@ -44,6 +44,7 @@ Release template (copy/paste this for new release):
 
 ### Fixed
  - Ignition schedule rebuilds now discharge the coil charged before its output mapping changed.
+ - A GDI pump with zero configured cam lobes stays inactive and makes no fuel request.
  - Shift torque reduction ignores invalid sensor readings when selecting spark cut, ignition retard, and time limits.
  - overdwell protection causes Null-pointer deref and crash #9435
  - huge print in Lua walks into memory #10159
