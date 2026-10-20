@@ -280,7 +280,9 @@ static Timer dashAliveTimer;
 	processCanQcBenchTest(frame);
 	processCanEcuControl(frame);
 
+#if EFI_LUA
 	processLuaCan(busIndex, frame);
+#endif // EFI_LUA
 
 	{
 		obdOnCanPacketRx(frame, busIndex);
