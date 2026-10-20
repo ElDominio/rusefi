@@ -39,6 +39,7 @@ Release template (copy/paste this for new release):
  - Nissan VK56DE (36-1-1) crank and PHASE cam triggers
 
 ### Fixed
+ - Ignition schedule rebuilds now discharge the coil charged before its output mapping changed.
  - overdwell protection causes Null-pointer deref and crash #9435
  - huge print in Lua walks into memory #10159
  - H723 bootloader fixes
