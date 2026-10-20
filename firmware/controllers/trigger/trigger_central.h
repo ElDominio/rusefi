@@ -187,6 +187,7 @@ public:
 	TriggerNoiseFilter noiseFilter;
 
 	angle_t getVVTPosition(uint8_t bankIndex, uint8_t camIndex);
+	bool isVvtPositionFresh(uint8_t bankIndex, uint8_t camIndex) const;
 
 #if EFI_UNIT_TEST
 	// latest VVT event position (could be not synchronization event)
@@ -195,6 +196,7 @@ public:
 
 	// synchronization event position
 	angle_t vvtPosition[BANKS_COUNT][CAMS_PER_BANK];
+	Timer vvtPositionUpdateTimer[BANKS_COUNT][CAMS_PER_BANK];
 
 #if EFI_SHAFT_POSITION_INPUT
 	PrimaryTriggerDecoder triggerState;
