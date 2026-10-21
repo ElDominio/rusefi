@@ -1,16 +1,18 @@
+set_prefix "TCU"
+
 struct_no_prefix tcu_controller_s
 	int8_t tcuCurrentGear;@@GAUGE_NAME_CURRENT_GEAR@@;"gear", 1, 0, -1, 10, 0
 	uint16_t autoscale tcRatio;@@GAUGE_NAME_TC_RATIO@@;"value",{1/@@PACK_MULT_PERCENT@@}, 0, 0, 0, 0
 	float lastShiftTime
-	uint8_t tcu_currentRange;"TCU: Current Range";"", 1, 0, 0, 0, 0
-	int8_t pressureControlDuty;"TCU: EPC Duty";"%",1,0,0,100,0
-	int8_t tcu_pcSlipTrimDuty;"TCU: Slip Trim";"%",1,0,-100,100,0
-	int8_t torqueConverterDuty;"TCU: TC Duty";"%",1,0,0,100,0
+	uint8_t tcu_currentRange;"Current Range";"", 1, 0, 0, 0, 0
+	int8_t pressureControlDuty;"EPC Duty";"%",1,0,0,100,0
+	int8_t tcu_pcSlipTrimDuty;"Slip Trim";"%",1,0,-100,100,0
+	int8_t torqueConverterDuty;"TC Duty";"%",1,0,0,100,0
 	bit isShifting;
-	bit tcu_solenoid1On;TCU: Solenoid 1 On
-	bit tcu_solenoid2On;TCU: Solenoid 2 On
-	bit tcu_tccLockupOn;TCU: TCC Lockup On
-	bit tcu_idleShiftToFirst;TCU: Idle Shift to 1st
-	int16_t autoscale tcu_upshiftMargin;TCU: Upshift Margin\nVehicle speed remaining before the next upshift, in the same units as the Automatic Shift Points table (VSS display units).;"", 0.1, 0, -100, 100, 1
-	int16_t autoscale tcu_downshiftMargin;TCU: Downshift Margin\nVehicle speed remaining before the next downshift, in the same units as the Automatic Shift Points table (VSS display units).;"", 0.1, 0, -100, 100, 1
+	bit tcu_solenoid1On;Solenoid 1 On
+	bit tcu_solenoid2On;Solenoid 2 On
+	bit tcu_tccLockupOn;TCC Lockup On
+	bit tcu_idleShiftToFirst;Idle Shift to 1st
+	int16_t autoscale tcu_upshiftMargin;Upshift Margin\nVehicle speed remaining before the next upshift, in the same units as the Automatic Shift Points table (VSS display units).;"", 0.1, 0, -100, 100, 1
+	int16_t autoscale tcu_downshiftMargin;Downshift Margin\nVehicle speed remaining before the next downshift, in the same units as the Automatic Shift Points table (VSS display units).;"", 0.1, 0, -100, 100, 1
 end_struct
