@@ -8,7 +8,8 @@ DOCS_ENUMS_INPUTS = \
   $(PROJECT_DIR)/integration/config_page_5.txt \
   $(PROJECT_DIR)/integration/config_page_6.txt \
   $(PROJECT_DIR)/console/binary/output_channels.txt \
-  $(PROJECT_DIR)//tunerstudio/gauge_declarations.ini \
+  $(PROJECT_DIR)/tunerstudio/gauge_declarations.ini \
+  $(PROJECT_DIR)/controllers/actuators/vvt.txt \
   $(PROJECT_DIR)/controllers/engine_cycle/knock_controller.txt \
   $(PROJECT_DIR)/controllers/engine_cycle/live_data_rotational_idle.txt \
   $(PROJECT_DIR)/controllers/engine_cycle/prime_injection.txt \
