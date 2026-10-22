@@ -7230,3 +7230,31 @@ pull-up/analog-divider `ts_show_*` panels (4chan keeps its own values for its ha
 Validation: `gen_config_board.sh` + full `compile.sh -b` for alphax-4chan_f7 -> rc 0, flash 32%,
 ram0 100% (normal). F4 variant not rebuilt (untouched by design). Follow-up: the table-size changes
 alter the 4chan_f7 config layout/signature - existing 4chan_f7 tunes need re-import in TS after flashing.
+
+## 2026-10-21 - Single Tooth cam filter (branch single-tooth-cam-filter)
+
+Rejects noise teeth on a Single Tooth cam once engine phase is synced. A single tooth cam fires
+once per 720 deg, so the next tooth is expected where the last accepted one landed (+- VVT
+movement); teeth further than `singleToothCamFilter{Intake,Exhaust}Pct` % of 720 deg from that
+reference are dropped before `adjustCrankPhase()`/VVT position. Measured in crank angle, not
+wall time: immune to cranking speed ripple, and a missed real tooth does not move the expectation.
+
+| File | Change |
+|------|--------|
+| `integration/config_page_6.txt` | `singleToothCamFilterIntakePct`/`ExhaustPct` (U08, 0..25 %, 0 = off) |
+| `controllers/custom_page.cpp` | defaults 0, `PAGE6_DATA_VERSION` 23 -> 24 (page 6 resets to defaults) |
+| `controllers/trigger/trigger_central.{h,cpp}` | per-cam filter state, `singleToothCamFilterRejects()` after `skipToothSpecialShape()`; references reset on any phase shift in `syncEnginePhaseAndReport()` |
+| `tunerstudio/tunerstudio.template.ini` | Advanced Trigger fields, visible only when vvtMode1/vvtMode2 == Single Tooth |
+| `config/stm32f4ems/efifeatures.h`, unit_tests/simulator efifeatures | `EFI_SINGLE_TOOTH_CAM_FILTER` TRUE (F4 too, F7/H7 inherit) |
+| `unit_tests/tests/trigger/test_single_tooth_cam_filter.cpp` | noise rejection, unfiltered phase flip, VVT tracking, stale re-seed |
+
+Decisions: filter inactive (and reference cleared) until `hasSynchronizedPhase()` - every tooth is
+needed to establish sync; first tooth after sync seeds the reference. If no tooth is accepted for
+2.5 engine cycles (cycle time from cycle-averaged RPM) the reference is assumed bad and re-seeds.
+Window wraps over 720 so a noise tooth exactly 360 deg away is rejected (it would otherwise flip
+phase - see `noiseFlipsPhaseWithoutFilter`).
+
+Validation: full unit suite 1768/1768 pass; alphax-4chan (F4) firmware build rc 0, fresh ELF.
+Follow-ups: not bench/vehicle tested; no live-data gauge for the reject counter yet
+(`TriggerCentral::singleToothCamFilter[i].rejectCounter`); the tooth that first establishes phase
+sync is never filtered by design.

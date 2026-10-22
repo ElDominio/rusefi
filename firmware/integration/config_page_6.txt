@@ -730,4 +730,12 @@ struct_no_prefix page6_s
 	! See LimpManager::updateState(), ClearReason::CrankingNoSpark.
 	bit crankingNoSparkEnabled,"enabled","disabled";Cranking No-Spark: master enable. Suppresses ECU spark entirely while cranking, for engines with an external distributor/module firing spark during crank. Normal ECU spark control resumes once cranking ends (Cranking RPM threshold).
 
+	! --- Single Tooth cam filter (EFI_SINGLE_TOOTH_CAM_FILTER) [tag:single_tooth_cam_filter] ---
+	! Once crank + cam phase sync is established, a Single Tooth cam tooth is only accepted if it
+	! lands within +/- this % of one engine cycle (720 deg, i.e. the expected tooth-to-tooth
+	! period) of the last accepted tooth's crank position. See singleToothCamFilterRejects() in
+	! trigger_central.cpp.
+	uint8_t singleToothCamFilterIntakePct;Single Tooth cam filter (intake): once engine phase is synchronized, ignore intake cam teeth that arrive further than this % of the expected cam tooth period (one 720 deg engine cycle) from where the previous good tooth arrived. 10% = +/-72 crank deg. 0 disables.;"%", 1, 0, 0, 25, 0
+	uint8_t singleToothCamFilterExhaustPct;Single Tooth cam filter (exhaust): once engine phase is synchronized, ignore exhaust cam teeth that arrive further than this % of the expected cam tooth period (one 720 deg engine cycle) from where the previous good tooth arrived. 10% = +/-72 crank deg. 0 disables.;"%", 1, 0, 0, 25, 0
+
 end_struct

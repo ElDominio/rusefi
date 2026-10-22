@@ -124,3 +124,4 @@
 // External CAN ETB controller (CH32V203-based board) - opt-in per board, off for unit tests
 #define EFI_EXTERNAL_CAN_ETB FALSE
 #define EFI_CRANKING_NO_SPARK TRUE
+#define EFI_SINGLE_TOOTH_CAM_FILTER TRUE

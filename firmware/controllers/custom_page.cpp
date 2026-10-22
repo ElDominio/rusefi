@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 23;
+static constexpr uint32_t PAGE6_DATA_VERSION = 24;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -319,6 +319,10 @@ void customPageSetDefaults() {
 		d.vvtAdvOilPressureBinsIntake[i] = i * (1000.0f / 5);  // 0 .. 1000 kPa
 		d.vvtAdvOilPressureBinsExhaust[i] = i * (1000.0f / 5);
 	}
+
+	// Single Tooth cam filter [tag:single_tooth_cam_filter] — disabled by default (0%).
+	d.singleToothCamFilterIntakePct = 0;
+	d.singleToothCamFilterExhaustPct = 0;
 }
 
 void loadCustomPage() {

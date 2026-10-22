@@ -620,6 +620,12 @@
 #define EFI_CRANKING_NO_SPARK FALSE
 #endif
 
+// Single Tooth cam filter (reject cam teeth outside a % window of the expected position once phase is synced)
+// Tiny code footprint, so unlike most AlphaX features this defaults TRUE on F4 too (and F7/H7 inherit it).
+#ifndef EFI_SINGLE_TOOTH_CAM_FILTER
+#define EFI_SINGLE_TOOTH_CAM_FILTER TRUE
+#endif
+
 // External CAN ETB controller (CH32V203-based board, see can_etb.h) - bench experiment, opt-in per board
 #ifndef EFI_EXTERNAL_CAN_ETB
 #define EFI_EXTERNAL_CAN_ETB FALSE

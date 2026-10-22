@@ -24,6 +24,9 @@
 #include "engine_sniffer.h"
 #include "auto_generated_sync_edge.h"
 #include "board_overrides.h"
+#if EFI_SINGLE_TOOTH_CAM_FILTER
+#include "custom_page.h"
+#endif // EFI_SINGLE_TOOTH_CAM_FILTER
 
 #if EFI_TUNER_STUDIO
 #include "tunerstudio.h"
@@ -157,6 +160,10 @@ angle_t TriggerCentral::syncEnginePhaseAndReport(int divider, int remainder, boo
 		}
 		m_lastToothPhaseFromSyncPoint = wrapAngleMethod(m_lastToothPhaseFromSyncPoint - totalShift, "syncEnginePhase", ObdCode::CUSTOM_ERR_6555);
 		triggerToothAngleError = 0;
+
+#if EFI_SINGLE_TOOTH_CAM_FILTER
+		resetSingleToothCamFilterReferences();
+#endif // EFI_SINGLE_TOOTH_CAM_FILTER
 
 #if EFI_ENGINE_CONTROL
 		// Reset schedulers to avoid "out-of-order" warnings/errors when transitioning phase
@@ -539,6 +546,57 @@ PUBLIC_API_WEAK bool skipToothSpecialShape(size_t index, vvt_mode_e vvtMode, ang
 	return false;
 }
 
+#if EFI_SINGLE_TOOTH_CAM_FILTER
+// If no tooth was accepted for this many engine cycles, the reference is assumed bad (seeded
+// from noise, or the cam moved further than the window) and the next tooth re-seeds it.
+static constexpr float SINGLE_TOOTH_CAM_FILTER_STALE_CYCLES = 2.5f;
+
+/**
+ * Single Tooth cam filter [tag:single_tooth_cam_filter]: a single tooth cam produces exactly one
+ * tooth per engine cycle, and with full engine phase sync we know where on the crank it should
+ * land: where the previous good tooth landed (give or take VVT movement). Teeth further than
+ * the configured % of the engine cycle from that position are noise and are dropped before
+ * they can resync engine phase or corrupt the VVT position.
+ *
+ * Measured in crank angle rather than wall time so it is immune to crank speed fluctuation
+ * during cranking, and a missed real tooth does not shift the expectation.
+ *
+ * Settings: singleToothCamFilterIntakePct/ExhaustPct in config_page_6.txt.
+ * @returns true if this tooth should be ignored
+ */
+static bool singleToothCamFilterRejects(TriggerCentral *tc, int index, angle_t currentPosition, efitick_t nowNt) {
+	auto& filter = tc->singleToothCamFilter[index];
+	const auto page = getCustomPage();
+	float windowPct = CAM_BY_INDEX(index) == 0 ? page->singleToothCamFilterIntakePct : page->singleToothCamFilterExhaustPct;
+
+	if (windowPct <= 0 || !tc->triggerState.hasSynchronizedPhase()) {
+		// Disabled, or no phase sync yet: every tooth is needed to establish sync
+		filter.hasReference = false;
+		return false;
+	}
+
+	if (filter.hasReference) {
+		float rpm = Sensor::getOrZero(SensorType::Rpm);
+		float sinceLastAcceptedUs = NT2US(nowNt - filter.lastAcceptedNt);
+		// one engine cycle (two crank revolutions) takes 120e6 / rpm microseconds
+		bool isStale = rpm <= 0
+			|| sinceLastAcceptedUs > SINGLE_TOOTH_CAM_FILTER_STALE_CYCLES * 120e6f / rpm;
+
+		angle_t window = windowPct * 0.01f * FOUR_STROKE_CYCLE_DURATION;
+		angle_t error = wrapVvt(currentPosition - filter.referencePosition, FOUR_STROKE_CYCLE_DURATION);
+		if (absF(error) > window && !isStale) {
+			filter.rejectCounter++;
+			return true;
+		}
+	}
+
+	filter.hasReference = true;
+	filter.referencePosition = currentPosition;
+	filter.lastAcceptedNt = nowNt;
+	return false;
+}
+#endif // EFI_SINGLE_TOOTH_CAM_FILTER
+
 void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 	TriggerCentral *tc = getTriggerCentral();
 	if (index == 0) {
@@ -638,6 +696,13 @@ void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
   if (skipTooth) {
 			return;
   }
+
+#if EFI_SINGLE_TOOTH_CAM_FILTER
+	if (engineConfiguration->vvtMode[camIndex] == VVT_SINGLE_TOOTH
+			&& singleToothCamFilterRejects(tc, index, currentPosition, nowNt)) {
+		return;
+	}
+#endif // EFI_SINGLE_TOOTH_CAM_FILTER
 
 	// this could be just an 'if' but let's have it expandable for future use :)
 	switch(engineConfiguration->vvtMode[camIndex]) {
