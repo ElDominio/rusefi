@@ -620,10 +620,10 @@
 #define EFI_CRANKING_NO_SPARK FALSE
 #endif
 
-// Single Tooth cam filter (reject cam teeth outside a % window of the expected position once phase is synced)
+// VVT angle window (ignore cam sync teeth whose VVT angle is outside a configured min/max once phase is synced)
 // Tiny code footprint, so unlike most AlphaX features this defaults TRUE on F4 too (and F7/H7 inherit it).
-#ifndef EFI_SINGLE_TOOTH_CAM_FILTER
-#define EFI_SINGLE_TOOTH_CAM_FILTER TRUE
+#ifndef EFI_VVT_ANGLE_WINDOW
+#define EFI_VVT_ANGLE_WINDOW TRUE
 #endif
 
 // External CAN ETB controller (CH32V203-based board, see can_etb.h) - bench experiment, opt-in per board

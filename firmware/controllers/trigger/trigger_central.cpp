@@ -24,9 +24,9 @@
 #include "engine_sniffer.h"
 #include "auto_generated_sync_edge.h"
 #include "board_overrides.h"
-#if EFI_SINGLE_TOOTH_CAM_FILTER
+#if EFI_VVT_ANGLE_WINDOW
 #include "custom_page.h"
-#endif // EFI_SINGLE_TOOTH_CAM_FILTER
+#endif // EFI_VVT_ANGLE_WINDOW
 
 #if EFI_TUNER_STUDIO
 #include "tunerstudio.h"
@@ -160,10 +160,6 @@ angle_t TriggerCentral::syncEnginePhaseAndReport(int divider, int remainder, boo
 		}
 		m_lastToothPhaseFromSyncPoint = wrapAngleMethod(m_lastToothPhaseFromSyncPoint - totalShift, "syncEnginePhase", ObdCode::CUSTOM_ERR_6555);
 		triggerToothAngleError = 0;
-
-#if EFI_SINGLE_TOOTH_CAM_FILTER
-		resetSingleToothCamFilterReferences();
-#endif // EFI_SINGLE_TOOTH_CAM_FILTER
 
 #if EFI_ENGINE_CONTROL
 		// Reset schedulers to avoid "out-of-order" warnings/errors when transitioning phase
@@ -546,56 +542,56 @@ PUBLIC_API_WEAK bool skipToothSpecialShape(size_t index, vvt_mode_e vvtMode, ang
 	return false;
 }
 
-#if EFI_SINGLE_TOOTH_CAM_FILTER
-// If no tooth was accepted for this many engine cycles, the reference is assumed bad (seeded
-// from noise, or the cam moved further than the window) and the next tooth re-seeds it.
-static constexpr float SINGLE_TOOTH_CAM_FILTER_STALE_CYCLES = 2.5f;
-
+#if EFI_VVT_ANGLE_WINDOW
 /**
- * Single Tooth cam filter [tag:single_tooth_cam_filter]: a single tooth cam produces exactly one
- * tooth per engine cycle, and with full engine phase sync we know where on the crank it should
- * land: where the previous good tooth landed (give or take VVT movement). Teeth further than
- * the configured % of the engine cycle from that position are noise and are dropped before
- * they can resync engine phase or corrupt the VVT position.
+ * VVT angle window [tag:vvt_angle_window]: once engine phase is synchronized, a cam sync tooth whose
+ * VVT angle lands outside the user's [min, max] is noise and is dropped before it can resync
+ * engine phase or corrupt the VVT position. Works for every VVT mode since all of them reach
+ * handleVvtCamSignal() with the sync tooth position.
  *
- * Measured in crank angle rather than wall time so it is immune to crank speed fluctuation
- * during cranking, and a missed real tooth does not shift the expectation.
+ * @param vvtPosition VVT angle as shown on the gauge (offset applied, wrapped to [-360, 360))
  *
- * Settings: singleToothCamFilterIntakePct/ExhaustPct in config_page_6.txt.
+ * Escape hatch: if the engine went vvtAngleWindowRecoveryCycles engine cycles with no in-window
+ * tooth, the next tooth is accepted anyway. Without it, a phase synced on a noise pulse would make
+ * every real tooth read ~360 deg off, get rejected, and the wrong phase would never be corrected.
+ * Counted in cycles rather than rejected teeth so several noise pulses between two good teeth
+ * cannot trip it.
+ *
+ * Settings: vvtAngleWindow* in config_page_6.txt.
  * @returns true if this tooth should be ignored
  */
-static bool singleToothCamFilterRejects(TriggerCentral *tc, int index, angle_t currentPosition, efitick_t nowNt) {
-	auto& filter = tc->singleToothCamFilter[index];
+static bool vvtAngleWindowRejects(TriggerCentral *tc, int index, angle_t vvtPosition, efitick_t nowNt) {
+	auto& window = tc->vvtAngleWindow[index];
 	const auto page = getCustomPage();
-	float windowPct = CAM_BY_INDEX(index) == 0 ? page->singleToothCamFilterIntakePct : page->singleToothCamFilterExhaustPct;
 
-	if (windowPct <= 0 || !tc->triggerState.hasSynchronizedPhase()) {
+	if (!page->vvtAngleWindowEnabled || !tc->triggerState.hasSynchronizedPhase()) {
 		// Disabled, or no phase sync yet: every tooth is needed to establish sync
-		filter.hasReference = false;
+		window.lastAcceptedNt = nowNt;
 		return false;
 	}
 
-	if (filter.hasReference) {
-		float rpm = Sensor::getOrZero(SensorType::Rpm);
-		float sinceLastAcceptedUs = NT2US(nowNt - filter.lastAcceptedNt);
-		// one engine cycle (two crank revolutions) takes 120e6 / rpm microseconds
-		bool isStale = rpm <= 0
-			|| sinceLastAcceptedUs > SINGLE_TOOTH_CAM_FILTER_STALE_CYCLES * 120e6f / rpm;
+	bool isIntake = CAM_BY_INDEX(index) == 0;
+	float minAngle = isIntake ? page->vvtAngleWindowIntakeMin : page->vvtAngleWindowExhaustMin;
+	float maxAngle = isIntake ? page->vvtAngleWindowIntakeMax : page->vvtAngleWindowExhaustMax;
 
-		angle_t window = windowPct * 0.01f * FOUR_STROKE_CYCLE_DURATION;
-		angle_t error = wrapVvt(currentPosition - filter.referencePosition, FOUR_STROKE_CYCLE_DURATION);
-		if (absF(error) > window && !isStale) {
-			filter.rejectCounter++;
+	if (vvtPosition < minAngle || vvtPosition > maxAngle) {
+		float rpm = Sensor::getOrZero(SensorType::Rpm);
+		float sinceLastAcceptedUs = NT2US(nowNt - window.lastAcceptedNt);
+		// one engine cycle (two crank revolutions) takes 120e6 / rpm microseconds. The extra half
+		// cycle keeps the threshold away from the periodic tooth arrival: N cycles of misses are
+		// rejected, the tooth in cycle N + 1 is accepted.
+		bool recover = rpm <= 0
+			|| sinceLastAcceptedUs > (page->vvtAngleWindowRecoveryCycles + 0.5f) * 120e6f / rpm;
+		if (!recover) {
+			window.rejectCounter++;
 			return true;
 		}
 	}
 
-	filter.hasReference = true;
-	filter.referencePosition = currentPosition;
-	filter.lastAcceptedNt = nowNt;
+	window.lastAcceptedNt = nowNt;
 	return false;
 }
-#endif // EFI_SINGLE_TOOTH_CAM_FILTER
+#endif // EFI_VVT_ANGLE_WINDOW
 
 void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 	TriggerCentral *tc = getTriggerCentral();
@@ -697,13 +693,6 @@ void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 			return;
   }
 
-#if EFI_SINGLE_TOOTH_CAM_FILTER
-	if (engineConfiguration->vvtMode[camIndex] == VVT_SINGLE_TOOTH
-			&& singleToothCamFilterRejects(tc, index, currentPosition, nowNt)) {
-		return;
-	}
-#endif // EFI_SINGLE_TOOTH_CAM_FILTER
-
 	// this could be just an 'if' but let's have it expandable for future use :)
 	switch(engineConfiguration->vvtMode[camIndex]) {
 	case VVT_HONDA_K_INTAKE:
@@ -714,6 +703,14 @@ void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 		// else, do nothing
 		break;
 	}
+
+#if EFI_VVT_ANGLE_WINDOW
+	// Checked before adjustCrankPhase() so a rejected tooth cannot resync engine phase. With phase
+	// already synchronized the crank offset is normally 0, so this matches the gauge value.
+	if (vvtAngleWindowRejects(tc, index, wrapVvt(vvtPosition, FOUR_STROKE_CYCLE_DURATION), nowNt)) {
+		return;
+	}
+#endif // EFI_VVT_ANGLE_WINDOW
 
 #if EFI_PROD_CODE
   if (!isBrainPinValid(engineConfiguration->camInputs[engineConfiguration->engineSyncCam]) &&

@@ -23,7 +23,7 @@ TESTS_SRC_CPP = \
 	tests/trigger/test_trigger_input_adc.cpp \
 	tests/trigger/test_miata_na_tdc.cpp \
 	tests/trigger/test_cam_vvt_input.cpp \
-	tests/trigger/test_single_tooth_cam_filter.cpp \
+	tests/trigger/test_vvt_angle_window.cpp \
 	tests/trigger/test_2jz_vvt.cpp \
 	tests/trigger/test_toyota_3_tooth_cam.cpp \
 	tests/trigger/test_trigger_skipped_wheel.cpp \

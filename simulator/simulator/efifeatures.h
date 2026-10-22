@@ -245,4 +245,4 @@
 
 // Cranking No-Spark (external distributor/module fires spark during cranking, ECU takes over after)
 #define EFI_CRANKING_NO_SPARK TRUE
-#define EFI_SINGLE_TOOTH_CAM_FILTER TRUE
+#define EFI_VVT_ANGLE_WINDOW TRUE

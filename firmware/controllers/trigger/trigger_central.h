@@ -216,25 +216,16 @@ public:
 	// window and must be discarded rather than classified.
 	bool mitsu6g75BetaCountValid = false;
 
-#if EFI_SINGLE_TOOTH_CAM_FILTER
-	// Single Tooth cam filter [tag:single_tooth_cam_filter], per global cam index: crank
-	// position of the last accepted tooth, used as the expected position of the next one. See
-	// singleToothCamFilterRejects() in trigger_central.cpp.
-	struct SingleToothCamFilterState {
-		bool hasReference = false;
-		angle_t referencePosition = 0;
+#if EFI_VVT_ANGLE_WINDOW
+	// VVT angle window [tag:vvt_angle_window], per global cam index. See vvtAngleWindowRejects()
+	// in trigger_central.cpp.
+	struct VvtAngleWindowState {
+		// last tooth that was accepted (or arrived while the window was inactive)
 		efitick_t lastAcceptedNt = 0;
 		uint32_t rejectCounter = 0;
 	};
-	SingleToothCamFilterState singleToothCamFilter[CAM_INPUTS_COUNT];
-
-	// Called on engine phase change: references from the old phase frame are no longer valid
-	void resetSingleToothCamFilterReferences() {
-		for (auto& filter : singleToothCamFilter) {
-			filter.hasReference = false;
-		}
-	}
-#endif // EFI_SINGLE_TOOTH_CAM_FILTER
+	VvtAngleWindowState vvtAngleWindow[CAM_INPUTS_COUNT];
+#endif // EFI_VVT_ANGLE_WINDOW
 
 	TriggerWaveform triggerShape;
 

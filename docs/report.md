@@ -7285,3 +7285,37 @@ Validation: host test binary built against the paralela generated config (out-of
 - default tune dumped and parsed with `rusefi_paralela.ini`; `validateConfigOnStartUpOrBurn()` passes.
 Normal f407-discovery unit suite 1768/1768 pass. Paralela firmware image not rebuilt; config
 generation for paralela (incl. INI reference validation) passes.
+
+## 2026-10-22 - VVT angle window replaces Single Tooth cam filter
+
+The Single Tooth cam filter (learned reference position +/- %) was replaced by a fixed, user-set
+min/max VVT angle window that applies to every VVT mode. Field symptom that motivated it: a cam
+reading ~0 deg that intermittently jumps to 120 / -220 deg, and with the old filter sometimes
+locked at -135 deg for 1-2 s (most likely the learned reference got seeded from a noise tooth,
+after which real teeth fell outside the window until the 2.5-cycle stale re-seed). A fixed window
+learns nothing, so it cannot latch onto noise.
+
+| File | Change |
+|------|--------|
+| `integration/config_page_6.txt` | drop `singleToothCamFilter*Pct`; add `vvtAngleWindowEnabled` bit, intake/exhaust min/max (int16 deg), `vvtAngleWindowRecoveryCycles` (default 3) |
+| `controllers/custom_page.cpp` | defaults (disabled, window -360..360), `PAGE6_DATA_VERSION` 24 -> 25 |
+| `controllers/trigger/trigger_central.cpp/.h` | `vvtAngleWindowRejects()` replaces `singleToothCamFilterRejects()`; no reset on phase shift needed |
+| `tunerstudio/tunerstudio.template.ini` | Advanced Trigger: enable + 4 angles + recovery cycles (exhaust behind `ts_show_cam2`) |
+| efifeatures (f4ems, unit_tests, simulator), `FEATURE_FLAGS.md` | `EFI_SINGLE_TOOTH_CAM_FILTER` -> `EFI_VVT_ANGLE_WINDOW` |
+| `unit_tests/tests/trigger/test_vvt_angle_window.cpp` | renamed from `test_single_tooth_cam_filter.cpp`, rewritten |
+
+Decisions:
+- Checked value is the gauge value: after vvtOffset, Honda K 180 wrap and `wrapVvt(.., 720)`,
+  but *before* `adjustCrankPhase()` so a rejected tooth cannot resync phase. With phase already
+  synced the crank offset is normally 0, so pre-adjust == gauge.
+- Only active once `hasSynchronizedPhase()`; before that the angle can be 360 deg off.
+- Recovery counts engine cycles without an in-window tooth (time since last accepted >
+  (N + 0.5) * 120e6/rpm), not consecutive rejects: several noise pulses per cycle between good
+  teeth must not trip it. Needed because a phase synced on a noise pulse makes every real tooth
+  read ~360 off and the window would otherwise lock the wrong phase in forever.
+- No live-data reject counter (user: not needed); `rejectCounter` in the state struct is for tests.
+
+Validation: full unit suite 1770/1770 pass; alphax-4chan (F4) firmware build rc 0, fresh ELF,
+generated INI carries the new fields/dialog entries.
+Follow-ups: not bench/vehicle tested. Window must not straddle the +/-360 wrap (not an issue for
+realistic VVT ranges).

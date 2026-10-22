@@ -730,12 +730,18 @@ struct_no_prefix page6_s
 	! See LimpManager::updateState(), ClearReason::CrankingNoSpark.
 	bit crankingNoSparkEnabled,"enabled","disabled";Cranking No-Spark: master enable. Suppresses ECU spark entirely while cranking, for engines with an external distributor/module firing spark during crank. Normal ECU spark control resumes once cranking ends (Cranking RPM threshold).
 
-	! --- Single Tooth cam filter (EFI_SINGLE_TOOTH_CAM_FILTER) [tag:single_tooth_cam_filter] ---
-	! Once crank + cam phase sync is established, a Single Tooth cam tooth is only accepted if it
-	! lands within +/- this % of one engine cycle (720 deg, i.e. the expected tooth-to-tooth
-	! period) of the last accepted tooth's crank position. See singleToothCamFilterRejects() in
-	! trigger_central.cpp.
-	uint8_t singleToothCamFilterIntakePct;Single Tooth cam filter (intake): once engine phase is synchronized, ignore intake cam teeth that arrive further than this % of the expected cam tooth period (one 720 deg engine cycle) from where the previous good tooth arrived. 10% = +/-72 crank deg. 0 disables.;"%", 1, 0, 0, 25, 0
-	uint8_t singleToothCamFilterExhaustPct;Single Tooth cam filter (exhaust): once engine phase is synchronized, ignore exhaust cam teeth that arrive further than this % of the expected cam tooth period (one 720 deg engine cycle) from where the previous good tooth arrived. 10% = +/-72 crank deg. 0 disables.;"%", 1, 0, 0, 25, 0
+	! --- VVT angle window (EFI_VVT_ANGLE_WINDOW) [tag:vvt_angle_window] ---
+	! Once engine phase is synchronized, a cam sync tooth whose VVT angle (the same value shown on
+	! the VVT position gauge) lands outside [min, max] is ignored: it neither updates the VVT
+	! position nor resyncs engine phase. Applies to every VVT mode. Escape hatch: after
+	! vvtAngleWindowRecoveryCycles engine cycles without an in-window tooth, the next tooth is
+	! accepted anyway so a genuinely wrong engine phase can still be corrected.
+	! See vvtAngleWindowRejects() in trigger_central.cpp.
+	bit vvtAngleWindowEnabled,"enabled","disabled";Enable min/max VVT angle processing. Once engine phase is synchronized, cam teeth whose VVT angle is outside the intake/exhaust min/max window are ignored (no VVT position update, no engine phase resync). Works with every VVT mode. Set vvtOffsets correctly first - the window is in the same units as the VVT position gauge.
+	int16_t vvtAngleWindowIntakeMin;Intake (cam 1 of each bank) minimum valid VVT angle in VVT position gauge units (-360 to 360 - Honda K intake reads -90 to 90). Use the full mechanical cam travel (cold-oil park position to full authority) plus ~10 deg margin - not the VVT target table range - or real teeth get dropped during overshoot or cold start.;"deg", 1, 0, -360, 360, 0
+	int16_t vvtAngleWindowIntakeMax;Intake (cam 1 of each bank) maximum valid VVT angle in VVT position gauge units (-360 to 360 - Honda K intake reads -90 to 90). Use the full mechanical cam travel plus ~10 deg margin - not the VVT target table range.;"deg", 1, 0, -360, 360, 0
+	int16_t vvtAngleWindowExhaustMin;Exhaust (cam 2 of each bank) minimum valid VVT angle in VVT position gauge units (-360 to 360). Use the full mechanical cam travel (cold-oil park position to full authority) plus ~10 deg margin - not the VVT target table range - or real teeth get dropped during overshoot or cold start.;"deg", 1, 0, -360, 360, 0
+	int16_t vvtAngleWindowExhaustMax;Exhaust (cam 2 of each bank) maximum valid VVT angle in VVT position gauge units (-360 to 360). Use the full mechanical cam travel plus ~10 deg margin - not the VVT target table range.;"deg", 1, 0, -360, 360, 0
+	uint8_t vvtAngleWindowRecoveryCycles;Recovery: after this many engine cycles in a row with no cam tooth inside the window the next tooth is accepted even if outside - so a wrong engine phase (synced on a noise pulse) can correct itself. Noise between good teeth does not count - only cycles where no good tooth arrived at all. Shared by intake and exhaust.;"cycles", 1, 0, 1, 50, 0
 
 end_struct

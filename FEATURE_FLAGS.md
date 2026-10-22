@@ -94,7 +94,7 @@ These gate the AlphaX custom features. All of them are **FALSE** in the f4ems ba
 | `EFI_CHT_CLT_ESTIMATOR` | CLT Estimator (estimates coolant temp from CHT via a competing-rate radiator model, with a lagged thermostat valve simulating the crossing/dip/recover hunting behavior) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_OIL_LIFE_MONITOR` | Weighted Engine Oil Life Monitor (temperature-weighted revolution counter, oil-life % gauge; accumulates in RAM only and flushes to flash exactly once on ignition-off; **requires `EFI_MAIN_RELAY_CONTROL`** — a build error if the flag is on without it, and consequently not enabled in the simulator, which sets `EFI_MAIN_RELAY_CONTROL FALSE`) | FALSE (f4) / TRUE (f7,h7) |
 | `EFI_CRANKING_NO_SPARK` | Cranking No-Spark (suppresses ECU-scheduled coil dwell/charge entirely while `isCranking()`, for engines with a distributor/module that fires spark on its own during crank; normal ECU spark control resumes as soon as cranking ends, reusing the existing Cranking RPM threshold — no separate threshold field. Fuel/everything else unaffected. Cut via `LimpManager`/`ClearReason::CrankingNoSpark`, same mechanism as `kickStartCranking`) | FALSE (f4) / TRUE (f7,h7) |
-| `EFI_SINGLE_TOOTH_CAM_FILTER` | Single Tooth cam filter (once engine phase is synced, ignore Single Tooth cam teeth further than a per-cam `%` of the 720 deg engine cycle from the last accepted tooth's crank position; reference re-seeds after 2.5 cycles without an accepted tooth; settings on page 6, shown in Advanced Trigger only when the cam mode is Single Tooth) | **TRUE (f4, f7, h7)** - tiny code, exception to the F4=FALSE default |
+| `EFI_VVT_ANGLE_WINDOW` | VVT angle window (opt-in via `vvtAngleWindowEnabled`: once engine phase is synced, ignore cam sync teeth of **any** VVT mode whose VVT angle - same value as the VVT position gauge - is outside the intake/exhaust min/max; rejected teeth neither update VVT position nor resync phase. Recovery: after `vvtAngleWindowRecoveryCycles` engine cycles with no in-window tooth the next one is accepted so a wrong phase can still correct. Settings on page 6, Advanced Trigger. Replaced the Single Tooth cam filter) | **TRUE (f4, f7, h7)** - tiny code, exception to the F4=FALSE default |
 
 **Exception to the table above:** `EFI_WHEEL_SPEED_SENSORS` (Main Speed Sensor: a Source
 selector — Output Shaft Speed / Front Axle / Rear Axle — that is the **sole** source of
@@ -190,7 +190,6 @@ EFI_POTENTIOMETER
 EFI_RTC
 EFI_SENT_SUPPORT
 EFI_SHAFT_POSITION_INPUT
-EFI_SINGLE_TOOTH_CAM_FILTER      ← AlphaX (single tooth cam noise window)
 EFI_SIGNAL_EXECUTOR_ONE_TIMER
 EFI_SIGNAL_EXECUTOR_SLEEP
 EFI_SPI1_AF
@@ -221,6 +220,7 @@ EFI_USE_UART_DMA
 EFI_VEHICLE_SPEED
 EFI_VVT_COMPENSATION             ← AlphaX (VVT compensation)
 EFI_VVT_ADVANCED_MODE            ← AlphaX (VVT advanced-mode duty curves)
+EFI_VVT_ANGLE_WINDOW             ← AlphaX (VVT min/max angle window)
 EFI_VVT_PID
 EFI_WHEEL_SPEED_SENSORS         ← AlphaX (Main Speed Sensor / OSS / axle speed / wheel slip source; default TRUE everywhere, opt-out, see exception note above)
 EFI_WIDEBAND_FIRMWARE_UPDATE
