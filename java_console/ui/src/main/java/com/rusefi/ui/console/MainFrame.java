@@ -943,7 +943,7 @@ public class MainFrame {
     }
 
     private void setTitle() {
-        String consoleVersion = "Console " + Launcher.CONSOLE_VERSION;
+        String consoleVersion = UiProperties.getDisplayName() + " " + Launcher.CONSOLE_VERSION;
         String frameTitle;
         // the title bar shows the same state as short labels; the full text stays in its tooltip
         java.util.List<String> chips;
