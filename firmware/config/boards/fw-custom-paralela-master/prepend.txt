@@ -8,7 +8,9 @@
 #define ts_show_can2 false
 #define ts_show_hardware_simulator false
 #define ts_show_tcu false
-#define ts_show_gdi true
+// paralela-based hardware never runs GDI/HPFP (EFI_HPFP/EFI_MC33816 are FALSE) - hide the UI
+#define ts_show_gdi false
+#define ts_show_gdi_low_level false
 #define ts_show_fancy_hardware false
 #define ts_show_fuel_trim_cylinder_10 false
 #define ts_show_fuel_trim_cylinder_11 false

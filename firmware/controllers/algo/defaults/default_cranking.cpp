@@ -36,8 +36,9 @@ void setDefaultCranking() {
 	setLinearCurve(config->cltCrankingCorrBins, CLT_CURVE_RANGE_FROM, 100, 1);
 	setLinearCurve(config->cltCrankingCorr, 50, 50, 1); // now as % of idle valve/etb
 
-#if CRANKING_CURVE_SIZE == 8
-	// Cranking temperature compensation
+	// Cranking temperature compensation - 8-point reference curve, resampled to CRANKING_CURVE_SIZE so
+	// boards that shrink it (e.g. fw-custom-paralela-master, 5) do not keep an all-zero axis that fails
+	// the "Cranking fuel mult" ascending-axis check on a fresh flash
 	static const float crankingCoef[] = {
 		2.8,
 		2.2,
@@ -48,7 +49,7 @@ void setDefaultCranking() {
 		1.0,
 		1.0
 	};
-	copyArray(config->crankingFuelCoef, crankingCoef);
+	copyArrayInterpolated(config->crankingFuelCoef, crankingCoef);
 
 	// Deg C
 	static const float crankingBins[] = {
@@ -61,7 +62,7 @@ void setDefaultCranking() {
 		65,
 		90
 	};
-	copyArray(config->crankingFuelBins, crankingBins);
+	copyArrayInterpolated(config->crankingFuelBins, crankingBins);
 
 	// Opt-in 2D cranking flex table: seed every ethanol row with the same coolant curve so it starts
 	// neutral with respect to ethanol (identical to the non-flex behaviour) until the user calibrates it.
@@ -70,10 +71,9 @@ void setDefaultCranking() {
 
 	for (size_t ethanolIdx = 0; ethanolIdx < efi::size(config->crankingFuelFlexTable); ethanolIdx++) {
 		for (size_t cltIdx = 0; cltIdx < CRANKING_CURVE_SIZE; cltIdx++) {
-			config->crankingFuelFlexTable[ethanolIdx][cltIdx] = crankingCoef[cltIdx];
+			config->crankingFuelFlexTable[ethanolIdx][cltIdx] = config->crankingFuelCoef[cltIdx];
 		}
 	}
-#endif
 	// Cranking cycle compensation
 
 	setTable(config->crankingCycleBaseFuel, 27.0f);

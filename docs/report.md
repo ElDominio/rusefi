@@ -7258,3 +7258,30 @@ Validation: full unit suite 1768/1768 pass; alphax-4chan (F4) firmware build rc 
 Follow-ups: not bench/vehicle tested; no live-data gauge for the reject counter yet
 (`TriggerCentral::singleToothCamFilter[i].rejectCounter`); the tooth that first establishes phase
 sync is never filtered by design.
+
+## 2026-10-22 - Paralela default axes / zeroed warmup curves
+
+`fw-custom-paralela-master` shrinks several curve sizes in `prepend.txt`. Default setters guarded
+by `#if <SIZE> == N` compiled to nothing there, leaving all-zero axes that fail
+`validateConfigOnStartUpOrBurn()` on a fresh flash, plus zero operating values.
+
+| Curve | Size on paralela | Before | After |
+|-------|------------------|--------|-------|
+| `crankingFuelBins`/`crankingFuelCoef` (+ `crankingFuelFlexTable`) | 5 | all 0 -> "Broken axis: Cranking fuel mult" | 8-point reference resampled: -20,-10,20,50,90 C / 2.8,2.2,1.55,1.1,1.0 |
+| `cltIdleRpmBins`/`cltIdleRpm` | 8 | all 0 -> "Idle target RPM" broken axis | 16-point reference resampled: -30..120 C / 1350..1100 RPM |
+| `iatFuelCorrBins` | 6 | -40..10 C (fixed 10 C step) | -40..110 C (step = 150/(size-1); unchanged for 16-point boards) |
+
+| File | Change |
+|------|--------|
+| `controllers/algo/defaults/default_cranking.cpp` | drop `#if CRANKING_CURVE_SIZE == 8`, use `copyArrayInterpolated`; flex rows seeded from the resampled curve |
+| `controllers/algo/engine_configuration.cpp` | `#else` branch in `setDefaultIdleSpeedTarget()`; IAT step derived from `IAT_CURVE_SIZE` |
+| `config/boards/fw-custom-paralela-master/prepend.txt` | `ts_show_gdi`/`ts_show_gdi_low_level` false - paralela never runs GDI/HPFP |
+
+Not fixed by design: `hpfpLobeProfileQuantityBins` is also all-zero, but its check only runs when
+`isGdiEngine()`, which is always false with `EFI_HPFP=FALSE`. `warmup enrichment` (`cltFuelCorr`) was
+already handled by the existing `CLT_CURVE_SIZE == 8` branch.
+
+Validation: host test binary built against the paralela generated config (out-of-tree scratch build)
+- default tune dumped and parsed with `rusefi_paralela.ini`; `validateConfigOnStartUpOrBurn()` passes.
+Normal f407-discovery unit suite 1768/1768 pass. Paralela firmware image not rebuilt; config
+generation for paralela (incl. INI reference validation) passes.

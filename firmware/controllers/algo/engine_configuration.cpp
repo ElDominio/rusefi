@@ -268,6 +268,13 @@ static void setDefaultIdleSpeedTarget() {
 #if CLT_CURVE_SIZE == 16
 	copyArray(config->cltIdleRpmBins, {  -30, - 20,  -10,    0,   10,   20,   30,   40,   50,  60,  70,  80,  90, 100 , 110,  120 });
 	copyArray(config->cltIdleRpm,     { 1350, 1350, 1300, 1200, 1150, 1100, 1050, 1000, 1000, 950, 950, 930, 900, 900, 1000, 1100 });
+#else
+	// boards that shrink CLT_CURVE_SIZE (e.g. fw-custom-paralela-master) would otherwise keep an
+	// all-zero axis and fail the "Idle target RPM" ascending-axis check on a fresh flash
+	static const float idleRpmBins[] = {  -30, - 20,  -10,    0,   10,   20,   30,   40,   50,  60,  70,  80,  90, 100 , 110,  120 };
+	static const float idleRpm[] =     { 1350, 1350, 1300, 1200, 1150, 1100, 1050, 1000, 1000, 950, 950, 930, 900, 900, 1000, 1100 };
+	copyArrayInterpolated(config->cltIdleRpmBins, idleRpmBins);
+	copyArrayInterpolated(config->cltIdleRpm, idleRpm);
 #endif // CLT_CURVE_SIZE
 
 	setLinearCurve(config->acIdleAdderByPressureBins, 0, 500, 1);
@@ -454,7 +461,8 @@ static void setDefaultEngineConfiguration() {
 	engineConfiguration->maxAcClt = 100;
 	engineConfiguration->maxAcTps = 75;
 
-	initTemperatureCurve(IAT_FUEL_CORRECTION_CURVE, 1);
+	// span -40..110C regardless of IAT_CURVE_SIZE (a fixed 10C step tops out at 10C on 6-point boards)
+	initTemperatureCurve(IAT_FUEL_CORRECTION_CURVE, 1, -40.0f, 150.0f / (IAT_CURVE_SIZE - 1));
 
 	initBoostTemperatureCurve(config->cltBoostCorrBins, config->cltBoostCorr, 1.0f);
 	initBoostTemperatureCurve(config->iatBoostCorrBins, config->iatBoostCorr, 1.0f);
