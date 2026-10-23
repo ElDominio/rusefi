@@ -6975,3 +6975,25 @@ pull-up/analog-divider `ts_show_*` panels (4chan keeps its own values for its ha
 Validation: `gen_config_board.sh` + full `compile.sh -b` for alphax-4chan_f7 -> rc 0, flash 32%,
 ram0 100% (normal). F4 variant not rebuilt (untouched by design). Follow-up: the table-size changes
 alter the 4chan_f7 config layout/signature - existing 4chan_f7 tunes need re-import in TS after flashing.
+
+## 2026-10-23 - console: remove "extracted bundle" Universal Updater banner (alphax-beta + alphax-alpha)
+
+AlphaX ships the console as an extracted bundle on purpose, so the yellow banner pointing users at the
+upstream rusEFI Universal Updater installer does not apply. Removed the whole feature rather than
+just hiding the text.
+
+| File | Change |
+|------|--------|
+| `java_console/ui/.../console/MainFrame.java` | Removed `INSTALLER_URL_PROPERTY`, `installerAnnouncementShown`, `installerBannerHost`, `maybeShowInstallerAnnouncement()`, `shouldAnnounceInstaller()`, banner show/close, `wrapContentWithInstallerBanner()`, both post-connect call sites, and now-unused imports. |
+| `java_console/ui/.../ConsoleUI.java` | `setNormalContent(rootPanel)` instead of the banner wrapper. |
+| `java_console/ui/.../MainFrameUpdateCheckTest.java` | Removed the `shouldAnnounceInstaller` test. |
+| `java_tools/version/.../UiVersion.java` | `CONSOLE_VERSION` -> 20261023. |
+
+`universal_updater_installer_url` stays in `shared_io.properties` (now unused, keeps that file aligned with upstream).
+alphax-alpha-branch never had the banner.
+
+Validation: alphax-beta -> `./gradlew :ui:test --tests MainFrameUpdateCheckTest` passes. alphax-alpha ->
+identical diff (same hunks/line counts), grep shows no dangling references, but not compiled: a fresh
+worktree fails `:mcp_ecu:compileJava` on `VariableRegistryValues.OUTPUT_CHANNEL_SD_CARD_MODE` because the
+checked-in generated `VariableRegistryValues.java` is stale until config generation runs (pre-existing).
+Follow-up: confirm the alphax-alpha console build after the next config generation.
