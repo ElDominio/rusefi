@@ -154,8 +154,7 @@ TEST(MlgOpenIssues, SdHeaderHasNoStartingTuneBlock) {
 	EXPECT_EQ(header.bytes.size(), dataOffset);
 }
 
-// Disabled until batch 7 (TS-1/TS-2 output-channel changes expose "LTFT: learning: hits" / ltftCntHit).
-TEST(MlgOpenIssues, DISABLED_SdIncludesLtftButOmitsMisfireFields) {
+TEST(MlgOpenIssues, SdIncludesLtftAndMisfireFields) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	CaptureWriter header;
 	MLG::writeFileHeader(header);
@@ -173,14 +172,13 @@ TEST(MlgOpenIssues, DISABLED_SdIncludesLtftButOmitsMisfireFields) {
 	for (const char* present : {"LTFT: Bank 1", "LTFT: Bank 2", "LTFT: learning: hits"}) {
 		EXPECT_EQ(1u, names.count(present)) << present;
 	}
-	// Issue 6: misfire fields still have no SD source wiring.
-	for (const char* missing : {"Misfire: total count", "Misfire: EMA baseline"}) {
-		EXPECT_EQ(0u, names.count(missing)) << missing;
+	// Mockable module fields are available in host logs as well as firmware.
+	for (const char* present : {"Misfire: total count", "Misfire: EMA baseline"}) {
+		EXPECT_EQ(1u, names.count(present)) << present;
 	}
 }
 
-// Disabled until batch 7 (see above).
-TEST(MlgOpenIssues, DISABLED_LuaIncludesLtftCounterButOmitsIteratedTrims) {
+TEST(MlgOpenIssues, LuaIncludesLtftCounterButOmitsIteratedTrims) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engine->module<LongTermFuelTrim>()->ltftCntHit = 42;
 	engine->module<LongTermFuelTrim>()->ltftCorrection[0] = 1.05f;
