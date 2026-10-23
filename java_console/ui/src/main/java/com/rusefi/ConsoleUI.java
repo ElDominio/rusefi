@@ -612,7 +612,7 @@ console live data tab is broken #8402
                 && !unsupportedEcuHost.isBlocking());
         AutoupdateUtil.setAppIcon(mainFrame.getFrame().getFrame());
 
-        unsupportedEcuHost.setNormalContent(mainFrame.wrapContentWithInstallerBanner(rootPanel));
+        unsupportedEcuHost.setNormalContent(rootPanel);
         mainFrame.getFrame().getFrame().addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {

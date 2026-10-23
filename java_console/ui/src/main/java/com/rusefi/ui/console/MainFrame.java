@@ -4,17 +4,11 @@ import com.devexperts.logging.Logging;
 import com.opensr5.ini.IniFileModel;
 import com.rusefi.*;
 import com.rusefi.autoupdate.Autoupdate;
-import com.rusefi.autoupdate.ConsoleExeFileLocator;
 import com.rusefi.binaryprotocol.BinaryProtocol;
 import com.rusefi.config.generated.Integration;
 import com.rusefi.core.EngineState;
 import com.rusefi.core.SensorCentral;
 import com.rusefi.core.SensorSubscription;
-import com.rusefi.core.OsUtil;
-import com.rusefi.core.io.BoardCompatibility;
-import com.rusefi.core.io.ConnectedEcuTarget;
-import com.rusefi.core.net.ConnectionAndMeta;
-import com.rusefi.core.net.PropertiesHolder;
 import com.rusefi.core.ui.AutoupdateUtil;
 import com.rusefi.io.*;
 import com.rusefi.io.tcp.BinaryProtocolServer;
@@ -49,7 +43,6 @@ import static com.rusefi.core.net.ConnectionAndMeta.RUSEFI_WIKI_DOWNLOAD_PAGE;
  */
 public class MainFrame {
     private static final Logging log = getLogging(Launcher.class);
-    private static final String INSTALLER_URL_PROPERTY = "universal_updater_installer_url";
 
     enum FirmwareUpdateCheckResult {
         AVAILABLE,
@@ -224,8 +217,6 @@ public class MainFrame {
     private FrameOverlay firmwareUpdateCheckOverlay;
     private FrameOverlay connectionFailureOverlay;
     private FrameOverlay unsavedTuneChangesOverlay;
-    private boolean installerAnnouncementShown;
-    private final JPanel installerBannerHost = new JPanel(new BorderLayout());
     private FrameOverlay activeOverlay;
     private FrameOverlay configErrorOverlay;
     private final ConfigErrorOverlayController configErrorController = new ConfigErrorOverlayController(
@@ -283,8 +274,6 @@ public class MainFrame {
             }
         };
 
-        installerBannerHost.setVisible(false);
-        installerBannerHost.setOpaque(false);
         createMenuBar();
         // Keep the error bit in selective output polling on every tab, including after splash hand-off.
         configErrorSubscription = SensorCentral.getInstance().addListener(
@@ -640,98 +629,6 @@ public class MainFrame {
         unsavedTuneChangesOverlay = null;
     }
 
-    private void maybeShowInstallerAnnouncement() {
-        if (!SwingUtilities.isEventDispatchThread()) {
-            SwingUtilities.invokeLater(this::maybeShowInstallerAnnouncement);
-            return;
-        }
-        ConnectedEcuTarget connectedTarget = consoleUI.uiContext.getLinkManager().getConnectedEcuTarget();
-        String installerUrl = PropertiesHolder.getProperty(INSTALLER_URL_PROPERTY);
-        boolean defaultWhiteLabel = ConnectionAndMeta.isDefaultWhitelabel(
-            ConnectionAndMeta.getWhiteLabel(ConnectionAndMeta.getProperties()));
-        if (!shouldAnnounceInstaller(
-            OsUtil.isWindows(),
-            isFirmwareUpdateConnectionReady(ConnectionStatusLogic.INSTANCE.getValue()),
-            ConsoleExeFileLocator.isRunningFromUnzippedBundle(),
-            defaultWhiteLabel,
-            connectedTarget.isLiveTargetKnown(),
-            installerAnnouncementShown,
-            connectedTarget.effectiveTarget(),
-            BoardCompatibility.getBoardCompatibility(),
-            installerUrl
-        )) {
-            return;
-        }
-
-        installerAnnouncementShown = true;
-        showInstallerAnnouncementBanner(installerUrl);
-    }
-
-    static boolean shouldAnnounceInstaller(
-        boolean windows,
-        boolean connectionReady,
-        boolean extractedBundle,
-        boolean defaultWhiteLabel,
-        boolean liveTargetKnown,
-        boolean alreadyShown,
-        String connectedTarget,
-        String compatibility,
-        String installerUrl
-    ) {
-        return windows
-            && connectionReady
-            && extractedBundle
-            && defaultWhiteLabel
-            && liveTargetKnown
-            && !alreadyShown
-            && installerUrl != null
-            && !installerUrl.trim().isEmpty()
-            && BoardCompatibility.matchesCompatibility(connectedTarget, compatibility);
-    }
-
-    private void showInstallerAnnouncementBanner(String installerUrl) {
-        JPanel banner = new JPanel(new BorderLayout(12, 0));
-        banner.setBackground(new Color(255, 243, 205));
-        banner.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(180, 140, 50)),
-            BorderFactory.createEmptyBorder(6, 12, 6, 6)
-        ));
-
-        URLLabel link = new URLLabel(
-            "You're running rusEFI from an extracted bundle. Install Universal Updater for automatic console and ECU firmware updates.",
-            installerUrl
-        );
-        link.setFont(link.getFont().deriveFont(Font.BOLD));
-        banner.add(link, BorderLayout.CENTER);
-
-        JButton close = new JButton("X");
-        close.setToolTipText("Dismiss");
-        close.setMargin(new Insets(2, 8, 2, 8));
-        close.setFocusable(false);
-        close.addActionListener(e -> closeInstallerAnnouncementBanner());
-        banner.add(close, BorderLayout.EAST);
-
-        installerBannerHost.removeAll();
-        installerBannerHost.add(banner, BorderLayout.CENTER);
-        installerBannerHost.setVisible(true);
-        installerBannerHost.revalidate();
-        installerBannerHost.repaint();
-    }
-
-    private void closeInstallerAnnouncementBanner() {
-        installerBannerHost.setVisible(false);
-        installerBannerHost.removeAll();
-        installerBannerHost.revalidate();
-        installerBannerHost.repaint();
-    }
-
-    public JComponent wrapContentWithInstallerBanner(JComponent content) {
-        JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.add(installerBannerHost, BorderLayout.NORTH);
-        wrapper.add(content, BorderLayout.CENTER);
-        return wrapper;
-    }
-
     private void showOverlay(FrameOverlay overlay) {
         if (overlay != configErrorOverlay) {
             closeConfigErrorOverlay();
@@ -826,7 +723,6 @@ public class MainFrame {
                             InvocationConfirmationListener.VOID, false));
                     BinaryProtocol bp = consoleUI.uiContext.getBinaryProtocol();
                     if (bp != null && bp.signature != null) {
-                        maybeShowInstallerAnnouncement();
                         requestFirmwareUpdateCheck(false);
                     }
                 } else {
@@ -853,7 +749,6 @@ public class MainFrame {
                 new BinaryProtocolServer().start(linkManager);
             });
             if (existingBp.signature != null) {
-                maybeShowInstallerAnnouncement();
                 requestFirmwareUpdateCheck(false);
             }
         } else {
