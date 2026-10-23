@@ -220,6 +220,7 @@ TESTS_SRC_CPP = \
 	tests/sensor/test_baro_from_map.cpp \
 	tests/sensor/table_func.cpp \
 	tests/sensor/test_fuel_level_func.cpp \
+	tests/sensor/test_sensor_checker.cpp \
 	tests/test_stft.cpp \
 	tests/test_hpfp.cpp \
 	tests/test_hpfp_integrated.cpp \
