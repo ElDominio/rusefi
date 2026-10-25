@@ -154,7 +154,7 @@ TEST(idle_v2, clutchOrNeutralOverridesVssGate) {
 
 	// No gear signal, but the clutch switch itself reports disengaged -- override still applies.
 	Sensor::resetMockValue(SensorType::DetectedGear);
-	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
 	engine->engineState.clutchDownState = true;
 	EXPECT_EQ(ICP::Idling, dut.determinePhase(1000, targetInfo, 0, 25, 10));
 

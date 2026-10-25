@@ -38,10 +38,6 @@ custom exhaust_cutout_behavior_e 1 bits, U08, @OFFSET@, [0:1], @@exhaust_cutout_
 #define exhaust_cutout_output_mode_e_enum "Digital", "PWM", "H-Bridge"
 custom exhaust_cutout_output_mode_e 1 bits, U08, @OFFSET@, [0:1], @@exhaust_cutout_output_mode_e_enum@@
 
-#define sm_clutch_switch_e_enum "None", "Clutch Up", "Clutch Down", "INVALID"
-custom sm_clutch_switch_e 1 bits, U08, @OFFSET@, [0:1], @@sm_clutch_switch_e_enum@@
-#define sm_shift_detection_mode_e_enum "RPM Rate", "VSS Rate (needs VSS sensor)", "INVALID", "INVALID"
-custom sm_shift_detection_mode_e 1 bits, U08, @OFFSET@, [0:1], @@sm_shift_detection_mode_e_enum@@
 #define pops_and_bangs_cutout_inhibit_e_enum "Off", "Inhibit Unless Cutout Open"
 custom pops_and_bangs_cutout_inhibit_e 1 bits, U08, @OFFSET@, [0:1], @@pops_and_bangs_cutout_inhibit_e_enum@@
 #define eco_mode_switch_mode_e_enum "Off", "Inhibit"
@@ -168,30 +164,8 @@ struct_no_prefix page6_s
 	lua_gauge_meaning_e smSportModeLuaGaugeMeaning;Sport Mode: Lua gauge comparison direction.
 	float smSportModeLuaGaugeThreshold;Sport Mode: Lua gauge activation threshold (LuaGauge mode).;"", 1, 0, -30000, 30000, 3
 
-	! --- Engine State Machine thresholds + shift detection (enable bit stays in page 1) ---
-	uint8_t smWotTpsThreshold;Engine SM: TPS threshold above which the engine is at Wide Open Throttle.;"%", 1, 0, 50, 100, 0
-
-	bit stateBasedStft,"enabled","disabled";Engine SM: drive STFT region selection from the live SM state (Idle/Overrun/WOT/Cruise) instead of the RPM/load region thresholds. The per-region STFT settings (time constant, max add/remove) are reused unchanged.
-	bit smSecondClutchSwitchAvailable,"yes","no";Engine SM: a second clutch switch is also wired (e.g. both Clutch-Up and Clutch-Down, not just whichever is selected below). Lets shift detection open the window on the earliest available press edge and close it on the earliest available release edge, instead of relying solely on the configured switch's own edges.
-	bit smRelatchOnClutchDown,"enabled","disabled";Engine SM: while the shift latch (smShiftLatchTimeMs) is active, a fresh Clutch-Down full-press resets it back to the full duration instead of letting it expire -- keeps Upshifting/Downshifting asserted through a flurry of quick consecutive shifts. Requires smSecondClutchSwitchAvailable (both Clutch-Up and Clutch-Down wired).
+	! --- Engine State Machine: core thresholds/shift detection live in engine_state_machine_engineConfiguration.txt ---
 	bit smSlowStateTransitionEnabled,"enabled","disabled";Engine SM: ramp Eco Mode's and Ghost Cam's overlay targets (AFR, ignition timing, VVT cam angles, idle RPM/duty, throttle multiplier, alternator voltage) linearly over 1 second on engage and disengage instead of snapping instantly. The engineSmIsEcoMode/engineSmIsGhostCam flags themselves still switch instantly -- this only smooths the values downstream consumers read from them.
-
-	sm_clutch_switch_e smUpshiftClutchSwitch;Engine SM: Clutch switch that signals an upshift. 'Clutch Up' opens the shift window when the pedal leaves rest (falling edge, drivetrain still locked) and closes it when the pedal returns to rest; 'Clutch Down' opens the window on full press and closes it on release. Flat-shift torque reduction always overrides this.
-	sm_clutch_switch_e smDownshiftClutchSwitch;Engine SM: Clutch switch that signals a downshift.
-	sm_shift_detection_mode_e smShiftDetectionMode;Engine SM: Signal source for the shift-direction accumulator. RPM Rate: accumulates positive/negative based on engine RPM rate of change. VSS Rate: accumulates based on vehicle speed rate of change (needs VSS sensor).
-	int16_t smAccelRateThreshold;Engine SM: RPM/s rate threshold to enter the Accelerating state. Also the accumulator gain normalizer while accelerating -- at exactly this rate the accumulator climbs at smAccumulatorGain pct/s, faster rates climb proportionally faster. 0 disables the Accelerating state.;"RPM/s", 1, 0, 0, 10000, 0
-	int16_t smDecelRateThreshold;Engine SM: RPM/s rate threshold to enter the Decelerating state (RPM falling faster than this). Also the accumulator normalizer in Overrun. 0 disables the Decelerating state.;"RPM/s", 1, 0, 0, 10000, 0
-	uint16_t smRpmRateWindowMs;Engine SM: Time window used to compute RPM rate of change (RPM/s, "RPM/t") for Accelerating/Decelerating state detection and the RPM-rate shift-accumulator signal. Larger values smooth out sensor/tooth noise at the cost of slower response, smaller values track faster but are noisier. Internally floored to one slow-callback tick (50 ms). smAccelRateThreshold/smDecelRateThreshold stay in RPM/s regardless of this setting and do not need re-tuning when it changes.;"ms", 1, 0, 0, 1000, 0
-	uint16_t smShiftLatchTimeMs;Engine SM: once shift direction is confirmed, hold Upshifting/Downshifting true for at least this long. 0 = no latch.;"ms", 1, 0, 0, 2000, 0
-	uint16_t smTransientHoldTimeMs;Engine SM: time to hold the Transient state after the accel-enrichment threshold drops, and to hold off the Accelerating/Decelerating rate check after an Eco Mode engage/disengage edge. 0 = no hold.;"ms", 1, 0, 0, 2000, 0
-	uint16_t smShiftMinVss;Engine SM: VSS Rate mode only -- minimum vehicle speed. Below this the accumulator decays instead of accumulating. 0 = no minimum.;{bitStringValue(velocityUnitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : @@UNITS_KMH_TO_MPH@@}, 0, 0, 300, 0
-	int8_t smAccumulatorUpshiftThreshold;Engine SM: Accumulator must reach or exceed this value (0..100) to confirm an upshift. The accumulator runs from -100 to +100.;"", 1, 0, 0, 100, 0
-	int8_t smAccumulatorDownshiftThreshold;Engine SM: Accumulator must reach or fall below the negative of this value (0..100) to confirm a downshift.;"", 1, 0, 0, 100, 0
-	uint16_t smAccelHoldMs;Engine SM: once the Accelerating rate threshold is met, hold the Accelerating state for at least this long after the rate drops back below threshold. A fresh threshold crossing during the hold resets it back to the full duration. Broken immediately by a lift into the Coasting/Overrun phase, so a stale hold can never mask Overrun/DFCO. 0 = no hold (raw signal, legacy behavior).;"ms", 1, 0, 0, 5000, 0
-	float smAccumulatorGain;Engine SM: Accumulator climb rate in %/s per 1x threshold ratio. At exactly the threshold rate, the accumulator changes by this many %/s. Larger = faster response.;"%/s", 1, 0, 0, 200, 1
-	float smAccumulatorDecayRate;Engine SM: Rate at which the accumulator decays toward 0 (%/s) when the signal is within the ±threshold dead-band. Larger = faster decay.;"%/s", 1, 0, 0, 200, 1
-
-	uint16_t smAccumulatorSnapTimeMs;Engine SM: once continuously in the Accelerating state for this long, a still-negative accumulator (left over from a prior decel run) is forced to 0 instead of waiting for it to decay/climb across zero on its own. Symmetrically, once continuously in Decelerating or Overrun for this long, a still-positive accumulator is forced to 0. Lets a same-gear direction reversal (e.g. a long overrun immediately followed by acceleration) shed a large stale opposite-sign accumulator quickly, rather than needing an equally long run the other way to null it out and risking a stale shift-direction call (e.g. a spurious downshift blip on clutch-in right after tipping back into the throttle). 0 = disabled (legacy decay/cross-only behavior).;"ms", 1, 0, 0, 10000, 0
 
 	! --- Limp Mode (Engine State Machine sub-feature) ---
 	! These limits are enforced only while the state machine has latched the Limp state.
@@ -395,13 +369,6 @@ struct_no_prefix page6_s
 	float limiterAdderSportModeRpmAdd;Limiter Adders: flat RPM adder applied while Sport Mode is active (Sport Mode source only).;"RPM", 1, 0, -10000, 10000, 0
 	float limiterAdderSportModeBoostAdd;Limiter Adders: flat boost (kPa) adder applied while Sport Mode is active (Sport Mode source only).;"kPa", 1, 0, -1000, 1000, 1
 
-	! --- Engine Temperature Overlay (Engine State Machine sub-feature) ---
-	! Classifies CLT into three mutually-exclusive bands published as overlay bits each slow
-	! callback: engineSmIsCold (below smColdTempThreshold), engineSmIsOperating (between the
-	! two thresholds), engineSmIsHot (above smHotTempThreshold). When no CLT sensor is valid
-	! the engine is treated as Operating (no false Cold/Hot triggering).
-	int16_t smColdTempThreshold;Engine Temperature Overlay: CLT below this is Cold engine. Between this and smHotTempThreshold is Operating temperature.;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -40 : -40}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
-	int16_t smHotTempThreshold;Engine Temperature Overlay: CLT above this is Hot engine. Below smColdTempThreshold is Cold, between both is Operating temperature.;{bitStringValue(unitsLabels, useMetricOnInterface)}, {useMetricOnInterface ? 1 : 1.8}, {useMetricOnInterface ? 0 : 17.77777}, {useMetricOnInterface ? -40 : -40}, {useMetricOnInterface ? @@CLT_UPPER_LIMIT@@ : @@CLT_UPPER_LIMIT@@ * 1.8 + 32}, 0
 
 	! --- Quick Warmup (Engine State Machine sub-feature) ---
 	! Active only while the SM reports Cold AND Idle simultaneously. Overrides idle ignition

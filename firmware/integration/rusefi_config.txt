@@ -1912,7 +1912,7 @@ uint8_t autoscale knockFuelTrim;Maximum Amount of Fuel trim when knock;"%", 1, 0
 	bit exhaustCutoutKeyOnTestEnabled,"Key-on test","disabled"
 	bit exhaustCutoutEngineOnTestEnabled,"Engine-on test","disabled"
 	bit unusedBit_CutoutWasPwm
-	bit useEngineStateMachine,"enabled","disabled";Centralized Engine State Machine. When enabled, state detection is driven by a single priority-ordered evaluator. When disabled, each controller manages its own state detection.
+	bit unusedBit_wasUseEngineStateMachine
 	bit cdvControlEnabled,"enabled","disabled"
 	bit cdvUseClutchExit,"enabled","disabled";Deactivate CDV solenoid when clutch pedal is released
 	bit luaLimiterEnabled,"enabled","disabled"

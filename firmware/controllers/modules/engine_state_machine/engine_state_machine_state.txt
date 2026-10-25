@@ -14,13 +14,21 @@ struct_no_prefix engine_state_machine_state_s
 	bit engineSmIsTorqueReduction;Engine SM: Torque Reduction
 	bit engineSmIsUpshifting;Engine SM: Upshifting
 	bit engineSmIsDownshifting;Engine SM: Downshifting
+	bit engineSmIsLimp;Engine SM: Limp/Cut Active
+	bit engineSmIsPopsAndBangs;Engine SM: Pops and Bangs active
+	bit engineSmPnbSparkCut;Engine SM: P&B spark cut
+	bit engineSmIsEcoMode;Engine SM: Eco mode active
 	bit engineSmIsCold;Engine SM: Cold engine
 	bit engineSmIsOperating;Engine SM: At operating temp
 	bit engineSmIsHot;Engine SM: Hot engine
+	bit engineSmIsQuickWarmup;Engine SM: Quick Warmup active
 	bit engineSmIsAccelerating;Engine SM: Accelerating
 	bit engineSmIsDecelerating;Engine SM: Decelerating
+	bit engineSmIsGhostCam;Engine SM: Ghost Cam active
+	bit engineSmIsSportPedal;Engine SM: Sport Pedal active
+	bit engineSmIsSportMode;Engine SM: Sport Mode active
 
-	uint8_t engineSmCurrentState;Engine SM: display state
+	uint8_t engineSmCurrentState;Engine SM: primary state
 
 	float engineSmShiftAccumulator;Engine SM: Shift accumulator;"", 1, 0, -100, 100, 1
 	float engineSmRpmRate;Engine SM: RPM rate (RPM/t);"RPM/s", 1, 0, -20000, 20000, 0

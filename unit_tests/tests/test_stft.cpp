@@ -121,12 +121,12 @@ TEST(ClosedLoopFuel, StateBasedSelectionOverridesThresholds) {
 
 	// With state-based STFT off, RPM/load thresholds pick the region (idle here).
 	engineConfiguration->useEngineStateMachine = true;
-	getCustomPage()->stateBasedStft = false;
+	engineConfiguration->stateBasedStft = false;
 	EXPECT_EQ(ftRegionIdle, stft.computeStftBin(1000, 10, cfg));
 
 	// With state-based STFT on, the SM state wins regardless of RPM/load. The SM defaults to
 	// the Off state, which maps to the main cruise cell.
-	getCustomPage()->stateBasedStft = true;
+	engineConfiguration->stateBasedStft = true;
 	EXPECT_EQ(ftRegionCruise, stft.computeStftBin(1000, 10, cfg));
 }
 

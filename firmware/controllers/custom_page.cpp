@@ -39,22 +39,6 @@ void customPageSetDefaults() {
 	d.downshiftBlipperKi = 0;
 	d.downshiftBlipperKd = 0;
 
-	// Engine State Machine thresholds + shift detection (enable bit lives in page 1).
-	d.smWotTpsThreshold = 90;           // 90% TPS
-	d.smTransientHoldTimeMs = 200;
-	d.smUpshiftClutchSwitch   = sm_clutch_switch_e::None;
-	d.smDownshiftClutchSwitch = sm_clutch_switch_e::None;
-	d.smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
-	d.smAccelRateThreshold = 0;
-	d.smDecelRateThreshold = 0;
-	d.smRpmRateWindowMs    = 100; // 100 ms (2 slow-callback ticks) -- recompute cadence for RPM/t vs. the old raw single-tick behavior
-	d.smRelatchOnClutchDown    = false;
-	d.smShiftLatchTimeMs       = 0;
-	d.smShiftMinVss            = 0;
-	d.smAccumulatorUpshiftThreshold  = 40;
-	d.smAccumulatorDownshiftThreshold = 40;
-	d.smAccumulatorGain      = 20.0f;
-	d.smAccumulatorDecayRate = 10.0f;
 
 	// Sport Mode (Engine State Machine) — disabled by default.
 	d.smSportModeActivationMode  = SPORT_MODE_OFF;
@@ -112,9 +96,6 @@ void customPageSetDefaults() {
 		d.sportPedalMultValues[i] = 1.0f;            // 1.0 = pass-through until the user tunes it
 	}
 
-	// Engine Temperature Overlay (Engine State Machine sub-feature).
-	d.smColdTempThreshold = 60;   // below 60°C = Cold (not yet at operating temp)
-	d.smHotTempThreshold  = 100;  // above 100°C = Hot (typical thermostat-open range)
 
 	// Quick Warmup (Engine State Machine sub-feature) — disabled by default; safe inert calibration.
 	d.quickWarmupEnabled      = false;

@@ -139,18 +139,18 @@ class IEtbController;
  * Always go through Engine::module<T>() / Engine::forEachModule() / Engine::aggregateModules() -
  * never reach into coreModules or this list by name.
  *
- * ExhaustCutoutController, CdvController and EngineStateMachine below carry no #if EFI_<NAME>
+ * ExhaustCutoutController and CdvController below carry no #if EFI_<NAME>
  * guard here (matching their pre-split presence) even though each is an AlphaX subsystem with
  * its own flag: unconditional consumers exist (live_data.cpp, lua_hooks.cpp, the generated
- * output_lookup_generated.cpp, and - for EngineStateMachine alone - 14 core .cpp files with
- * 30+ call sites) that would all need auditing/guarding first. Their own .cpp stubs no-op when
+ * output_lookup_generated.cpp) that would all need auditing/guarding first.
+ * EngineStateMachine (including the AlphaX Limp/Eco/Ghost Cam/Sport/P&B overlays) is
+ * registered unconditionally in coreModules, as upstream does. Their own .cpp stubs no-op when
  * the flag is off; only their memory placement changed here, not their compile-time presence.
  * Do not add a guard to their entry without first guarding every one of those consumers.
  */
 using AlphaXModuleList = type_list<
     ExhaustCutoutController,
     CdvController,
-    EngineStateMachine,
 #if EFI_ELECTRONIC_THROTTLE_BODY
     DownshiftBlipper,
     UpshiftRpmHold,

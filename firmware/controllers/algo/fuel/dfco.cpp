@@ -106,7 +106,7 @@ bool DfcoController::getState(const EngineStateMachine& sm) const {
 			return true;
 		}
 		if (!Sensor::hasSensor(SensorType::VehicleSpeed)) {
-			float decelThr = (float)getCustomPage()->smDecelRateThreshold;
+			float decelThr = (float)engineConfiguration->smDecelRateThreshold;
 			if (decelThr > 0 && sm.getLastRpmRate() < -decelThr) {
 				return true;
 			}
