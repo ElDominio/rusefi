@@ -6997,3 +6997,26 @@ identical diff (same hunks/line counts), grep shows no dangling references, but 
 worktree fails `:mcp_ecu:compileJava` on `VariableRegistryValues.OUTPUT_CHANNEL_SD_CARD_MODE` because the
 checked-in generated `VariableRegistryValues.java` is stale until config generation runs (pre-existing).
 Follow-up: confirm the alphax-alpha console build after the next config generation.
+
+## 2026-10-24 - build_gui.py: alphax-silver config generation failed on stale LiveData fragments
+
+Symptom: build_gui.py STEP 2 (`gen_config_board.sh`) for alphax-silver aborted with
+`rusefi_alphax-silver.ini:5959: Undefined data point [tractionControlYAxisValue] (yBins)`.
+
+Root cause: `console/binary/generated/live_data_fragments.ini` (the output-channel block inlined into
+every board .ini) was left over from a build with a different LiveData layout - it had
+`veTableYAxis`@1512 -> `veTableIdleYAxis`@1514 with no traction field, while
+`live_data_generated/engine_state_generated.h` already had it. `gen_config_board.sh` reads those
+fragments but never regenerates them; only `gen_live_documentation.sh` (make's docs_enums.mk rule) does.
+After regeneration the field sits at 1614, so the whole layout had shifted by ~100 bytes.
+
+A second, already-documented failure followed: stale `firmware/.dep` naming the removed
+`ChibiOS/os/various/syscalls.c` -> `rm -rf firmware/.dep firmware/build`.
+
+| File | Change |
+|------|--------|
+| `build_gui.py` | New STEP 1.5 runs `gen_live_documentation.sh` before `gen_config_board.sh`. |
+
+Validation: `gen_config_board.sh config/boards/hellen/alphax-silver alphax-silver` exits clean;
+`bin/compile.sh config/boards/hellen/alphax-silver/meta-info.env -j12` exits 0 with a fresh
+`build/rusefi.elf`/`.bin`/`.srec`. Did not rerun the full GUI bundle (`-b`) path.
