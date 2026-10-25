@@ -30,7 +30,7 @@ public class IniFieldMigrationUtils {
 
     //ATTENTION! please add only lower-cased value in the list below:
     private final static List<Set<String>> UNITS_SYNONYMS = Arrays.asList(
-        CompatibilitySet.of("%", "percent"),
+        CompatibilitySet.of("%", "percent", "pct"),
         CompatibilitySet.of("deg c", "c"),
         CompatibilitySet.of("voltage", "volts")
     );

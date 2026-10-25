@@ -27,6 +27,7 @@ public enum ComposedTuneMigrator implements TuneMigrator {
         BoostLoadBinsMigrator.INSTANCE,
         BooleanIniFieldMigrator.INSTANCE,
         FanAcModeMigrator.INSTANCE,
+        AlphaxUpstreamSyncMigrator.INSTANCE,
         DigitsIniFieldMigrator.INSTANCE,
         STFTFieldMigrator.INSTANCE,
         IdleCurveMigrator.INSTANCE,
