@@ -398,15 +398,6 @@ const burst_knock_state_s* getLiveData(size_t) {
 }
 
 template<>
-const check_engine_light_state_s* getLiveData(size_t) {
-#ifdef MODULE_CHECK_ENGINE_LIGHT
-	return &engine->module<CheckEngineLight>().unmock();
-#else
-	return nullptr;
-#endif
-}
-
-template<>
 const dfco_state_s* getLiveData(size_t) {
 	return &engine->module<DfcoController>().unmock();
 }

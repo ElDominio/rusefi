@@ -3,7 +3,6 @@
 #include "engine_state_machine.h"
 #include "electronic_throttle.h"
 #include "malfunction_central.h"
-#include "check_engine_light.h"
 #include "dfco.h"
 #include "exhaust_cutout.h"
 #include "tinymt32.h" // basic 'random' for the P&B automatic cut duration
@@ -164,21 +163,9 @@ void EngineStateMachine::onSlowCallback() {
 
 	// Overlay: Limp Mode — explicit latched protective state.
 	//
-	// This used to be derived from ANY LimpManager fuel/spark cut, which incorrectly
-	// flagged limp for the normal rev limit, boost cut, launch cut, etc. Limp mode is now
-	// a dedicated latch (m_limpModeLatched) raised only via reportLimpCondition(). Triggers:
-	//   - ETB jam (LimpManager::reportEtbJammed), and
-	//   - the CEL escalating to flashing (isCelBlinkingActive() -- Check Engine Triggering's
-	//     points-gated celBlinkPointsThreshold, see check_engine_light.cpp). Every check on that
-	//     module (TPS Circuit, TPS Intermittent, Misfire, and the battery/MAP/IAT/TPS voltage
-	//     checks) contributes a flat point toward the same total, so there is a single points
-	//     system rather than a separate DTC-severity threshold for Limp mode.
-	// The ordinary rev limit and other transient cuts intentionally do NOT enter limp mode.
-#ifdef MODULE_CHECK_ENGINE_LIGHT
-	if (isCelBlinkingActive()) {
-		reportLimpCondition();
-	}
-#endif // MODULE_CHECK_ENGINE_LIGHT
+	// Limp is a dedicated latch (m_limpModeLatched) raised only via reportLimpCondition(),
+	// currently by an ETB jam (LimpManager::reportEtbJammed). The ordinary rev limit and other
+	// transient cuts intentionally do NOT enter limp mode.
 
 	engineSmIsLimp = m_limpModeLatched;
 

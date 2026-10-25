@@ -333,14 +333,6 @@ Usages:
 
 
 
-  - name: check_engine_light_state
-    java: CheckEngineTriggering.java
-    folder: controllers/modules/check_engine_light
-    prepend: integration/rusefi_config_shared.txt
-    output_name: check_engine_light
-    engineModule: CheckEngineLight
-    conditional_compilation: "EFI_CHECK_ENGINE_TRIGGERING"
-
   - name: live_data_rotational_idle
     constexpr: "static_cast<live_data_rotational_idle_s&>(engine->rotationalIdleController)"
     java: RotationalIdle.java

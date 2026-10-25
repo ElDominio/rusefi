@@ -74,10 +74,4 @@ private:
 	int m_pulsesRemaining = 0;
 	bool m_wasBenchActive = false;
 	bool m_ignitionOn = false;
-
-	// Check Engine Triggering escalation (see isCelBlinkingActive()): a plain flash pattern that
-	// takes priority over the digit-blink-out state machine above while active.
-	bool m_wasCelBlinking = false;
-	bool m_celBlinkOn = false;
-	Timer m_celBlinkTimer;
 };

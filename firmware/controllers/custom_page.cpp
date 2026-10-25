@@ -137,22 +137,6 @@ void customPageSetDefaults() {
 	d.popsAndBangsCutDurationMs = 100;
 
 
-	// Check Engine Triggering — all checks disabled by default; each check is worth 1 point.
-	d.tpsCircuitCelEnable = false;
-	d.tpsIntermittentCelEnable = false;
-	d.oilPressureLowCelEnable = false;
-	d.cltHighCelEnable = false;
-	d.afrCelEnable = false;
-	d.voltageCelEnable = false;
-	d.celPointsThreshold = 1;       // one tripped, enabled check raises the DTC, CEL solid
-	d.celBlinkPointsThreshold = 2;  // two simultaneously tripped checks escalate to a flashing CEL
-	d.celDebounceTimeSec = 5.0f;    // every check's condition must hold for 5s before tripping/clearing
-	d.tpsIntermittentFlipCount = 3; // 3+ ok/fault flips within celDebounceTimeSec trips Intermittent
-
-	// Malfunction Indicator KOEO bulb check — enabled by default (matches the classic OBD-II
-	// bulb-check convention MILController assumes unconditionally), independent of Check Engine
-	// Triggering above. Users can opt out via TS.
-	d.celOnKoeo = true;
 
 	// Injector Small Pulse % Correction Curve — evenly-spaced bins 0..2 ms, all corrections zero.
 	// User fills in vendor data (e.g. Injector Dynamics NFC) before enabling Curve (%) mode.
