@@ -3,10 +3,7 @@
 # Target ECU board design
 BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 
-#we are low on flash
-DDEFS += -DEFI_LOGIC_ANALYZER=FALSE
-DDEFS += -DEFI_HPFP=FALSE
-DDEFS += -DEFI_EMBED_INI_MSD=FALSE
+#we are low on flash (HPFP/INI/logic analyzer are disabled in the F4 policy block below)
 MODULE_DTC_MANAGER = no
 
 # Add them all together
