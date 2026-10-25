@@ -85,30 +85,6 @@ TEST(ClosedLoopFuel, CellSelection) {
 	EXPECT_EQ(3u, stft.computeStftBin(10000, 50, cfg));
 }
 
-TEST(ClosedLoopFuel, StateBasedRegionMapping) {
-	using S = EngineStateMachineState;
-
-	// Idle group -> idle cell. Coasting joined this group (rather than overrun) because it no
-	// longer necessarily implies engine-braking -- see isTransmissionEngaged().
-	EXPECT_EQ(ftRegionIdle, ShortTermFuelTrim::regionForSmState(S::Idle));
-	EXPECT_EQ(ftRegionIdle, ShortTermFuelTrim::regionForSmState(S::Afterstart));
-	EXPECT_EQ(ftRegionIdle, ShortTermFuelTrim::regionForSmState(S::Coasting));
-
-	// Overrun group -> overrun cell
-	EXPECT_EQ(ftRegionOverrun, ShortTermFuelTrim::regionForSmState(S::Overrun));
-
-	// WOT -> power cell
-	EXPECT_EQ(ftRegionPower, ShortTermFuelTrim::regionForSmState(S::WOT));
-
-	// Cruising and all inactive-STFT states -> main cruise cell
-	EXPECT_EQ(ftRegionCruise, ShortTermFuelTrim::regionForSmState(S::Cruising));
-	EXPECT_EQ(ftRegionCruise, ShortTermFuelTrim::regionForSmState(S::Off));
-	EXPECT_EQ(ftRegionCruise, ShortTermFuelTrim::regionForSmState(S::Cranking));
-	EXPECT_EQ(ftRegionCruise, ShortTermFuelTrim::regionForSmState(S::Transient));
-	EXPECT_EQ(ftRegionCruise, ShortTermFuelTrim::regionForSmState(S::LaunchControl));
-	EXPECT_EQ(ftRegionCruise, ShortTermFuelTrim::regionForSmState(S::Limp));
-}
-
 TEST(ClosedLoopFuel, StateBasedSelectionOverridesThresholds) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 

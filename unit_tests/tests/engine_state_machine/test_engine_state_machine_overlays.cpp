@@ -37,10 +37,20 @@ static constexpr float TEST_RUNNING_RPM  = 800.0f;
 	return getSm().getCurrentState();
 }
 
-
+// ---- Disabled by default ----
 
 // AlphaX operating-mode overlays (Limp, Eco, Ghost Cam, Sport Mode, Pops & Bangs,
 // torque-reduction/traction) layered on the upstream Engine State Machine core.
+
+// ---- Helper: put the engine into a stable running state ----
+[[maybe_unused]] static void enterRunning(float rpmVal = 2000.0f, float tpsVal = 50.0f) {
+	engine->rpmCalculator.setRpmValue(rpmVal);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, tpsVal);
+	engine->periodicSlowCallback();
+}
+
+// ---- Flat-shift torque reduction ----
+
 
 TEST(EngineStateMachine, tractionControlSetsTorqueReduction) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
@@ -94,7 +104,53 @@ TEST(EngineStateMachine, torqueReductionClearsWhenTractionInactive) {
 	EXPECT_FALSE(getSm().engineSmIsTorqueReduction);
 }
 
-// ---- Launch Control overlay ----
+// ---- Clutch-based shift detection ----
+
+[[maybe_unused]] static void setupShiftDetectionConfig() {
+	setupSmConfig();
+	// Both directions mapped to Clutch Down switch, RPM Rate accumulator mode
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
+	setupAccumulatorConfig();
+}
+
+// Run N callbacks at constant RPM/TPS. With constant RPM the accumulator stays at 0
+// (rate=0 → dead-band decay from 0). Used by single-direction tests where no
+// accumulator build-up is required before pressing the clutch.
+[[maybe_unused]] static void seedHistory(int callbacks = 10, float rpm = 2000.0f, float tps = 50.0f) {
+	engine->rpmCalculator.setRpmValue(rpm);
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, tps);
+	for (int i = 0; i < callbacks; i++) {
+		engine->periodicSlowCallback();
+		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	}
+}
+
+// Run N callbacks with linearly ramping RPM. Used to pre-build the shift-direction accumulator
+// before pressing the clutch. Rising RPM → positive accumulator (upshift); falling → negative.
+[[maybe_unused]] static void seedRampedRpm(float startRpm, float rpmPerCallback, int callbacks, float tps) {
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, tps);
+	for (int i = 0; i < callbacks; i++) {
+		engine->rpmCalculator.setRpmValue(startRpm + rpmPerCallback * i);
+		engine->periodicSlowCallback();
+		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	}
+}
+
+
+// ---- RPM Rate accumulator shift detection ----
+
+[[maybe_unused]] static void setupRpmRateModeConfig() {
+	setupSmConfig();
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
+	setupAccumulatorConfig(); // sets rate thresholds and accumulator params
+}
+
+// Rising RPM builds a positive accumulator → upshift confirmed.
+// 2000 RPM/s at 500 RPM/s threshold → 4× → 4 %/callback → 80 % after 20 callbacks (threshold 40 %).
 
 TEST(EngineStateMachine, ecoEngageSuppressesFalseAcceleratingDuringSettleHoldoff) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
@@ -144,10 +200,6 @@ TEST(EngineStateMachine, ecoEngageSuppressesFalseAcceleratingDuringSettleHoldoff
 	EXPECT_EQ(EngineStateMachineState::Accelerating, sm.getCurrentState());
 	EXPECT_FALSE(sm.engineSmIsEcoMode);
 }
-
-// A disengage caused by a genuine, already-detected Accelerating/Decelerating must NOT arm the
-// settle holdoff -- that's real driver input, not eco noise, and suppressing further detection
-// would blind the state machine to the driver's continued acceleration.
 
 TEST(EngineStateMachine, genuineAccelerationDropsEcoWithoutArmingHoldoff) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
@@ -212,6 +264,54 @@ TEST(EngineStateMachine, genuineAccelerationDropsEcoWithoutArmingHoldoff) {
 // The pedal leaving rest (falling edge) is the moment the drivetrain is still locked, which is
 // when the window must open. This is the edge that was previously missed entirely.
 
+[[maybe_unused]] static void setupSecondSwitchUpPrimaryConfig() {
+	setupSmConfig();
+	engineConfiguration->smUpshiftClutchSwitch   = sm_clutch_switch_e::ClutchUp;
+	engineConfiguration->smDownshiftClutchSwitch = sm_clutch_switch_e::None;
+	engineConfiguration->smShiftDetectionMode    = sm_shift_detection_mode_e::RpmRate;
+	setupAccumulatorConfig();
+}
+
+// With a Clutch-Down switch also wired, its falling edge (release starting) should close the
+// window earlier than waiting for Clutch-Up to fully return to rest.
+
+// ---- VSS Rate mode: minimum-speed gate (smShiftMinVss) ----
+
+[[maybe_unused]] static void setupVssRateModeConfig() {
+	setupSmConfig();
+	engineConfiguration->smUpshiftClutchSwitch    = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smDownshiftClutchSwitch  = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smShiftDetectionMode     = sm_shift_detection_mode_e::VssRate;
+	engineConfiguration->smAccelRateThreshold     = 5;  // km/h per second
+	engineConfiguration->smDecelRateThreshold     = 5;
+	engineConfiguration->smAccumulatorGain              = 20.0f;
+	engineConfiguration->smAccumulatorDecayRate         = 10.0f;
+	engineConfiguration->smAccumulatorUpshiftThreshold  = 40;
+	engineConfiguration->smAccumulatorDownshiftThreshold = 40;
+}
+
+// Seed the history buffer with linearly ramping VSS, mirroring seedRampedRpm.
+[[maybe_unused]] static void seedRampedVss(float startVss, float vssPerCallback, int callbacks, float tps) {
+	Sensor::setMockValue(SensorType::DriverThrottleIntent, tps);
+	for (int i = 0; i < callbacks; i++) {
+		Sensor::setMockValue(SensorType::VehicleSpeed, startVss + vssPerCallback * i);
+		engine->periodicSlowCallback();
+		advanceTimeUs(SLOW_CALLBACK_PERIOD_MS * 1000);
+	}
+}
+
+// Below smShiftMinVss the accumulator decays instead of accumulating, so the confirmation
+// threshold is never reached even when the VSS rate would otherwise qualify.
+
+// ---- smRelatchOnClutchDown: a fresh Clutch-Down press refreshes an active latch ----
+
+[[maybe_unused]] static void setupRelatchConfig() {
+	setupClutchUpOnlyConfig();
+	engineConfiguration->smSecondClutchSwitchAvailable = true;
+	engineConfiguration->smShiftLatchTimeMs = 100;
+}
+
+
 TEST(EngineStateMachine, shiftingBlocksOverrunFuelCut) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupShiftDetectionConfig(); // up & down both ClutchDown, RPM accumulator
@@ -239,6 +339,15 @@ TEST(EngineStateMachine, shiftingBlocksOverrunFuelCut) {
 		<< "overrun fuel cut must be blocked while a shift is in progress";
 }
 
+// ---- Limp Mode overlay ----
+
+// Sync LimpManager transient state by running its fast-callback logic.
+[[maybe_unused]] static void updateLimpManager() {
+	getLimpManager()->updateState(engine->rpmCalculator.getCachedRpm(), getTimeNowNt());
+}
+
+// Limp mode is a dedicated latch (reportLimpCondition), NOT derived from generic cuts.
+
 TEST(EngineStateMachine, limpLatchOverlay) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
@@ -260,8 +369,6 @@ TEST(EngineStateMachine, limpLatchOverlay) {
 	EXPECT_TRUE(sm.engineSmIsLimp);
 }
 
-// A normal fuel/ignition cut (e.g. the rev limit or a Lua cut) must NOT enter limp mode.
-
 TEST(EngineStateMachine, ordinaryCutDoesNotEnterLimp) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSmConfig();
@@ -275,8 +382,6 @@ TEST(EngineStateMachine, ordinaryCutDoesNotEnterLimp) {
 	auto& sm = getSm();
 	EXPECT_FALSE(sm.engineSmIsLimp);
 }
-
-// An ETB jam latches limp mode through the state machine when the SM is enabled.
 
 TEST(EngineStateMachine, etbJamLatchesLimp) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
@@ -303,8 +408,6 @@ TEST(EngineStateMachine, limpPriorityOverUpshifting) {
 	// Limp (12) must beat Upshifting (10) in the display integer
 	EXPECT_EQ(static_cast<uint8_t>(EngineStateMachineState::Limp), getSm().engineSmCurrentState);
 }
-
-// ---- Sport Mode ----
 
 TEST(EngineStateMachine, sportModeOffByDefault) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
@@ -380,5 +483,3 @@ TEST(EngineStateMachine, ghostCamActivatesViaSportMode) {
 	engine->periodicSlowCallback();
 	EXPECT_TRUE(getSm().engineSmIsGhostCam);
 }
-
-// ---- Temperature overlay ----

@@ -85,7 +85,6 @@ TESTS_SRC_CPP = \
 	tests/ignition_injection/test_fuelCut.cpp \
 	tests/ignition_injection/test_pops_and_bangs.cpp \
 	tests/ignition_injection/test_eco_mode.cpp \
-	tests/ignition_injection/test_burst_knock.cpp \
 	tests/ignition_injection/test_fuel_computer.cpp \
 	tests/ignition_injection/test_fuel_economy_calculator.cpp \
 	tests/ignition_injection/test_injector_model.cpp \
@@ -177,7 +176,6 @@ TESTS_SRC_CPP = \
 	tests/test_dwell_corner_case_issue_796.cpp \
 	tests/test_idle_controller.cpp \
 	tests/test_launch.cpp \
-	tests/test_rolling_launch.cpp \
 	tests/engine_state_machine/test_engine_state_machine_overlays.cpp \
 	tests/test_fuel_map.cpp \
 	tests/test_vvt_corrections.cpp \

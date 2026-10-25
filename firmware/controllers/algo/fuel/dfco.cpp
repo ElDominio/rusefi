@@ -101,7 +101,8 @@ void DfcoController::update() {
 	auto& sm = engine->module<EngineStateMachine>().unmock();
 	bool newState = getState(sm);
 	// Shift assistance needs fuel. A suppressed cut also restarts the entry delay.
-	if (sm.isEnabled() && (sm.engineSmIsUpshifting || sm.engineSmIsDownshifting)) {
+	// AlphaX: Pops & Bangs also needs the rich unburnt mixture, so it inhibits the cut too.
+	if ((sm.isEnabled() && (sm.engineSmIsUpshifting || sm.engineSmIsDownshifting)) || sm.engineSmIsPopsAndBangs) {
 		newState = false;
 	}
 
@@ -114,6 +115,8 @@ void DfcoController::update() {
 	}
 
 	m_isDfco = newState;
+	// AlphaX live data (dfco_state.txt)
+	dfcoCutActive = cutFuel();
 }
 
 bool DfcoController::cutFuel() const {

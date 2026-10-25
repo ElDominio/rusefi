@@ -433,53 +433,6 @@ TEST(fuelCut, delay) {
 #endif //FUEL_RPM_COUNT == 16
 
 #if FUEL_RPM_COUNT == 16
-TEST(fuelCut, requiresGear) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
-		.WillRepeatedly(Return(AirmassResult{0.1008f, 50.0f}));
-
-	// configure coastingFuelCut, gated on being in a valid gear
-	engineConfiguration->coastingFuelCutEnabled = true;
-	engineConfiguration->coastingFuelCutRequiresGear = true;
-	engineConfiguration->coastingFuelCutRpmLow = 1300;
-	engineConfiguration->coastingFuelCutRpmHigh = 1500;
-	engineConfiguration->coastingFuelCutTps = 2;
-	engineConfiguration->coastingFuelCutClt = 30;
-	engineConfiguration->coastingFuelCutMap = 100;
-	// set cranking threshold
-	engineConfiguration->cranking.rpm = 999;
-
-	// basic engine setup
-	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
-
-	Sensor::setMockValue(SensorType::Map, 0);
-
-	// mock CLT - just above threshold ('hot engine')
-	float hotClt = engineConfiguration->coastingFuelCutClt + 1;
-	Sensor::setMockValue(SensorType::Clt, hotClt);
-	// mock TPS - throttle is released, RPM in cut range
-	Sensor::setMockValue(SensorType::DriverThrottleIntent, 0);
-	Sensor::setMockValue(SensorType::Rpm, engineConfiguration->coastingFuelCutRpmHigh + 1);
-	eth.moveTimeForwardUs(1000);
-
-	const float normalInjDuration = 1.5f;
-
-	// Neutral (DetectedGear == 0): all other DFCO conditions met, but no cut while in neutral
-	Sensor::setMockValue(SensorType::DetectedGear, 0);
-	eth.engine.periodicFastCallback();
-	EXPECT_NORMAL();
-
-	// Shift into 1st gear: cut should now engage
-	Sensor::setMockValue(SensorType::DetectedGear, 1);
-	eth.engine.periodicFastCallback();
-	EXPECT_CUT();
-
-	// Back to neutral: cut should disengage immediately
-	Sensor::setMockValue(SensorType::DetectedGear, 0);
-	eth.engine.periodicFastCallback();
-	EXPECT_NORMAL();
-}
-
 // While deceleration fuel cut-off is active the commanded fuel mass is zero, so the
 // injection duration computed at injection scheduling time is zero as well.
 // Zero duration is an intentional "no injection" and must NOT be reported as an

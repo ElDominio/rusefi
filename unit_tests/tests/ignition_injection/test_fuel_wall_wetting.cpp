@@ -31,7 +31,7 @@ TEST(fuel, wallWettingTelemetryMass) {
 	EXPECT_CALL(wallController, getEnable()).WillRepeatedly(Return(true));
 	EXPECT_CALL(wallController, getAlpha()).WillRepeatedly(Return(0.5f));
 	EXPECT_CALL(wallController, getBeta()).WillRepeatedly(Return(0.25f));
-	engine->engineModules.get<WallFuelController>().set(&wallController);
+	engine->module<WallFuelController>().set(&wallController);
 
 	auto& wall = engine->injectionEvents.elements[0].getWallFuel();
 	EXPECT_NEAR(0.016f, wall.adjust(0.012f), 1e-7f);

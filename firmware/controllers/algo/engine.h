@@ -48,6 +48,8 @@
 #include "cdv_controller.h"
 #include "launch_power_ramp.h"
 #include "oil_life_monitor.h"
+// AlphaX TS page 6 (getCustomPage()); many AlphaX consumers rely on it via pch
+#include "custom_page.h"
 #include "check_engine_light.h"
 #include "ac_control.h"
 #include "type_list.h"
