@@ -70,6 +70,6 @@ public enum AlphaxUpstreamSyncMigrator implements TuneMigrator {
         }
         final EnumIniField.EnumKeyValueMap pins = ((EnumIniField) newPin.get()).getEnums();
         // Index 0 of every pin enum is the "unassigned" entry.
-        context.addMigration(OSS_PIN, newPinValue.cloneWithValue(pins.get(0)));
+        context.addMigration(OSS_PIN, newPinValue.cloneWithValue(quote(pins.get(0))));
     }
 }

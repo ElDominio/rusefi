@@ -55,6 +55,11 @@ DOCS_ENUMS_INPUTS = \
   $(PROJECT_DIR)/controllers/modules/burst_knock/burst_knock_state.txt \
   $(PROJECT_DIR)/controllers/modules/engine_state_machine/engine_state_machine_state.txt \
   $(PROJECT_DIR)/controllers/modules/wot_enrichment/wot_enrichment_state.txt \
+  $(PROJECT_DIR)/controllers/actuators/downshift_blipper_state.txt \
+  $(PROJECT_DIR)/controllers/actuators/upshift_rpm_hold_state.txt \
+  $(PROJECT_DIR)/controllers/algo/fuel/dfco_state.txt \
+  $(PROJECT_DIR)/controllers/modules/cdv_controller/cdv_controller_state.txt \
+  $(PROJECT_DIR)/controllers/modules/launch_power_ramp/launch_power_ramp_state.txt \
   $(PROJECT_DIR)/integration/rusefi_config_trigger.txt \
   $(PROJECT_DIR)/integration/ts_protocol.txt \
   $(PROJECT_DIR)/integration/LiveData.yaml \

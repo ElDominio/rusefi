@@ -7387,3 +7387,58 @@ Decisions:
 
 Validation: `py_compile` passes; GUI constructs and scans 20 boards with the new button enabled. A
 full multi-board batch build was not run.
+
+## 2026-10-25 - alphax-master-sync: selective master sync (8b55109fe5..07a13f80ef)
+
+- New branch `alphax-master-sync` from `alphax-alpha` (1110011c6d). Cherry-picked (`-x`) master
+  commits after the 10-13 sync point in master order; no `git merge master`. 322 of 323 selected
+  picks plus fix-up commits. Skipped: GHA/date/dependabot/auto-generated commits, CI-only and
+  usbipd commits, uaefi `meta-info` env tweaks.
+- Upstream (rusefillc) has started porting AlphaX features itself (`only:norman` commits). Where
+  both sides implement the same feature the same way, upstream's copy is adopted and the AlphaX
+  copy (page-6 fields, defaults, INI dialogs, LiveData entries, `EFI_*` flags) is deleted.
+
+| Feature | Resolution |
+|------|--------|
+| Engine State Machine | Upstream core in `modules/engine_state_machine`; AlphaX Limp/Eco/Ghost Cam/Sport Mode/Sport Pedal/Quick Warmup/P&B overlays 3-way merged into that file (user choice: patch into upstream ESM). Limp=12, Eco=13 use upstream's reserved slots. Overlay tests in `test_engine_state_machine_overlays.cpp` |
+| BurstKnock, WOT Enrichment, Rolling Launch, VVT Advanced, state-aware DFCO, dual/PWM fuel pump, fan A/C mode, TPS smoothing, BENCH_SPEEDO_TEST | Upstream version; AlphaX copy removed |
+| Output Shaft Speed | Upstream OSS sensor + slip detection (user choice); AlphaX Wheel Speed Sensors keep Front/Rear axle, slip ratio and Main Speed Sensor selector; `ossMode` removed |
+| Check Engine Triggering | Replaced by upstream malfunction_central/indicator rework (user choice). Limp now latches only on ETB jam |
+| Idle clutch (#10415) | Combined (user choice): upstream always-on clutch-down bypass + AlphaX opt-in neutral latch + Ghost Cam coasting bypass |
+| DFCO | Upstream controller; AlphaX `dfco_state` live data and Pops & Bangs fuel-cut inhibit kept |
+| STM32H7 port | Removal taken (user choice); no enabled AlphaX board is H7 |
+| Traction spark skip | Stays a 0..1 ratio (AlphaX TractionController divides at source); upstream's /100 in launch_control.cpp reverted, its tests adapted |
+| INI blend labels | AlphaX lacks upstream's `ignLoadSrc`/`veLoadSrc`/`afrLoadSrc` PcVariables (da515397df, lost in an earlier merge); new blend dialogs mapped to `ignAxisLabels`/`veAxisLabels`/`targetAfrAxisLabels` |
+| Installer banner (e7dabfc540) | Kept removed (c60baca271) |
+
+- Removed flags: `EFI_ENGINE_STATE_MACHINE`, `EFI_ROLLING_LAUNCH`, `EFI_BURST_KNOCK`,
+  `EFI_WOT_ENRICHMENT`, `EFI_AC_PRESSURE_FAN`, `EFI_ADVANCED_FUEL_PUMP`, `EFI_VVT_ADVANCED_MODE`,
+  `EFI_CHECK_ENGINE_TRIGGERING`.
+- `FLASH_DATA_VERSION` 261025: page 6 and main config layout changed. Same-name settings moved
+  from page 6 to main config restore through `DefaultTuneMigrator`; new `AlphaxUpstreamSyncMigrator`
+  handles `secondaryFp*Load` (kPa -> load units) and `ossMode` (non-pin mode -> unassigned pin);
+  "pct" added as a "%" synonym (`fuelPumpBaseDutyTable`).
+- Deferred: `b12560a25b` (I2c legacy #10461) needs the pre-10-13 I2C stack (core driver move,
+  PCA9685, ADS7128, LUA_I2C_DAC, ~23 commits) that the 10-13 sync excluded.
+
+Pitfalls hit (also in CLAUDE.md):
+- `git add -u` during cherry-pick conflict resolution records the *checked-out* submodule commit;
+  it silently reverted master's `luaaa` bump and broke the Lua setup allocation-retry tests.
+- A line-union conflict resolver must not de-duplicate `}` or blank lines (dropped a brace in
+  `validateConfig`).
+- Upstream feature ports at the same paths merge *both* copies without conflicts (duplicate
+  `tests.mk`/`modules.mk`/`LiveData.yaml` entries, double WOT AFR adder); config generation,
+  compile and link errors flag most, but double-applied logic does not.
+
+Validation:
+- Unit tests (GCC, `./test.sh`): 2061/2061 pass. Clang not run on this machine.
+- Firmware builds OK: alphax-s197-v2, alphax-s550, paralela F407/F427, alphax-2chan, alphax-4chan
+  (F4, F7), alphax-4K-GDI, alphax-8chan_f7, alphax-gold, alphax-silver, hellen121nissan,
+  hellen121vag, hellen154hyundai (F4, F7), hellen-gm-e67, hellen-honda-k, protorico-econoline,
+  protorico-grummann, test-build-guards.
+- Java: `./gradlew build -x javadoc` (headless) - fixed `DocsEnumsInputsTest` (5 AlphaX LiveData
+  inputs missing from `docs_enums.mk`), `BlendAxisLabelsTest` (restored upstream `ignLoadSrc` /
+  `ignBlendLoadLabels` for the ignition blend axes), `DefaultTuneMigratorTest` (expected log back
+  to upstream's now that `enableFanXWithAc` became `fanXAcMode`); `:config_definition:test` and
+  `:ui:test` pass, including `AlphaxUpstreamSyncMigratorTest` (3 tests).
+- Not run on hardware; tune migration not tried against a real AlphaX .msq.

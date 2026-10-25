@@ -477,7 +477,7 @@ void EngineStateMachine::updateOverlayBlend(float& blend, bool active, efitimems
 }
 
 void EngineStateMachine::updateSportPedal() {
-#if EFI_SPORT_PEDAL
+#if EFI_SPORT_PEDAL && EFI_ELECTRONIC_THROTTLE_BODY
 	engineSmIsSportPedal = isSportPedalActive();
 #else
 	engineSmIsSportPedal = false;
