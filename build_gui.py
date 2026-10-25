@@ -169,10 +169,12 @@ class App(tk.Tk):
         if is_valid:
             self.repo_status_lbl.configure(text="Valid rusEFI Repository", foreground=SUCCESS)
             self.build_btn.configure(state=tk.NORMAL)
+            self.build_all_btn.configure(state=tk.NORMAL)
             self.board_combo.configure(state="normal" if not self.use_custom_board.get() else "disabled")
         else:
             self.repo_status_lbl.configure(text="Invalid Repository (Select root containing 'firmware/')", foreground=ERROR)
             self.build_btn.configure(state=tk.DISABLED)
+            self.build_all_btn.configure(state=tk.DISABLED)
             self.board_combo.configure(state="disabled")
 
     def browse_repo(self):
@@ -422,7 +424,10 @@ class App(tk.Tk):
         
         self.build_btn = ttk.Button(btn_frame, text="Compile Board & Build Console (.zip)", style="Accent.TButton", command=self.start_build)
         self.build_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
+
+        self.build_all_btn = ttk.Button(btn_frame, text="Build All Boards", command=lambda: self.start_build(all_boards=True))
+        self.build_all_btn.pack(side=tk.LEFT, padx=(0, 10))
+
         self.cancel_btn = ttk.Button(btn_frame, text="Cancel Build", state=tk.DISABLED, command=self.cancel_build)
         self.cancel_btn.pack(side=tk.LEFT)
         
@@ -631,8 +636,20 @@ class App(tk.Tk):
     def _append_log_main(self, text, tag):
         self.log_text.insert(tk.END, text, tag)
         self.log_text.see(tk.END)
+
+    def clear_log(self):
+        if threading.current_thread() is threading.main_thread():
+            self.log_text.delete("1.0", tk.END)
+        else:
+            self.queue.put(lambda: self.log_text.delete("1.0", tk.END))
+
+    def set_status(self, text):
+        if threading.current_thread() is threading.main_thread():
+            self.status_var.set(text)
+        else:
+            self.queue.put(lambda: self.status_var.set(text))
         
-    def start_build(self):
+    def start_build(self, all_boards=False):
         # Validation checks
         repo = self.workspace_root.get().strip()
         if not repo or not os.path.exists(os.path.join(repo, "firmware", "bin", "compile.sh")):
@@ -655,7 +672,29 @@ class App(tk.Tk):
         short_name = ""
         display_name = ""
 
-        if self.use_custom_board.get():
+        if all_boards:
+            if not self.boards_list:
+                messagebox.showerror("Error", "No boards were found in the repository.")
+                return
+            if not messagebox.askyesno(
+                "Build All Boards",
+                f"Build all {len(self.boards_list)} scanned board configurations?\n\n"
+                "Failed boards are skipped and listed in a summary at the end. "
+                "The log is cleared for each board; error summaries are collected in:\n"
+                f"{ERROR_LOG_FILE}"
+            ):
+                return
+            targets = [{
+                "display_name": b["display_name"],
+                "meta_info": b["full_path"],
+                "board_dir": os.path.join(self.boards_dir, b["board_dir"]),
+                "short_name": b["short_board_name"],
+            } for b in self.boards_list]
+            try:
+                open(ERROR_LOG_FILE, "w").close()
+            except Exception:
+                pass
+        elif self.use_custom_board.get():
             custom_dir = self.custom_board_dir.get().strip()
             if not custom_dir or not os.path.exists(custom_dir):
                 messagebox.showerror("Error", "Please select a valid custom board directory.")
@@ -695,17 +734,29 @@ class App(tk.Tk):
             short_name = self.selected_board["short_board_name"]
             display_name = self.selected_board["display_name"]
 
+        if not all_boards:
+            targets = [{
+                "display_name": display_name,
+                "meta_info": build_meta_info_path,
+                "board_dir": board_dir_path,
+                "short_name": short_name,
+            }]
+
         # Lock UI
         self.build_btn.configure(state=tk.DISABLED)
+        self.build_all_btn.configure(state=tk.DISABLED)
         self.cancel_btn.configure(state=tk.NORMAL)
         self.status_var.set("Building...")
         self.status_lbl.configure(foreground=ACCENT)
         self.stop_build_flag = False
-        
+
         self.log_text.delete("1.0", tk.END)
-        self.append_log(f"--- Starting Build for {display_name} ---\n", "info")
-        self.append_log(f"Meta-info file: {build_meta_info_path}\n", "info")
-        self.append_log(f"Short Board Name: {short_name}\n", "info")
+        if all_boards:
+            self.append_log(f"--- Starting Build for all {len(targets)} boards ---\n", "info")
+        else:
+            self.append_log(f"--- Starting Build for {display_name} ---\n", "info")
+            self.append_log(f"Meta-info file: {build_meta_info_path}\n", "info")
+            self.append_log(f"Short Board Name: {short_name}\n", "info")
         self.append_log(f"Branch: {self.current_branch or 'unknown'}\n", "info")
         self.append_log(f"Destination: {dest}\n\n", "info")
 
@@ -717,18 +768,22 @@ class App(tk.Tk):
         commit = self.current_commit
         self.build_thread = threading.Thread(
             target=self.build_worker,
-            args=(build_meta_info_path, board_dir_path, short_name, dest, clean_build, extract_zip, delete_zip, workspace_root, branch, commit)
+            args=(targets, dest, clean_build, extract_zip, delete_zip, workspace_root, branch, commit)
         )
         self.build_thread.start()
 
     def cancel_build(self):
+        # Set the flag even when no trackable process is running, so a multi-board
+        # build stops before starting the next step/board.
+        self.stop_build_flag = True
         if self.process:
-            self.stop_build_flag = True
             self.append_log("\n[INFO] Cancelling build, killing process...\n", "stderr")
             try:
                 self.process.terminate()
             except Exception:
                 pass
+        else:
+            self.append_log("\n[INFO] Cancel requested; stopping after the current step...\n", "stderr")
                 
     def run_logged_process(self, cmd, cwd, env, trackable=False):
         proc = subprocess.Popen(
@@ -755,21 +810,24 @@ class App(tk.Tk):
             self.process = None
         return proc.returncode, lines
 
-    def write_error_summary(self, lines, step_label):
+    def write_error_summary(self, lines, step_label, append=False):
         error_lines = [l for l in lines if ERROR_PATTERN.search(l)]
         if not error_lines:
             # No obvious error keyword matched; fall back to the tail of the output.
             error_lines = lines[-40:]
         summary = f"=== Build error summary ({step_label}) ===\n" + "".join(error_lines)
+        if append:
+            summary += "\n"
         try:
-            with open(ERROR_LOG_FILE, "w") as f:
+            with open(ERROR_LOG_FILE, "a" if append else "w") as f:
                 f.write(summary)
         except Exception:
             pass
         self.append_log(f"\n[ERROR SUMMARY] Filtered errors saved to: {ERROR_LOG_FILE}\n", "stderr")
         self.append_log(summary, "stderr")
 
-    def build_worker(self, meta_info_file, board_dir, short_name, dest, clean_build, extract_zip, delete_zip, workspace_root, branch, commit):
+    def build_worker(self, targets, dest, clean_build, extract_zip, delete_zip, workspace_root, branch, commit):
+        batch = len(targets) > 1
         try:
             # Set up environment variables, ensuring BUNDLE_SIMULATOR=false
             # to prevent trying to compile Windows simulator on Linux/macOS
@@ -795,6 +853,66 @@ class App(tk.Tk):
                 self.save_config()
             else:
                 self.append_log(f"[INFO] Commit unchanged ({commit or 'unknown'}); skipping config_definition.jar rebuild.\n", "info")
+
+            results = []
+            for index, target in enumerate(targets, 1):
+                if self.stop_build_flag:
+                    break
+                if batch:
+                    self.clear_log()
+                    self.append_log(f"=== [{index}/{len(targets)}] Building {target['display_name']} ===\n", "info")
+                    self.append_log(f"Meta-info file: {target['meta_info']}\n\n", "info")
+                    self.set_status(f"Building {index}/{len(targets)}: {target['display_name']}")
+                result = self.build_one_board(target["meta_info"], target["board_dir"], target["short_name"], dest,
+                                              clean_build, extract_zip, delete_zip, workspace_root, branch, batch)
+                results.append((target["display_name"], result))
+                if result == "cancelled":
+                    break
+
+            failed = [name for name, result in results if result == "failed"]
+            if batch:
+                self.report_batch_results(results, len(targets))
+
+            if self.stop_build_flag:
+                self.build_failed("Cancelled")
+            elif failed:
+                self.build_failed(f"Failed ({len(failed)}/{len(targets)})" if batch else "Failed")
+            else:
+                self.build_success()
+
+        except Exception as e:
+            self.append_log(f"\n[FATAL ERROR] An unexpected exception occurred: {str(e)}\n", "stderr")
+            self.write_error_summary([str(e)], "Unexpected exception", append=batch)
+            self.build_failed()
+        finally:
+            self.build_complete()
+
+    def report_batch_results(self, results, total):
+        ok = [name for name, result in results if result == "ok"]
+        failed = [name for name, result in results if result == "failed"]
+        skipped = total - len(results)
+        summary = f"\n=== Build All Boards summary: {len(ok)} succeeded, {len(failed)} failed"
+        if skipped or any(result == "cancelled" for _, result in results):
+            summary += f", cancelled with {skipped} not started"
+        summary += " ===\n"
+        self.append_log(summary, "info")
+        for name in ok:
+            self.append_log(f"  [OK]     {name}\n", "success")
+        for name in failed:
+            self.append_log(f"  [FAILED] {name}\n", "stderr")
+        if failed:
+            self.append_log(f"\nError summaries for failed boards: {ERROR_LOG_FILE}\n", "stderr")
+            try:
+                with open(ERROR_LOG_FILE, "a") as f:
+                    f.write(summary + "".join(f"  [FAILED] {name}\n" for name in failed))
+            except Exception:
+                pass
+
+    def build_one_board(self, meta_info_file, board_dir, short_name, dest, clean_build, extract_zip, delete_zip, workspace_root, branch, batch):
+        """Builds and packages a single board. Returns "ok", "failed" or "cancelled"."""
+        label = f"{short_name}: " if batch else ""
+        try:
+            build_env = {**os.environ, "BUNDLE_SIMULATOR": "false"}
 
             # Clean the deliver directory to prevent packing stale .srec files with different signature hashes
             deliver_dir = os.path.join(self.firmware_dir, "deliver")
@@ -839,9 +957,8 @@ class App(tk.Tk):
             sig_returncode, sig_lines = self.run_logged_process(sig_cmd, self.firmware_dir, build_env)
             if sig_returncode != 0:
                 self.append_log(f"\n[ERROR] Signature generation failed with code {sig_returncode}\n", "stderr")
-                self.write_error_summary(sig_lines, "Signature generation")
-                self.build_failed()
-                return
+                self.write_error_summary(sig_lines, f"{label}Signature generation", append=batch)
+                return "failed"
 
             # 1.5 Regenerate LiveData output-channel fragments. gen_config_board.sh inlines
             # console/binary/generated/live_data_fragments.ini into the board .ini but never
@@ -854,9 +971,8 @@ class App(tk.Tk):
             live_returncode, live_lines = self.run_logged_process(live_cmd, self.firmware_dir, build_env)
             if live_returncode != 0:
                 self.append_log(f"\n[ERROR] LiveData generation failed with code {live_returncode}\n", "stderr")
-                self.write_error_summary(live_lines, "LiveData generation")
-                self.build_failed()
-                return
+                self.write_error_summary(live_lines, f"{label}LiveData generation", append=batch)
+                return "failed"
 
             # 2. Generate configuration headers
             self.append_log("\n[STEP 2/3] Generating board config headers...\n", "info")
@@ -866,9 +982,8 @@ class App(tk.Tk):
             gen_returncode, gen_lines = self.run_logged_process(gen_cmd, self.firmware_dir, build_env)
             if gen_returncode != 0:
                 self.append_log(f"\n[ERROR] Config generation failed with code {gen_returncode}\n", "stderr")
-                self.write_error_summary(gen_lines, "Config generation")
-                self.build_failed()
-                return
+                self.write_error_summary(gen_lines, f"{label}Config generation", append=batch)
+                return "failed"
 
             # 2.5 Clean build folder if requested
             if clean_build:
@@ -880,12 +995,15 @@ class App(tk.Tk):
 
                 if self.stop_build_flag:
                     self.append_log("\n[INFO] Build cancelled by user.\n", "stderr")
-                    self.build_failed("Cancelled")
-                    return
+                    return "cancelled"
 
                 if clean_code != 0:
                     self.append_log(f"\n[WARNING] Make clean failed with code {clean_code}. Proceeding with build anyway...\n", "stderr")
-                    self.write_error_summary(clean_lines, "make clean")
+                    self.write_error_summary(clean_lines, f"{label}make clean", append=batch)
+
+            if self.stop_build_flag:
+                self.append_log("\n[INFO] Build cancelled by user.\n", "stderr")
+                return "cancelled"
 
             # 3. Main bundle compilation
             self.append_log("\n[STEP 3/3] Compiling firmware & building console bundle...\n", "info")
@@ -898,14 +1016,12 @@ class App(tk.Tk):
 
             if self.stop_build_flag:
                 self.append_log("\n[INFO] Build cancelled by user.\n", "stderr")
-                self.build_failed("Cancelled")
-                return
+                return "cancelled"
 
             if ret_code != 0:
                 self.append_log(f"\n[ERROR] Build failed with exit code {ret_code}\n", "stderr")
-                self.write_error_summary(compile_lines, "Firmware compile")
-                self.build_failed()
-                return
+                self.write_error_summary(compile_lines, f"{label}Firmware compile", append=batch)
+                return "failed"
                 
             # 4. Copy results to destination
             self.append_log("\n--- Assembling Package Results ---\n", "info")
@@ -923,8 +1039,7 @@ class App(tk.Tk):
                     self.append_log(f"Found alternative zip: {zip_filename}\n", "info")
                 else:
                     self.append_log("[ERROR] No bundle zip file found in artifacts directory!\n", "stderr")
-                    self.build_failed()
-                    return
+                    return "failed"
             
             # Make sure destination folder exists
             os.makedirs(dest, exist_ok=True)
@@ -1034,14 +1149,12 @@ class App(tk.Tk):
                     self.append_log(f"[WARNING] Failed to create launcher scripts: {str(e)}\n", "stderr")
 
             self.append_log("\n[SUCCESS] Build and bundle packaging completed successfully!\n", "success")
-            self.build_success()
-            
+            return "ok"
+
         except Exception as e:
             self.append_log(f"\n[FATAL ERROR] An unexpected exception occurred: {str(e)}\n", "stderr")
-            self.write_error_summary([str(e)], "Unexpected exception")
-            self.build_failed()
-        finally:
-            self.build_complete()
+            self.write_error_summary([str(e)], f"{label}Unexpected exception", append=batch)
+            return "failed"
 
     def load_config(self):
         try:
@@ -1072,6 +1185,7 @@ class App(tk.Tk):
         self.status_var.set(status)
         self.status_lbl.configure(foreground=ERROR)
         self.build_btn.configure(state=tk.NORMAL)
+        self.build_all_btn.configure(state=tk.NORMAL)
         self.cancel_btn.configure(state=tk.DISABLED)
 
     def build_success(self):
@@ -1092,6 +1206,7 @@ class App(tk.Tk):
 
     def _build_complete_main(self):
         self.build_btn.configure(state=tk.NORMAL)
+        self.build_all_btn.configure(state=tk.NORMAL)
         self.cancel_btn.configure(state=tk.DISABLED)
 
 if __name__ == "__main__":

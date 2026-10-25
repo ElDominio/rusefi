@@ -7364,3 +7364,26 @@ A second, already-documented failure followed: stale `firmware/.dep` naming the 
 Validation: `gen_config_board.sh config/boards/hellen/alphax-silver alphax-silver` exits clean;
 `bin/compile.sh config/boards/hellen/alphax-silver/meta-info.env -j12` exits 0 with a fresh
 `build/rusefi.elf`/`.bin`/`.srec`. Did not rerun the full GUI bundle (`-b`) path.
+
+## 2026-10-25 - build_gui.py: "Build All Boards" button
+
+New button next to "Compile Board & Build Console (.zip)" builds every scanned standard board
+(`meta-info*.env` under `config/boards`, so `meta-info.disabled_env` boards are excluded) in sequence.
+
+Decisions:
+- `config_definition.jar` rebuild runs once per batch; all other steps (deliver clean, date stamp,
+  signature, LiveData, config gen, optional make clean, compile, packaging) still run per board,
+  unchanged from the single-board path.
+- A failing board does not stop the batch; a summary of OK/FAILED boards is printed at the end and
+  appended to `~/rusefi_build_gui_last_error.log`, which also collects each failed board's error summary
+  (truncated at batch start, appended per board).
+- The log widget is cleared at each board start to keep Tk responsive over long batches.
+- Cancel now sets the stop flag even when no trackable process is running; the batch stops before the
+  next board, and a board stops before its compile step.
+
+| File | Change |
+|------|--------|
+| `build_gui.py` | `build_worker` loops over targets; per-board body moved to `build_one_board()` (returns ok/failed/cancelled); `report_batch_results`, `clear_log`, `set_status` helpers; `write_error_summary(append=)`. |
+
+Validation: `py_compile` passes; GUI constructs and scans 20 boards with the new button enabled. A
+full multi-board batch build was not run.
