@@ -843,6 +843,21 @@ class App(tk.Tk):
                 self.build_failed()
                 return
 
+            # 1.5 Regenerate LiveData output-channel fragments. gen_config_board.sh inlines
+            # console/binary/generated/live_data_fragments.ini into the board .ini but never
+            # regenerates it, so fragments left over from another branch's build fail the INI
+            # reference validator with "Undefined data point [...]".
+            self.append_log("\n[STEP 1.5/3] Regenerating LiveData output channels...\n", "info")
+            live_cmd = ["bash", "gen_live_documentation.sh"]
+            self.append_log(f"Running: {' '.join(live_cmd)}\n", "info")
+
+            live_returncode, live_lines = self.run_logged_process(live_cmd, self.firmware_dir, build_env)
+            if live_returncode != 0:
+                self.append_log(f"\n[ERROR] LiveData generation failed with code {live_returncode}\n", "stderr")
+                self.write_error_summary(live_lines, "LiveData generation")
+                self.build_failed()
+                return
+
             # 2. Generate configuration headers
             self.append_log("\n[STEP 2/3] Generating board config headers...\n", "info")
             gen_cmd = ["bash", "gen_config_board.sh", rel_board_dir, short_name]
