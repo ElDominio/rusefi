@@ -184,7 +184,7 @@ namespace {
         engineConfiguration->acPressure.hwChannel = EFI_ADC_0;
         Sensor::setMockValue(SensorType::Rpm, 500);
         engine->engineState.lua.acRequestState = true;
-        auto& ac = engine->engineModules.get<AcController>();
+        auto& ac = engine->module<AcController>();
 
         updateAcPressure(100);
         ASSERT_TRUE(enginePins.acRelay.getLogicValue());
@@ -220,7 +220,7 @@ namespace {
 
         periodicSlowCallback();
 
-        EXPECT_TRUE(engine->engineModules.get<AcController>()->isAcEnabled());
+        EXPECT_TRUE(engine->module<AcController>()->isAcEnabled());
         EXPECT_TRUE(enginePins.acRelay.getLogicValue());
     }
 

@@ -162,7 +162,7 @@ using AlphaXModuleList = type_list<
     OilLifeMonitor,
 #endif // EFI_OIL_LIFE_MONITOR
 #if EFI_MISFIRE_DETECTION
-    MisfireController,
+    Mockable<MisfireController>,
 #endif // EFI_MISFIRE_DETECTION
     EngineModule // dummy placeholder so the previous entries can all have commas
 >;

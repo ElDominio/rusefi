@@ -56,7 +56,6 @@
 #include "wheel_slip_ratio_source.h"
 #include "rusefi_lua.h"
 #include "lua_heap.h"
-#include "buttonshift.h"
 #include "start_stop.h"
 #include "dynoview.h"
 #include "vr_pwm.h"

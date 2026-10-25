@@ -55,7 +55,8 @@ TEST(TractionSparkSkip, OnePercentHardCutSkipsAboutOnePercent) {
 	Sensor::setMockValue(SensorType::WheelSlipRatio, 5);
 	engine->rpmCalculator.setRpmValue(2000);
 	engine->periodicFastCallback();
-	ASSERT_FLOAT_EQ(1, engine->engineState.tractionControlSparkSkip);
+	// AlphaX TractionController publishes a 0..1 ratio (table percent / 100)
+	ASSERT_FLOAT_EQ(0.01f, engine->engineState.tractionControlSparkSkip);
 	EXPECT_FLOAT_EQ(0.01f, engine->hardSparkLimiter.getTargetSkipRatio());
 	int skipped = 0;
 	for (int i = 0; i < 100; i++) {
@@ -88,7 +89,7 @@ TEST(TractionSparkSkip, TenPercentHardCutUsesNormalizedRatio) {
 	Sensor::setMockValue(SensorType::WheelSlipRatio, 5);
 	engine->rpmCalculator.setRpmValue(2000);
 	engine->periodicFastCallback();
-	ASSERT_FLOAT_EQ(10, engine->engineState.tractionControlSparkSkip);
+	ASSERT_FLOAT_EQ(0.1f, engine->engineState.tractionControlSparkSkip);
 	EXPECT_FLOAT_EQ(0.1f, engine->hardSparkLimiter.getTargetSkipRatio());
 	EXPECT_FLOAT_EQ(0, engine->softSparkLimiter.getTargetSkipRatio());
 	int skipped = 0;
@@ -107,7 +108,7 @@ TEST(TractionSparkSkip, TenPercentSoftCutUsesNormalizedRatio) {
 	Sensor::setMockValue(SensorType::WheelSlipRatio, 5);
 	engine->rpmCalculator.setRpmValue(2000);
 	engine->periodicFastCallback();
-	ASSERT_FLOAT_EQ(10, engine->engineState.tractionControlSparkSkip);
+	ASSERT_FLOAT_EQ(0.1f, engine->engineState.tractionControlSparkSkip);
 	EXPECT_FLOAT_EQ(0.1f, engine->softSparkLimiter.getTargetSkipRatio());
 	EXPECT_FLOAT_EQ(0, engine->hardSparkLimiter.getTargetSkipRatio());
 	int skipped = 0;

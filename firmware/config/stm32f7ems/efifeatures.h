@@ -12,16 +12,8 @@
 
  #pragma once
 
-#ifndef EFI_ADVANCED_FUEL_PUMP
-#define EFI_ADVANCED_FUEL_PUMP TRUE
-#endif
-
 #ifndef EFI_VVT_COMPENSATION
 #define EFI_VVT_COMPENSATION TRUE
-#endif
-
-#ifndef EFI_VVT_ADVANCED_MODE
-#define EFI_VVT_ADVANCED_MODE TRUE
 #endif
 
 #ifndef EFI_EXHAUST_CUTOUT
@@ -34,10 +26,6 @@
 
 #ifndef EFI_UPSHIFT_RPM_HOLD
 #define EFI_UPSHIFT_RPM_HOLD TRUE
-#endif
-
-#ifndef EFI_ENGINE_STATE_MACHINE
-#define EFI_ENGINE_STATE_MACHINE TRUE
 #endif
 
 // Misfire Detection (Engine State Machine sub-feature, reads SM idle state)
@@ -53,15 +41,6 @@
 #define EFI_LAUNCH_POWER_RAMP TRUE
 #endif
 
-#ifndef EFI_ROLLING_LAUNCH
-#define EFI_ROLLING_LAUNCH TRUE
-#endif
-
-// Burst Knock (transient ignition timing pull on a TPS-rate stab)
-#ifndef EFI_BURST_KNOCK
-#define EFI_BURST_KNOCK TRUE
-#endif
-
 // Cranking No-Spark (external distributor/module fires spark during cranking, ECU takes over after)
 #ifndef EFI_CRANKING_NO_SPARK
 #define EFI_CRANKING_NO_SPARK TRUE
@@ -72,11 +51,6 @@
 #define EFI_EXTERNAL_CAN_ETB FALSE
 #endif
 
-// WOT Time Enrichment (richen target AFR after prolonged WOT; needs Engine State Machine at runtime)
-#ifndef EFI_WOT_ENRICHMENT
-#define EFI_WOT_ENRICHMENT TRUE
-#endif
-
 // Sport Pedal (ETB pedal-to-throttle ratio shaping; needs EFI_ELECTRONIC_THROTTLE_BODY)
 #ifndef EFI_SPORT_PEDAL
 #define EFI_SPORT_PEDAL TRUE
@@ -85,11 +59,6 @@
 // Weighted Engine Oil Life Monitor (temperature-weighted revolution counter, TS page 6 config)
 #ifndef EFI_OIL_LIFE_MONITOR
 #define EFI_OIL_LIFE_MONITOR TRUE
-#endif
-
-// Check Engine Triggering (TS-configurable threshold checks that light the MIL/CEL, TS page 6 config)
-#ifndef EFI_CHECK_ENGINE_TRIGGERING
-#define EFI_CHECK_ENGINE_TRIGGERING TRUE
 #endif
 
 // Ghost Cam Mode (idle lope via VVT overlap + AFR/ignition overrides; needs Engine State Machine)
@@ -105,11 +74,6 @@
 // Injector Small Pulse % Correction Curve (nonlinear flow correction via user-supplied PW vs % curve)
 #ifndef EFI_INJ_PERCENT_CURVE
 #define EFI_INJ_PERCENT_CURVE TRUE
-#endif
-
-// AC Pressure Fan Control (pressure-based fan on/off hysteresis when AC high-side pressure sensor is installed)
-#ifndef EFI_AC_PRESSURE_FAN
-#define EFI_AC_PRESSURE_FAN TRUE
 #endif
 
 

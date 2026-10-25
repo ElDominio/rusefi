@@ -568,16 +568,8 @@
 #define EFI_SENT_SUPPORT        FALSE
 #endif
 
-#ifndef EFI_ADVANCED_FUEL_PUMP
-#define EFI_ADVANCED_FUEL_PUMP FALSE
-#endif
-
 #ifndef EFI_VVT_COMPENSATION
 #define EFI_VVT_COMPENSATION FALSE
-#endif
-
-#ifndef EFI_VVT_ADVANCED_MODE
-#define EFI_VVT_ADVANCED_MODE FALSE
 #endif
 
 // AlphaX custom subsystems (config lives in TS page 5). Default FALSE on F4 (limited flash);
@@ -594,10 +586,6 @@
 #define EFI_UPSHIFT_RPM_HOLD FALSE
 #endif
 
-#ifndef EFI_ENGINE_STATE_MACHINE
-#define EFI_ENGINE_STATE_MACHINE FALSE
-#endif
-
 // Misfire Detection (Engine State Machine sub-feature, reads SM idle state)
 #ifndef EFI_MISFIRE_DETECTION
 #define EFI_MISFIRE_DETECTION FALSE
@@ -609,16 +597,6 @@
 
 #ifndef EFI_LAUNCH_POWER_RAMP
 #define EFI_LAUNCH_POWER_RAMP FALSE
-#endif
-
-// Rolling Launch Control (button-held captured-RPM hold to spool the turbo while moving)
-#ifndef EFI_ROLLING_LAUNCH
-#define EFI_ROLLING_LAUNCH FALSE
-#endif
-
-// Burst Knock (transient ignition timing pull on a TPS-rate stab)
-#ifndef EFI_BURST_KNOCK
-#define EFI_BURST_KNOCK FALSE
 #endif
 
 // Cranking No-Spark (external distributor/module fires spark during cranking, ECU takes over after)
@@ -637,11 +615,6 @@
 #define EFI_EXTERNAL_CAN_ETB FALSE
 #endif
 
-// WOT Time Enrichment (richen target AFR after prolonged WOT; needs Engine State Machine at runtime)
-#ifndef EFI_WOT_ENRICHMENT
-#define EFI_WOT_ENRICHMENT FALSE
-#endif
-
 // Sport Pedal (ETB pedal-to-throttle ratio shaping; needs EFI_ELECTRONIC_THROTTLE_BODY)
 #ifndef EFI_SPORT_PEDAL
 #define EFI_SPORT_PEDAL FALSE
@@ -651,11 +624,6 @@
 // needs EFI_MAIN_RELAY_CONTROL to hold power open long enough to flush its counter on ignition-off)
 #ifndef EFI_OIL_LIFE_MONITOR
 #define EFI_OIL_LIFE_MONITOR FALSE
-#endif
-
-// Check Engine Triggering (TS-configurable threshold checks that light the MIL/CEL, TS page 6 config)
-#ifndef EFI_CHECK_ENGINE_TRIGGERING
-#define EFI_CHECK_ENGINE_TRIGGERING FALSE
 #endif
 
 // Ghost Cam Mode (idle lope via VVT overlap + AFR/ignition overrides; needs Engine State Machine)
@@ -679,11 +647,6 @@
 // Injector Small Pulse % Correction Curve (nonlinear flow correction via user-supplied PW vs % curve)
 #ifndef EFI_INJ_PERCENT_CURVE
 #define EFI_INJ_PERCENT_CURVE FALSE
-#endif
-
-// AC Pressure Fan Control (pressure-based fan on/off hysteresis when AC high-side pressure sensor is installed)
-#ifndef EFI_AC_PRESSURE_FAN
-#define EFI_AC_PRESSURE_FAN FALSE
 #endif
 
 

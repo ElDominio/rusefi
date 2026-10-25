@@ -33,9 +33,7 @@ void EngineState::updateSparkSkip() {
 		// Pops & Bangs spark cut rides the hard limiter so consecutive sparks can be skipped,
 		// letting raw fuel accumulate in the exhaust before it is re-lit. 0 outside the window.
 		float popsAndBangsSparkSkip = 0.0f;
-#if EFI_ENGINE_STATE_MACHINE
 		popsAndBangsSparkSkip = engine->module<EngineStateMachine>().unmock().getPopsAndBangsSparkSkipRatio();
-#endif // EFI_ENGINE_STATE_MACHINE
 
 		engine->softSparkLimiter.updateTargetSkipRatio(luaSoftSparkSkip, tractionControlSparkSkip);
 		engine->hardSparkLimiter.updateTargetSkipRatio(

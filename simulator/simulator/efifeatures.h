@@ -145,10 +145,6 @@
 #define EFI_MAIN_RELAY_CONTROL FALSE
 #endif
 
-#ifndef EFI_ADVANCED_FUEL_PUMP
-#define EFI_ADVANCED_FUEL_PUMP TRUE
-#endif
-
 #define EFI_CAN_SUPPORT TRUE
 
 #ifndef EFI_UDS
@@ -219,30 +215,23 @@
 // AlphaX custom subsystems (config in TS page 5).
 #define EFI_DOWNSHIFT_BLIPPER TRUE
 #define EFI_UPSHIFT_RPM_HOLD TRUE
-#define EFI_ENGINE_STATE_MACHINE TRUE
 #define EFI_MISFIRE_DETECTION TRUE
 #define EFI_CLUTCH_DELAY_VALVE TRUE
 #define EFI_LAUNCH_POWER_RAMP TRUE
-#define EFI_ROLLING_LAUNCH TRUE
-#define EFI_BURST_KNOCK TRUE
-#define EFI_WOT_ENRICHMENT TRUE
 #define EFI_SPORT_PEDAL TRUE
 #define EFI_OFF_IDLE_RPM_ADDER TRUE
 #define EFI_LUA_LIMITER TRUE
-#define EFI_AC_PRESSURE_FAN TRUE
 #define EFI_CHT_CLT_ESTIMATOR TRUE
 // off for simulator: EFI_MAIN_RELAY_CONTROL is FALSE here (no real relay hardware to simulate),
 // and oil_life_monitor.cpp #errors if EFI_OIL_LIFE_MONITOR is on without it (no reliable signal
 // to flush the counter to flash on shutdown - meaningless for a desktop simulator anyway)
 #define EFI_OIL_LIFE_MONITOR FALSE
-#define EFI_CHECK_ENGINE_TRIGGERING TRUE
 #define EFI_GHOST_CAM TRUE
 #define EFI_WHEEL_SPEED_SENSORS TRUE
 #define EFI_INJ_PERCENT_CURVE TRUE
 #define EFI_IMRC TRUE
 
 #define EFI_VVT_COMPENSATION TRUE
-#define EFI_VVT_ADVANCED_MODE TRUE
 
 // External CAN ETB controller (CH32V203-based board) - bench experiment, opt-in per board, off for simulator
 #define EFI_EXTERNAL_CAN_ETB FALSE

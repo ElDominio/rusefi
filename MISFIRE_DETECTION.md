@@ -74,7 +74,7 @@ To allow for user calibration, the following fields should be added to `rusefi_c
 The shipped `MisfireController` narrows the scope above to make it robust without the §4
 learning step, by running **only while the Engine State Machine reports `Idle`** (lowest
 inertia ⇒ highest combustion-torque signal). Sub-feature of the SM, gated by
-`EFI_ENGINE_STATE_MACHINE`.
+Enable Engine State Machine.
 
 * **Windowing** — uses `engine->cylinders[i].getAngleOffset()` (firing order / odd-fire
   aware) + `isPhaseInRange`, mirroring `MapAveragingModule`. Window is `[TDC+start, TDC+end]`
