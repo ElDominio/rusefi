@@ -7462,3 +7462,11 @@ Validation:
 - Unit tests (GCC): 2073/2073 pass (12 new I2C/MCP4728/ADS7128 tests).
 - Firmware: all 20 boards of the sync batch build (incl. paralela F407, protorico boards).
 - `:config_definition:test` passes; I2C picks touched no Java.
+
+## 2026-10-26 - alphax-master-sync: smart-GPIO ignitionKey fix
+
+- Picked `4292163b90` + `3ae3160542` (previously excluded on 10-13): `ignitionKeyDigitalPin` is
+  now `switch_input_pin_e` instead of `Gpio`, so smart-GPIO inputs can be selected; same 2-byte
+  storage, no layout change. m74_9 pinout update (disabled board) and `IgnitionKeyExportTest`.
+- Validation: unit tests 2073/2073 (GCC); all 20 sync-batch firmware boards build;
+  `:config_definition:test` (incl. `IgnitionKeyExportTest`) and `:ui:test` pass.
