@@ -7442,3 +7442,23 @@ Validation:
   to upstream's now that `enableFanXWithAc` became `fanXAcMode`); `:config_definition:test` and
   `:ui:test` pass, including `AlphaxUpstreamSyncMigratorTest` (3 tests).
 - Not run on hardware; tune migration not tried against a real AlphaX .msq.
+
+## 2026-10-25 - alphax-master-sync: I2C stack for upstream compatibility
+
+- Picked (`-x`, master order) the upstream I2C stack the 10-13 sync had excluded, so
+  `b12560a25b` (I2c legacy #10461) and later upstream I2C work apply cleanly: STM32 I2C helpers,
+  `i2cscan`, `i2cBus` class (HW + bit-banged), core driver in `hw_layer/drivers/i2c`, bus lock,
+  ADS7128 off-chip ADC, PCA9685 PWM/GPIO extender (config in `rusefi_config.txt`, TS dialog),
+  `EFI_I2C_SUPPORT`, `LUA_I2C_DAC` (MCP4728), `i2c_device_e` -> `i2c_bus_e`. 44 commits plus
+  prerequisites `0726d22dfa`/`02e2e708aa` (MSIOBOX_* -> EXTIOCHIP_* gpio rename, needed by
+  PCA9685) and `70e3fe4af4`.
+- Still excluded (10-13 decision): smart-GPIO ignitionKey fix (`4292163b90`/`3ae3160542`).
+- Conflicts: premium-quick-test (disabled board) kept ours; `live_data.cpp` include union;
+  `LUA_I2C_DAC` hooks taken from upstream master in `hooks.add` style (SignalDebounce block
+  dropped, upstream removed it). `ts_show_i2c*` defaults are now false, matching upstream.
+- No AlphaX I2C code overlapped. `FLASH_DATA_VERSION` stays 261025 (same unreleased sync).
+
+Validation:
+- Unit tests (GCC): 2073/2073 pass (12 new I2C/MCP4728/ADS7128 tests).
+- Firmware: all 20 boards of the sync batch build (incl. paralela F407, protorico boards).
+- `:config_definition:test` passes; I2C picks touched no Java.
