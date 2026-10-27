@@ -598,6 +598,7 @@ static bool validateConfig(const engine_configuration_s* previousConfiguration) 
   }
 #endif // EFI_SOFTWARE_KNOCK
 
+#if EFI_ENGINE_CONTROL
   // the only step which is allowed to modify configuration - everything else in this method is read-only validation
   applyDefaultsOrFixAfterBurn(previousConfiguration);
 	if (engineConfiguration->cylindersCount > MAX_CYLINDER_COUNT) {
@@ -605,6 +606,8 @@ static bool validateConfig(const engine_configuration_s* previousConfiguration) 
 		criticalError("Invalid Number of cylinders: %d", engineConfiguration->cylindersCount);
 		return false;
 	}
+#endif // EFI_ENGINE_CONTROL
+
 #if EFI_PROD_CODE && (BOARD_MC33810_COUNT > 0)
     float maxConfiguredCorr = config->dwellVoltageCorrValues[0];
     for (size_t i = 0;i<efi::size(config->dwellVoltageCorrValues);i++) {
