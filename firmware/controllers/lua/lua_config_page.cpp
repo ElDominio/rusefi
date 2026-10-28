@@ -22,11 +22,18 @@ static_assert(LUA_PAGE_SECTOR_OFFSET + sizeof(page5_container_s) <= 128u * 1024u
 	"Lua config page does not fit in the flash sector — reduce LUA_SCRIPT_SIZE for this board");
 #endif
 
-// Place the container in the same RAM region the persistent config uses (CCM where available,
-// see persistent_store.cpp's PERSISTENT_LOCATION). luaScript was previously a field inside
-// persistentState, so keeping the extracted page in CCM_OPTIONAL preserves the per-region RAM
-// balance — otherwise CCM boards (F4/F7/H7, e.g. nucleo_f429) overflow main SRAM by LUA_SCRIPT_SIZE
-// while CCM gains the same slack.
+// On MFS boards the Lua page is its own MFS record. mfsWriteRecord() rejects records
+// above MFS_CFG_MAX_RECORD_SIZE with a ChibiOS panic on every burn, so catch it here:
+// raise MFS_CFG_MAX_RECORD_SIZE in board.mk or lower LUA_SCRIPT_SIZE.
+#if (EFI_STORAGE_MFS == TRUE) && !EFI_SIMULATOR
+#include "hal_mfs.h"
+static_assert(sizeof(page5_container_s) <= MFS_CFG_MAX_RECORD_SIZE,
+	"Lua config page exceeds MFS_CFG_MAX_RECORD_SIZE — raise it for this board or reduce LUA_SCRIPT_SIZE");
+#endif
+
+// Keep the Lua page in CCM where available to avoid exhausting main SRAM on
+// boards with large LUA_SCRIPT_SIZE. The main settings container can be placed
+// independently via persistent_store.cpp's PERSISTENT_LOCATION override.
 static page5_container_s luaConfigPageContainer CCM_OPTIONAL;
 
 void luaConfigPageSetDefaults() {
