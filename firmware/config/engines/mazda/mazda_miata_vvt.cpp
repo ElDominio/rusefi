@@ -388,6 +388,14 @@ static void setMazdaMiataEngineNB2Defaults() {
  * https://wiki.rusefi.com/HOWTO-TCU-A42DE-on-Proteus
  */
 #if HW_PROTEUS
+// Bounds-checked tcuSolenoidTable cell: boards may shrink TCU_GEAR_COUNT/TCU_SOLENOID_COUNT
+// (paralela: 6/2), and cells they don't have are skipped instead of written out of bounds.
+[[maybe_unused]] static void setTcuSolenoidCell(size_t row, size_t column, uint8_t value) {
+	if (row < efi::size(config->tcuSolenoidTable) && column < efi::size(config->tcuSolenoidTable[0])) {
+		config->tcuSolenoidTable[row][column] = value;
+	}
+}
+
 void setMiataNB2_Proteus_TCU() {
 	engineConfiguration->tcuEnabled = true;
 
@@ -418,23 +426,23 @@ void setMiataNB2_Proteus_TCU() {
 	engineConfiguration->tcuDownshiftButtonPinMode = PI_PULLUP;
 
 	// R
-	config->tcuSolenoidTable[0][0] = 1;
-	config->tcuSolenoidTable[0][1] = 0;
+	setTcuSolenoidCell(0, 0, 1);
+	setTcuSolenoidCell(0, 1, 0);
 	// P/N
-	config->tcuSolenoidTable[1][0] = 1;
-	config->tcuSolenoidTable[1][1] = 0;
+	setTcuSolenoidCell(1, 0, 1);
+	setTcuSolenoidCell(1, 1, 0);
 	// 1
-	config->tcuSolenoidTable[2][0] = 1;
-	config->tcuSolenoidTable[2][1] = 0;
+	setTcuSolenoidCell(2, 0, 1);
+	setTcuSolenoidCell(2, 1, 0);
 	// 2
-	config->tcuSolenoidTable[3][0] = 1;
-	config->tcuSolenoidTable[3][1] = 1;
+	setTcuSolenoidCell(3, 0, 1);
+	setTcuSolenoidCell(3, 1, 1);
 	// 3
-	config->tcuSolenoidTable[4][0] = 0;
-	config->tcuSolenoidTable[4][1] = 1;
+	setTcuSolenoidCell(4, 0, 0);
+	setTcuSolenoidCell(4, 1, 1);
 	// 4
-	config->tcuSolenoidTable[5][0] = 0;
-	config->tcuSolenoidTable[5][1] = 0;
+	setTcuSolenoidCell(5, 0, 0);
+	setTcuSolenoidCell(5, 1, 0);
 
 }
 #endif // HW_PROTEUS

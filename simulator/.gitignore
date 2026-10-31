@@ -2,3 +2,4 @@ flash*.bin
 rusefi_tool.log
 downloaded_tunes
 build_posix
+build_posix_*

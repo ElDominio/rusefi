@@ -46,8 +46,9 @@ endif
 # cannot load into the 64-bit engine-sim host. Uses its own build dir so the two variants'
 # same-named objects (ch.o, hal_can.o) never mix.
 ifeq ($(POSIX_SIM),yes)
-  BUILDDIR = build_posix
-  DEPDIR = build_posix/.dep
+  # One build dir per board: SHORT_BOARD_NAME=paralela BOARD_DIR=... -> build_posix_paralela/
+  BUILDDIR = build_posix$(if $(SHORT_BOARD_NAME),_$(SHORT_BOARD_NAME))
+  DEPDIR = $(BUILDDIR)/.dep
   SANITIZE = no
 endif
 

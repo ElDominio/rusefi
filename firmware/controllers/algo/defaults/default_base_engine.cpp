@@ -344,6 +344,14 @@ bool applyDefaultsOrFixAfterBurn(const engine_configuration_s* previousConfigura
 	return changed;
 }
 
+// Bounds-checked tcuSolenoidTable cell: boards may shrink TCU_GEAR_COUNT/TCU_SOLENOID_COUNT
+// (paralela: 6/2), and cells they don't have are skipped instead of written out of bounds.
+[[maybe_unused]] static void setTcuSolenoidCell(size_t row, size_t column, uint8_t value) {
+	if (row < efi::size(config->tcuSolenoidTable) && column < efi::size(config->tcuSolenoidTable[0])) {
+		config->tcuSolenoidTable[row][column] = value;
+	}
+}
+
 void setDefaultBaseEngine() {
 	// Base Engine Settings
 	engineConfiguration->displacement = 2;
@@ -494,39 +502,39 @@ void setDefaultBaseEngine() {
 
 #if EFI_SIMULATOR
 	// R
-	config->tcuSolenoidTable[0][0] = 99;
-	config->tcuSolenoidTable[0][1] = 1;
-	config->tcuSolenoidTable[0][2] = 2;
-	config->tcuSolenoidTable[0][3] = 3;
-	config->tcuSolenoidTable[0][4] = 4;
-	config->tcuSolenoidTable[0][5] = 5;
+	setTcuSolenoidCell(0, 0, 99);
+	setTcuSolenoidCell(0, 1, 1);
+	setTcuSolenoidCell(0, 2, 2);
+	setTcuSolenoidCell(0, 3, 3);
+	setTcuSolenoidCell(0, 4, 4);
+	setTcuSolenoidCell(0, 5, 5);
 	// P/N
-	config->tcuSolenoidTable[1][0] = 10;
-	config->tcuSolenoidTable[1][1] = 11;
-	config->tcuSolenoidTable[1][2] = 12;
-	config->tcuSolenoidTable[1][3] = 13;
-	config->tcuSolenoidTable[1][4] = 14;
-	config->tcuSolenoidTable[1][5] = 15;
-	config->tcuSolenoidTable[1][6] = 16;
-	config->tcuSolenoidTable[1][7] = 17;
-	config->tcuSolenoidTable[1][8] = 18;
-	config->tcuSolenoidTable[1][9] = 19;
+	setTcuSolenoidCell(1, 0, 10);
+	setTcuSolenoidCell(1, 1, 11);
+	setTcuSolenoidCell(1, 2, 12);
+	setTcuSolenoidCell(1, 3, 13);
+	setTcuSolenoidCell(1, 4, 14);
+	setTcuSolenoidCell(1, 5, 15);
+	setTcuSolenoidCell(1, 6, 16);
+	setTcuSolenoidCell(1, 7, 17);
+	setTcuSolenoidCell(1, 8, 18);
+	setTcuSolenoidCell(1, 9, 19);
 	// 1
-	config->tcuSolenoidTable[2][0] = 20;
-	config->tcuSolenoidTable[2][1] = 21;
-	config->tcuSolenoidTable[2][2] = 22;
+	setTcuSolenoidCell(2, 0, 20);
+	setTcuSolenoidCell(2, 1, 21);
+	setTcuSolenoidCell(2, 2, 22);
 	// 2
-	config->tcuSolenoidTable[3][0] = 30;
-	config->tcuSolenoidTable[3][1] = 31;
-	config->tcuSolenoidTable[3][3] = 33;
+	setTcuSolenoidCell(3, 0, 30);
+	setTcuSolenoidCell(3, 1, 31);
+	setTcuSolenoidCell(3, 3, 33);
 	// 3
-	config->tcuSolenoidTable[4][0] = 40;
-	config->tcuSolenoidTable[4][1] = 41;
-	config->tcuSolenoidTable[4][4] = 44;
+	setTcuSolenoidCell(4, 0, 40);
+	setTcuSolenoidCell(4, 1, 41);
+	setTcuSolenoidCell(4, 4, 44);
 	// 4
-	config->tcuSolenoidTable[5][0] = 50;
-	config->tcuSolenoidTable[5][1] = 51;
-	config->tcuSolenoidTable[5][5] = 55;
+	setTcuSolenoidCell(5, 0, 50);
+	setTcuSolenoidCell(5, 1, 51);
+	setTcuSolenoidCell(5, 5, 55);
 
   // [tag:runNotSquareTest] huh why is this not a unit test?!
 	config->scriptTable4[0][0] = 140;

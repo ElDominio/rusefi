@@ -61,14 +61,19 @@ void setSingleCoilDwell() {
 		config->sparkDwellValues[i] = 4;
 	}
 
-	config->sparkDwellRpmBins[5] = 500;
-	config->sparkDwellValues[5] = 4;
+	// The last three points, relative to the end of the curve: boards may shrink
+	// DWELL_CURVE_SIZE (paralela: 5), where fixed indexes 5..7 wrote past the arrays.
+	// For the default size 8 these are indexes 5, 6, 7 as before.
+	static_assert(DWELL_CURVE_SIZE >= 3, "single coil dwell needs at least 3 points");
+	constexpr int last = DWELL_CURVE_SIZE - 1;
+	config->sparkDwellRpmBins[last - 2] = 500;
+	config->sparkDwellValues[last - 2] = 4;
 
-	config->sparkDwellRpmBins[6] = 4500;
-	config->sparkDwellValues[6] = 4;
+	config->sparkDwellRpmBins[last - 1] = 4500;
+	config->sparkDwellValues[last - 1] = 4;
 
-	config->sparkDwellRpmBins[7] = 12500;
-	config->sparkDwellValues[7] = 0;
+	config->sparkDwellRpmBins[last] = 12500;
+	config->sparkDwellValues[last] = 0;
 }
 
 /**
