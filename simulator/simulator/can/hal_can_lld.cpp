@@ -28,6 +28,7 @@
 
 #if !EFI_SIM_IS_WINDOWS
 #include <linux/can.h>
+#include <unistd.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <errno.h>

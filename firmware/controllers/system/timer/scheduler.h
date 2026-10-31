@@ -288,6 +288,10 @@ struct scheduling_s {
 #if EFI_SIMULATOR
   // used by signal_executor_sleep executor implementation
 	virtual_timer_t timer;
+#if defined(EFI_SIMULATOR_POSIX)
+	// lazy chVTObjectInit for static records (POSIX simulator executor)
+	bool timerInitialized = false;
+#endif
 #endif /* EFI_SIMULATOR */
 
 	// Scheduler implementation uses a sorted linked list of these scheduling records.

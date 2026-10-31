@@ -1,0 +1,7 @@
+/* Export only the engine-sim ECU C ABI from rusefi_simulator.so (see simulator/Makefile ecu-so). */
+{
+  global:
+    ecu_*;
+  local:
+    *;
+};

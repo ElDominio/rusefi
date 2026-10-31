@@ -1,7 +1,9 @@
 #include "pch.h"
 
 #include "mass_storage_init.h"
+#if !defined(EFI_SIMULATOR_POSIX) // no ChibiOS block devices in the POSIX simulator shim
 #include "null_device.h"
+#endif
 
 #if HAL_USE_USB_MSD
 #include "mass_storage_device.h"

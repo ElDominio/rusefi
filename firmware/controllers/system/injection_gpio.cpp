@@ -3,6 +3,7 @@
  */
 
 #include "pch.h"
+#include "sim_output_counters.h"
 
 extern bool printFuelDebug;
 
@@ -29,6 +30,13 @@ InjectorOutputPin::InjectorOutputPin() : NamedOutputPin() {
 void InjectorOutputPin::open(efitick_t nowNt) {
 	// per-output counter for error detection
 	overlappingCounter++;
+#if defined(EFI_SIMULATOR_POSIX)
+	// engine-sim replays one fuel event per opening, overlapped ones included (a held-open
+	// injector at >= 100% duty would otherwise read as a fuel cut).
+	if (injectorIndex >= 0 && injectorIndex < MAX_CYLINDER_COUNT) {
+		simInjectionOpenCount[injectorIndex] = simInjectionOpenCount[injectorIndex] + 1;
+	}
+#endif
 	// global counter for logging
 	getEngineState()->fuelInjectionCounter++;
 

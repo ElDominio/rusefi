@@ -40,6 +40,17 @@ else
   IS_WIN = no
 endif
 
+# POSIX_SIM=yes: 64-bit build on a std::thread-based ChibiOS API shim (posix/) instead of
+# the 32-bit ChibiOS SIMIA32 port. Required for the in-process engine-sim ECU library
+# (make POSIX_SIM=yes ecu-so -> build_posix/rusefi_simulator.so), since a 32-bit object
+# cannot load into the 64-bit engine-sim host. Uses its own build dir so the two variants'
+# same-named objects (ch.o, hal_can.o) never mix.
+ifeq ($(POSIX_SIM),yes)
+  BUILDDIR = build_posix
+  DEPDIR = build_posix/.dep
+  SANITIZE = no
+endif
+
 include ../firmware/rusefi.mk
 include ../firmware/rusefi_rules.mk
 -include ${BOARD_DIR}/firmware/firmware.mk
@@ -58,12 +69,22 @@ CONFDIR = .
 
 # SANITIZE=yes enables AddressSanitizer (ASan) which is incompatible with Valgrind.
 # If you want to run Valgrind, you must use SANITIZE=no.
+ifeq ($(SANITIZE),)
 ifeq ($(IS_WIN),yes)
   SANITIZE = no
 else
   SANITIZE = yes
 endif
+endif
 
+ifeq ($(POSIX_SIM),yes)
+ifeq ($(SIMULATOR_DEBUG_LEVEL_OPT),)
+  # The in-process engine-sim ECU runs every trigger tooth on the host physics thread:
+  # -O0 is ~10x too slow there. -g stays for backtraces. GCC's -O2 maybe-uninitialized
+  # false positives must not fail the build.
+  SIMULATOR_DEBUG_LEVEL_OPT = -O2 -g -Wno-error=maybe-uninitialized
+endif
+endif
 ifeq ($(SIMULATOR_DEBUG_LEVEL_OPT),)
 # If you would like to debug the simulator, swap which of these lines is commented. It's commented because debug info causes a 10-15x increase in binary size.
   SIMULATOR_DEBUG_LEVEL_OPT = -O0 -g
@@ -76,9 +97,16 @@ ifeq ($(USE_OPT),)
 
   ifeq ($(IS_WIN),yes)
     USE_OPT += -DEFI_SIM_IS_WINDOWS=1 -DIS_WINDOWS_COMPILER=1
+  else ifeq ($(POSIX_SIM),yes)
+    USE_OPT += -DEFI_SIM_IS_WINDOWS=0 -DIS_WINDOWS_COMPILER=0
   else
     USE_OPT += -m32 -DEFI_SIM_IS_WINDOWS=0 -DIS_WINDOWS_COMPILER=0
   endif
+endif
+
+ifeq ($(POSIX_SIM),yes)
+  # -fPIC: the same objects link into both the exe and the engine-sim shared library.
+  USE_OPT += -DEFI_SIMULATOR_POSIX=1 -pthread -fPIC
 endif
 
 # Pretend we are all different hardware so that all canned engine configs are included
@@ -171,6 +199,7 @@ include $(PROJECT_DIR)/common_libfirmware.mk
 include $(CHIBIOS)/os/license/license.mk
 # Startup files.
 # HAL-OSAL files (optional).
+ifneq ($(POSIX_SIM),yes)
 include $(CHIBIOS)/os/hal/hal.mk
 include $(CHIBIOS)/os/hal/boards/simulator/board.mk
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
@@ -185,6 +214,7 @@ ifeq ($(IS_WIN),yes)
   include ${CHIBIOS}/os/hal/ports/simulator/win32/platform.mk
 else
   include ${CHIBIOS}/os/hal/ports/simulator/posix/platform.mk
+endif
 endif
 
 include $(PROJECT_DIR)/console/binary/tunerstudio.mk
@@ -239,6 +269,20 @@ CPPSRC = $(ALLCPPSRC) \
 # (not available in simulator). We only need getStorageImage() for TS protocol.
 CPPSRC := $(filter-out $(PROJECT_DIR)/hw_layer/mass_storage/mass_storage_device.cpp,$(CPPSRC))
 
+ifeq ($(POSIX_SIM),yes)
+  # No ChibiOS block devices in the shim; mass_storage_init.cpp alone serves the TS FS_IMAGE pages.
+  CPPSRC := $(filter-out $(PROJECT_DIR)/hw_layer/mass_storage/null_device.cpp \
+    $(PROJECT_DIR)/hw_layer/mass_storage/counting_block_device.cpp \
+    $(PROJECT_DIR)/hw_layer/mass_storage/compressed_block_device.cpp,$(CPPSRC))
+  CSRC := $(filter-out $(PROJECT_DIR)/ChibiOS-Contrib/os/various/lib_scsi.c,$(CSRC))
+  CPPSRC := $(filter-out $(CHIBIOS)/os/various/cpp_wrappers/ch.cpp main.cpp, $(CPPSRC))
+  CPPSRC += posix/ch.cpp posix/fatfs_diskio.cpp posix/hal_can.cpp posix/sim_backtrace.cpp \
+    posix/sim_net.cpp posix/sim_reboot.cpp main_posix.cpp sim_shell_common.cpp \
+    simulator_flash_files.cpp ecu_dll.cpp \
+    $(PROJECT_DIR)/controllers/trigger/engine_sim_trigger.cpp
+  CSRC += $(PROJECT_DIR)/ext/FatFS/ff.c $(PROJECT_DIR)/ext/FatFS/ffunicode.c
+endif
+
 
 # List ASM source files here
 ASMSRC = $(PORTASM)
@@ -260,9 +304,17 @@ INCDIR += . \
   simulator/can \
   simulator
 
+ifeq ($(POSIX_SIM),yes)
+  INCDIR := posix $(INCDIR) $(PROJECT_DIR)/ext/FatFS
+endif
+
 # List ASM source files here
 ASMSRC =
+ifeq ($(POSIX_SIM),yes)
+ASMXSRC =
+else
 ASMXSRC = $(STARTUPASM) $(PORTASM) $(OSALASM)
+endif
 
 #
 # Project, sources and paths
@@ -352,6 +404,10 @@ ifeq ($(SANITIZE),yes)
 	ULIBS += -fsanitize=address
 endif
 
+ifeq ($(POSIX_SIM),yes)
+	ULIBS += -pthread
+endif
+
 #
 # End of user defines
 ##############################################################################
@@ -369,6 +425,25 @@ ifeq ($(USE_CLANG),yes)
   CPPFLAGS += -MD -MP -MF $(DEPDIR)/$(@F).d
   ASFLAGS += -MD -MP -MF $(DEPDIR)/$(@F).d
   ASXFLAGS += -MD -MP -MF $(DEPDIR)/$(@F).d
+endif
+
+# ---------------------------------------------------------------------------
+# engine-sim in-process ECU library (POSIX_SIM=yes only): the exe's objects minus
+# main_posix.o, linked -shared. ecu_dll.cpp carries the ecu_* C ABI the engine-sim
+# host resolves with dlsym (point ENGINE_SIM_ECU_DLL at the result). Only ecu_*
+# symbols are exported (version script) so firmware globals never collide with the host.
+ifeq ($(POSIX_SIM),yes)
+ECU_SO := $(BUILDDIR)/rusefi_simulator.so
+ECU_SO_OBJS = $(filter-out $(OBJDIR)/main_posix.o,$(OBJS))
+ECU_SO_LDFLAGS = $(MCFLAGS) $(OPT) $(LLIBDIR) -shared -static-libstdc++ -static-libgcc \
+  -Wl,--version-script=ecu_so.map,-Map=$(ECU_SO).map,--no-undefined,$(LDOPT)
+
+$(ECU_SO): $(ECU_SO_OBJS) ecu_so.map Makefile
+	@echo Linking $(notdir $@)
+	$(LD) $(ECU_SO_OBJS) $(ECU_SO_LDFLAGS) $(LIBS) -o $@
+
+.PHONY: ecu-so
+ecu-so: PRE_MAKE_ALL_RULE_HOOK $(OBJS) $(ECU_SO) POST_MAKE_ALL_RULE_HOOK
 endif
 
 ifneq (yes,$(SUBMAKE))
@@ -397,6 +472,6 @@ $(OBJS): .os-sentinel
 
 CLEAN_RULE_HOOK: CLEAN_PCH_HOOK
 	@echo Cleaning Simulator
-	rm -rf build
+	rm -rf build build_posix
 	rm -rf .dep
 	@echo Done Cleaning Simulator

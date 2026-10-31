@@ -12,3 +12,12 @@ TUNERSTUDIO_SRC_CPP = $(PROJECT_DIR)/console/binary/tunerstudio_io.cpp \
 	$(PROJECT_DIR)/console/binary/signature.cpp \
 	$(PROJECT_DIR)/console/binary/trigger_scope.cpp \
 
+
+# 64-bit POSIX simulator (simulator/posix shim): no ChibiOS SerialDriver, TS runs on plain TCP sockets.
+ifeq ($(POSIX_SIM),yes)
+TUNERSTUDIO_SRC_CPP := $(filter-out \
+	$(PROJECT_DIR)/console/binary/tunerstudio_io_serial.cpp \
+	$(PROJECT_DIR)/console/binary/tunerstudio_io_serial_ports.cpp, \
+	$(TUNERSTUDIO_SRC_CPP))
+TUNERSTUDIO_SRC_CPP += $(PROJECT_DIR)/console/binary/tunerstudio_io_posix.cpp
+endif

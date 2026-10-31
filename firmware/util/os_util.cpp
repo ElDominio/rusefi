@@ -24,10 +24,12 @@
 
 #include "os_util.h"
 
+#if !defined(EFI_SIMULATOR_POSIX) // the POSIX simulator shim defines its own
 void chVTSetAny(virtual_timer_t *vtp, systime_t time, vtfunc_t vtfunc, void *par) {
 	chibios_rt::CriticalSectionLocker csl;
 
 	chVTSetI(vtp, time, vtfunc, par);
 }
+#endif
 
 #endif /* EFI_UNIT_TEST */

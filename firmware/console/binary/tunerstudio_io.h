@@ -154,5 +154,13 @@ protected:
 void startSerialChannels();
 SerialTsChannelBase* getBluetoothChannel();
 
+#if defined(EFI_SIMULATOR_POSIX)
+// 64-bit POSIX simulator (simulator/posix): TS over plain TCP. An in-process engine-sim
+// boot (simulator/ecu_dll.cpp) makes a port bind failure non-fatal and reads it back.
+void stopSerialChannels();
+void setTsBindFailureIsFatal(bool fatal);
+bool tsBindFailureReported();
+#endif // EFI_SIMULATOR_POSIX
+
 void startCanConsole();
 void announceCanConsole(CanCycle cycle);

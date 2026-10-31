@@ -122,6 +122,13 @@ public:
 	bool isRedundant() const {
 		const auto sensor = m_sensor;
 
+#if defined(EFI_SIMULATOR_POSIX)
+		// engine-sim: the mock replaces the registered sensor's reading, so its redundancy too
+		// (the plant's drive-by-wire TPS / pedal pairs over the simulator's single-track sensors).
+		if (m_useMock) {
+			return m_mockRedundant;
+		}
+#endif
 		if (sensor) {
 			return sensor->isRedundant();
 		}

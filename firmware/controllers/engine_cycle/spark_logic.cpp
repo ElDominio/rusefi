@@ -6,6 +6,7 @@
  */
 
 #include "pch.h"
+#include "sim_output_counters.h"
 
 #include "spark_logic.h"
 
@@ -51,6 +52,17 @@ static void fireSparkBySettingPinLow(IgnitionEvent *event, IgnitionOutputPin *ou
 #endif /* SPARK_EXTREME_LOGGING */
 		warning(ObdCode::CUSTOM_OUT_OF_ORDER_COIL, "out-of-order coil off %s", output->getName());
 	}
+#if defined(EFI_SIMULATOR_POSIX)
+	// engine-sim: a coil that was actually dwelling fires this event's spark. Counted per
+	// cylinder (not per coil, so distributor / wasted-spark setups replay at the right
+	// cylinder) and once per event (a wasted-spark pair has two outputs).
+	if (output->currentLogicValue && output == event->outputs[0]) {
+		const size_t cylinder = getCylinderNumberAtIndex(event->cylinderIndex);
+		if (cylinder < MAX_CYLINDER_COUNT) {
+			simSparkFireCount[cylinder] = simSparkFireCount[cylinder] + 1;
+		}
+	}
+#endif
 	output->setLow();
 }
 

@@ -10,6 +10,9 @@
 #include "thread_controller.h"
 #include "efitime.h"
 #include "perf_trace.h"
+#if defined(EFI_SIMULATOR_POSIX)
+#include "sim_clock.h"
+#endif
 
 /**
  * @brief Base class for a controller that needs to run periodically to perform work.
@@ -38,6 +41,18 @@ class PeriodicController : public ThreadController<TStackSize>
 private:
 	// time in ChibiOS time units, see CH_CFG_ST_FREQUENCY
     systime_t m_period;
+#if defined(EFI_SIMULATOR_POSIX)
+    // Simulation clock (engine-sim ENGINE_SIM_ECU_CLOCK=simulation): run on a virtual
+    // timer driven by ecu_step instead of a wall-time thread.
+    virtual_timer_t m_simTimer{};
+    bool m_simStarted = false;
+    static void simTick(virtual_timer_t*, void* arg) {
+        auto* self = static_cast<PeriodicController*>(arg);
+        if (!self->m_simStarted) return;
+        self->PeriodicTask(getTimeNowNt());
+        if (self->m_simStarted) chVTSetAny(&self->m_simTimer, self->m_period, simTick, self);
+    }
+#endif
 
 protected:
 
@@ -79,6 +94,16 @@ private:
 	}
 
 public:
+#if defined(EFI_SIMULATOR_POSIX)
+    void start() {
+        if (!simClockEnabled()) { ThreadController<TStackSize>::start(); return; }
+        chibios_rt::CriticalSectionLocker lock;
+        if (m_simStarted) return;
+        m_simStarted = true;
+        OnStarted();
+        simTick(nullptr, this);
+    }
+#endif
     PeriodicController(const char* name, tprio_t priority, float frequencyHz)
         : ThreadController<TStackSize>(name, priority)
         // First compute the period in systime_t

@@ -89,6 +89,16 @@ See also unit_tests/test_results/readme.md for unit tests output.
 
 **Cross-platform requirement**: Unit test code MUST build and run on all supported host platforms — Linux (GCC/Clang), macOS (Clang), and Windows (MSVC and MinGW). Avoid POSIX-only APIs (e.g. `realpath`, `PATH_MAX`, `dirent.h` without guards) unless wrapped in `#ifdef` guards or replaced by portable C++ equivalents. Prefer `std::filesystem` over POSIX path APIs.
 
+### 64-bit POSIX simulator + engine-sim in-process ECU (`POSIX_SIM=yes`, branch `alphax-beta-enginesim`)
+
+`make -C simulator POSIX_SIM=yes -j12 [ecu-so]` builds a 64-bit simulator on `simulator/posix/` (a std::thread-based ChibiOS API shim ported from EpicEFI's epicefi_fw) instead of the 32-bit ChibiOS SIMIA32 port: `build_posix/rusefi_simulator` (exe, TS on :29001) and `build_posix/rusefi_simulator.so` (the `ecu_*` C ABI the EpicEFI Engine Simulator host dlopens via `ENGINE_SIM_ECU_DLL`; only `ecu_*` is exported, `simulator/ecu_so.map`). Firmware changes for it are all behind `EFI_SIMULATOR_POSIX`. Things the code cannot tell you:
+
+- **The shim's `chSysLock` is one global recursive mutex.** Any ChibiOS "S"-class blocking call (made with the lock held, e.g. `osalThreadEnqueueTimeoutS` in `CanTxMessage::waitForWork`) must release it while waiting (`SysLockReleaseForWait` in `posix/ch.cpp`) - real ChibiOS does. Holding it across the wait stalled every firmware thread and the host's `ecu_commit` for the whole CAN TX timeout (~80 ms per commit, RPM collapse). When adding a new S-API to the shim, release the lock. `RUSEFI_SIM_LOCK_DEBUG=1` logs critical sections held > 5 ms with the holder's stack (but cannot see a lock held by a sleeping thread - gdb `thread apply all bt` found that one).
+- **POSIX builds default to `-O2 -g`** (`-O0` makes every trigger tooth ~0.3 ms on the host physics thread); `-Wno-error=maybe-uninitialized` is needed there. `ptrace_scope=1` on this machine blocks `gdb -p`; run the process under gdb instead.
+- **The synthetic crank/cam wheel follows the tune** (`controllers/trigger/engine_sim_trigger.cpp`): crank edges from `triggerCentral.triggerShape`, cams from `vvtShape[]`, placed so plant angle 0 = TDC #1 (shape angle = phase + `tdcPosition()` + sync angle; cam sync tooth at `vvtOffsets[i] - camPhase`). A tune with correct trigger/VVT offsets for the real engine is correct in the sim; EpicEFI's original was a fixed 36-1 + one cam tooth.
+- Actuator events for the host come from per-cylinder counters (`sim_output_counters.h`): injections by injector index at `InjectorOutputPin::open`, sparks by physical cylinder (`getCylinderNumberAtIndex(event->cylinderIndex)`) once per event - counting by coil put every distributor spark on cylinder 1.
+- The 32-bit build needs `gcc-multilib`/`g++-multilib` (missing on this machine as of 2026-10-31: `bits/libc-header-start.h` not found).
+
 ### Simulator Functional Test (local WSL quirks)
 
 `./gradlew simulatorFunctionalTestLauncherWithSimulator` (repo root; also CI `build-simulator.yaml`, Linux-only) launches `simulator/build/rusefi_simulator` and talks TS protocol over TCP :29001. Two local traps, both hit 2026-08-25:

@@ -473,7 +473,9 @@ void Engine::setConfig() {
  * This code asserts that we do not have unexpected gaps in time flow with the exception of internal flash burn.
  */
 static void assertTimeIsLinear() {
-#if ! EFI_UNIT_TEST
+// POSIX simulator: a desktop host process (engine-sim) legitimately stalls for >200 ms
+// (window drags, scheduling, -O0 builds); that is not an ECU timing fault there.
+#if ! EFI_UNIT_TEST && !defined(EFI_SIMULATOR_POSIX)
 	static efitimems_t mostRecentMs = 0;
 	efitimems_t msNow = getTimeNowMs();
 	if (engineConfiguration->watchOutForLinearTime && engine->configBurnTimer.hasElapsedSec(5)) {

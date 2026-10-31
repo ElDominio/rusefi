@@ -10,6 +10,10 @@
 #if !EFI_UNIT_TEST
 
 #include <rusefi/rusefi_time_wraparound.h>
+#if defined(EFI_SIMULATOR_POSIX)
+#include <mutex>
+#include "sim_clock.h"
+#endif
 
 static WrapAround62 timeNt;
 
@@ -17,6 +21,13 @@ static WrapAround62 timeNt;
  * 64-bit counter CPU/timer cycles since MCU reset
  */
 efitick_t getTimeNowNt() {
+#if defined(EFI_SIMULATOR_POSIX)
+	// Many host threads call this concurrently (the ChibiOS port serializes them); the
+	// wraparound state needs a lock. Function-local: constructed before Engine's ctor uses it.
+	if (simClockEnabled()) return simClockNowNt();
+	static std::mutex timeNtMutex;
+	std::lock_guard<std::mutex> lock(timeNtMutex);
+#endif
 	return timeNt.update(getTimeNowLowerNt());
 }
 
