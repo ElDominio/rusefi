@@ -301,6 +301,8 @@ void stageEngineSimInputIndex(int index, float value) {
 }
 void commitEngineSimInputs() {
     bool runPollNow = false;
+    // Synchronous (in-process) mode: the wheel phase this commit advances to.
+    double exactTarget = NAN;
     {
     chibios_rt::CriticalSectionLocker lock;
     if (!dirty) return;
@@ -340,6 +342,18 @@ void commitEngineSimInputs() {
         trackedSpeedDeg = speed * 180 / Pi;
     }
 #endif
+    else if (synchronousPoll) {
+        // rusEFI port: in-process, the plant hands over its ACTUAL crank angle every physics
+        // step, so follow it exactly - no wall-time prediction, slew or snap. The prediction
+        // could not follow cranking (compression pulses swing crank speed ~2x inside one
+        // revolution): it drifted past the snap limit, the snap reset the decoder, and every
+        // re-sync showed a ~2x RPM spike. The crank never runs backwards here: a small reversal
+        // (a stall bounce) just holds the wheel until the plant passes that angle again.
+        const double forward = std::remainder(angle + wheelOffsetDeg - previousPhase, 720.0);
+        exactTarget = previousPhase + std::max(0.0, forward);
+        samplePhase = previousPhase;
+        trackedSpeedDeg = speed * 180 / Pi;
+    }
     else {
         // Preserve generated position across M packets. Network arrival jitter
         // cannot rewind the wheel or replay a tooth. Slew small errors out
@@ -384,7 +398,15 @@ void commitEngineSimInputs() {
     }
     // Synchronous mode: the host commits at its selected wall-time cadence. The
     // wheel advances here on the caller's thread; scheduler re-arm is skipped.
-    if (runPollNow) poll();
+    if (runPollNow) {
+        if (std::isfinite(exactTarget)) {
+            chibios_rt::CriticalSectionLocker lock;
+            pollTo(getTimeNowNt(), exactTarget, false);
+            samplePhase = previousPhase;
+        } else {
+            poll();
+        }
+    }
 }
 void releaseEngineSimInputs() {
     chibios_rt::CriticalSectionLocker lock;
