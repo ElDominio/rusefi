@@ -47,6 +47,8 @@ endif
 #
 -include $(PROJECT_DIR)/hw_layer/$(CPU_HWLAYER)/hw_ports.mk
 
+# all current ports are Cortex-M; a non-ARM port sets CPU_ARCH in its hw_ports.mk
+CPU_ARCH ?= ARMCMx
 ifeq ($(CPU_ARCH),ARMCMx)
   HW_LAYER_CPP += $(PROJECT_DIR)/hw_layer/ports/arm_common.cpp
 endif
