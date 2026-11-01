@@ -139,12 +139,29 @@ bool validateRoute(const MockRoute& route, float value) {
 	return route.type != SensorType::Invalid;   // NaN = release, +/-inf = wiring fault, else a value
 }
 
+// The firmware's first charge-temperature update runs before the plant has sent any sensor,
+// so it seeds rusEFI's tCharge rate limiter with the 0 C no-sensor fail-safe and then slews
+// up from there - on a car the ADC already reads CLT/IAT at that point. Once the plant has
+// supplied both, clear tChargeK once: EngineState::updateTChargeK() then re-seeds from the
+// real sensors through its own tChargeK == 0 path. Bridge-side only; no firmware change.
+bool s_seenClt = false, s_seenIat = false, s_tChargeReseeded = false;
+void noteTemperatureInput(SensorType type, float value) {
+	if (s_tChargeReseeded || !std::isfinite(value)) return;
+	if (type == SensorType::Clt) s_seenClt = true;
+	if (type == SensorType::Iat) s_seenIat = true;
+	if (s_seenClt && s_seenIat) {
+		engine->engineState.sd.tChargeK = 0;
+		s_tChargeReseeded = true;
+	}
+}
+
 void applyRoute(const MockRoute& route, float value) {
 	if (route.engineSimIndex) {
 		stageEngineSimInputIndex(route.engineSimIndex, value);
 		return;
 	}
 	const auto type = route.type;
+	noteTemperatureInput(type, value);
 	if (std::isnan(value)) {
 		Sensor::resetMockValue(type);
 	} else if (std::isinf(value)) {

@@ -356,6 +356,23 @@ static void ensureMainThread() {
 
 namespace { struct ShimThreadExit {}; }
 
+// Simulation-clock timer jitter: uniform +/- RUSEFI_SIM_TIMER_JITTER_US (default 10 us, 0 = off),
+// from a fixed-seed generator so runs stay reproducible.
+static int64_t simTimerJitterNt() {
+	static const int64_t maxUs = [] {
+		const char* text = std::getenv("RUSEFI_SIM_TIMER_JITTER_US");
+		return text ? std::max(0L, std::strtol(text, nullptr, 10)) : 10L;
+	}();
+	if (maxUs == 0) {
+		return 0;
+	}
+	static uint64_t state = 0x9E3779B97F4A7C15ULL;   // xorshift64*
+	state ^= state >> 12; state ^= state << 25; state ^= state >> 27;
+	const uint64_t r = state * 0x2545F4914F6CDD1DULL;
+	const int64_t span = 2 * maxUs * g_ticksPerUs + 1;
+	return static_cast<int64_t>(r % static_cast<uint64_t>(span)) - maxUs * static_cast<int64_t>(g_ticksPerUs);
+}
+
 // Drops every level of g_sysLock this thread holds for a blocking wait, restores them after.
 namespace {
 struct SysLockReleaseForWait {
@@ -816,7 +833,16 @@ void chVTSetAny(virtual_timer_t* vtp, sysinterval_t delay, vtfunc_t vtfunc, void
 		return;
 	}
 	if (simClockEnabled()) {
-		const uint64_t ticks = (static_cast<uint64_t>(delay) * 1000000ULL * g_ticksPerUs) / CH_CFG_ST_FREQUENCY;
+		uint64_t ticks = (static_cast<uint64_t>(delay) * 1000000ULL * g_ticksPerUs) / CH_CFG_ST_FREQUENCY;
+		// A real MCU's periodic timers jitter by microseconds; the simulation clock is exact.
+		// Exactness is not neutral: e.g. the 200 Hz fast callback's 1 C/s tCharge slew step
+		// lands exactly on half the 0.01 C storage LSB and rounds away every time, freezing
+		// the estimate. Symmetric jitter restores hardware-like behaviour. Interval timers
+		// only: injection/spark (chVTSetAbsoluteNtI from the sleep executor) stay exact.
+		const int64_t jitter = simTimerJitterNt();
+		if (jitter > 0 || static_cast<uint64_t>(-jitter) < ticks) {
+			ticks = static_cast<uint64_t>(static_cast<int64_t>(ticks) + jitter);
+		}
 		chVTSetAbsoluteNtI(vtp, simClockNowNt() + ticks, vtfunc, arg);
 		return;
 	}
