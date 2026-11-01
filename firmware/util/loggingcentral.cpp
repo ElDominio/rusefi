@@ -153,7 +153,11 @@ const char* swapOutputBuffers(size_t* actualOutputBufferSize) {
 // Limit: 24 x 256 bytes = 6 KB of RAM. This is the number of efiPrintf lines that can be
 // in flight before the low-priority flusher thread copies them out; when the free queue is
 // empty efiPrintfInternal returns without logging (silent drop, no blocking).
-constexpr size_t lineBufferCount = 24;
+// RAM-constrained boards can reduce the number of queued log lines (AlphaX default stays 24, upstream default is 64)
+#ifndef EFI_LOG_LINE_BUFFER_COUNT
+#define EFI_LOG_LINE_BUFFER_COUNT 24
+#endif
+constexpr size_t lineBufferCount = EFI_LOG_LINE_BUFFER_COUNT;
 static LogLineBuffer lineBuffers[lineBufferCount];
 
 // freeBuffers contains a queue of buffers that are not in use
