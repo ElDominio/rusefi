@@ -51,7 +51,9 @@ static_assert(OIL_LIFE_SECTOR_OFFSET + OIL_LIFE_RECORD_SIZE <= 128u * 1024u,
 
 void resetExtraPages() {
 	secondTablesSetDefaults();
+#if EFI_LUA
 	luaConfigPageSetDefaults();
+#endif
 	customPageSetDefaults();
 
 	// When extracting a new config page from the main config, add a
@@ -60,7 +62,9 @@ void resetExtraPages() {
 
 void loadExtraPages() {
 	loadSecondTables();
+#if EFI_LUA
 	loadLuaConfigPage();
+#endif
 	loadCustomPage();
 
 	// When extracting a new config page from the main config, add a
@@ -70,8 +74,10 @@ void loadExtraPages() {
 void loadExtraPage(StorageItemId id) {
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		loadSecondTables();
+#if EFI_LUA
 	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
 		loadLuaConfigPage();
+#endif
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		loadCustomPage();
 	}
@@ -87,10 +93,12 @@ void burnExtraFlashPages() {
 		secondTablesGetStoragePtr(),
 		secondTablesGetStorageSize());
 
+#if EFI_LUA
 	luaConfigPagePrepareForStorage();
 	storageWrite(EFI_LUA_PAGE_RECORD_ID,
 		luaConfigPageGetStoragePtr(),
 		luaConfigPageGetStorageSize());
+#endif
 
 	customPagePrepareForStorage();
 	storageWrite(EFI_CUSTOM_PAGE_RECORD_ID,
@@ -110,8 +118,10 @@ void burnExtraFlashPages() {
 void* getExtraPageAddr(StorageItemId id) {
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		return secondTablesGetTsPage();
+#if EFI_LUA
 	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
 		return luaConfigPageGetTsPage();
+#endif
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		return customPageGetTsPage();
 	}
@@ -124,8 +134,10 @@ void* getExtraPageAddr(StorageItemId id) {
 size_t getExtraPageSize(StorageItemId id) {
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		return secondTablesGetTsPageSize();
+#if EFI_LUA
 	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
 		return luaConfigPageGetTsPageSize();
+#endif
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		return customPageGetTsPageSize();
 	}
@@ -136,6 +148,7 @@ size_t getExtraPageSize(StorageItemId id) {
 }
 
 void burnExtraFlashPage(StorageItemId id) {
+	if (getExtraPageSize(id) == 0) { return; }
 #if EFI_CONFIGURATION_STORAGE
 #if (EFI_STORAGE_INT_FLASH == TRUE) && (EFI_STORAGE_MFS != TRUE) && !EFI_SIMULATOR
 	// INT_FLASH boards: extra pages share a flash sector with the main config.
@@ -155,11 +168,13 @@ void burnExtraFlashPage(StorageItemId id) {
 		storageWrite(EFI_SECOND_TABLES_RECORD_ID,
 			secondTablesGetStoragePtr(),
 			secondTablesGetStorageSize());
+#if EFI_LUA
 	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
 		luaConfigPagePrepareForStorage();
 		storageWrite(EFI_LUA_PAGE_RECORD_ID,
 			luaConfigPageGetStoragePtr(),
 			luaConfigPageGetStorageSize());
+#endif
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		customPagePrepareForStorage();
 		storageWrite(EFI_CUSTOM_PAGE_RECORD_ID,
@@ -180,8 +195,10 @@ void burnExtraFlashPage(StorageItemId id) {
 size_t getExtraPageFlashOffset(StorageItemId id) {
 	if (id == EFI_SECOND_TABLES_RECORD_ID) {
 		return PAGE4_SECTOR_OFFSET;
+#if EFI_LUA
 	} else if (id == EFI_LUA_PAGE_RECORD_ID) {
 		return LUA_PAGE_SECTOR_OFFSET;
+#endif
 	} else if (id == EFI_CUSTOM_PAGE_RECORD_ID) {
 		return PAGE6_SECTOR_OFFSET;
 	} else if (id == EFI_OIL_LIFE_RECORD_ID) {
