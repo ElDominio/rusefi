@@ -7043,3 +7043,17 @@ Decisions:
 
 Validation: `py_compile` passes; GUI constructs and scans 20 boards with the new button enabled. A
 full multi-board batch build was not run.
+
+## 2026-11-06 - paralela: re-expose Ignition Output Mode in TunerStudio
+
+Upstream 5004816d29 set `ts_show_ignitionPinMode` to false globally, which hid the Ignition Output Mode
+dropdown on every board. Re-enabled it for `fw-custom-paralela-master` only, covering both the `paralela`
+and `paralela-f427` targets, since they share `prepend.txt`.
+
+| File | Change |
+|------|--------|
+| `firmware/config/boards/fw-custom-paralela-master/prepend.txt` | Added `#define ts_show_ignitionPinMode true`. |
+
+Validation: `gen_config_board.sh ./config/boards/fw-custom-paralela-master paralela` exits 0 and
+`rusefi_paralela.ini` now lists the field. SIGNATURE_HASH changed (26731 -> 32262), so the regenerated
+.ini needs matching firmware. Firmware was not built or flashed, and `paralela-f427` was not regenerated.

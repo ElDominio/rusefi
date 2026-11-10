@@ -55,3 +55,4 @@
 #define TCU_RANGE_COUNT 6
 #define TCU_SOLENOID_COUNT 2
 #define TCU_TABLE_WIDTH 2
+#define ts_show_ignitionPinMode true
