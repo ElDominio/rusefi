@@ -55,11 +55,25 @@ void applyIACposition(percent_t position) {
 	float duty = PERCENT_TO_DUTY(position);
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
-	setEtbIdlePosition(position);
+	// stepper overtravel can push position outside 0..100, the ETB never sees that
+	setEtbIdlePosition(clampPercentValue(position));
 #endif // EFI_ELECTRONIC_THROTTLE_BODY
 
 	if (engineConfiguration->useStepperIdle) {
-		iacMotor.setTargetPosition(duty * engineConfiguration->idleStepperTotalSteps);
+#if EFI_STEPPER_IDLE_EXT
+		// [tag:stepper_idle_ext] driver on the throttle: leave the valve where it is
+		if (engine->module<IdleController>().unmock().isStepperHeld) {
+			return;
+		}
+#endif // EFI_STEPPER_IDLE_EXT
+		float stepDuty = duty;
+#if EFI_STEPPER_IDLE_EXT
+		// [tag:stepper_idle_ext] flipped: step 0 (parking/home end) is the maximum-air end
+		if (getCustomPage()->stepperFlipDirection) {
+			stepDuty = 1 - duty;
+		}
+#endif // EFI_STEPPER_IDLE_EXT
+		iacMotor.setTargetPosition(stepDuty * engineConfiguration->idleStepperTotalSteps);
 	} else {
 		// if not spinning or running a bench test, turn off the idle valve(s) to be quieter and save power
 #if EFI_SHAFT_POSITION_INPUT
@@ -201,6 +215,10 @@ void initIdleHardware() {
 
 StepperMotorBase& getIacMotorForUnitTest() {
 	return iacMotor;
+}
+
+bool isIdleStepDirDriverEnabledForUnitTest() {
+	return iacStepperHw.isDriverEnabled();
 }
 
 void resetIdleHardwareForUnitTest() {

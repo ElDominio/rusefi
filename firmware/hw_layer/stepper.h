@@ -19,6 +19,15 @@ public:
 	void pause(int divisor = 1) const;
 	// pause and enter the idle mode (less current consumption)
 	virtual void sleep();
+	// release the coils/driver completely, e.g. when ignition voltage is lost
+	virtual void deenergize() { }
+
+	// Coil phase bookkeeping for drivers whose commutation phase lives in the ECU (dual H-bridge /
+	// push-pull). Invariant: phase == f(step position), established by ending every home-stop
+	// park/resync on phase zero, so a position restored from backup RAM can restore the phase too.
+	// Step/Direction drivers keep the phase in their own indexer, hence the no-op defaults.
+	virtual bool isAtPhaseZero() const { return true; }
+	virtual void restorePhase(int /*position*/) { }
 
 protected:
 	void setReactionTime(float ms);
@@ -32,6 +41,9 @@ public:
 	void initialize(brain_pin_e stepPin, brain_pin_e directionPin, pin_output_mode_e directionPinMode, float reactionTime, brain_pin_e enablePin, pin_output_mode_e enablePinMode);
 
 	bool step(bool positive) override;
+	void deenergize() override;
+
+	bool isDriverEnabled() const;
 
 private:
 	bool pulse();
@@ -52,6 +64,9 @@ public:
     bool step(bool positive) override;
 
 	void sleep() override;
+
+	bool isAtPhaseZero() const override;
+	void restorePhase(int position) override;
 
 protected:
 	bool update(float dutyMult);
@@ -84,6 +99,13 @@ protected:
 
 	void changeCurrentPosition(bool positive);
 	void postCurrentPosition(void);
+	// steps past the counted closed position until the hardware phase is back at zero, see isAtPhaseZero()
+	bool alignPhaseAtHomeStop();
+#if EFI_STEPPER_IDLE_EXT
+	bool handleHomeStopResync(int& targetPosition);
+	int m_resyncStepsDone = 0;
+	bool m_homeResyncDone = false;
+#endif // EFI_STEPPER_IDLE_EXT
 
 	StepperHw* m_hw = nullptr;
 

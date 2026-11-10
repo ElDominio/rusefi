@@ -266,3 +266,262 @@ TEST(Actuators, IdleSingleSolenoidHeldWhileEngineStopped) {
 	applyIACposition(70);
 	EXPECT_EQ(0, getIdleSolenoidOpenDutyForUnitTest());
 }
+
+// ---------------------------------------------------------------------------------------------
+// Stepper idle extensions [tag:stepper_idle_ext]
+// ---------------------------------------------------------------------------------------------
+
+static StepperMotorBase& initStepDirStepperForExtTest(int totalSteps) {
+	Sensor::setMockValue(SensorType::BatteryVoltage, 12);
+
+	engineConfiguration->useStepperIdle = true;
+	engineConfiguration->useHbridgesToDriveIdleStepper = false;
+	engineConfiguration->useRawOutputToDriveIdleStepper = false;
+	engineConfiguration->idleStepperTotalSteps = totalSteps;
+	engineConfiguration->idle.stepperStepPin = Gpio::C13;
+	engineConfiguration->idle.stepperDirectionPin = Gpio::C14;
+	engineConfiguration->stepperEnablePin = Gpio::C15;
+	// start from the saved (= 0 in unit tests) position, no parking steps
+	engineConfiguration->stepperForceParkingEveryRestart = false;
+
+	EXPECT_NO_FATAL_ERROR(initIdleHardware());
+
+	auto& iac = getIacMotorForUnitTest();
+	// first iteration latches the initial (saved = 0) position
+	iac.doIteration();
+	EXPECT_EQ(0, iac.m_currentPosition);
+	return iac;
+}
+
+static void iterate(StepperMotorBase& iac, int count) {
+	for (int i = 0; i < count; i++) {
+		iac.doIteration();
+	}
+}
+
+TEST(Actuators, StepperHomeStopResync) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	getCustomPage()->stepperHomeResyncSteps = 5;
+	auto& iac = initStepDirStepperForExtTest(100);
+
+	applyIACposition(10);
+	iterate(iac, 10);
+	EXPECT_EQ(10, iac.m_currentPosition);
+
+	// commanded past the home (closed) stop: travel down to 0 normally...
+	applyIACposition(-20);
+	iterate(iac, 10);
+	EXPECT_EQ(0, iac.m_currentPosition);
+
+	// ...then 5 extra steps into the stop while the counter stays at 0
+	for (int i = 0; i < 5; i++) {
+		iac.doIteration();
+		EXPECT_EQ(0, iac.m_currentPosition);
+		EXPECT_TRUE(isIdleMotorBusy()) << "resync step " << i;
+	}
+
+	// resync done: held at 0 even though the target is -20, no more hammering
+	iterate(iac, 10);
+	EXPECT_EQ(0, iac.m_currentPosition);
+	EXPECT_FALSE(isIdleMotorBusy());
+
+	// opening again re-arms the resync for the next home command
+	applyIACposition(3);
+	iterate(iac, 3);
+	EXPECT_EQ(3, iac.m_currentPosition);
+}
+
+TEST(Actuators, StepperHomeStopResyncDisabledKeepsLegacyNegativeTravel) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	getCustomPage()->stepperHomeResyncSteps = 0;
+	auto& iac = initStepDirStepperForExtTest(100);
+
+	applyIACposition(-5);
+	iterate(iac, 10);
+	EXPECT_EQ(-5, iac.m_currentPosition);
+}
+
+TEST(Actuators, StepperHeldOffIdleIgnoresNewTarget) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	auto& iac = initStepDirStepperForExtTest(200);
+
+	applyIACposition(25);
+	EXPECT_FLOAT_EQ(50, iac.getTargetPosition());
+
+	auto& idle = engine->module<IdleController>().unmock();
+	idle.isStepperHeld = true;
+	applyIACposition(80);
+	EXPECT_FLOAT_EQ(50, iac.getTargetPosition());
+
+	idle.isStepperHeld = false;
+	applyIACposition(80);
+	EXPECT_FLOAT_EQ(160, iac.getTargetPosition());
+}
+
+TEST(Actuators, StepDirDriverEnableHold) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	// default: driver stays enabled after a step
+	EXPECT_TRUE(getCustomPage()->stepperKeepDriverEnabled);
+	auto& iac = initStepDirStepperForExtTest(200);
+	EXPECT_FALSE(isIdleStepDirDriverEnabledForUnitTest());
+	applyIACposition(10);
+	iac.doIteration();
+	EXPECT_EQ(1, iac.m_currentPosition);
+	EXPECT_TRUE(isIdleStepDirDriverEnabledForUnitTest());
+
+	// ignition voltage lost: driver released
+	Sensor::setMockValue(SensorType::BatteryVoltage, 0);
+	iac.doIteration();
+	EXPECT_FALSE(isIdleStepDirDriverEnabledForUnitTest());
+}
+
+TEST(Actuators, StepDirDriverLegacyReleaseAfterEachStep) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	getCustomPage()->stepperKeepDriverEnabled = false;
+	auto& iac = initStepDirStepperForExtTest(200);
+
+	applyIACposition(10);
+	iac.doIteration();
+	EXPECT_EQ(1, iac.m_currentPosition);
+	EXPECT_FALSE(isIdleStepDirDriverEnabledForUnitTest());
+}
+
+// Parking must end on coil phase 0, so position 0 == phase 0 and a restored position can restore
+// the phase. With 5 total steps the 5 parking steps end on phase 3; 3 more align it.
+TEST(Actuators, HbridgeStepperParkingEndsOnPhaseZero) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	Sensor::setMockValue(SensorType::BatteryVoltage, 12);
+
+	engineConfiguration->useStepperIdle = true;
+	engineConfiguration->useHbridgesToDriveIdleStepper = true;
+	engineConfiguration->idleStepperTotalSteps = 5;
+	engineConfiguration->stepperNumMicroSteps = STEPPER_FULL;
+	engineConfiguration->stepperForceParkingEveryRestart = true;
+	engineConfiguration->stepperParkingExtraSteps = 0;
+
+	EXPECT_NO_FATAL_ERROR(initIdleHardware());
+	auto& iac = getIacMotorForUnitTest();
+
+	iac.doIteration();
+	EXPECT_EQ(0, iac.m_currentPosition);
+	expectHbridgePhase(0);
+
+	applyIACposition(100);
+	for (int step = 1; step <= 5; step++) {
+		iac.doIteration();
+		EXPECT_EQ(step, iac.m_currentPosition);
+		expectHbridgePhase(step);
+	}
+}
+
+TEST(Actuators, HbridgeStepperRestorePhase) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	DualHBridgeStepper hb;
+
+	engineConfiguration->stepperNumMicroSteps = STEPPER_FULL;
+	hb.restorePhase(8);
+	EXPECT_TRUE(hb.isAtPhaseZero());
+	hb.restorePhase(5);
+	EXPECT_FALSE(hb.isAtPhaseZero());
+	hb.restorePhase(-4);
+	EXPECT_TRUE(hb.isAtPhaseZero());
+	hb.restorePhase(-3);
+	EXPECT_FALSE(hb.isAtPhaseZero());
+
+	// micro-stepping: one step = 8 entries of the 32-entry table, so 4 steps per cycle as well
+	engineConfiguration->stepperNumMicroSteps = STEPPER_FOURTH;
+	hb.restorePhase(4);
+	EXPECT_TRUE(hb.isAtPhaseZero());
+	hb.restorePhase(2);
+	EXPECT_FALSE(hb.isAtPhaseZero());
+}
+
+TEST(Actuators, StepperMinMoveDeadband) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	getCustomPage()->stepperMinMoveSteps = 4;
+	auto& iac = initStepDirStepperForExtTest(400);
+
+	applyIACposition(10);
+	EXPECT_FLOAT_EQ(40, iac.getTargetPosition());
+
+	// +/-0.5% of 400 steps = 2 steps of jitter: ignored
+	applyIACposition(10.5f);
+	EXPECT_FLOAT_EQ(40, iac.getTargetPosition());
+	applyIACposition(9.5f);
+	EXPECT_FLOAT_EQ(40, iac.getTargetPosition());
+
+	// a real change of 4+ steps goes through
+	applyIACposition(11);
+	EXPECT_FLOAT_EQ(44, iac.getTargetPosition());
+
+	// fully closing always goes through, even when within the deadband
+	applyIACposition(0.5f);
+	EXPECT_FLOAT_EQ(2, iac.getTargetPosition());
+	applyIACposition(0);
+	EXPECT_FLOAT_EQ(0, iac.getTargetPosition());
+}
+
+TEST(Actuators, StepperMinMoveDisabledKeepsOneStepThreshold) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	getCustomPage()->stepperMinMoveSteps = 0;
+	auto& iac = initStepDirStepperForExtTest(400);
+
+	applyIACposition(10);
+	applyIACposition(10.5f);
+	EXPECT_FLOAT_EQ(42, iac.getTargetPosition());
+}
+
+// Flip stepper direction: step 0 (parking/home end) is the maximum-air end, 100% duty still
+// means maximum air. For pintle valves whose only safe stop is fully retracted.
+TEST(Actuators, StepperFlipDirectionMapsDutyToSteps) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	auto& iac = initStepDirStepperForExtTest(400);
+
+	// flip off: legacy mapping
+	getCustomPage()->stepperFlipDirection = false;
+	applyIACposition(25);
+	EXPECT_FLOAT_EQ(100, iac.getTargetPosition());
+
+	getCustomPage()->stepperFlipDirection = true;
+	applyIACposition(25);
+	EXPECT_FLOAT_EQ(300, iac.getTargetPosition());
+	applyIACposition(100);
+	EXPECT_FLOAT_EQ(0, iac.getTargetPosition());
+	applyIACposition(0);
+	EXPECT_FLOAT_EQ(400, iac.getTargetPosition());
+}
+
+TEST(Actuators, StepperFlipDirectionHomeResyncAtFullAir) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	getCustomPage()->stepperFlipDirection = true;
+	getCustomPage()->stepperHomeResyncSteps = 3;
+	auto& iac = initStepDirStepperForExtTest(100);
+
+	applyIACposition(90);
+	iterate(iac, 10);
+	EXPECT_EQ(10, iac.m_currentPosition);
+
+	// 110% (overtravel) -> step -10: travel to the home stop, resync there, then hold at 0
+	applyIACposition(110);
+	iterate(iac, 10);
+	EXPECT_EQ(0, iac.m_currentPosition);
+	iterate(iac, 3);
+	EXPECT_TRUE(isIdleMotorBusy());
+	iterate(iac, 5);
+	EXPECT_EQ(0, iac.m_currentPosition);
+	EXPECT_FALSE(isIdleMotorBusy());
+}
+
+TEST(Actuators, StepperFlipDirectionNeverPastExtendedEnd) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	getCustomPage()->stepperFlipDirection = true;
+	auto& iac = initStepDirStepperForExtTest(10);
+
+	// -50% would be step 15: the stepper layer stops at totalSteps regardless
+	applyIACposition(-50);
+	EXPECT_FLOAT_EQ(15, iac.getTargetPosition());
+	iterate(iac, 30);
+	EXPECT_EQ(10, iac.m_currentPosition);
+	EXPECT_FALSE(isIdleMotorBusy());
+}

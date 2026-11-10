@@ -626,6 +626,12 @@
 #define EFI_VVT_ANGLE_WINDOW TRUE
 #endif
 
+// Stepper idle extensions (overtravel, closed-stop resync, hold off-idle, keep driver enabled)
+// [tag:stepper_idle_ext]. Tiny code footprint, so like EFI_VVT_ANGLE_WINDOW this defaults TRUE on F4 too.
+#ifndef EFI_STEPPER_IDLE_EXT
+#define EFI_STEPPER_IDLE_EXT TRUE
+#endif
+
 // External CAN ETB controller (CH32V203-based board, see can_etb.h) - bench experiment, opt-in per board
 #ifndef EFI_EXTERNAL_CAN_ETB
 #define EFI_EXTERNAL_CAN_ETB FALSE

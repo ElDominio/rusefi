@@ -246,3 +246,4 @@
 // Cranking No-Spark (external distributor/module fires spark during cranking, ECU takes over after)
 #define EFI_CRANKING_NO_SPARK TRUE
 #define EFI_VVT_ANGLE_WINDOW TRUE
+#define EFI_STEPPER_IDLE_EXT TRUE

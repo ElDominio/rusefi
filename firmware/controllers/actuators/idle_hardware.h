@@ -31,5 +31,6 @@ float getIdleSolenoidCloseDutyForUnitTest();
 
 class StepperMotorBase;
 StepperMotorBase& getIacMotorForUnitTest();
+bool isIdleStepDirDriverEnabledForUnitTest();
 void resetIdleHardwareForUnitTest();
 #endif // EFI_UNIT_TEST

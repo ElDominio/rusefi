@@ -744,4 +744,33 @@ struct_no_prefix page6_s
 	int16_t vvtAngleWindowExhaustMax;Exhaust (cam 2 of each bank) maximum valid VVT angle in VVT position gauge units (-360 to 360). Use the full mechanical cam travel plus ~10 deg margin - not the VVT target table range.;"deg", 1, 0, -360, 360, 0
 	uint8_t vvtAngleWindowRecoveryCycles;Recovery: after this many engine cycles in a row with no cam tooth inside the window the next tooth is accepted even if outside - so a wrong engine phase (synced on a noise pulse) can correct itself. Noise between good teeth does not count - only cycles where no good tooth arrived at all. Shared by intake and exhaust.;"cycles", 1, 0, 1, 50, 0
 
+	! --- Stepper idle extensions (EFI_STEPPER_IDLE_EXT) [tag:stepper_idle_ext] ---
+	! Workarounds for idle steppers whose real position drifts away from the step counter
+	! (lost steps). Main explanation: StepperMotorBase::doIteration() in hw_layer/stepper.cpp.
+	! - Overtravel: widens the final idle position clamp from 0..100 to -N..100+N (stepper idle
+	!   only; ETB idle and modeled-flow idle stay 0..100) so closed loop can command past the
+	!   nominal travel to compensate for a desynced valve.
+	! - Home-stop resync: whenever the commanded step position reaches 0 or below, overdrive this many
+	!   extra steps into the home (parking) stop and redefine that as position 0. Home is the closed
+	!   end normally, the fully-open end with stepperFlipDirection (i.e. 100% duty).
+	! - Flip direction: duty -> steps becomes (1 - duty) * totalSteps, so step 0 / the parking stop is
+	!   the maximum-air end while 100% duty still means maximum air. For pintle valves whose only
+	!   safe hard stop is fully retracted (open): overdriving the extended end unscrews the shaft.
+	!   Combine with the Dir pin mode that makes parking retract. Overtravel below 0% is blocked and
+	!   the target is never allowed past totalSteps (the extended end) while flipped.
+	! - Hold off-idle: while TPS is above the PID deactivation threshold the stepper target is
+	!   frozen and the idle PID integrator is preserved (not reset), so the valve stays put during
+	!   acceleration and closed loop resumes where it left off on return to idle.
+	! - Min move (deadband): target changes smaller than N steps are ignored, see
+	!   StepperMotorBase::setTargetPosition(). Reuses the former stepperIdleExtPad byte (old value 0 =
+	!   legacy 1-step threshold), so no PAGE6_DATA_VERSION bump was needed.
+	! - Keep driver enabled: Step/Direction drivers only. Keeps the driver enable pin asserted between
+	!   steps instead of releasing it after every step, so the coils keep holding torque.
+	uint8_t stepperOvertravelPercent;Stepper idle: how far past 0..100% the final idle position may go, so closed loop can push a desynced valve beyond its nominal travel. 0 = disabled (legacy 0..100 clamp). Stepper idle only.;"%", 1, 0, 0, 100, 0
+	uint8_t stepperHomeResyncSteps;Stepper idle: when the commanded step position reaches the home (parking) end - 0% duty normally, 100% duty with Flip stepper direction - drive this many extra steps into that stop and reset the step counter there. 0 = disabled.;"steps", 1, 0, 0, 255, 0
+	uint8_t stepperMinMoveSteps;Stepper idle: deadband - ignore target changes smaller than this many steps, so sensor noise (e.g. TPS jitter through the dashpot taper) doesn't keep the valve hunting. Moves all the way to the home (parking) end always go through. 0 or 1 = legacy (react to any 1-step change).;"steps", 1, 0, 0, 50, 0
+	bit stepperHoldOffIdle,"enabled","disabled";Stepper idle: freeze the stepper while TPS is above the idle PID deactivation threshold (the driver is accelerating). The idle PID integrator is held instead of reset, so closed loop resumes where it left off when the throttle closes.
+	bit stepperFlipDirection,"flipped","normal";Stepper idle: flip how idle duty maps to steps. Normal: step 0 (parking end) = 0% duty. Flipped: step 0 (parking end) = 100% duty, so parking/resync/overtravel push into the maximum-air end while 100% still means maximum air. Use when the valve's only safe stop is fully open/retracted; set the Dir pin mode so that parking retracts. Overtravel below 0% is blocked while flipped.
+	bit stepperKeepDriverEnabled,"enabled","disabled";Stepper idle (Step/Direction driver only): keep the driver enable pin asserted between steps so the coils hold the valve, instead of releasing it after every step. Released when ignition voltage is lost.
+
 end_struct

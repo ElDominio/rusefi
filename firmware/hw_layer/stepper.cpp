@@ -10,6 +10,7 @@
 #include "pch.h"
 
 #include "stepper.h"
+#include "custom_page.h"
 
 #if !EFI_UNIT_TEST
 RUSEFI_STACK_ROOT(StepperMotor, ThreadTask);
@@ -22,7 +23,16 @@ float StepperMotorBase::getTargetPosition() const {
 void StepperMotorBase::setTargetPosition(float targetPositionSteps) {
 	// When the IAC position value change is insignificant (lower than this threshold), leave the poor valve alone
 	// When we get a larger change, actually update the target stepper position
-	if (std::abs(m_targetPosition - targetPositionSteps) >= 1) {
+	float minMove = 1;
+#if EFI_STEPPER_IDLE_EXT
+	// [tag:stepper_idle_ext] configurable deadband against noise-driven hunting
+	minMove = std::max(1.0f, (float)getCustomPage()->stepperMinMoveSteps);
+	// a move all the way to the home (step 0) end always goes through (also arms the home resync)
+	bool closing = targetPositionSteps <= 0 && m_targetPosition > 0;
+#else
+	bool closing = false;
+#endif // EFI_STEPPER_IDLE_EXT
+	if (closing || std::abs(m_targetPosition - targetPositionSteps) >= minMove) {
 		m_targetPosition = targetPositionSteps;
 	}
 }
@@ -111,15 +121,27 @@ void StepperMotorBase::setInitialPosition() {
 			changeCurrentPosition(false);
 		}
 
+		// keep pushing into the stop until the coil phase is back at zero, so that position 0 always
+		// corresponds to phase 0 (see StepperHw::isAtPhaseZero)
+		if (!alignPhaseAtHomeStop()) {
+			initialPositionSet = false;
+			return;
+		}
+
 		// set & save zero stepper position after the parking completion
 		m_currentPosition = 0;
 		saveStepperPos(m_currentPosition);
 		// todo: is this a slow operation on the start-up path?
 		efiPrintf("Stepper: parking finished time=%lums", (unsigned long)getTimeNowMs());
 	} else {
+		// Restored from backup RAM: re-establish the coil phase that matches this position,
+		// otherwise the first step after boot energizes a pattern the rotor isn't at and the
+		// valve can jump the wrong way / lose steps (dual H-bridge / push-pull only).
+		m_hw->restorePhase(m_currentPosition);
 		// The initial target position should correspond to the saved stepper position.
 		// Idle thread starts later and sets a new target position.
-		setTargetPosition(m_currentPosition);
+		// Assigned directly: the move deadband must not keep a stale target here.
+		m_targetPosition = m_currentPosition;
 	}
 
 	initialPositionSet = true;
@@ -127,11 +149,11 @@ void StepperMotorBase::setInitialPosition() {
 
 void StepperMotorBase::doIteration() {
 	int targetPosition = efiRound(getTargetPosition(), 1);
-	int currentPosition = m_currentPosition;
 
 	// stepper requires +12V
 	if (!isIgnVoltage()) {
 	  initialPositionSet = false;
+		m_hw->deenergize();
 		m_hw->pause();
 		return;
 	}
@@ -140,6 +162,22 @@ void StepperMotorBase::doIteration() {
 		setInitialPosition();
 		return;
 	}
+
+#if EFI_STEPPER_IDLE_EXT
+	if (getCustomPage()->stepperFlipDirection) {
+		// [tag:stepper_idle_ext] flipped: totalSteps is the extended end with no safe stop, never
+		// command past it whatever the idle controller asks for
+		targetPosition = std::min(targetPosition, m_totalSteps);
+	}
+
+	if (handleHomeStopResync(targetPosition)) {
+		// this iteration was spent on a resync step
+		return;
+	}
+#endif // EFI_STEPPER_IDLE_EXT
+
+	// read after the resync above, which may have re-referenced the counter
+	int currentPosition = m_currentPosition;
 
 	if (targetPosition == currentPosition) {
 		m_hw->sleep();
@@ -160,6 +198,64 @@ void StepperMotorBase::doIteration() {
 	saveStepperPos(m_currentPosition);
 #endif
 }
+
+bool StepperMotorBase::alignPhaseAtHomeStop() {
+	// at most one full electrical cycle (4 full steps); bounded in case the hardware cannot reach
+	// phase zero (e.g. stepping mode changed at runtime)
+	for (int i = 0; i < 4 && !m_hw->isAtPhaseZero(); i++) {
+		if (!m_hw->step(false)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+#if EFI_STEPPER_IDLE_EXT
+/**
+ * [tag:stepper_idle_ext] Home-stop resync.
+ *
+ * A stepper idle valve has no position feedback: m_currentPosition is just a step counter, and
+ * every step the motor fails to make (low voltage, binding, too short a reaction time, asymmetric
+ * spring/vacuum load) silently shifts the real valve away from the counter. Parking on boot is the
+ * only regular re-reference. When the idle controller commands 0% or below while running, the
+ * valve is meant to sit on the home (parking) stop anyway, so we drive stepperHomeResyncSteps extra
+ * steps into that stop (the counter does not move while doing so) and re-define it as position 0.
+ * Home is the closed end normally, the fully-open end with stepperFlipDirection (100% duty).
+ * Commands below 0 (overtravel, see clampIdleValvePosition) are held at 0: the valve cannot go
+ * further than the stop, hammering it would only re-introduce windup.
+ *
+ * Returns true if this iteration was consumed by a resync step.
+ */
+bool StepperMotorBase::handleHomeStopResync(int& targetPosition) {
+	int resyncSteps = getCustomPage()->stepperHomeResyncSteps;
+	if (resyncSteps == 0 || targetPosition > 0) {
+		m_homeResyncDone = false;
+		m_resyncStepsDone = 0;
+		return false;
+	}
+
+	targetPosition = 0;
+	if (m_homeResyncDone || m_currentPosition > 0) {
+		// still on the way down to 0 (normal stepping), or already resynced at this home command
+		return false;
+	}
+
+	bool needMoreSteps = m_resyncStepsDone < resyncSteps
+		// then finish on phase zero to keep the position <-> phase invariant, bounded to one cycle
+		|| (!m_hw->isAtPhaseZero() && m_resyncStepsDone < resyncSteps + 4);
+	if (needMoreSteps) {
+		m_isBusy = true;
+		m_hw->step(false);
+		m_resyncStepsDone++;
+		return true;
+	}
+
+	m_currentPosition = 0;
+	saveStepperPos(m_currentPosition);
+	m_homeResyncDone = true;
+	return false;
+}
+#endif // EFI_STEPPER_IDLE_EXT
 
 bool StepperMotorBase::isBusy() const {
 	return m_isBusy;
@@ -184,9 +280,25 @@ bool StepDirectionStepper::pulse() {
 	stepPin.setValue(false);
 	pause();
 
+#if EFI_STEPPER_IDLE_EXT
+	// [tag:stepper_idle_ext] keep the coils energized between steps (holding torque); released by
+	// deenergize() when ignition voltage goes away
+	if (getCustomPage()->stepperKeepDriverEnabled) {
+		return true;
+	}
+#endif // EFI_STEPPER_IDLE_EXT
 	enablePin.setValue(true); // disable stepper
 
 	return true;
+}
+
+void StepDirectionStepper::deenergize() {
+	enablePin.setValue(true); // disable stepper
+}
+
+bool StepDirectionStepper::isDriverEnabled() const {
+	// enable is active-low in logic terms: setValue(false) enables the driver
+	return !enablePin.getLogicValue();
 }
 
 void StepperHw::sleep() {

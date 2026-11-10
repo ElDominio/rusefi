@@ -489,6 +489,17 @@ float IdleController::getClosedLoop(IIdleController::Phase phase, float tpsPos, 
 
 	isIdleClosedLoop = phase == IIdleController::Phase::Idling;
 
+#if EFI_STEPPER_IDLE_EXT
+	if (!isIdleClosedLoop && isStepperHeld) {
+		// [tag:stepper_idle_ext] Stepper held off-idle: the valve is not moving, so keep the PID
+		// exactly as it was (no reset, no integration) and resume from it on return to idle. On a
+		// valve with lost steps the integrator is what carries the offset between the step counter
+		// and the real valve - wiping it on every tip-in would make each return to idle dip.
+		idleState = TPS_THRESHOLD;
+		return m_lastAutomaticPosition;
+	}
+#endif // EFI_STEPPER_IDLE_EXT
+
 	if (!isIdleClosedLoop) {
 		// Don't store old I and D terms if PID doesn't work anymore.
 		// Otherwise they will affect the idle position much later, when the throttle is closed.¿
@@ -603,6 +614,8 @@ float IdleController::getIdlePosition(float rpm) {
 		// update TS flag
 		isIdling = (phase == Phase::Idling) || (phase == Phase::CrankToIdleTaper);
 
+		isStepperHeld = shouldHoldStepper(phase, tps, useModeledFlow);
+
     if (phase != m_lastPhase && phase == Phase::Idling) {
         // Just entered idle, reset timer
  		    m_timeInIdlePhase.reset();
@@ -702,7 +715,7 @@ float IdleController::getIdlePosition(float rpm) {
 				iacPosition += getCustomPage()->quickWarmupEtbOffset;
 			}
 
-			iacPosition = clampPercentValue(iacPosition);
+			iacPosition = clampIdleValvePosition(iacPosition, useModeledFlow);
 
 // todo: while is below disabled for unit tests?
 #if EFI_TUNER_STUDIO && (EFI_PROD_CODE || EFI_SIMULATOR)
@@ -753,6 +766,47 @@ float IdleController::getIdlePosition(float rpm) {
 		return 0;
 #endif // EFI_SHAFT_POSITION_INPUT
 
+}
+
+/**
+ * [tag:stepper_idle_ext] Freeze the stepper while the driver is on the throttle: TPS above the
+ * same threshold that takes the idle controller out of closed loop. Explicit TPS check rather than
+ * Phase::Running, which is also entered on a failed TPS or the VSS gate.
+ */
+bool IdleController::shouldHoldStepper(Phase phase, SensorResult tps, bool useModeledFlow) const {
+#if EFI_STEPPER_IDLE_EXT
+	return getCustomPage()->stepperHoldOffIdle
+		&& engineConfiguration->useStepperIdle
+		&& !useModeledFlow
+		&& phase != Phase::Cranking
+		&& tps.Valid
+		&& tps.Value > engineConfiguration->idlePidDeactivationTpsThreshold;
+#else
+	UNUSED(phase);
+	UNUSED(tps);
+	UNUSED(useModeledFlow);
+	return false;
+#endif // EFI_STEPPER_IDLE_EXT
+}
+
+/**
+ * Final clamp of the idle valve position. Normally 0..100%. [tag:stepper_idle_ext] For stepper
+ * idle with stepperOvertravelPercent > 0 it is widened to -N..100+N so closed loop can command a
+ * valve that lost steps past its nominal travel (only upward when stepperFlipDirection is set). ETB idle and modeled-flow idle (which feeds
+ * airmass math) always stay 0..100; applyIACposition() re-clamps the ETB idle position.
+ */
+percent_t clampIdleValvePosition(float position, bool useModeledFlow) {
+#if EFI_STEPPER_IDLE_EXT
+	float overtravel = getCustomPage()->stepperOvertravelPercent;
+	if (overtravel > 0 && engineConfiguration->useStepperIdle && !useModeledFlow) {
+		// flipped: below 0% is past the extended (closed) end, which has no safe stop
+		float minPosition = getCustomPage()->stepperFlipDirection ? 0 : -overtravel;
+		return clampF(minPosition, position, 100 + overtravel);
+	}
+#else
+	UNUSED(useModeledFlow);
+#endif // EFI_STEPPER_IDLE_EXT
+	return clampPercentValue(position);
 }
 
 // Periodic tick from the fast callback scheduler: recompute idle position and push it to hardware.

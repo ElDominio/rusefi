@@ -107,6 +107,24 @@ bool DualHBridgeStepper::update(float dutyMult) {
 	return true;
 }
 
+// Each step() advances m_phase by 1 (full-step, 4-entry cycle) or by maxNumSteps (micro-stepping,
+// 32-entry microPhases table), so phase is a pure function of step position once position 0 is
+// pinned to phase 0 - see StepperHw::isAtPhaseZero().
+bool DualHBridgeStepper::isAtPhaseZero() const {
+	if (engineConfiguration->stepperNumMicroSteps > 1) {
+		return (m_phase & tableSizeMask) == 0;
+	}
+	return (m_phase & 0x03) == 0;
+}
+
+void DualHBridgeStepper::restorePhase(int position) {
+	if (engineConfiguration->stepperNumMicroSteps > 1) {
+		m_phase = (position * maxNumSteps) & tableSizeMask;
+	} else {
+		m_phase = position & 0x03;
+	}
+}
+
 void DualHBridgeStepper::sleep() {
 	float sleepingCoef = minI(engineConfiguration->stepperMinDutyCycle, engineConfiguration->stepperMaxDutyCycle) * phaseDutyCycleDivisor;
 	update(sleepingCoef);

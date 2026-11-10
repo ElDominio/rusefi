@@ -1010,3 +1010,88 @@ TEST(idle_v2, ghostCamOverridesIdleTimingPid) {
 	// to open loop.
 	EXPECT_FLOAT_EQ(-20, dut.getIdleTimingAdjustment(1050));
 }
+
+// [tag:stepper_idle_ext] Off-idle hold keeps the idle PID integrator instead of resetting it.
+static float buildIntegratorThenGoOffIdle(IdleController& dut, bool held) {
+	engineConfiguration->idleRpmPid.pFactor = 0;
+	engineConfiguration->idleRpmPid.iFactor = 1;
+	engineConfiguration->idleRpmPid.dFactor = 0;
+	engineConfiguration->idleRpmPid.periodMs = 0;
+	engineConfiguration->idleRpmPid.minValue = -50;
+	engineConfiguration->idleRpmPid.maxValue = 50;
+	engineConfiguration->idlerpmpid_iTermMin = -50;
+	engineConfiguration->idlerpmpid_iTermMax = 50;
+	engineConfiguration->idlePidRpmDeadZone = 0;
+
+	// burn the post-reset damping period
+	dut.getClosedLoop(ICP::Idling, 0, 900, 900);
+	advanceTimeUs(5'000'000);
+
+	// below target: integrator winds up positive
+	for (int i = 0; i < 20; i++) {
+		dut.getClosedLoop(ICP::Idling, 0, 850, 900);
+	}
+	float integral = dut.getIdlePid()->getIntegration();
+	EXPECT_GT(integral, 0);
+
+	dut.isStepperHeld = held;
+	dut.getClosedLoop(ICP::Running, 50, 3000, 900);
+	dut.getClosedLoop(ICP::Running, 50, 3000, 900);
+	dut.isStepperHeld = false;
+
+	// back to idle at target: P=0, so only a surviving integrator shows up
+	dut.getClosedLoop(ICP::Idling, 0, 900, 900);
+	return integral;
+}
+
+TEST(idle_v2, stepperHeldOffIdlePreservesIntegrator) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	dut.init();
+
+	float integral = buildIntegratorThenGoOffIdle(dut, /*held*/ true);
+	EXPECT_NEAR(integral, dut.getIdlePid()->getIntegration(), 1e-3);
+}
+
+TEST(idle_v2, offIdleWithoutHoldResetsIntegrator) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+	dut.init();
+
+	buildIntegratorThenGoOffIdle(dut, /*held*/ false);
+	EXPECT_NEAR(0, dut.getIdlePid()->getIntegration(), 1e-3);
+}
+
+TEST(idle_v2, stepperOvertravelClamp) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->useStepperIdle = true;
+	getCustomPage()->stepperOvertravelPercent = 0;
+	EXPECT_FLOAT_EQ(100, clampIdleValvePosition(130, false));
+	EXPECT_FLOAT_EQ(0, clampIdleValvePosition(-10, false));
+
+	getCustomPage()->stepperOvertravelPercent = 20;
+	EXPECT_FLOAT_EQ(115, clampIdleValvePosition(115, false));
+	EXPECT_FLOAT_EQ(120, clampIdleValvePosition(130, false));
+	EXPECT_FLOAT_EQ(-20, clampIdleValvePosition(-30, false));
+
+	// modeled flow feeds airmass math: always 0..100
+	EXPECT_FLOAT_EQ(100, clampIdleValvePosition(130, true));
+
+	// not a stepper: always 0..100
+	engineConfiguration->useStepperIdle = false;
+	EXPECT_FLOAT_EQ(100, clampIdleValvePosition(130, false));
+}
+
+TEST(idle_v2, stepperOvertravelClampFlipped) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->useStepperIdle = true;
+	getCustomPage()->stepperFlipDirection = true;
+	getCustomPage()->stepperOvertravelPercent = 20;
+
+	// up into the safe (fully open) stop is allowed...
+	EXPECT_FLOAT_EQ(120, clampIdleValvePosition(130, false));
+	// ...below 0% would extend past closed: blocked
+	EXPECT_FLOAT_EQ(0, clampIdleValvePosition(-10, false));
+}

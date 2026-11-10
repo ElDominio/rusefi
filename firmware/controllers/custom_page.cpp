@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 25;
+static constexpr uint32_t PAGE6_DATA_VERSION = 27;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -328,6 +328,15 @@ void customPageSetDefaults() {
 	d.vvtAngleWindowExhaustMin = -360;
 	d.vvtAngleWindowExhaustMax = 360;
 	d.vvtAngleWindowRecoveryCycles = 3;
+
+	// Stepper idle extensions [tag:stepper_idle_ext] - only the driver-enable hold is on by
+	// default (Step/Direction drivers only); everything else is opt-in.
+	d.stepperOvertravelPercent = 0;
+	d.stepperHomeResyncSteps = 0;
+	d.stepperMinMoveSteps = 0;
+	d.stepperHoldOffIdle = false;
+	d.stepperFlipDirection = false;
+	d.stepperKeepDriverEnabled = true;
 }
 
 void loadCustomPage() {

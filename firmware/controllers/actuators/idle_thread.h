@@ -82,6 +82,8 @@ public:
 
 	float getOffIdleAdder(Phase phase, float rpm);
 
+	bool shouldHoldStepper(Phase phase, SensorResult tps, bool useModeledFlow) const;
+
 	void onConfigurationChange(engine_configuration_s const * previousConfig) override final;
 	void onFastCallback() override final;
 	void onEngineStop() override final;
@@ -157,6 +159,7 @@ private:
 };
 
 percent_t getIdlePosition();
+percent_t clampIdleValvePosition(float position, bool useModeledFlow);
 
 void applyIACposition(percent_t position);
 void setManualIdleValvePosition(int positionPercent);
