@@ -7401,3 +7401,83 @@ and `paralela-f427` targets, since they share `prepend.txt`.
 Validation: `gen_config_board.sh ./config/boards/fw-custom-paralela-master paralela` exits 0 and
 `rusefi_paralela.ini` now lists the field. SIGNATURE_HASH changed (26731 -> 32262), so the regenerated
 .ini needs matching firmware. Firmware was not built or flashed, and `paralela-f427` was not regenerated.
+
+## 2026-11-10 - Stepper idle extensions (EFI_STEPPER_IDLE_EXT)
+
+Trigger: a paralela user's stepper (Step/Direction driver, 410 steps, 8 ms reaction time, forced parking
+every restart) drifts toward closed during a drive until 100% no longer reaches target idle RPM. Raising
+total steps works around it. Added four page-6 options plus one unconditional bug fix, all under
+`[tag:stepper_idle_ext]`.
+
+- Bounded overtravel (`stepperOvertravelPercent`, 0 = off). The final idle clamp widens from 0..100 to
+  -N..100+N, stepper only. ETB idle and modeled flow stay 0..100, and `applyIACposition` re-clamps the ETB
+  idle position. Open loop is still clamped 0..100 earlier, so only closed loop and adders can use the
+  extra range. The PID output/iTerm limits stay tune values, as before.
+- Closed-stop resync (`stepperClosedResyncSteps`, 0 = off). Once the target is <= 0 and the counter
+  reaches 0, the stepper takes N extra closing steps while the counter stays fixed, then resets the counter
+  to 0. It then stays there with no further hammering. This re-arms when the target goes > 0, and
+  negative targets are held at 0 while it is enabled.
+- Hold off-idle (`stepperHoldOffIdle`). Above `idlePidDeactivationTpsThreshold` (explicit TPS check, not
+  `Phase::Running`, which the VSS gate and a failed TPS also select), `applyIACposition` skips the
+  stepper target update. `getClosedLoop` returns the last value without resetting or integrating the
+  PID, so the integrator, which carries the counter-vs-valve offset, survives each tip-in. New live bit:
+  `isStepperHeld`.
+- Keep driver enabled (`stepperKeepDriverEnabled`, default ON, Step/Direction only).
+  `StepDirectionStepper::pulse()` used to release the enable pin after every step, so the coils carried
+  no holding current at rest, and each step started from zero coil current. It now stays enabled and is
+  released via the new `StepperHw::deenergize()` when ignition voltage is lost. This is the suspected root
+  cause for the user's one-direction drift: it is cheap to A/B by toggling the option.
+- Bug fix (unconditional): with dual H-bridge or push-pull drivers, the coil phase `m_phase` restarted
+  at 0 on every boot, while the position was restored from backup RAM. The first step could then move
+  the rotor the wrong way, losing up to about 2 steps per key cycle. Parking and resync now finish on
+  phase 0, so position 0 always means phase 0, and a restored position restores the phase
+  (`isAtPhaseZero`/`restorePhase`). Step/Direction drivers keep the phase in their own indexer, so
+  there are no-op defaults.
+- `idleStepperTargetPosition` output channel: uint8 -> int16. It already wrapped above 255 steps (this
+  tune: 410), and overtravel makes it signed. The neighbouring layout is unchanged, because the
+  following uint32 was already 4-aligned.
+
+| File | Change |
+|------|--------|
+| `firmware/integration/config_page_6.txt` | 2 uint8 + pad + 2 bits after the VVT angle window block. |
+| `firmware/controllers/custom_page.cpp` | Defaults; `PAGE6_DATA_VERSION` 25 -> 26. |
+| `firmware/hw_layer/stepper.{h,cpp}`, `stepper_dual_hbridge.cpp` | Resync, phase invariant, enable hold, `deenergize`. |
+| `firmware/controllers/actuators/idle_thread.{h,cpp}` | `shouldHoldStepper`, held PID path, `clampIdleValvePosition`. |
+| `firmware/controllers/actuators/idle_hardware.{h,cpp}` | Hold gate, ETB re-clamp, unit-test accessor. |
+| `firmware/controllers/actuators/idle_state.txt`, `console/binary/output_channels.txt` | `isStepperHeld` bit; int16 target position. |
+| `firmware/tunerstudio/tunerstudio.template.ini` | 4 fields in the Stepper dialog. |
+| efifeatures (f4 base, unit_tests, simulator), `FEATURE_FLAGS.md` | `EFI_STEPPER_IDLE_EXT` TRUE everywhere (tiny). |
+| `unit_tests/tests/actuators/test_idle_hardware.cpp`, `tests/test_idle_controller.cpp` | 10 new tests. |
+
+Validation: full unit-test suite passes (1780). `fw-custom-paralela-master` (paralela, F4) firmware builds.
+Generated `rusefi_paralela.ini` contains the new fields. Not tested on hardware.
+
+Follow-ups: the Coasting phase still resets the idle PID, so a desync offset is still lost on decel.
+Consider holding there too if the hold helps. When not force-parking, a Step/Direction driver powered
+down at key-off also loses its indexer phase. This tune force-parks, so it is not affected.
+
+### 2026-11-10 (later) - Stepper idle: Flip direction, min-move deadband, home-stop resync
+
+Context: the paralela valve is a pintle. Fully extended means closed and has no safe stop
+(overdriving it unscrews the shaft). Fully retracted means open and has a hard stop. With Dir pin
+"default inverted", the duty -> air mapping was right, but parking/resync/negative overtravel all
+pushed into the extended end. Flipping the Dir pin alone would make parking safe but invert duty
+-> air. The two had to be decoupled.
+
+- `stepperFlipDirection` (bit, default normal). Flipped: steps = (1 - duty) * totalSteps, so step 0
+  (parking/home end) is 100% duty = maximum air. In `clampIdleValvePosition` the overtravel lower
+  bound becomes 0%, and `doIteration` caps the target at `m_totalSteps` (extended end) whatever the
+  idle controller asks. Flip off = previous behavior. Intended setup for this valve: Dir pin "default"
+  (parking retracts) + Flip on. Idle tables are unchanged, because duty -> air is the same as before.
+- `stepperClosedResyncSteps` renamed `stepperHomeResyncSteps` ("Home-stop resync"). The logic is
+  unchanged (target step <= 0); with Flip on it fires at 100% duty into the open stop.
+- `stepperMinMoveSteps` (deadband, replaces `stepperIdleExtPad`). `setTargetPosition` ignores changes
+  < N steps, except a move all the way to step 0, which always goes through. Motivation:
+  `iacByTpsTaper` = 15% over a 3% TPS threshold turns +/-0.1% closed-throttle TPS noise into +/-0.5%
+  duty (about 2 steps of 410), so the valve was hunting all the time. The initial-position assignment
+  in `setInitialPosition` now bypasses the deadband.
+- `PAGE6_DATA_VERSION` 26 -> 27 (the new bit shifted `stepperKeepDriverEnabled`).
+
+Validation: full unit-test suite 1786 passed (6 new tests: deadband x2, flip mapping, flip home
+resync, flip extended-end cap, flip overtravel clamp). `fw-custom-paralela-master` firmware builds. Not
+tested on hardware.
