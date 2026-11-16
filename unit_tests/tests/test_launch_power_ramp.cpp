@@ -12,7 +12,7 @@ static LaunchPowerRamp& getRamp() {
 static void setupRamp() {
 	auto* d = getCustomPage();
 	d->launchPowerRampEnabled = true;
-	d->smWotTpsThreshold = 90; // WOT gate
+	engineConfiguration->smWotTpsThreshold = 90; // WOT gate
 
 	// Simple ramp: 10 deg at t=0, decaying linearly to 0 at t=5s.
 	for (int i = 0; i < LAUNCH_POWER_RAMP_CURVE_SIZE; i++) {

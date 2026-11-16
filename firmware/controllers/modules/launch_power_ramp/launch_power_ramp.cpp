@@ -16,7 +16,7 @@ void LaunchPowerRamp::onSlowCallback() {
     }
 
     bool launchActive = engine->launchController.isLaunchCondition;
-    bool isWot = Sensor::getOrZero(SensorType::DriverThrottleIntent) >= cfg->smWotTpsThreshold;
+    bool isWot = Sensor::getOrZero(SensorType::DriverThrottleIntent) >= engineConfiguration->smWotTpsThreshold;
 
     // Start the ramp on the launch-release edge (leaving the line) while at WOT. This is
     // when the car actually launches; x=0 of the curve is this moment.

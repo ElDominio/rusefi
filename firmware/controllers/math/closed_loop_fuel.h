@@ -29,17 +29,15 @@ struct FuelingBank {
 class ShortTermFuelTrim : public EngineModule, public short_term_fuel_trim_state_s {
 public:
 	void init(stft_s *stftCfg);
+	// Maps an Engine State Machine state onto one of the existing STFT region cells. Used when
+	// "state based STFT" is enabled so the SM state, rather than RPM/load thresholds, selects
+	// the active trim cell. Public/static so it can be unit-tested directly.
 	static ft_region_e regionForSmState(EngineStateMachineState state);
 	// EngineModule implementation
 	void onSlowCallback() override;
 	bool needsDelayedShutoff() override;
 
 	ClosedLoopFuelResult getCorrection(float rpm, float fuelLoad);
-
-	// Maps an Engine State Machine state onto one of the existing STFT region cells. Used when
-	// "state based STFT" is enabled so the SM state, rather than RPM/load thresholds, selects
-	// the active trim cell. Public/static so it can be unit-tested directly.
-	static ft_region_e regionForSmState(EngineStateMachineState state);
 
 #if ! EFI_UNIT_TEST
 private:
