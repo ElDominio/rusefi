@@ -25,6 +25,36 @@ ETB reporting runs from `updateState` so a jam remains eligible for reporting
 after another warning consumed the interval, even if `reportEtbJammed` is not
 called again.
 
+## Oil pressure and boost cut details
+
+- The running minimum-oil-pressure check (`minimumOilPressureBins`/`Values`) is deferred
+  until the 5 s after-start window (`minOilPressureAfterStart`) is over, so cold oil can
+  build pressure before the running check starts counting.
+- An active boost fuel cut (`BoostCut`) is kept until a *valid* MAP reading falls below the
+  resume pressure; an invalid MAP sample neither starts nor releases the cut.
+- The boost cut limit includes the Lua limiter adder (`EFI_LUA_LIMITER`) before the
+  comparison.
+
+## Check Engine Light, limp and malfunction codes
+
+- Codes live in `WarningCodeState` (`controllers/gauges/malfunction_central.{h,cpp}`):
+  `MAX_STORED_ERROR_CODES_COUNT` (32) codes are stored, the first `MAX_ERROR_CODES_COUNT`
+  (10) are reported. With SD logging (`EFI_FILE_LOGGING`) `PastCodeHistory`
+  (`past_codes.*`, stored by `hw_layer/past_codes_storage.*`) keeps expired codes.
+- `warning()` stores a code, prints a console line and takes a freeze frame (DtcManager). It
+  is used by `LimpManager` cuts and by `MisfireController` for
+  `OBD_Random_Misfire`. `addError()` stores the code only; the `CheckEngineLight` voltage range
+  checks and TPS Range/Intermittent codes use it.
+- `CheckEngineLight` sums points (TPS circuit low/high, TPS intermittent, active range DTCs,
+  latched misfire). `celPointsThreshold` lights the lamp, `celBlinkPointsThreshold` makes
+  `isCelBlinkingActive()` true.
+- `MILController` blinks the stored codes with a 5 s steady prelude, 2 s between codes and
+  finishes the code being blinked when it disappears. While `isCelBlinkingActive()` it flashes
+  plainly at 200 ms instead ([tag:alphax_cel_blink]). The key-on lamp check with no codes
+  requires `celOnKoeo`.
+- Limp mode (`OperatingModes`) latches on an ETB jam or on `isCelBlinkingActive()`.
+  There is no cumulative-severity trigger.
+
 ## How-To: Adding an Engine Protection Feature
 
 To add a new protection feature (e.g., "Fuel Pressure Protection"), follow this 4-step pattern:
