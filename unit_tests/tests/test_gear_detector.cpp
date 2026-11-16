@@ -290,3 +290,15 @@ TEST(GearDetector, RpmSourceOnlyAppliesWithOutputShaftSpeed) {
 	// 3000 ISS / 2000 OSS - proves ISS (not the deliberately-wrong 9999 RPM) fed the numerator.
 	EXPECT_NEAR_M3(1.5f, dut.getGearboxRatio());
 }
+
+// Corner case from upstream 937936ee1f: a non-finite ratio is neutral, not first gear.
+TEST(GearDetector, NonFiniteRatioIsNeutral) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	engineConfiguration->totalGearsCount = 3;
+	engineConfiguration->gearRatio[0] = 3;
+	engineConfiguration->gearRatio[1] = 2;
+	engineConfiguration->gearRatio[2] = 1;
+	auto& dut = engine->module<GearDetector>().unmock();
+	EXPECT_EQ(0u, dut.determineGearFromRatio(NAN));
+	EXPECT_EQ(0u, dut.determineGearFromRatio(INFINITY));
+}

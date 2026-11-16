@@ -97,6 +97,11 @@ void GearDetector::onSlowCallback() {
 }
 
 size_t GearDetector::determineGearFromRatio(float ratio) const {
+	// NaN makes every comparison below false, otherwise falling through to first gear.
+	if (!std::isfinite(ratio)) {
+		return 0;
+	}
+
 	auto gearCount = engineConfiguration->totalGearsCount;
 	if (gearCount == 0) {
 		// No gears, we only have neutral.
@@ -233,7 +238,7 @@ void GearDetector::computeSlip() {
 
 	// Ideal (no-slip) RPM for the Detected Gear given the current driveshaft speed.
 	float expectedRpm = getRpmInGear(m_currentGear);
-	if (expectedRpm <= 0) {
+	if (!std::isfinite(expectedRpm) || expectedRpm <= 0 || !std::isfinite(actualRpm.Value)) {
 		return;
 	}
 
