@@ -150,13 +150,13 @@ float DownshiftBlipper::runPid(float rpm, float dt) {
 
 // Inhibit gate (not a throttle multiplier): while Sport Mode is required and not active, the
 // blip cannot start, and an active blip is treated as a termination condition. Same pattern as
-// ExhaustCutoutController::getInputHigh() / EngineStateMachine::isPopsAndBangsBlocked().
+// ExhaustCutoutController::getInputHigh() / OperatingModes::isPopsAndBangsBlocked().
 bool DownshiftBlipper::isSportModeGateBlocking() const {
 	auto cfg = getCustomPage();
 	if (!cfg->downshiftBlipperRequireSportMode) {
 		return false;
 	}
-	return !engine->module<EngineStateMachine>().unmock().engineSmIsSportMode;
+	return !engine->module<OperatingModes>().unmock().engineSmIsSportMode;
 }
 
 void DownshiftBlipper::onFastCallback() {

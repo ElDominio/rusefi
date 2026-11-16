@@ -359,12 +359,12 @@ TEST(etb, sportPedalMultiplier) {
 	}
 
 	// Sport Mode off -> sport pedal inactive -> passthru target.
-	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = false;
+	engine->module<OperatingModes>().unmock().engineSmIsSportMode = false;
 	Sensor::setMockValue(SensorType::AcceleratorPedal, 40.0f, true);
 	EXPECT_NEAR(40, etb.getSetpoint().value_or(-1), EPS4D);
 
 	// Sport Mode on -> sport pedal active -> target multiplied by 1.5.
-	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = true;
+	engine->module<OperatingModes>().unmock().engineSmIsSportMode = true;
 	Sensor::setMockValue(SensorType::AcceleratorPedal, 40.0f, true);
 	EXPECT_NEAR(60, etb.getSetpoint().value_or(-1), EPS4D);
 

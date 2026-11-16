@@ -240,7 +240,7 @@ TEST(DownshiftBlipper, sportModeGateBlocksEntry) {
 
 	auto cfg = getCustomPage();
 	cfg->downshiftBlipperRequireSportMode = true;
-	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = false; // gate is blocking
+	engine->module<OperatingModes>().unmock().engineSmIsSportMode = false; // gate is blocking
 
 	setSensors(2700, 80, 0);
 	latchGear(eth, 4);
@@ -258,7 +258,7 @@ TEST(DownshiftBlipper, sportModeGateCutsActiveBlip) {
 
 	auto cfg = getCustomPage();
 	cfg->downshiftBlipperRequireSportMode = true;
-	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = true; // not blocking yet
+	engine->module<OperatingModes>().unmock().engineSmIsSportMode = true; // not blocking yet
 
 	setSensors(2700, 80, 0);
 	latchGear(eth, 4);
@@ -270,7 +270,7 @@ TEST(DownshiftBlipper, sportModeGateCutsActiveBlip) {
 	ASSERT_TRUE(dut().isActive());
 
 	// Sport Mode turns off mid-blip -> gate trips -> ramp closed, then lockout.
-	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = false;
+	engine->module<OperatingModes>().unmock().engineSmIsSportMode = false;
 	dut().onFastCallback();
 	eth.moveTimeForwardMs(40);
 	dut().onFastCallback();

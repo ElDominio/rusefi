@@ -11,7 +11,7 @@ ExhaustCutoutController& dut() {
 }
 
 void setSportMode(bool v) {
-	engine->module<EngineStateMachine>().unmock().engineSmIsSportMode = v;
+	engine->module<OperatingModes>().unmock().engineSmIsSportMode = v;
 }
 
 } // namespace

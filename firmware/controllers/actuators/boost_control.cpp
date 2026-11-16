@@ -129,7 +129,7 @@ expected<float> BoostController::getSetpoint() {
 	// Limp Mode boost ceiling: cap the boost target while limp is latched.
 	// Note: this only limits closed-loop correction directly; open-loop wastegate duty is only
 	// affected indirectly, if and only if boostOpenLoopYAxis == GPPWM_BoostTarget.
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+	if (engine->module<OperatingModes>().unmock().engineSmIsLimp) {
 		float limpBoost = getCustomPage()->limpModeBoostLimit;
 		if (limpBoost > 0 && target > limpBoost) {
 			target = limpBoost;

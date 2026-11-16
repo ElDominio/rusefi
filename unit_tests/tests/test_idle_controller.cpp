@@ -154,7 +154,7 @@ TEST(idle_v2, clutchOrNeutralOverridesVssGate) {
 
 	// No gear signal, but the clutch switch itself reports disengaged -- override still applies.
 	Sensor::resetMockValue(SensorType::DetectedGear);
-	getCustomPage()->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
+	engineConfiguration->smUpshiftClutchSwitch = sm_clutch_switch_e::ClutchDown;
 	engine->engineState.clutchDownState = true;
 	EXPECT_EQ(ICP::Idling, dut.determinePhase(1000, targetInfo, 0, 25, 10));
 
@@ -227,7 +227,7 @@ TEST(idle_v2, ghostCamBypassesCoastingClassification) {
 	// Without ghost cam, an RPM excursion past IdleExitRpm reads as Coasting (baseline).
 	EXPECT_EQ(ICP::Coasting, dut.determinePhase(1200, targetInfo, 0, 0, 10));
 
-	engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam = true;
+	engine->module<OperatingModes>().unmock().engineSmIsGhostCam = true;
 
 	// With ghost cam active, the same RPM excursion must stay Idling instead.
 	EXPECT_EQ(ICP::Idling, dut.determinePhase(1200, targetInfo, 0, 0, 10));
@@ -1159,7 +1159,7 @@ TEST(idle_v2, ghostCamOverridesIdleTimingPid) {
 	Sensor::setMockValue(SensorType::VehicleSpeed, 0);
 	Sensor::setMockValue(SensorType::Clt, 70);
 
-	engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam = true;
+	engine->module<OperatingModes>().unmock().engineSmIsGhostCam = true;
 
 	dut.getIdlePosition(1050);
 

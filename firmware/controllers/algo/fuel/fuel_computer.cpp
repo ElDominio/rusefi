@@ -31,7 +31,7 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 	float lambda = getTargetLambda(rpm, load);
 
 	// Limp Mode AFR enrichment: richen the target (lower lambda) while limp is latched.
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+	if (engine->module<OperatingModes>().unmock().engineSmIsLimp) {
 		lambda *= (1.0f - getCustomPage()->limpModeAfrEnrichment * 0.01f);
 	}
 
@@ -45,15 +45,15 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 
 	// Eco Mode: lean the mixture to an absolute target AFR while the economy overlay is active.
 	// Blends in/out over smSlowStateTransitionEnabled's ramp instead of snapping (see
-	// EngineStateMachine::getEcoModeBlend()).
-	float ecoModeBlend = engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
+	// OperatingModes::getEcoModeBlend()).
+	float ecoModeBlend = engine->module<OperatingModes>().unmock().getEcoModeBlend();
 	if (ecoModeBlend > 0) {
 		afr = interpolateClamped(0, afr, 1, getCustomPage()->ecoTargetAfr, ecoModeBlend);
 		lambda = afr / stoich; // keep published targetLambda consistent with the eco target
 	}
 
 	// Quick Warmup: override lambda target when cold + idle to aid catalyst light-off.
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+	if (engine->module<OperatingModes>().unmock().engineSmIsQuickWarmup) {
 		lambda = getCustomPage()->quickWarmupLambdaTarget;
 		afr = lambda * stoich;
 	}
@@ -61,8 +61,8 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 #if EFI_GHOST_CAM
 	// Ghost Cam: override AFR target while active. STFT stays active and chases this target.
 	// Blends in/out over smSlowStateTransitionEnabled's ramp instead of snapping (see
-	// EngineStateMachine::getGhostCamBlend()).
-	float ghostCamBlend = engine->module<EngineStateMachine>().unmock().getGhostCamBlend();
+	// OperatingModes::getGhostCamBlend()).
+	float ghostCamBlend = engine->module<OperatingModes>().unmock().getGhostCamBlend();
 	if (ghostCamBlend > 0) {
 		afr = interpolateClamped(0, afr, 1, getCustomPage()->ghostCamTargetAfr, ghostCamBlend);
 		lambda = afr / stoich;

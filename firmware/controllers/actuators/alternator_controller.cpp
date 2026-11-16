@@ -73,7 +73,7 @@ expected<float> AlternatorController::getSetpoint() {
 	// getEcoModeBlend()).
 	const float ecoTarget = getCustomPage()->ecoAlternatorVoltageTarget;
 	if (ecoTarget > 0) {
-		float ecoModeBlend = engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
+		float ecoModeBlend = engine->module<OperatingModes>().unmock().getEcoModeBlend();
 		if (ecoModeBlend > 0) {
 			targetVoltage = interpolateClamped(0, targetVoltage, 1, ecoTarget, ecoModeBlend);
 		}

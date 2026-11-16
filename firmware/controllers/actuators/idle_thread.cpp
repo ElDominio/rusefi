@@ -61,7 +61,7 @@ IIdleController::TargetInfo IdleController::getTargetRpm(float clt) {
 	// Blends the target RPM in/out over smSlowStateTransitionEnabled's ramp instead of snapping
 	// (see getGhostCamBlend()); entry/exit thresholds are derived from the blended base so they
 	// stay consistent with idleTarget throughout the transition.
-	float ghostCamBlend = engine->module<EngineStateMachine>().unmock().getGhostCamBlend();
+	float ghostCamBlend = engine->module<OperatingModes>().unmock().getGhostCamBlend();
 	if (ghostCamBlend > 0) {
 		float ghostRpm = static_cast<float>(getCustomPage()->ghostCamIdleRpm);
 		float blendedTarget = interpolateClamped(0, target, 1, ghostRpm, ghostCamBlend);
@@ -115,7 +115,7 @@ IIdleController::Phase IdleController::determinePhase(float rpm, IIdleController
 
 	bool ghostCamBypassesCoasting = false;
 #if EFI_GHOST_CAM
-	ghostCamBypassesCoasting = engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam;
+	ghostCamBypassesCoasting = engine->module<OperatingModes>().unmock().engineSmIsGhostCam;
 #endif // EFI_GHOST_CAM
 
 	// [tag:idle_clutch_disengaged] The engine can return to idle independently of
@@ -630,7 +630,7 @@ float IdleController::getIdlePosition(float rpm) {
 
 #if EFI_GHOST_CAM
 		{
-			bool ghostCamActive = engine->module<EngineStateMachine>().unmock().engineSmIsGhostCam;
+			bool ghostCamActive = engine->module<OperatingModes>().unmock().engineSmIsGhostCam;
 			if (m_lastGhostCamActive && !ghostCamActive) {
 				// Ghost cam deactivated: reset CLID integrator and restore normal timing PID config.
 				getIdlePid()->reset();
@@ -687,7 +687,7 @@ float IdleController::getIdlePosition(float rpm) {
 		// Blends the open-loop duty in/out over smSlowStateTransitionEnabled's ramp instead of
 		// snapping (see getGhostCamBlend()).
 		if (phase == Phase::Idling) {
-			float ghostCamDutyBlend = engine->module<EngineStateMachine>().unmock().getGhostCamBlend();
+			float ghostCamDutyBlend = engine->module<OperatingModes>().unmock().getGhostCamBlend();
 			if (ghostCamDutyBlend > 0) {
 				iacPosition = interpolateClamped(0, iacPosition, 1, getCustomPage()->ghostCamIdleBaseDuty, ghostCamDutyBlend);
 				baseIdlePosition = iacPosition;
@@ -711,12 +711,12 @@ float IdleController::getIdlePosition(float rpm) {
 			  isIdleClosedLoop = false;
 			}
 
-			if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+			if (engine->module<OperatingModes>().unmock().engineSmIsPopsAndBangs) {
 				iacPosition += getCustomPage()->popsAndBangsAirAdd;
 			}
 
 			// Quick Warmup: feed-forward IAC offset to compensate for torque lost to timing retard + rich target.
-			if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+			if (engine->module<OperatingModes>().unmock().engineSmIsQuickWarmup) {
 				iacPosition += getCustomPage()->quickWarmupEtbOffset;
 			}
 

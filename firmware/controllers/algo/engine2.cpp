@@ -141,7 +141,7 @@ void EngineState::updateSparkSkip() {
 		// letting raw fuel accumulate in the exhaust before it is re-lit. 0 outside the window.
 		float popsAndBangsSparkSkip = 0.0f;
 #if EFI_ENGINE_STATE_MACHINE
-		popsAndBangsSparkSkip = engine->module<EngineStateMachine>().unmock().getPopsAndBangsSparkSkipRatio();
+		popsAndBangsSparkSkip = engine->module<OperatingModes>().unmock().getPopsAndBangsSparkSkipRatio();
 #endif // EFI_ENGINE_STATE_MACHINE
 
 		engine->softSparkLimiter.updateTargetSkipRatio(luaSoftSparkSkip, tractionControlSparkSkip);

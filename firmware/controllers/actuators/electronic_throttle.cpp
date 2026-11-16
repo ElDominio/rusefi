@@ -354,7 +354,7 @@ bool isSportPedalActive() {
 	}
 
 	if (cfg.sportPedalActivationMode == SPORT_PEDAL_SPORT_MODE) {
-		return engine->module<EngineStateMachine>().unmock().engineSmIsSportMode;
+		return engine->module<OperatingModes>().unmock().engineSmIsSportMode;
 	}
 
 	// SPORT_PEDAL_OFF
@@ -459,7 +459,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	}
 #endif /* EFI_ANTILAG_SYSTEM */
 
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+	if (engine->module<OperatingModes>().unmock().engineSmIsPopsAndBangs) {
 		targetPosition += getCustomPage()->popsAndBangsAirAdd;
 		shapeAdd(getCustomPage()->popsAndBangsAirAdd);
 	}
@@ -468,7 +468,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// the multiplier itself in/out over smSlowStateTransitionEnabled's ramp instead of snapping
 	// (see getEcoModeBlend()).
 	{
-		float ecoModeBlend = engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
+		float ecoModeBlend = engine->module<OperatingModes>().unmock().getEcoModeBlend();
 		if (ecoModeBlend > 0) {
 			float ecoMult = clampF(0.8f, getCustomPage()->ecoThrottleMult, 1.2f);
 			float ecoBlendMult = interpolateClamped(0, 1.0f, 1, ecoMult, ecoModeBlend);
@@ -478,7 +478,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	}
 
 	// Quick Warmup: feed-forward ETB offset to compensate for torque lost to timing retard + rich target.
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup) {
+	if (engine->module<OperatingModes>().unmock().engineSmIsQuickWarmup) {
 		targetPosition += getCustomPage()->quickWarmupEtbOffset;
 		shapeAdd(getCustomPage()->quickWarmupEtbOffset);
 	}
@@ -515,7 +515,7 @@ expected<percent_t> EtbController::getSetpointEtb() {
 	// Limp Mode ETB ceiling: cap throttle opening while limp is latched. Placed after the
 	// blipper (which fully replaces the target) so limp mode out-votes a rev-match blip, and
 	// before the rev limiter so the limiter can still pull the throttle further closed.
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+	if (engine->module<OperatingModes>().unmock().engineSmIsLimp) {
 		percent_t limpEtb = getCustomPage()->limpModeEtbLimit;
 		if (targetPosition > limpEtb) {
 			targetPosition = limpEtb;

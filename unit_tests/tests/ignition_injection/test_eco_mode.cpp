@@ -30,11 +30,11 @@ static void setupEco() {
 }
 
 static void tickEco(EngineTestHelper& eth, EngineStateMachineState state) {
-	eth.engine.module<EngineStateMachine>().unmock().updateEcoMode(state);
+	eth.engine.module<OperatingModes>().unmock().updateEcoMode(state);
 }
 
 static bool ecoActive(EngineTestHelper& eth) {
-	return eth.engine.module<EngineStateMachine>().unmock().engineSmIsEcoMode;
+	return eth.engine.module<OperatingModes>().unmock().engineSmIsEcoMode;
 }
 
 TEST(EcoMode, DisabledByDefault) {
@@ -122,7 +122,7 @@ TEST(EcoMode, TransientBlipDuringAccumulationStillEngages) {
 TEST(EcoMode, LimpModeOutVotesEco) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupEco();
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 	esm.engineSmIsLimp = true; // protective state wins
 
 	setTimeNowUs(1e6);
@@ -137,7 +137,7 @@ TEST(EcoMode, LimpModeOutVotesEco) {
 TEST(EcoMode, SportModeOutVotesEco) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupEco();
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 	esm.engineSmIsSportMode = true;
 
 	setTimeNowUs(1e6);
@@ -357,7 +357,7 @@ TEST(EcoMode, LimpModeOverridesEngageLock) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupEco();
 	getCustomPage()->ecoModeEngageLockTime = 1.0f;
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 
 	setTimeNowUs(1e6);
 	tickEco(eth, EngineStateMachineState::Idle);

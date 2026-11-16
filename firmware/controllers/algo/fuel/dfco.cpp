@@ -106,7 +106,7 @@ bool DfcoController::getState(const EngineStateMachine& sm) const {
 			return true;
 		}
 		if (!Sensor::hasSensor(SensorType::VehicleSpeed)) {
-			float decelThr = (float)getCustomPage()->smDecelRateThreshold;
+			float decelThr = (float)engineConfiguration->smDecelRateThreshold;
 			if (decelThr > 0 && sm.getLastRpmRate() < -decelThr) {
 				return true;
 			}
@@ -123,7 +123,7 @@ void DfcoController::update() {
 	// If P&B is active, don't cut fuel — we want rich, unburnt mixture for pops.
 	// Likewise, don't cut fuel while the SM has a shift in progress (Upshifting/Downshifting) —
 	// an abrupt fuel cut mid-shift fights the rev-match / RPM-hold modules and feels harsh.
-	if (sm.engineSmIsPopsAndBangs || sm.engineSmIsUpshifting || sm.engineSmIsDownshifting) {
+	if (engine->module<OperatingModes>().unmock().engineSmIsPopsAndBangs || sm.engineSmIsUpshifting || sm.engineSmIsDownshifting) {
 		newState = false;
 	}
 

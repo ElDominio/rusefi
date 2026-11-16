@@ -198,7 +198,7 @@ void MisfireController::onEnginePhase(float /*rpm*/, efitick_t edgeTimestamp,
 									  angle_t currentPhase, angle_t nextPhase) {
 	bool enabled = getCustomPage()->misfireDetectionEnabled;
 	bool idle = engine->module<EngineStateMachine>().unmock().engineSmIsIdle;
-	bool quickWarmup = engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup;
+	bool quickWarmup = engine->module<OperatingModes>().unmock().engineSmIsQuickWarmup;
 	bool monitoring = enabled && idle && !quickWarmup;
 
 	misfireDetectionActive = monitoring && m_emaSeeded && isSettled();

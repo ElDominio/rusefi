@@ -114,7 +114,7 @@ angle_t getRunningAdvance(float rpm, float engineLoad) {
 		(engine->module<IdleController>()->isIdlingOrTaper() || engine->module<IdleController>()->isCoastingAdvance())) {
 		// Quick Warmup: while active, a single absolute value replaces the idle timing curve outright
 		// (only meaningful here, since useSeparateAdvanceForIdle gates this whole block).
-		float idleAdvance = engine->module<EngineStateMachine>().unmock().engineSmIsQuickWarmup
+		float idleAdvance = engine->module<OperatingModes>().unmock().engineSmIsQuickWarmup
 			? getCustomPage()->quickWarmupIdleTimingOverride
 			: interpolate2d(rpm, config->idleAdvanceBins, config->idleAdvance);
 
@@ -314,7 +314,7 @@ angle_t IgnitionState::getAdvance(float rpm, float engineLoad) {
 
 angle_t IgnitionState::getWrappedAdvance(const float rpm, const float engineLoad) {
 	bool isCranking = engine->rpmCalculator.isCranking();
-	if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+	if (!isCranking && engine->module<OperatingModes>().unmock().engineSmIsPopsAndBangs) {
 		popsAndBangsTimingActive = true;
 		angle_t angle = getCustomPage()->popsAndBangsTimingOverride * luaTimingMult + luaTimingAdd;
 		wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
@@ -323,13 +323,13 @@ angle_t IgnitionState::getWrappedAdvance(const float rpm, const float engineLoad
 	popsAndBangsTimingActive = false;
     angle_t angle = getAdvance(rpm, engineLoad) * luaTimingMult + luaTimingAdd;
     // Limp Mode: pull timing while limp is latched (skipped during cranking above).
-    if (!isCranking && engine->module<EngineStateMachine>().unmock().engineSmIsLimp) {
+    if (!isCranking && engine->module<OperatingModes>().unmock().engineSmIsLimp) {
         angle -= getCustomPage()->limpModeTimingReduction;
     }
     // Eco Mode: add (or pull) timing while the economy overlay is active. Blends in/out over
     // smSlowStateTransitionEnabled's ramp instead of snapping (see getEcoModeBlend()).
     if (!isCranking) {
-        angle += getCustomPage()->ecoTimingAdder * engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
+        angle += getCustomPage()->ecoTimingAdder * engine->module<OperatingModes>().unmock().getEcoModeBlend();
     }
     wrapAngle(angle, "getWrappedAdvance", ObdCode::CUSTOM_ERR_ADCANCE_CALC_ANGLE);
     return angle;

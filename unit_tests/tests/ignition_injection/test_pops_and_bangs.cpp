@@ -29,7 +29,7 @@ static void setupPopsAndBangs() {
 
 // Helper: run the ESM P&B state machine with overrun=true at the given time
 static void tickPnb(EngineTestHelper& eth, bool overrun = true) {
-	eth.engine.module<EngineStateMachine>().unmock().updatePopsAndBangs(overrun);
+	eth.engine.module<OperatingModes>().unmock().updatePopsAndBangs(overrun);
 }
 
 // Helper: advance the crank revolution counter that drives the spark-cut "every X revs" window.
@@ -53,7 +53,7 @@ TEST(PopsAndBangs, DisabledByDefault) {
 	setupSensors();
 	setTimeNowUs(1e6);
 	tickPnb(eth, /*overrun=*/true);
-	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_FALSE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, ActivatesInOverrunWithRpmInWindow) {
@@ -62,7 +62,7 @@ TEST(PopsAndBangs, ActivatesInOverrunWithRpmInWindow) {
 	setupPopsAndBangs();
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_TRUE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, DoesNotActivateWhenNotInOverrun) {
@@ -71,7 +71,7 @@ TEST(PopsAndBangs, DoesNotActivateWhenNotInOverrun) {
 	setupPopsAndBangs();
 	setTimeNowUs(1e6);
 	tickPnb(eth, /*overrun=*/false);
-	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_FALSE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, DoesNotActivateBelowRpmHigh) {
@@ -81,7 +81,7 @@ TEST(PopsAndBangs, DoesNotActivateBelowRpmHigh) {
 	Sensor::setMockValue(SensorType::Rpm, 2000); // below popsAndBangsRpmHigh (2500)
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_FALSE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, DoesNotActivateAboveRpmMax) {
@@ -91,7 +91,7 @@ TEST(PopsAndBangs, DoesNotActivateAboveRpmMax) {
 	Sensor::setMockValue(SensorType::Rpm, 7000); // above popsAndBangsRpmMax (6000)
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_FALSE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, InhibitsDfcoDuringActive) {
@@ -108,7 +108,7 @@ TEST(PopsAndBangs, InhibitsDfcoDuringActive) {
 	tickPnb(eth);
 	eth.engine.periodicFastCallback(); // runs DfcoController::update()
 
-	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_TRUE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 	EXPECT_FALSE(eth.engine.module<DfcoController>().unmock().cutFuel());
 }
 
@@ -119,7 +119,7 @@ TEST(PopsAndBangs, DeactivatesWhenRpmFallsBelowRpmLow) {
 	setTimeNowUs(1e6);
 	tickPnb(eth);
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 	EXPECT_TRUE(esm.engineSmIsPopsAndBangs);
 
 	Sensor::setMockValue(SensorType::Rpm, 1600); // below popsAndBangsRpmLow (1800)
@@ -134,7 +134,7 @@ TEST(PopsAndBangs, DeactivatesAfterTimeout) {
 	setTimeNowUs(1e6);
 	tickPnb(eth);
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 	EXPECT_TRUE(esm.engineSmIsPopsAndBangs);
 
 	advanceTimeUs(2.1e6);
@@ -151,7 +151,7 @@ TEST(PopsAndBangs, DelayBeforeActivation) {
 	setTimeNowUs(1e6);
 	tickPnb(eth);
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 	EXPECT_FALSE(esm.engineSmIsPopsAndBangs); // delay not yet elapsed
 
 	advanceTimeUs(0.6e6);
@@ -166,7 +166,7 @@ TEST(PopsAndBangs, ColdEnginePreventsActivation) {
 	Sensor::setMockValue(SensorType::Clt, 20.0f); // below popsAndBangsCltMin (40)
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_FALSE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, InactiveWhenFeatureDisabled) {
@@ -176,7 +176,7 @@ TEST(PopsAndBangs, InactiveWhenFeatureDisabled) {
 	engineConfiguration->popsAndBangsEnabled = false;
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_FALSE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 // VSS irrelevant: overrun is determined by the ESM (which ignores VSS), so P&B works at zero speed
@@ -188,7 +188,7 @@ TEST(PopsAndBangs, VssIsIrrelevant) {
 	Sensor::setMockValue(SensorType::VehicleSpeed, 0.0f);
 	setTimeNowUs(1e6);
 	tickPnb(eth, /*overrun=*/true); // ESM overrun doesn't check VSS
-	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_TRUE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, DfcoLiveDataReflectsCutState) {
@@ -212,7 +212,7 @@ TEST(PopsAndBangs, SparkCutZeroWhenDisabled) {
 	setTimeNowUs(1e6);
 	tickPnb(eth);
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 	ASSERT_TRUE(esm.engineSmIsPopsAndBangs);
 	// Spark cut left disabled — ratio is always zero regardless of revolutions.
 	advanceRevs(eth, 50);
@@ -230,7 +230,7 @@ TEST(PopsAndBangs, SparkCutZeroWhenPnbInactive) {
 	setTimeNowUs(1e6);
 	tickPnb(eth, /*overrun=*/false); // P&B never activates
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 	ASSERT_FALSE(esm.engineSmIsPopsAndBangs);
 	advanceRevs(eth, 10);
 	EXPECT_FLOAT_EQ(0.0f, esm.getPopsAndBangsSparkSkipRatio());
@@ -243,7 +243,7 @@ TEST(PopsAndBangs, SparkCutOpensWindowEveryXRevs) {
 	setTimeNowUs(1e6);
 	setupSparkCut(eth); // everyRevs=3, cutPercent=50, duration=100ms
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 
 	// Not yet 3 revolutions since activation: still firing (ratio 0).
 	EXPECT_FLOAT_EQ(0.0f, esm.getPopsAndBangsSparkSkipRatio());
@@ -263,7 +263,7 @@ TEST(PopsAndBangs, SparkCutWindowClosesAfterDuration) {
 	setTimeNowUs(1e6);
 	setupSparkCut(eth);
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 
 	// Open the window.
 	advanceRevs(eth, 3);
@@ -293,7 +293,7 @@ TEST(PopsAndBangs, SparkCutPercentClampedTo100) {
 	setupSparkCut(eth);
 	getCustomPage()->popsAndBangsCutPercent = 150; // out of range, clamps to 100
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 	advanceRevs(eth, 3);
 	EXPECT_FLOAT_EQ(1.0f, esm.getPopsAndBangsSparkSkipRatio());
 }
@@ -308,7 +308,7 @@ TEST(PopsAndBangs, CutoutInhibitOffIgnoresCutoutState) {
 	eth.engine.module<ExhaustCutoutController>().unmock().isCutoutOpen = false;
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_TRUE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, CutoutInhibitBlocksActivationWhenCutoutClosed) {
@@ -319,7 +319,7 @@ TEST(PopsAndBangs, CutoutInhibitBlocksActivationWhenCutoutClosed) {
 	eth.engine.module<ExhaustCutoutController>().unmock().isCutoutOpen = false;
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_FALSE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, CutoutInhibitAllowsActivationWhenCutoutOpen) {
@@ -330,7 +330,7 @@ TEST(PopsAndBangs, CutoutInhibitAllowsActivationWhenCutoutOpen) {
 	eth.engine.module<ExhaustCutoutController>().unmock().isCutoutOpen = true;
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_TRUE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, CutoutInhibitExpiresActiveWindowWhenCutoutCloses) {
@@ -343,7 +343,7 @@ TEST(PopsAndBangs, CutoutInhibitExpiresActiveWindowWhenCutoutCloses) {
 	setTimeNowUs(1e6);
 	tickPnb(eth);
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 	ASSERT_TRUE(esm.engineSmIsPopsAndBangs);
 
 	cutout.isCutoutOpen = false;
@@ -356,10 +356,10 @@ TEST(PopsAndBangs, RequireSportModeBlocksActivationWhenSportModeOff) {
 	setupSensors();
 	setupPopsAndBangs();
 	getCustomPage()->popsAndBangsRequireSportMode = true;
-	eth.engine.module<EngineStateMachine>().unmock().engineSmIsSportMode = false;
+	eth.engine.module<OperatingModes>().unmock().engineSmIsSportMode = false;
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_FALSE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_FALSE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, RequireSportModeAllowsActivationWhenSportModeOn) {
@@ -367,10 +367,10 @@ TEST(PopsAndBangs, RequireSportModeAllowsActivationWhenSportModeOn) {
 	setupSensors();
 	setupPopsAndBangs();
 	getCustomPage()->popsAndBangsRequireSportMode = true;
-	eth.engine.module<EngineStateMachine>().unmock().engineSmIsSportMode = true;
+	eth.engine.module<OperatingModes>().unmock().engineSmIsSportMode = true;
 	setTimeNowUs(1e6);
 	tickPnb(eth);
-	EXPECT_TRUE(eth.engine.module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs);
+	EXPECT_TRUE(eth.engine.module<OperatingModes>().unmock().engineSmIsPopsAndBangs);
 }
 
 TEST(PopsAndBangs, SparkCutAutoDurationInRange) {
@@ -381,7 +381,7 @@ TEST(PopsAndBangs, SparkCutAutoDurationInRange) {
 	setupSparkCut(eth);
 	getCustomPage()->popsAndBangsCutDurationAuto = true;
 
-	auto& esm = eth.engine.module<EngineStateMachine>().unmock();
+	auto& esm = eth.engine.module<OperatingModes>().unmock();
 
 	// Open a window, then confirm it stays open at least the minimum (20ms) and closes
 	// by the maximum (500ms) — i.e. the random duration lands inside the 20-500ms range.

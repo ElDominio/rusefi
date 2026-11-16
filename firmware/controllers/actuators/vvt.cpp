@@ -96,7 +96,7 @@ expected<angle_t> VvtController::getSetpoint() {
 	// exhaust = cam 1). Opt-in so non-VVT and untuned setups are unaffected. Blends in/out over
 	// smSlowStateTransitionEnabled's ramp instead of snapping (see getEcoModeBlend()).
 	if (getCustomPage()->ecoModeVvtOverride) {
-		float ecoModeBlend = engine->module<EngineStateMachine>().unmock().getEcoModeBlend();
+		float ecoModeBlend = engine->module<OperatingModes>().unmock().getEcoModeBlend();
 		if (ecoModeBlend > 0) {
 			float ecoTarget = (m_cam == 0) ? getCustomPage()->ecoVvtIntakeTarget : getCustomPage()->ecoVvtExhaustTarget;
 			target = interpolateClamped(0, target, 1, ecoTarget, ecoModeBlend);
@@ -108,7 +108,7 @@ expected<angle_t> VvtController::getSetpoint() {
 	// Blends in/out over smSlowStateTransitionEnabled's ramp instead of snapping (see
 	// getGhostCamBlend()).
 	{
-		float ghostCamBlend = engine->module<EngineStateMachine>().unmock().getGhostCamBlend();
+		float ghostCamBlend = engine->module<OperatingModes>().unmock().getGhostCamBlend();
 		if (ghostCamBlend > 0) {
 			float ghostCamTarget = (m_cam == 0) ? getCustomPage()->ghostCamIntakeCamAngle : getCustomPage()->ghostCamExhaustCamAngle;
 			target = interpolateClamped(0, target, 1, ghostCamTarget, ghostCamBlend);

@@ -90,7 +90,7 @@ bool ExhaustCutoutController::getInputHigh() const {
 	}
 
 	if (cfg.exhaustCutoutActivationMode == EXHAUST_CUTOUT_SPORT_MODE) {
-		return engine->module<EngineStateMachine>().unmock().engineSmIsSportMode;
+		return engine->module<OperatingModes>().unmock().engineSmIsSportMode;
 	}
 
 	return false; // OFF or AUTO_SPORT_MODE (handled directly in onSlowCallback)
@@ -311,7 +311,7 @@ void ExhaustCutoutController::onSlowCallback() {
 		// Dedicated mode: open when the RPM/TPS/MAP auto-trigger is met OR Sport Mode is active;
 		// bypasses the Low/High behavior lookup entirely. The auto-trigger is always evaluated so
 		// its indicators and hold-open delay keep working while Sport Mode holds the cutout open.
-		bool sportModeActive = engine->module<EngineStateMachine>().unmock().engineSmIsSportMode;
+		bool sportModeActive = engine->module<OperatingModes>().unmock().engineSmIsSportMode;
 		isInputHigh = sportModeActive;
 		bool autoTriggered = evaluateAutoTrigger();
 		desiredOpen = autoTriggered || sportModeActive || isLuaOverrideActive;

@@ -111,7 +111,7 @@ float AirmassVeModelBase::getVe(float rpm, float load, bool postState) const {
 		ve *= ((100 + result.Value) * 0.01f);
 	}
 
-	if (engine->module<EngineStateMachine>().unmock().engineSmIsPopsAndBangs) {
+	if (engine->module<OperatingModes>().unmock().engineSmIsPopsAndBangs) {
 		return getCustomPage()->popsAndBangsVeOverride * PERCENT_DIV;
 	}
 
