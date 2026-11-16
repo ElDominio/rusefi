@@ -1,6 +1,11 @@
 #include "pch.h"
 #include "engine_state_machine.h"
 
+// [tag:alphax_esm_overlay_hook] AlphaX patches to the upstream state machine, each marked with this
+// tag: the EFI_ENGINE_STATE_MACHINE compile-out below, the Limp/Eco display enumerators and
+// holdRateClassification() (engine_state_machine.h), the traction-control Torque Reduction flag in
+// onSlowCallback(), and the rate-hold gate in determineState(). OperatingModes layers on top.
+
 void EngineStateMachine::setDefaultConfiguration() {
 	engineConfiguration->useEngineStateMachine = false;
 	engineConfiguration->stateBasedStft = false;
@@ -26,6 +31,8 @@ void EngineStateMachine::setDefaultConfiguration() {
 	engineConfiguration->smHotTempThreshold = 100;
 }
 
+#if EFI_ENGINE_STATE_MACHINE // [tag:alphax_esm_overlay_hook]
+
 void EngineStateMachine::reset() {
 	static_cast<engine_state_machine_state_s&>(*this) = {};
 	engineSmEnabled = isEnabled();
@@ -35,6 +42,7 @@ void EngineStateMachine::reset() {
 	m_accelHoldTimer.init();
 	m_accelStateTimer.init();
 	m_decelStateTimer.init();
+	m_rateHoldTimer.init();
 	m_shiftWindowOpen = false;
 	m_shiftIsUpshift = false;
 	m_shiftWindowOpenMs = 0;
@@ -131,6 +139,10 @@ void EngineStateMachine::onSlowCallback() {
 #else
 	bool flatShiftActive = false;
 #endif
+	// [tag:alphax_esm_overlay_hook] Traction control also reduces torque (ETB / timing / spark cut)
+	// but is not a gear shift: it raises the Torque Reduction overlay (which also makes the shift
+	// accumulator decay only) without driving the shift-direction flags.
+	engineSmIsTorqueReduction = engineSmIsTorqueReduction || engine->tractionController.isActive();
 
 	// RPM classification must continue without shift switches and during a flat shift.
 	updateShiftAccumulator(rpm, vss, vssValid, nowMs);
@@ -213,8 +225,11 @@ EngineStateMachineState EngineStateMachine::determineState(float rpm, float tps,
 	// lag is negligible at ~100 ms). Thresholds of 0 disable the respective state.
 	// Skipped while the IdleController considers us in closed-loop idle territory: RPM rate
 	// noise from idle hunting or AC/load compensation must not be misread as a driver-initiated
-	// tip-in/tip-out.
-	if (idlePhase != IIdleController::Phase::Idling) {
+	// tip-in/tip-out. Also skipped for smTransientHoldTimeMs after OperatingModes asks for a
+	// hold ([tag:alphax_esm_overlay_hook], Eco engage/disengage settle).
+	if (!m_rateHoldTimer.hasElapsedMs(static_cast<float>(engineConfiguration->smTransientHoldTimeMs))) {
+		// still within the post-overlay-edge settle hold-off
+	} else if (idlePhase != IIdleController::Phase::Idling) {
 		int16_t accelThr = engineConfiguration->smAccelRateThreshold;
 		int16_t decelThr = engineConfiguration->smDecelRateThreshold;
 
@@ -668,3 +683,17 @@ bool EngineStateMachine::evaluateShiftDirection(bool isUpshift, float currentVss
 		return m_shiftAccumulator <= -dnThr;
 	}
 }
+
+#else // !EFI_ENGINE_STATE_MACHINE [tag:alphax_esm_overlay_hook]
+
+// Engine State Machine compiled out (board set -DEFI_ENGINE_STATE_MACHINE=FALSE). The module stays
+// in the module list so consumers, live data and Lua lookups still link; it does nothing, every
+// engineSm* flag stays false and the transmission reads as always engaged. Defaults above stay.
+void EngineStateMachine::onEngineStop() {}
+void EngineStateMachine::onConfigurationChange(engine_configuration_s const*) {}
+bool EngineStateMachine::isEnabled() const { return false; }
+EngineStateMachineState EngineStateMachine::getCurrentState() const { return EngineStateMachineState::Off; }
+bool EngineStateMachine::isTransmissionEngaged() const { return true; }
+void EngineStateMachine::onSlowCallback() {}
+
+#endif // EFI_ENGINE_STATE_MACHINE

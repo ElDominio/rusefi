@@ -17,7 +17,11 @@ enum class EngineStateMachineState : uint8_t {
 	LaunchControl = 9,
 	Upshifting = 10,
 	Downshifting = 11,
-	// 12 and 13 are reserved for separate AlphaX operating-mode features.
+	// [tag:alphax_esm_overlay_hook] 12 and 13 are the AlphaX operating-mode display states
+	// published by OperatingModes (controllers/modules/operating_modes); this module never
+	// classifies them itself.
+	Limp = 12,
+	Eco = 13,
 	Accelerating = 14,
 	Decelerating = 15,
 };
@@ -36,6 +40,11 @@ public:
 	bool isTransmissionEngaged() const;
 	float getLastRpmRate() const { return m_lastRpmRate; }
 
+	// [tag:alphax_esm_overlay_hook] Lets OperatingModes hold the rate-based Accelerating/
+	// Decelerating classification off for smTransientHoldTimeMs: Eco Mode's own actuation is a
+	// real RPM transient that is not driver input and must not be classified as one.
+	void holdRateClassification() { m_rateHoldTimer.reset(); }
+
 private:
 	void reset();
 	EngineStateMachineState determineState(float rpm, float tps, float vss, bool vssValid);
@@ -50,6 +59,7 @@ private:
 	Timer m_accelHoldTimer;
 	Timer m_accelStateTimer;
 	Timer m_decelStateTimer;
+	Timer m_rateHoldTimer;
 	bool m_shiftWindowOpen = false;
 	bool m_shiftIsUpshift = false;
 	efitimems_t m_shiftWindowOpenMs = 0;

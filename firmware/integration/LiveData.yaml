@@ -353,6 +353,13 @@ Usages:
     output_name: esm
     engineModule: EngineStateMachine
 
+  - name: operating_modes_state
+    java: OperatingModes.java
+    folder: controllers/modules/operating_modes
+    prepend: integration/rusefi_config_shared.txt
+    output_name: opmodes
+    engineModule: OperatingModes
+
   - name: misfire_detection_state
     java: MisfireDetection.java
     folder: controllers/algo

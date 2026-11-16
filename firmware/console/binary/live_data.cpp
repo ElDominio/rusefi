@@ -339,6 +339,11 @@ const engine_state_machine_state_s* getLiveData(size_t) {
 }
 
 template<>
+const operating_modes_state_s* getLiveData(size_t) {
+	return &engine->module<OperatingModes>().unmock();
+}
+
+template<>
 const misfire_detection_state_s* getLiveData(size_t) {
 #if EFI_MISFIRE_DETECTION
 	return &engine->module<MisfireController>().unmock();

@@ -34,6 +34,7 @@
 #include "shift_torque_reduction_controller.h"
 #include "nitrous_controller.h"
 #include "engine_state_machine.h"
+#include "operating_modes.h"
 #include "misfire_detection.h"
 #include "downshift_blipper.h"
 #include "upshift_rpm_hold.h"
@@ -148,6 +149,7 @@ using AlphaXModuleList = type_list<
     ExhaustCutoutController,
     CdvController,
     EngineStateMachine,
+    OperatingModes, // after EngineStateMachine: layers on its flags every slow callback
 #if EFI_ELECTRONIC_THROTTLE_BODY
     DownshiftBlipper,
     UpshiftRpmHold,
