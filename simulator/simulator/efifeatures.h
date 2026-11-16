@@ -237,7 +237,6 @@
 #define EFI_IMRC TRUE
 
 #define EFI_VVT_COMPENSATION TRUE
-#define EFI_VVT_ADVANCED_MODE TRUE
 
 // External CAN ETB controller (CH32V203-based board) - bench experiment, opt-in per board, off for simulator
 #define EFI_EXTERNAL_CAN_ETB FALSE

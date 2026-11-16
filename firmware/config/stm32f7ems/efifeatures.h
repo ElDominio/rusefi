@@ -16,10 +16,6 @@
 #define EFI_VVT_COMPENSATION TRUE
 #endif
 
-#ifndef EFI_VVT_ADVANCED_MODE
-#define EFI_VVT_ADVANCED_MODE TRUE
-#endif
-
 #ifndef EFI_EXHAUST_CUTOUT
 #define EFI_EXHAUST_CUTOUT TRUE
 #endif
