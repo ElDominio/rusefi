@@ -132,6 +132,8 @@ TEST_F(StartStopTest, BrakeInterlockRequiresPressedPedal) {
 	EXPECT_FALSE(enginePins.starterControl.getLogicValue());
 
 	engine->brakePedalSwitchedState.update(true);
+	// The AlphaX start button is always sampled, so the blocked press above opened a debounce window.
+	eth.moveTimeForwardSec(10);
 	setMockState(engineConfiguration->startStopButtonPin, true);
 	slowStartStopButtonCallback();
 	setMockState(engineConfiguration->startStopButtonPin, false);
@@ -156,6 +158,8 @@ TEST_F(StartStopTest, ClutchUpInterlockRequiresActiveInput) {
 	EXPECT_FALSE(enginePins.starterControl.getLogicValue());
 
 	engine->clutchUpSwitchedState.update(true);
+	// The AlphaX start button is always sampled, so the blocked press above opened a debounce window.
+	eth.moveTimeForwardSec(10);
 	setMockState(engineConfiguration->startStopButtonPin, true);
 	slowStartStopButtonCallback();
 	setMockState(engineConfiguration->startStopButtonPin, false);
