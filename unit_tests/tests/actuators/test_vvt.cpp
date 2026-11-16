@@ -383,7 +383,6 @@ void configureVvtFeedbackReproduction() {
 	engineConfiguration->vvtControlMinRpm = 500;
 	engineConfiguration->vvtControlMinClt = 0;
 	engineConfiguration->vvtActivationDelayMs = 0;
-	engineConfiguration->vvtAdvancedModeEnabled = false;
 	engineConfiguration->invertVvtControlIntake = false;
 	engineConfiguration->auxPid[0].pFactor = 1;
 	engineConfiguration->auxPid[0].iFactor = 0;
