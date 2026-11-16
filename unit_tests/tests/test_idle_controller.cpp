@@ -12,6 +12,7 @@
 #include "idle_thread.h"
 #include "electronic_throttle.h"
 #include "engine_state_machine.h"
+#include "fan_control.h"
 
 using ::testing::StrictMock;
 using ::testing::_;
@@ -408,6 +409,44 @@ TEST(idle_v2, runningFanAcBump) {
 	EXPECT_FLOAT_EQ(50 + 9 + 7 + 3, dut.getRunningOpenLoop(IIdleController::Phase::Idling, 0, 10, 0));
 }
 
+// Issue #10310: reproduce unwanted idle adders with unassigned fan outputs.
+TEST(idle_v2, unassignedFanOutputStillAddsIdleAir) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+
+	engineConfiguration->fanPin = Gpio::Unassigned;
+	engineConfiguration->fan2Pin = Gpio::Unassigned;
+	engineConfiguration->fan1ExtraIdle = 7;
+	engineConfiguration->fan2ExtraIdle = 3;
+	engineConfiguration->fanOnTemperature = 90;
+	engineConfiguration->fanOffTemperature = 85;
+	engineConfiguration->fan2OnTemperature = 110;
+	engineConfiguration->fan2OffTemperature = 105;
+	setTable(config->cltIdleCorrTable, 50.0f);
+
+	// Cold: neither fan requests extra idle air.
+	Sensor::setMockValue(SensorType::Clt, 75);
+	engine->module<FanControl1>()->onSlowCallback();
+	engine->module<FanControl2>()->onSlowCallback();
+	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(IIdleController::Phase::Idling, 0, 10, 0));
+
+	Sensor::setMockValue(SensorType::Clt, 95);
+	engine->module<FanControl1>()->onSlowCallback();
+	engine->module<FanControl2>()->onSlowCallback();
+	EXPECT_TRUE(enginePins.fanRelay.getLogicValue());
+	EXPECT_FALSE(enginePins.fanRelay2.getLogicValue());
+	EXPECT_FLOAT_EQ(50 + 7, dut.getRunningOpenLoop(IIdleController::Phase::Idling, 0, 10, 0));
+
+	engineConfiguration->fanOnTemperature = 110;
+	engineConfiguration->fanOffTemperature = 105;
+	engineConfiguration->fan2OnTemperature = 90;
+	engineConfiguration->fan2OffTemperature = 85;
+	engine->module<FanControl1>()->onSlowCallback();
+	engine->module<FanControl2>()->onSlowCallback();
+	EXPECT_FALSE(enginePins.fanRelay.getLogicValue());
+	EXPECT_TRUE(enginePins.fanRelay2.getLogicValue());
+	EXPECT_FLOAT_EQ(50 + 3, dut.getRunningOpenLoop(IIdleController::Phase::Idling, 0, 10, 0));
+}
 // This can be seen as a kind of some close-loop logic, please read:
 // https://github.com/rusefi/rusefi/issues/6977
 TEST(idle_v2, idleAdderShouldNotAffectNonIdleAreas) {
