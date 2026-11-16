@@ -250,34 +250,6 @@ the Windows check suite, but its failing XML and logs came from the Linux
 console workflow (run 37950058647); inspect the producing workflow rather
 than inferring the host from the report association.
 
-### Java tests run headless on CI
-
-The console workflow's `./gradlew test` step runs on Ubuntu without
-`xvfb-run`, so Java reports `GraphicsEnvironment.isHeadless()`; a Windows
-desktop run is not headless. Drag and drop setup differs: headless Swing
-installs no `DropTarget` (`getDropTarget()` returns null after
-`setTransferHandler`), and `JList.setDragEnabled(true)` throws
-`HeadlessException`. Guard such calls, and reproduce CI locally with
-`JAVA_TOOL_OPTIONS=-Djava.awt.headless=true ./gradlew :ui:test`.
-
-### Swing clicks on drag-enabled components
-
-AWT sends no `MOUSE_CLICKED` once the pointer moved between press and
-release, and `DragSource.getDragThreshold()` can be as small as 2 px
-(measured on a Windows desktop), so on a drag-enabled `JList` a slightly
-moving click starts drag and drop and never reaches the component as a
-click. Act on release within a few pixels of the press, and treat a drag
-dropped back on its origin row as a click (see `LogViewerPanel.rowMouse`
-and `dropOnList`).
-
-### Native Swing screenshots under WSLg
-
-Xvfb without a window manager verifies shaped-window input but cannot reveal
-compositor decorations. Under WSLg, Java Robot screen capture may return black
-even while the windows are visible on Windows; capture the Windows desktop to
-inspect those artifacts. Use the console's FlatLaf theme as well as the default
-theme when testing detached windows.
-
 ### Key Concepts
 
 - **Event-driven execution**: Trigger events from crank/cam sensors drive the main control loop
@@ -467,17 +439,6 @@ height; re-evaluate after ancestor resize/layout as well as local resize.
 
 - Whenever Console keyboard shortcuts are added, changed, or removed, update the user-facing legend in `java_console/ui/src/main/java/com/rusefi/ui/console/ShortcutsDialog.java` in the same change. Describe the action, focus/context restrictions, and relevant modifiers; keep the corresponding button/menu tooltips and accelerators consistent with the legend.
 
-## Console theme files
-
-The console's FlatLaf look is defined in `java_console/ui/src/main/resources/com/rusefi/ui/theme/`
-(`[tag:console_theme]`, registered in `UiHelper.configureLaf()`): `FlatLaf.properties` for
-sizes/shapes shared by all themes, `FlatLightLaf.properties` (and a future
-`FlatDarkLaf.properties`) for palette variables and colour keys. Do not put colour keys in the
-shared file: FlatLaf's built-in `FlatLightLaf.properties` assigns most of them and wins. Add new
-look settings there rather than as `UIManager.put` calls, so they follow the active theme.
-Java's logical `Font.MONOSPACED` renders as Courier New on Windows; use `ConsoleFonts.mono()` for
-monospaced console text. Toolbar controls share `JoinedButtons.HEIGHT` so a row lines up.
-
 ## Java Version Constants
 
 TunerStudio's bundled runtime is Java 8. Gradle's Java 11 toolchain with
@@ -487,13 +448,6 @@ has a java8Test task; pass -Pjava8Executable=<TunerStudio runtime8/bin/java.exe>
 to test with the installed runtime. The plugin launcher compares both exact
 file size and timestamp against the server, so a locally rebuilt cached body
 JAR is replaced on the next online plugin launch until the fix is published.
-
-Java sources are compiled as UTF-8 via `options.encoding` in the root `build.gradle`
-(`[tag:java_source_encoding]`, guarded by `SourceEncodingTest`). Without it, Windows
-builds garble non-ASCII literals. On a Windows checkout, `SensorLoggerTest` (temp
-directory still locked at cleanup), `FirmwareSourceCodeDownloaderTest` (two
-rollback-failure cases that expect an `IOException` Windows does not raise) and
-`CalibrationPanelWorkspaceTest` fail independently of the change being tested.
 
 - When modifying Java code (`java_console/`, `java_tools/`), bump `UiVersion.CONSOLE_VERSION` in `java_tools/version/src/main/java/com/rusefi/UiVersion.java` to the current date in `YYYYMMDD` format as part of the same change (no-op if it already shows today's date).
 - `Autoupdate.AUTOUPDATE_VERSION` in `java_console/autoupdate/src/main/java/com/rusefi/autoupdate/Autoupdate.java` is a separate, manually managed version for the updater executable. Bump it (same `YYYYMMDD` format) only when the change affects updater behavior, i.e. code that runs inside `rusefi_autoupdate.exe`.
@@ -520,13 +474,6 @@ through `BinaryProtocolExecutor`, so per-manager workers must release idle
 threads without shutting down the reusable communication executor. A daemon
 thread still consumes native resources and can exhaust macOS's thread limit.
 See `LinkManagerThreadLifecycleTest` for repeated-probe and worker-restart coverage.
-
-Console output channels are polled selectively: only names subscribed through
-`SensorCentral.addListener` (active tokens) are requested. Subscribe with the
-output channel name (`GaugeModel.getChannel()`), never the gauge name; a
-gauge-name subscription requests nothing and the widget only appears to work
-while another widget polls the same channel. `GaugesPanelLayoutTest.hasDemand`
-checks the requested set.
 
 All rusEFI serial connections use the USB CDC (Communications Device Class) profile. Baud rate is irrelevant and never a concern — the USB serial profile handles throughput natively regardless of any baud rate setting in host software or code.
 
