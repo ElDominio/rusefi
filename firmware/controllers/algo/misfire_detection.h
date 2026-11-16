@@ -31,6 +31,8 @@ class MisfireController : public misfire_detection_state_s, public EngineModule 
 public:
 	using interface_t = MisfireController;
 
+	void setDefaultConfiguration() override;
+
 	// Per-tooth: bin teeth into per-cylinder expansion windows and time the segments.
 	void onEnginePhase(float rpm, efitick_t edgeTimestamp,
 					   angle_t currentPhase, angle_t nextPhase) override;

@@ -34,8 +34,23 @@ void MisfireController::resetDetectionState() {
 }
 
 bool MisfireController::isSettled() const {
-	uint16_t settleCycles = getCustomPage()->misfireSettleCycles;
+	uint16_t settleCycles = engineConfiguration->misfireSettleCycles;
 	return (settleCycles == 0) || (m_settleCount >= settleCycles);
+}
+
+void MisfireController::setDefaultConfiguration() {
+	engineConfiguration->misfireDetectionEnabled = false;
+	engineConfiguration->misfireConsecutiveCount  = 2;     // need >=2 flagged firings within the window to count one
+	engineConfiguration->misfireWindowFirings     = 12;   // sliding window: last 12 firings, any cylinder (~3 cycles on a 4-cyl)
+	engineConfiguration->misfireCountThreshold    = 50;   // 50 counted events throws the misfire DTC (P0300)
+	engineConfiguration->misfireK                 = 3.0f; // threshold = baseline + 3 * wobble
+	engineConfiguration->misfireEmaAlphaDecel     = 0.05f;  // positive delta (engine slowing): track RPM drops quickly
+	engineConfiguration->misfireEmaAlphaAccel     = 0.005f; // negative delta (engine faster): resist upward drift during misfires
+	engineConfiguration->misfireWobbleAlphaRise   = 0.1f;   // wobble rising (engine rougher): track fast to avoid false positives
+	engineConfiguration->misfireWobbleAlphaFall   = 0.01f;  // wobble falling (engine smoother): relax slowly, stay conservative
+	engineConfiguration->misfireSettleCycles      = 200;    // ~2 s on a 4-cyl at 800 RPM before detection goes live
+	engineConfiguration->misfireWindowStart       = 20;   // expansion stroke: TDC + 20 deg
+	engineConfiguration->misfireWindowEnd         = 120;  //                   TDC + 120 deg
 }
 
 void MisfireController::onEngineStop() {
@@ -74,7 +89,7 @@ uint8_t MisfireController::flaggedInWindow(uint8_t windowSize) const {
 void MisfireController::registerMisfire() {
 	misfireTotalCount++;
 
-	uint16_t threshold = getCustomPage()->misfireCountThreshold;
+	uint16_t threshold = engineConfiguration->misfireCountThreshold;
 	if (!misfireLatched && threshold > 0 && misfireTotalCount >= threshold) {
 		misfireLatched = true;
 		// Engine-wide detection => generic random/multiple-cylinder misfire code (P0300).
@@ -98,7 +113,7 @@ void MisfireController::evaluateSegment(float segDurationUs) {
 	// Adaptive wobble-based threshold: baseline + K * wobble.
 	// Flagging is suppressed until both the wobble is seeded and the settle period has elapsed.
 	// During settle the baseline and wobble still update so they are warm when detection starts.
-	float k = getCustomPage()->misfireK;
+	float k = engineConfiguration->misfireK;
 	if (k <= 0.0f) {
 		k = MISFIRE_K_DEFAULT;
 	}
@@ -120,14 +135,14 @@ void MisfireController::evaluateSegment(float segDurationUs) {
 		// "N of last M": a flagged firing only counts once at least misfireConsecutiveCount
 		// flagged firings (any cylinder) fall within the last misfireWindowFirings firings.
 		// Baseline and wobble are frozen on flagged firings so they cannot drift upward.
-		uint8_t windowSize = getCustomPage()->misfireWindowFirings;
+		uint8_t windowSize = engineConfiguration->misfireWindowFirings;
 		if (windowSize < 1) {
 			windowSize = 1;
 		}
 		if (windowSize > MISFIRE_WINDOW_MAX) {
 			windowSize = MISFIRE_WINDOW_MAX;
 		}
-		uint8_t need = getCustomPage()->misfireConsecutiveCount;
+		uint8_t need = engineConfiguration->misfireConsecutiveCount;
 		if (need < 1) {
 			need = 1;
 		}
@@ -152,12 +167,12 @@ void MisfireController::evaluateSegment(float segDurationUs) {
 		float diff = segDurationUs - m_emaSeg;
 		float alpha;
 		if (diff > 0.0f) {
-			alpha = getCustomPage()->misfireEmaAlphaDecel;
+			alpha = engineConfiguration->misfireEmaAlphaDecel;
 			if (alpha <= 0.0f || alpha > 1.0f) {
 				alpha = MISFIRE_EMA_ALPHA_RISE_DEFAULT;
 			}
 		} else {
-			alpha = getCustomPage()->misfireEmaAlphaAccel;
+			alpha = engineConfiguration->misfireEmaAlphaAccel;
 			if (alpha <= 0.0f || alpha > 1.0f) {
 				alpha = MISFIRE_EMA_ALPHA_FALL_DEFAULT;
 			}
@@ -176,12 +191,12 @@ void MisfireController::evaluateSegment(float segDurationUs) {
 			float wobbleDiff = deviation - m_emaWobble;
 			float wobbleAlpha;
 			if (wobbleDiff > 0.0f) {
-				wobbleAlpha = getCustomPage()->misfireWobbleAlphaRise;
+				wobbleAlpha = engineConfiguration->misfireWobbleAlphaRise;
 				if (wobbleAlpha <= 0.0f || wobbleAlpha > 1.0f) {
 					wobbleAlpha = MISFIRE_WOBBLE_ALPHA_RISE_DEFAULT;
 				}
 			} else {
-				wobbleAlpha = getCustomPage()->misfireWobbleAlphaFall;
+				wobbleAlpha = engineConfiguration->misfireWobbleAlphaFall;
 				if (wobbleAlpha <= 0.0f || wobbleAlpha > 1.0f) {
 					wobbleAlpha = MISFIRE_WOBBLE_ALPHA_FALL_DEFAULT;
 				}
@@ -196,7 +211,7 @@ void MisfireController::evaluateSegment(float segDurationUs) {
 
 void MisfireController::onEnginePhase(float /*rpm*/, efitick_t edgeTimestamp,
 									  angle_t currentPhase, angle_t nextPhase) {
-	bool enabled = getCustomPage()->misfireDetectionEnabled;
+	bool enabled = engineConfiguration->misfireDetectionEnabled;
 	bool idle = engine->module<EngineStateMachine>().unmock().engineSmIsIdle;
 	bool quickWarmup = engine->module<OperatingModes>().unmock().engineSmIsQuickWarmup;
 	bool monitoring = enabled && idle && !quickWarmup;
@@ -214,9 +229,8 @@ void MisfireController::onEnginePhase(float /*rpm*/, efitick_t edgeTimestamp,
 	}
 	m_wasMonitoring = true;
 
-	const auto* page = getCustomPage();
-	float windowStartOffset = page->misfireWindowStart;
-	float windowEndOffset = page->misfireWindowEnd;
+	float windowStartOffset = engineConfiguration->misfireWindowStart;
+	float windowEndOffset = engineConfiguration->misfireWindowEnd;
 
 	// The segment is timed between the trigger edges that bracket windowStart and windowEnd,
 	// so the crank only provides a real velocity sample at each tooth. If the whole window

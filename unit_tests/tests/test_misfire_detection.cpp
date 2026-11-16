@@ -27,7 +27,7 @@ static void setupMisfireConfig(EngineTestHelper& eth) {
 	engineConfiguration->trigger.customSkippedToothCount = 2;
 	eth.setTriggerType(trigger_type_e::TT_TOOTHED_WHEEL);
 
-	auto* d = getCustomPage();
+	auto* d = engineConfiguration;
 	d->misfireDetectionEnabled = true;
 	d->misfireK                = 3.0f; // threshold = baseline + 3 * wobble
 	d->misfireSettleCycles     = 0;    // no settle delay in tests
@@ -67,8 +67,8 @@ struct ToothDriver {
 		float winStart = 0, winEnd = 0;
 		if (targetCyl >= 0) {
 			angle_t tdc = engine->cylinders[targetCyl].getAngleOffset();
-			winStart = tdc + getCustomPage()->misfireWindowStart;
-			winEnd = tdc + getCustomPage()->misfireWindowEnd;
+			winStart = tdc + engineConfiguration->misfireWindowStart;
+			winEnd = tdc + engineConfiguration->misfireWindowEnd;
 		}
 
 		for (float phase = 0; phase < kCycle; phase += kToothDeg) {
@@ -91,7 +91,7 @@ struct ToothDriver {
 TEST(MisfireDetection, disabledByDefault) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	ASSERT_FALSE(getCustomPage()->misfireDetectionEnabled);
+	ASSERT_FALSE(engineConfiguration->misfireDetectionEnabled);
 
 	// Even forcing idle, nothing should be monitored or counted while disabled.
 	engine->module<EngineStateMachine>().unmock().engineSmIsIdle = true;
@@ -144,7 +144,7 @@ TEST(MisfireDetection, repeatedMisfireThrowsDtc) {
 		d.feedCycle(0, 1.6f);
 	}
 
-	EXPECT_GE(getMc().misfireTotalCount, getCustomPage()->misfireCountThreshold);
+	EXPECT_GE(getMc().misfireTotalCount, engineConfiguration->misfireCountThreshold);
 	EXPECT_TRUE(getMc().misfireLatched);
 
 	getMc().onSlowCallback();
@@ -163,7 +163,7 @@ TEST(MisfireDetection, repeatedMisfireThrowsDtc) {
 TEST(MisfireDetection, thresholdZeroMonitorOnly) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupMisfireConfig(eth);
-	getCustomPage()->misfireCountThreshold = 0; // monitor-only
+	engineConfiguration->misfireCountThreshold = 0; // monitor-only
 	engine->module<EngineStateMachine>().unmock().engineSmIsIdle = true;
 
 	ToothDriver d;
@@ -211,8 +211,8 @@ TEST(MisfireDetection, narrowWindowBelowToothSpacingRefuses) {
 	// would collapse to zero and every live-data field would silently freeze. The guard must
 	// refuse to run and raise a configError instead of measuring degenerate segments.
 	clearConfigErrorMessage();
-	getCustomPage()->misfireWindowStart = 20;
-	getCustomPage()->misfireWindowEnd   = 21; // 1 deg wide, far below any real tooth pitch
+	engineConfiguration->misfireWindowStart = 20;
+	engineConfiguration->misfireWindowEnd   = 21; // 1 deg wide, far below any real tooth pitch
 
 	ToothDriver d;
 	for (int i = 0; i < 6; i++) {
@@ -227,8 +227,8 @@ TEST(MisfireDetection, narrowWindowBelowToothSpacingRefuses) {
 	// Widening back to a valid window must clear the refusal and resume detection — and the
 	// guard must not keep re-raising the configError once the window is large enough.
 	clearConfigErrorMessage();
-	getCustomPage()->misfireWindowStart = 20;
-	getCustomPage()->misfireWindowEnd   = 120;
+	engineConfiguration->misfireWindowStart = 20;
+	engineConfiguration->misfireWindowEnd   = 120;
 	for (int i = 0; i < 3; i++) {
 		d.feedHealthyCycle();
 	}

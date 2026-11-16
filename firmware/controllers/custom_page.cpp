@@ -65,20 +65,6 @@ void customPageSetDefaults() {
 		d.luaLimiterBoostAddBins[i] = i;
 	}
 
-	// Misfire Detection (Engine State Machine sub-feature) — disabled by default.
-	d.misfireDetectionEnabled = false;
-	d.misfireConsecutiveCount  = 2;     // need >=2 flagged firings within the window to count one
-	d.misfireWindowFirings     = 12;   // sliding window: last 12 firings, any cylinder (~3 cycles on a 4-cyl)
-	d.misfireCountThreshold    = 50;   // 50 counted events throws the misfire DTC (P0300)
-	d.misfireK                 = 3.0f; // threshold = baseline + 3 * wobble
-	d.misfireEmaAlphaDecel     = 0.05f;  // positive delta (engine slowing): track RPM drops quickly
-	d.misfireEmaAlphaAccel     = 0.005f; // negative delta (engine faster): resist upward drift during misfires
-	d.misfireWobbleAlphaRise   = 0.1f;   // wobble rising (engine rougher): track fast to avoid false positives
-	d.misfireWobbleAlphaFall   = 0.01f;  // wobble falling (engine smoother): relax slowly, stay conservative
-	d.misfireSettleCycles      = 200;    // ~2 s on a 4-cyl at 800 RPM before detection goes live
-	d.misfireWindowStart       = 20;   // expansion stroke: TDC + 20 deg
-	d.misfireWindowEnd         = 120;  //                   TDC + 120 deg
-
 	// Burst Knock (transient ignition timing pull) — disabled by default; seed usable axes.
 	d.burstKnockEnabled = false;
 	d.burstKnockDecayTime = 1.0f; // pull decays back to zero over 1 s
