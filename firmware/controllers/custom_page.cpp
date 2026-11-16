@@ -4,7 +4,7 @@
 #include "custom_page.h"
 #include "extra_flash_pages.h"
 
-static constexpr uint32_t PAGE6_DATA_VERSION = 28;
+static constexpr uint32_t PAGE6_DATA_VERSION = 29;
 
 using page6_container_s = ExtraPageContainer<page6_s, PAGE6_DATA_VERSION>;
 
@@ -239,18 +239,6 @@ void customPageSetDefaults() {
 	// to user tuning rather than guessing it.
 	d.cltEstRadiatorReferenceTemp = 25;         // deg C -- "typical" calibration air temp
 	d.cltEstRadiatorEffectivenessIatGain = 0.0f;
-
-	// Rolling Launch Control — disabled by default; sane gates so it is usable once enabled.
-	d.rollingLaunchEnabled        = false;
-	d.rollingLaunchActivatePin    = Gpio::Unassigned;
-	d.rollingLaunchActivatePinMode = PI_DEFAULT;
-	d.rollingLaunchRpmWindow      = 500;   // hold target = captured RPM + 500
-	d.rollingLaunchMinArmRpm      = 2500;  // do not arm while lugging below 2500 RPM
-	d.rollingLaunchMaxRpm         = 7000;  // absolute over-rev ceiling for the captured target
-	d.rollingLaunchMinVss         = 10;    // must be rolling (>= 10 km/h) to arm
-	d.rollingLaunchTimingRetard   = 10;    // 10 deg pulled while held to build boost
-	d.rollingLaunchFuelAdderPercent = 5;   // 5% richer while held
-	d.rollingLaunchRampOutTime    = 1.0f;  // pulled timing decays to zero over 1 s on release
 
 	// Weighted Engine Oil Life Monitor — disabled by default; conservative starting multipliers.
 	d.oilLifeMonitorEnabled = false;

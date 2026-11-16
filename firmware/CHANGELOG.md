@@ -36,6 +36,8 @@ Release template (copy/paste this for new release):
 ## Unreleased
 
 ### Added
+ - Rolling launch control with captured-RPM spark skip, fuel enrichment and timing-retard ramp-out. kudos AlphaX!
+ - Cooling-fan A/C pressure mode with configurable PWM off/full duty and demand soft-start.. kudos AlphaX!
  - h-bridge as one GPIO #9673
  - updater: keyboard table operation
  - 36-2-2 Suzuki trigger

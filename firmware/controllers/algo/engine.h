@@ -157,9 +157,9 @@ using AlphaXModuleList = type_list<
 #if EFI_LAUNCH_POWER_RAMP
     LaunchPowerRamp,
 #endif // EFI_LAUNCH_POWER_RAMP
-#if EFI_ROLLING_LAUNCH
+#if EFI_LAUNCH_CONTROL
     RollingLaunchControl,
-#endif // EFI_ROLLING_LAUNCH
+#endif // EFI_LAUNCH_CONTROL
 #if EFI_BURST_KNOCK
     BurstKnock,
 #endif // EFI_BURST_KNOCK

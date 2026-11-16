@@ -47,10 +47,7 @@ void EngineState::updateSparkSkip() {
 			 */
 			engine->launchController.getSparkSkipRatio() + engine->shiftTorqueReductionController.getSparkSkipRatio()
 				+ popsAndBangsSparkSkip
-#if EFI_ROLLING_LAUNCH
-				// Rolling Launch holds a captured RPM ceiling via the same hard limiter.
 				+ engine->module<RollingLaunchControl>().unmock().getSparkSkipRatio()
-#endif // EFI_ROLLING_LAUNCH
 		);
 #endif // EFI_LAUNCH_CONTROL
 }
