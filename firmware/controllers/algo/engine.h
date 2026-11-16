@@ -50,6 +50,7 @@
 #include "rolling_launch.h"
 #include "burst_knock.h"
 #include "wot_enrichment.h"
+#include "custom_page.h"
 #include "oil_life_monitor.h"
 #include "check_engine_light.h"
 #include "ac_control.h"

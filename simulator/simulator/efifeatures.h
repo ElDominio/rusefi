@@ -230,7 +230,6 @@
 #define EFI_SPORT_PEDAL TRUE
 #define EFI_OFF_IDLE_RPM_ADDER TRUE
 #define EFI_LUA_LIMITER TRUE
-#define EFI_AC_PRESSURE_FAN TRUE
 #define EFI_CHT_CLT_ESTIMATOR TRUE
 // off for simulator: EFI_MAIN_RELAY_CONTROL is FALSE here (no real relay hardware to simulate),
 // and oil_life_monitor.cpp #errors if EFI_OIL_LIFE_MONITOR is on without it (no reliable signal

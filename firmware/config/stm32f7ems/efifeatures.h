@@ -103,11 +103,6 @@
 #define EFI_INJ_PERCENT_CURVE TRUE
 #endif
 
-// AC Pressure Fan Control (pressure-based fan on/off hysteresis when AC high-side pressure sensor is installed)
-#ifndef EFI_AC_PRESSURE_FAN
-#define EFI_AC_PRESSURE_FAN TRUE
-#endif
-
 
 // Intake Manifold Runner Control (solenoid or H-Bridge driven runner actuator)
 #ifndef EFI_IMRC

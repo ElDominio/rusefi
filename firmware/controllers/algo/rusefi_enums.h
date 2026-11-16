@@ -741,7 +741,7 @@ enum class eco_mode_switch_mode_e : uint8_t {
 };
 
 // Radiator fan A/C control mode — the single place that decides whether a fan follows the
-// A/C compressor. Values must match fan_ac_mode_e_enum order in config_page_6.txt
+// A/C compressor. Values must match fan_ac_mode_e_enum order in fan_control_engineConfiguration.txt
 enum class fan_ac_mode_e : uint8_t {
 	Disabled = 0, // fan never runs for A/C
 	Relay    = 1, // fan turns on whenever the A/C compressor relay is active

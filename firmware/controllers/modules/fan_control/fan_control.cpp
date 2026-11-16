@@ -14,11 +14,8 @@ PUBLIC_API_WEAK bool fansEnabledByBoardStatus() {
   return false;
 }
 
-// Sets cranking/notRunning/disabledBySpeed/disabledWhileEngineStopped (all exposed as live data)
-// and returns true if any of them require the fan to stop regardless of temperature or A/C state.
-// Shared by the on/off relay path (getState()) and the PWM path (onSlowCallbackPwm()) so the two
-// can never disagree about these checks.
-bool FanController::isHardInhibited() {
+// Refresh every condition before evaluating output priority, including while inhibited.
+void FanController::updateConditions(bool acActive) {
 	auto vss = Sensor::get(SensorType::VehicleSpeed);
 
 #if EFI_SHAFT_POSITION_INPUT
@@ -41,6 +38,17 @@ bool FanController::isHardInhibited() {
 	}
 	disabledWhileEngineStopped = notRunning && disableWhenStopped();
 
+	auto clt = Sensor::get(SensorType::Clt);
+	brokenClt = !clt;
+	enabledForAc = getAcMode() == fan_ac_mode_e::Relay && acActive;
+	hot = clt.value_or(0) > getFanOnTemp();
+	cold = clt.value_or(0) < getFanOffTemp();
+	enabledForAcPressure = getAcMode() == fan_ac_mode_e::Pressure &&
+		(isPwmEnabled() ? getAcPressureDemand() > 0 : enabledForAcByPressure(getPin().getLogicValue()));
+}
+
+// Both output modes use the same inhibit priority.
+bool FanController::isHardInhibited() {
 	if (cranking) {
 		radiatorFanStatus = (int)RadiatorFanState::Cranking;
 		return true;
@@ -57,10 +65,7 @@ bool FanController::isHardInhibited() {
 	return false;
 }
 
-bool FanController::getState(bool acActive, bool lastState) {
-	auto clt = Sensor::get(SensorType::Clt);
-	auto acMode = getAcMode();
-
+bool FanController::getState(bool lastState) {
 	if (fansEnabledByBoardStatus()) {
 		radiatorFanStatus = (int)RadiatorFanState::BoardForcedOn;
 		return true;
@@ -70,22 +75,14 @@ bool FanController::getState(bool acActive, bool lastState) {
 		return false;
 	}
 
-	brokenClt = !clt;
-	enabledForAc = (acMode == fan_ac_mode_e::Relay) && acActive;
-	hot = clt.value_or(0) > getFanOnTemp();
-	cold = clt.value_or(0) < getFanOffTemp();
-
 	if (brokenClt) {
 		// If CLT is broken, turn the fan on
 		radiatorFanStatus = (int)RadiatorFanState::CltBroken;
 		return true;
-#if EFI_AC_PRESSURE_FAN
-	} else if (acMode == fan_ac_mode_e::Pressure && enabledForAcByPressure(lastState)) {
+	} else if (enabledForAcPressure) {
+		radiatorFanStatus = (int)RadiatorFanState::AcPressure;
 		return true;
-	} else if (acMode == fan_ac_mode_e::Relay && enabledForAc) {
-#else
 	} else if (enabledForAc) {
-#endif
 	  radiatorFanStatus = (int)RadiatorFanState::AC;
 		return true;
 	} else if (hot) {
@@ -101,7 +98,6 @@ bool FanController::getState(bool acActive, bool lastState) {
 	}
 }
 
-#if EFI_AC_PRESSURE_FAN
 bool FanController::enabledForAcByPressure(bool lastState) {
 	// Pressure is the command here: high-side pressure drives the fan regardless of
 	// whether the compressor is currently engaged (eg static heat soak with clutch open).
@@ -121,12 +117,18 @@ bool FanController::enabledForAcByPressure(bool lastState) {
 		enabledForAcPressure = lastState;
 	}
 
-	if (enabledForAcPressure) {
-		radiatorFanStatus = (int)RadiatorFanState::AcPressure;
-	}
 	return enabledForAcPressure;
 }
-#endif
+
+float FanController::getAcPressureDemand() const {
+	auto pressure = Sensor::get(SensorType::AcPressure);
+	float on = getAcPressureFanOnThreshold();
+	float off = getAcPressureFanOffThreshold();
+	if (!pressure || on <= off) {
+		return 0;
+	}
+	return clampF(0, 100.0f * (pressure.Value - off) / (on - off), 100);
+}
 
 void FanController::initPwm() {
 	if (m_pwmInitialized) {
@@ -134,7 +136,6 @@ void FanController::initPwm() {
 	}
 #if !EFI_UNIT_TEST
 	if (!isBrainPinValid(getConfigPin())) {
-		efiPrintf("Fan PWM: NOT starting, configured pin is invalid (brain_pin_e=%d)", (int)getConfigPin());
 		return;
 	}
 	float frequency = getPwmFrequency();
@@ -183,26 +184,18 @@ void FanController::onSlowCallbackPwm(bool acActive) {
 		rawDemand = computeCurvePwm(clt.Value);
 		radiatorFanStatus = (int)RadiatorFanState::Previous;
 		if (acMode == fan_ac_mode_e::Relay && acActive) {
-			// The condenser needs full airflow whenever the compressor relay is engaged - no
-			// point ramping a PWM fan gradually for A/C, just run it flat out.
+			// Compressor assistance requests the curve's full-speed demand before soft-start.
 			radiatorFanStatus = (int)RadiatorFanState::AC;
 			rawDemand = computeCurvePwm(1000.0f);
-#if EFI_AC_PRESSURE_FAN
 		} else if (acMode == fan_ac_mode_e::Pressure) {
 			// Ramp demand from 0% at the Off pressure threshold to 100% at the On threshold, and
 			// take the max with the temperature curve's own demand: pressure can only push the fan
 			// faster than the curve already wants, never slower.
-			auto acPressure = Sensor::get(SensorType::AcPressure);
-			float onT = getAcPressureFanOnThreshold();
-			float offT = getAcPressureFanOffThreshold();
-			if (acPressure.Valid && onT > offT) {
-				float pressureDemand = clampF(0, 100.0f * (acPressure.Value - offT) / (onT - offT), 100);
-				if (pressureDemand > rawDemand) {
-					radiatorFanStatus = (int)RadiatorFanState::AcPressure;
-				}
-				rawDemand = maxF(rawDemand, pressureDemand);
+			float pressureDemand = getAcPressureDemand();
+			if (pressureDemand > rawDemand) {
+				radiatorFanStatus = (int)RadiatorFanState::AcPressure;
 			}
-#endif
+			rawDemand = maxF(rawDemand, pressureDemand);
 		}
 	}
 	rawDemand = clampF(0, rawDemand, 100);
@@ -247,6 +240,7 @@ void FanController::onSlowCallback() {
 #endif
 
 	bool acActive = engine->module<AcController>()->isAcEnabled();
+	updateConditions(acActive);
 
 	pwmActive = isPwmEnabled();
 	if (isPwmEnabled()) {
@@ -256,7 +250,7 @@ void FanController::onSlowCallback() {
 
 	auto& pin = getPin();
 
-	bool result = getState(acActive, pin.getLogicValue());
+	bool result = getState(pin.getLogicValue());
 
 	m_state = result;
 
@@ -291,13 +285,13 @@ void FanController::setDefaultConfiguration() {
 	engineConfiguration->fan1SoftStartSec = 2.0f;
 	engineConfiguration->fan2SoftStartSec = 2.0f;
 
-#if EFI_AC_PRESSURE_FAN
-	// Defaults suited for R134a/R1234yf high-side: fan 1 on at ~200 psi, fan 2 on at ~260 psi.
-	getCustomPage()->fan1AcPressureOn  = 1400;
-	getCustomPage()->fan1AcPressureOff = 1100;
-	getCustomPage()->fan2AcPressureOn  = 1800;
-	getCustomPage()->fan2AcPressureOff = 1400;
-#endif
+	engineConfiguration->fan1AcMode = fan_ac_mode_e::Disabled;
+	engineConfiguration->fan2AcMode = fan_ac_mode_e::Disabled;
+	// A/C high-side pressure thresholds, in kPa.
+	engineConfiguration->fan1AcPressureOn  = 1400;
+	engineConfiguration->fan1AcPressureOff = 1100;
+	engineConfiguration->fan2AcPressureOn  = 1800;
+	engineConfiguration->fan2AcPressureOff = 1400;
 }
 
 void debugReinitFanPwm() {
