@@ -5,7 +5,54 @@ operating state at the slow-callback cadence. It is runtime-disabled by default.
 Settings live on the main configuration page. The module uses the launch and
 idle controllers, reports operating-state and shift flags, and optionally
 selects STFT regions. Actuator behavior belongs to the features consuming those
-flags.
+flags. The AlphaX-only operating modes (Limp, Sport Mode, Eco Mode, Ghost Cam,
+Sport Pedal, Quick Warmup, Pops and Bangs) live in the separate `OperatingModes`
+module described in [Operating modes](#operating-modes) and layer on this one.
+
+## Module layout
+
+- `controllers/modules/engine_state_machine`: `EngineStateMachine`, its settings
+  fragment (`engine_state_machine_engineConfiguration.txt`, the 20 `sm*` settings,
+  `useEngineStateMachine` and `stateBasedStft` in `engineConfiguration`) and the
+  `engine_state_machine_state_s` live data (`engineSm*` channels). The class is
+  the upstream state machine with four patches, each marked
+  `[tag:alphax_esm_overlay_hook]`: the `Limp = 12` and `Eco = 13` enumerators (the
+  module never classifies them), `holdRateClassification()`, the traction-control
+  term of `engineSmIsTorqueReduction`, and the `EFI_ENGINE_STATE_MACHINE` compile-out
+  (the module stays in the list as a stub; defaults still apply).
+- `controllers/modules/operating_modes`: `OperatingModes` and
+  `operating_modes_state_s` (`engineSmIsLimp`, `engineSmIsPopsAndBangs`,
+  `engineSmPnbSparkCut`, `engineSmIsEcoMode`, `engineSmIsQuickWarmup`,
+  `engineSmIsGhostCam`, `engineSmIsSportPedal`, `engineSmIsSportMode`). Channel
+  names are unchanged. Both modules sit in `AlphaXModuleList` in `engine.h`,
+  `OperatingModes` after `EngineStateMachine`, so the state machine flags are
+  current when the overlays run.
+- Page 6 keeps the operating-mode settings (Sport Mode, Eco, Ghost Cam, Pops and
+  Bangs, Quick Warmup, Limp, `smSlowStateTransitionEnabled`); the state machine,
+  WOT enrichment and misfire settings are in `engineConfiguration`.
+
+## Operating modes
+
+`OperatingModes::onSlowCallback()` does nothing while the state machine is
+disabled and clears its flags. Otherwise, in order: it latches Limp (ETB jam via
+`LimpManager::reportEtbJammed`, or the Check Engine Light blinking), evaluates
+Sport Mode (Limp out-votes it), Eco Mode (Limp and Sport Mode out-vote it), arms
+the Eco settle hold, evaluates Ghost Cam (Idle only), steps the Eco and Ghost Cam
+target blends, evaluates Sport Pedal, Quick Warmup (Cold and Idle), rewrites the
+display state and finally runs the Pops and Bangs machine.
+
+- Display priority in `engineSmCurrentState`: Limp, Upshifting, Downshifting,
+  LaunchControl, Eco, then the primary state. The state machine ranks the middle
+  three; `OperatingModes` places Limp first and Eco after them. Ghost Cam is not a
+  display state.
+- Eco settle hold: Eco's own throttle/VVT step is not driver input. On an Eco edge
+  that was not itself caused by Accelerating/Decelerating, `OperatingModes` calls
+  `EngineStateMachine::holdRateClassification()`, which suppresses the RPM-rate
+  states for `smTransientHoldTimeMs`.
+- Consumers of the overlay flags and blends (`getEcoModeBlend()`,
+  `getGhostCamBlend()`, `getPopsAndBangsSparkSkipRatio()`) read `OperatingModes`;
+  consumers of the primary flags (idle, WOT, shift, Decelerating) read the state
+  machine. State-aware DFCO inhibits its cut during Pops and Bangs.
 
 ## Primary state and display overlays
 
@@ -111,3 +158,8 @@ The suite also covers state priority, transient hold, rate cadence, clutch
 edges, accumulator direction, latches, stale-window timeout and temperature
 overlays.
 `unit_tests/tests/test_stft.cpp` covers region mapping and threshold fallback.
+`unit_tests/tests/engine_state_machine/test_operating_modes.cpp` covers the
+Limp latch and priority, Sport Mode, Ghost Cam via Sport Mode, the Eco settle hold,
+the traction-control Torque Reduction flag and shift suppression of the overrun
+fuel cut; `test_eco_mode.cpp` and `test_pops_and_bangs.cpp` cover the Eco and
+Pops and Bangs machines.

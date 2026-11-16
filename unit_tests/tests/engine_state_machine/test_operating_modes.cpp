@@ -408,3 +408,29 @@ TEST(OperatingModes, ghostCamActivatesViaSportMode) {
 	EXPECT_TRUE(getOm().engineSmIsGhostCam);
 }
 
+
+// ---- Disabled state machine ----
+
+// OperatingModes layers on the state machine: with it disabled nothing is classified, so no
+// overlay is active even when Limp is latched and Sport Mode is asserted.
+TEST(OperatingModes, inactiveWhileStateMachineDisabled) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	ASSERT_FALSE(engineConfiguration->useEngineStateMachine);
+
+	getCustomPage()->smSportModeActivationMode = SPORT_MODE_LUA_GAUGE;
+	getCustomPage()->smSportModeLuaGauge = LUA_GAUGE_1;
+	getCustomPage()->smSportModeLuaGaugeMeaning = LUA_GAUGE_LOWER_BOUND;
+	getCustomPage()->smSportModeLuaGaugeThreshold = 0.5f;
+	Sensor::setMockValue(SensorType::LuaGauge1, 1.0f);
+	getOm().reportLimpCondition();
+
+	enterRunning();
+	EXPECT_FALSE(getOm().engineSmIsLimp);
+	EXPECT_FALSE(getOm().engineSmIsSportMode);
+
+	// Enabling the state machine releases the latched Limp and the Sport Mode request.
+	engineConfiguration->useEngineStateMachine = true;
+	engine->periodicSlowCallback();
+	EXPECT_TRUE(getOm().engineSmIsLimp);
+	EXPECT_FALSE(getOm().engineSmIsSportMode); // Limp out-votes Sport Mode
+}
