@@ -10,16 +10,24 @@ struct_no_prefix ignition_state_s
 
 	int16_t autoscale cltTimingCorrection;CLT correction;"deg",{1/@@PACK_MULT_PERCENT@@},0, -20,20, 2,@@GAUGE_CATEGORY_TIMING@@
 	int16_t autoscale timingIatCorrection;IAT correction;"deg",{1/@@PACK_MULT_PERCENT@@},0, -20,20, 2,@@GAUGE_CATEGORY_TIMING@@
+set_prefix ""
 	int16_t autoscale timingPidCorrection;Idle: Timing adjustment;"deg",{1/@@PACK_MULT_PERCENT@@},0, -20,20, 2,@@GAUGE_CATEGORY_TIMING@@
+set_prefix "Ignition"
 	int16_t autoscale vvtIntakeTimingCorrection;VVT Intake correction;"deg",{1/@@PACK_MULT_PERCENT@@},0, -25,25, 2,@@GAUGE_CATEGORY_TIMING@@
 	int16_t autoscale vvtExhaustTimingCorrection;VVT Exhaust correction;"deg",{1/@@PACK_MULT_PERCENT@@},0, -25,25, 2,@@GAUGE_CATEGORY_TIMING@@
+set_prefix ""
 	int16_t autoscale dfcoTimingRetard;DFCO: Timing retard;"deg",{1/@@PACK_MULT_PERCENT@@}, 0, 0, 50, 2
+set_prefix "Ignition"
+set_prefix ""
 	bit popsAndBangsTimingActive;P&B: timing override active
+set_prefix "Ignition"
 
 	int16_t autoscale baseIgnitionAdvance;@@GAUGE_NAME_TIMING_ADVANCE@@;"deg",{1/@@PACK_MULT_ANGLE@@}, 0, 0, 0, 1
 	int16_t autoscale correctedIgnitionAdvance;@@GAUGE_NAME_ADJUSTED_TIMING@@;"deg",{1/@@PACK_MULT_ANGLE@@}, 0, 0, 0, 1
 
+set_prefix ""
 	int16_t autoscale tractionAdvanceDrop;Traction: timing correction;"deg",{1/@@PACK_MULT_ANGLE@@}, 0, 0, 0, 1
+set_prefix "Ignition"
 
 float dwellVoltageCorrection;Dwell voltage correction
 
@@ -29,7 +37,7 @@ bit luaIgnitionSkip;Lua Spark Skip
 
     int16_t autoscale trailingSparkAngle;Trailing spark deg;"deg",{1/@@PACK_MULT_PERCENT@@},0, -20,20, 2,@@GAUGE_CATEGORY_TIMING@@
     int16_t rpmForIgnitionTableDot;
-    int16_t rpmForIgnitionIdleTableDot;
+    int16_t rpmForIgnitionIdleTableDot;RPM for Idle table
     float loadForIgnitionTableDot;
 end_struct
 

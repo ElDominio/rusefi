@@ -37,6 +37,13 @@ DOCS_ENUMS_INPUTS = \
   $(PROJECT_DIR)/controllers/algo/misfire_detection_state.txt \
   $(PROJECT_DIR)/controllers/algo/wall_fuel_state.txt \
   $(PROJECT_DIR)/controllers/algo/nitrous_control_state.txt \
+  $(PROJECT_DIR)/controllers/actuators/downshift_blipper_state.txt \
+  $(PROJECT_DIR)/controllers/actuators/upshift_rpm_hold_state.txt \
+  $(PROJECT_DIR)/controllers/algo/fuel/dfco_state.txt \
+  $(PROJECT_DIR)/controllers/modules/cdv_controller/cdv_controller_state.txt \
+  $(PROJECT_DIR)/controllers/modules/check_engine_light/check_engine_light_state.txt \
+  $(PROJECT_DIR)/controllers/modules/launch_power_ramp/launch_power_ramp_state.txt \
+  $(PROJECT_DIR)/controllers/modules/operating_modes/operating_modes_state.txt \
   $(PROJECT_DIR)/hw_layer/drivers/gpio/mc33810_state.txt \
   $(PROJECT_DIR)/controllers/algo/fuel/fuel_computer.txt \
   $(PROJECT_DIR)/controllers/algo/fuel/injector_model.txt \

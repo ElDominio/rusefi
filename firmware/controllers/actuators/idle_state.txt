@@ -26,7 +26,7 @@ custom idle_state_e 4 bits, S32, @OFFSET@, [0:2], "not important"
 	bit looksLikeCrankToIdle
     bit isIdleCoasting;coasting
 	bit isIdleClosedLoop;Closed loop active
-	bit isIdling; Idle: idling
+	bit isIdling;idling
 	bit isStepperHeld;stepper held off-idle\nStepper target frozen and idle PID integrator preserved while TPS is above the PID deactivation threshold, see stepperHoldOffIdle.
 
 	uint16_t idleTarget;Target RPM

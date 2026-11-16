@@ -28,7 +28,9 @@ struct_no_prefix fuel_computer_s
 	! c'mon, not the whole LiveData spaghetti for SD class?
 	float sdTcharge_coff
 	float sdAirMassInOneCylinder;@@GAUGE_NAME_AIR_MASS@@;"g",1, 0, 0, 0, 3
+set_prefix ""
 	float normalizedCylinderFilling;Air: Normalized cyl filling;"%", 1, 0, 0, 100, 1
+set_prefix "Fuel"
 
 	uint8_t brokenInjector
 

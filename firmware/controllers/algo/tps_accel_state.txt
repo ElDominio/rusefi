@@ -12,9 +12,9 @@ percent_t deltaTps;change
 	float valueFromTable;valueFromTable
 
 bit isAboveAccelThreshold;Active
-bit isBelowDecelThreshold;
+bit isBelowDecelThreshold;Below Decel Thres
 bit isTimeToResetAccumulator;reset time
-bit isFractionalEnrichment
+bit isFractionalEnrichment;Fractional Enrich
 bit belowEpsilon;below threshold
 bit tooShort;too short
 
