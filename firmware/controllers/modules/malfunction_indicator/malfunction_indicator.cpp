@@ -31,6 +31,8 @@
 
 #include "bench_test.h"
 #include "board_overrides.h"
+#include "custom_page.h"
+#include "check_engine_light.h"
 #include "malfunction_central.h"
 #include "malfunction_indicator.h"
 
@@ -41,6 +43,8 @@ static constexpr float PulseGapMs = 400;
 static constexpr float PreludeMs = 5000;
 // pause between two consecutive codes
 static constexpr float CodeGapMs = 2000;
+// [tag:alphax_cel_blink] plain flash period of the Check Engine Triggering escalation
+static constexpr float CelBlinkPeriodMs = 200;
 
 // Optional board hook: decides which OBD codes are allowed to be blinked out at all.
 std::optional<board_mil_code_filter_type> custom_board_milCodeFilter;
@@ -179,6 +183,28 @@ void MILController::onSlowCallback() {
 		return;
 	}
 
+	// [tag:alphax_cel_blink] Check Engine Triggering escalation: once points reach
+	// celBlinkPointsThreshold (on top of an active DTC at celPointsThreshold), flash the lamp
+	// plainly instead of the upstream prelude/digit sequence. A flashing MIL signals a more
+	// critical condition than a steady one. The digit sequence is reset so it restarts from
+	// Idle once the escalation clears.
+	if (isCelBlinkingActive()) {
+		if (!m_wasCelBlinking) {
+			m_wasCelBlinking = true;
+			m_celBlinkOn = true;
+			m_celBlinkTimer.reset();
+		}
+		m_phase = Phase::Idle;
+		m_activeObdCode = ObdCode::None;
+		if (m_celBlinkTimer.hasElapsedMs(CelBlinkPeriodMs)) {
+			m_celBlinkOn = !m_celBlinkOn;
+			m_celBlinkTimer.reset();
+		}
+		setLamp(m_celBlinkOn, true);
+		return;
+	}
+	m_wasCelBlinking = false;
+
 	switch (m_phase) {
 	case Phase::Idle:
 		{
@@ -188,7 +214,8 @@ void MILController::onSlowCallback() {
 			getErrorCodes(&codes, custom_board_milCodeFilter.value_or(nullptr));
 			if (codes.count == 0) {
 				m_activeObdCode = ObdCode::None;
-				setLamp(engine->rpmCalculator.isStopped());
+				// Key-On-Engine-Off bulb check, only when celOnKoeo is enabled (AlphaX gate)
+				setLamp(getCustomPage()->celOnKoeo && engine->rpmCalculator.isStopped());
 				return;
 			}
 			// codes are present: start with the steady lamp

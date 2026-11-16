@@ -150,8 +150,8 @@ void CheckEngineLight::updateCheckEngineTriggering() {
 
 	// Points contributed by every check on this module, so a combination of otherwise-minor
 	// faults can escalate the CEL to flashing even if no single one crosses its own threshold.
-	// Misfire Detection keeps its own addError() latch (misfire_detection.cpp raises
-	// OBD_Random_Misfire directly once latched) but also contributes a fixed point here. The
+	// Misfire Detection raises OBD_Random_Misfire through warning() (misfire_detection.cpp) once
+	// latched and also contributes a fixed point here. The
 	// voltage-range checks above (battery/MAP/IAT/TPS) raise/clear their DTCs immediately and
 	// unconditionally via updateRange() -- that behavior is unchanged -- but each also
 	// contributes a point here while its DTC is active.
