@@ -301,6 +301,30 @@ TEST(LuaHooks, ProductionLazyHookVisitorUnderUnitTest) {
 	EXPECT_TRUE(lua_toboolean(state, -1));
 }
 
+// [tag:lua_lazy_native_hooks] Hooks that exist only on AlphaX must be registered through
+// hooks.add() in enumerateMainRusefiLuaHooks(); a plain lua_register() would load eagerly and
+// defeat the F4 RAM saving. Each one must resolve through the lazy registry.
+TEST(LuaHooks, AlphaXHooksResolveThroughLazyRegistry) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	LuaHandle handle(luaL_newstate());
+	auto* state = static_cast<lua_State*>(handle);
+	ASSERT_NE(nullptr, state);
+	configureRusefiLuaHooksLazyForTests(state);
+
+	const char* script = R"(
+		if setLaunchRpm == nil then return 1 end
+		if startDisabled == nil then return 2 end
+		if setExhCutoutActive == nil then return 3 end
+		if resetOilLifeMonitor == nil then return 4 end
+		if setRollingLaunchTrigger == nil then return 5 end
+		return 0
+	)";
+	ASSERT_EQ(0, luaL_loadstring(state, script));
+	ASSERT_EQ(0, lua_pcall(state, 0, 1, 0));
+	EXPECT_EQ(0, lua_tointeger(state, -1));
+}
+
 TEST(LuaHooks, TestCrc8) {
 	const char* realHDdata = R"(
 
