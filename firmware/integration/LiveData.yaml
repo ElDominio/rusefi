@@ -321,7 +321,6 @@ Usages:
     prepend: integration/rusefi_config_shared.txt
     output_name: burst_knock
     engineModule: BurstKnock
-    conditional_compilation: "EFI_BURST_KNOCK"
 
   - name: wot_enrichment_state
     java: WotEnrichment.java

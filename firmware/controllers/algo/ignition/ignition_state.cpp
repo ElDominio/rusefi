@@ -251,9 +251,7 @@ angle_t getAdvanceCorrections(float engineLoad) {
 #if EFI_LAUNCH_CONTROL
 		- engine->module<RollingLaunchControl>().unmock().getTimingRetard()
 #endif // EFI_LAUNCH_CONTROL
-#if EFI_BURST_KNOCK
 		- engine->module<BurstKnock>().unmock().getTimingRetard()
-#endif // EFI_BURST_KNOCK
 		;
 }
 

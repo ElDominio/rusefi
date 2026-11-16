@@ -161,9 +161,6 @@ using AlphaXModuleList = type_list<
 #if EFI_LAUNCH_CONTROL
     RollingLaunchControl,
 #endif // EFI_LAUNCH_CONTROL
-#if EFI_BURST_KNOCK
-    BurstKnock,
-#endif // EFI_BURST_KNOCK
 #if EFI_WOT_ENRICHMENT
     WotEnrichment,
 #endif // EFI_WOT_ENRICHMENT
@@ -281,6 +278,7 @@ public:
 #endif // EFI_ENGINE_CONTROL
 
 #include "modules_list_generated.h"
+		BurstKnock,
 
         EngineModule // dummy placeholder so the previous entries can all have commas
     > coreModules{};

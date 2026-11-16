@@ -65,17 +65,6 @@ void customPageSetDefaults() {
 		d.luaLimiterBoostAddBins[i] = i;
 	}
 
-	// Burst Knock (transient ignition timing pull) — disabled by default; seed usable axes.
-	d.burstKnockEnabled = false;
-	d.burstKnockDecayTime = 1.0f; // pull decays back to zero over 1 s
-	for (size_t i = 0; i < efi::size(d.burstKnockRpmBins); i++) {
-		d.burstKnockRpmBins[i] = 800 + i * 800;      // 800 .. 6400 rpm
-	}
-	for (size_t i = 0; i < efi::size(d.burstKnockTpsRateBins); i++) {
-		d.burstKnockTpsRateBins[i] = i * 150;        // 0 .. 1050 %/s
-	}
-	// burstKnockRetardTable left at zero (no pull) until the user tunes it.
-
 	// Sport Pedal (ETB pedal-to-throttle ratio shaping) — disabled by default; pass-through curve.
 	d.sportPedalActivationMode   = SPORT_PEDAL_OFF;
 	d.sportPedalSwitchPin        = Gpio::Unassigned;

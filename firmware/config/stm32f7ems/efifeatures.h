@@ -49,11 +49,6 @@
 #define EFI_LAUNCH_POWER_RAMP TRUE
 #endif
 
-// Burst Knock (transient ignition timing pull on a TPS-rate stab)
-#ifndef EFI_BURST_KNOCK
-#define EFI_BURST_KNOCK TRUE
-#endif
-
 // Cranking No-Spark (external distributor/module fires spark during cranking, ECU takes over after)
 #ifndef EFI_CRANKING_NO_SPARK
 #define EFI_CRANKING_NO_SPARK TRUE
