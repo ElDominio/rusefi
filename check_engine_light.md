@@ -19,7 +19,7 @@ There are two independent paths that toggle this pin.
 
 This is the standard, recoverable-fault path — there is no dedicated "set MIL" function; everything funnels through `addError()`.
 
-Example consumer: Misfire Detection. `MisfireController::registerMisfire()` (`firmware/controllers/algo/misfire_detection.cpp`) increments a per-cylinder count; once it crosses `getCustomPage()->misfireCountThreshold` it latches a persistent `misfireLatched` flag (survives engine stop) and calls `addError(ObdCode::OBD_Random_Misfire)` (P0300) — lighting the CEL purely via the shared `addError()` mechanism above. It also contributes a point to Check Engine Triggering's `celPointsTotal` (below).
+Example consumer: Misfire Detection. `MisfireController::registerMisfire()` (`firmware/controllers/algo/misfire_detection.cpp`) increments a per-cylinder count; once it crosses `getCustomPage()->misfireCountThreshold` it latches a persistent `misfireLatched` flag (survives engine stop) and raises `warning(ObdCode::OBD_Random_Misfire)` (P0300), which stores the code in the same set as `addError()` (and additionally prints a console line and takes a freeze frame). It also contributes a point to Check Engine Triggering's `celPointsTotal` (below).
 
 ## Path 2 — fatal/critical errors
 
@@ -30,7 +30,7 @@ Example consumer: Misfire Detection. `MisfireController::registerMisfire()` (`fi
 | Trigger | Mechanism | CEL behavior |
 |---|---|---|
 | Recoverable diagnostic fault | `addError(ObdCode::...)` | Picked up by `MILController`, blinks out the OBD code digits |
-| Misfire latch | `addError(ObdCode::OBD_Random_Misfire)` from `MisfireController` | Same as above (P0300); also contributes a point to `celPointsTotal` |
+| Misfire latch | `warning(ObdCode::OBD_Random_Misfire)` from `MisfireController` | Same as above (P0300); also contributes a point to `celPointsTotal` |
 | Voltage out of configured range (battery/MAP/IAT/TPS) | `CheckEngineLight::updateRange()` -> `addError()` | Same as above; also contributes a point to `celPointsTotal` |
 | Check Engine Triggering points reach `celBlinkPointsThreshold` | `isCelBlinkingActive()` | `MILController` flashes the pin plainly (200ms on/off) instead of the normal digit-blink-out |
 | Fatal/unrecoverable error | `firmwareError()` / `criticalError()` | `turnAllPinsOff()` forces CEL pin solid ON |
@@ -56,7 +56,7 @@ Two page-6 thresholds gate what the combined total does, `celPointsThreshold` lo
 
 ### Limp Mode
 
-Limp Mode (`firmware/controllers/algo/engine_state_machine.cpp`) latches on an ETB jam (`LimpManager::reportEtbJammed`) **or** when `isCelBlinkingActive()` is true — i.e. the exact same points system above, gated by `#ifdef MODULE_CHECK_ENGINE_LIGHT`. There is no separate DTC-severity table or threshold for Limp Mode; it simply reuses the CEL's own flashing-escalation signal.
+Limp Mode (`firmware/controllers/modules/operating_modes/`) latches on an ETB jam (`LimpManager::reportEtbJammed`) **or** when `isCelBlinkingActive()` is true — i.e. the exact same points system above, gated by `#ifdef MODULE_CHECK_ENGINE_LIGHT`. There is no separate DTC-severity table or threshold for Limp Mode; it simply reuses the CEL's own flashing-escalation signal.
 
 ### Malfunction Indicator KOEO bulb check (`MODULE_MIL`)
 
