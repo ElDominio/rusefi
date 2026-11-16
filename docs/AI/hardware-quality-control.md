@@ -60,6 +60,18 @@ drive the valve for 3 s, both coils in double-solenoid mode). `bench_mode_e` in
 from TunerStudio (`cmd_test_*` in `tunerstudio.template.ini` -> `TS_BENCH_CATEGORY` ->
 `handleBenchCategory()`).
 
+`BENCH_SPEEDO_TEST` (`speedoBench()` in `bench_test.cpp`, implemented in
+`firmware/controllers/gauges/speedometer.cpp`) overrides the speedometer PWM frequency
+instead of queuing a `pinbench()` request. The **Test Speedo** button in the
+**Speedometer output** dialog uses `speedometerBenchTestFrequency` (default 100 Hz)
+for three seconds. `speedoUpdate()`, called by the 200 Hz fast callback, then returns
+to the current `VehicleSpeed` and `speedometerPulsePerKm` conversion. An uninitialized
+output rejects the request. Repeating the command replaces the frequency and restarts
+the timer. Zero frequency pauses pulses for the test interval using the PWM driver's
+`NAN` convention. The bench command retains AlphaX wire value 45; value 44 is reserved.
+`SpeedometerBenchTest` drives real PWM callbacks on the simulated clock to check
+command routing, output frequency, expiry, repeated requests, and zero-frequency pause.
+
 ### Dispatch invariant and unit coverage
 
 Every `bench_mode_e` value that `tunerstudio.template.ini` binds to a `commandButton` must have a
@@ -222,8 +234,9 @@ generates.
 ## 4. Test-rig hardware note
 
 The QC fixture ("stim" board) generates trigger/analog/digital stimulus into the ECU harness
-connector and observes ECU outputs; it drives the CAN protocol above. See
-https://github.com/rusefi/rusefi-hardware (digital-inputs firmware) and the wiki CAN page.
+connector and observes ECU outputs; it drives the CAN protocol above. Its firmware, test
+cycle, per-board expectation tables and the output-ordinal contract with `getBoardMeta*` are
+described in [HW QC Stim Rig](hw-qc-stim-rig.md).
 `FW_WIPE_OUT` and `HW_QC_TESTER_PRESENT` CAN IDs are reserved for the tester/OpenBLT side -
 firmware currently neither sends nor handles them.
 

@@ -4,6 +4,9 @@ This document inventories the custom functions and classes that rusEFI firmware 
 into the user Lua VM, grouped by category. It is intended for AI assistants and developers
 working on the scripting surface; user-facing docs live at https://wiki.rusefi.com/Lua-Scripting
 
+For which subsystems can accept a Lua implementation, and the limits of each
+replacement/adjustment path, see [Lua implementation injection points](lua_implementation_injection.md).
+
 ## Where hooks are registered
 
 | File | Role |
@@ -102,8 +105,9 @@ Lets a script *be* a sensor - e.g. CAN-sourced coolant temp or pedal position.
 
 ### 3. Virtual switch inputs (overriding driver controls)
 
-Boolean state pushed into `engine->engineState.lua.*`, consumed by the respective controllers
-instead of / in addition to physical switches.
+Switch state consumed by the respective controllers instead of / in addition
+to physical switches. Most setters write booleans into `engine->engineState.lua.*`;
+the launch and rolling-idle trigger setters take integers and write controller state.
 
 | Function | Target |
 |------------------------------|--------|
@@ -111,17 +115,18 @@ instead of / in addition to physical switches.
 | `setBrakePedalState(bool)` | Brake pedal |
 | `setAcRequestState(bool)` | AC request "button" |
 | `setTorqueReductionState(bool)` | Flat-shift/torque-reduction trigger |
-| `setLaunchTrigger(bool)` | `launchController.luaLaunchState` (EFI_LAUNCH_CONTROL) |
-| `setRollingIdleTrigger(bool)` | `antilagController.luaAntilagState` (EFI_ANTILAG_SYSTEM) |
+| `setLaunchTrigger(0 or 1)` | `launchController.luaLaunchState` (EFI_LAUNCH_CONTROL); selects the raw input in Lua activation mode, with native launch gates still applied. See [Launch Control](launch_control.md) for arming and reset behavior. |
+| `setRollingIdleTrigger(0 or 1)` | `antilagController.luaAntilagState` (EFI_ANTILAG_SYSTEM) |
 
 ### 4. Closed-loop trims and adjustments (fuel / ignition / boost / idle / ETB)
 
 Numeric trims applied on top of the normal control algorithms. These are the primary
-"engine control from Lua" surface; values persist until the script changes them.
+"engine control from Lua" surface. Most persist until changed or reset; ETB/EWG
+additions expire after 0.2 seconds without refresh.
 
 | Function | Target |
 |------------------------------|--------|
-| `setFuelAdd(mg)` / `setFuelMult(coef)` | Fueling (see [fueling_system.md](fueling_system.md)); Add is per-cylinder mg |
+| `setFuelAdd(grams)` / `setFuelMult(coef)` | Fueling (see [fueling_system.md](fueling_system.md)); Add is grams per injection, applied before downstream trims/staging |
 | `setTimingAdd(deg)` / `setTimingMult(coef)` | Ignition advance (see [ignition_system.md](ignition_system.md)) |
 | `setSparkSkipRatio(r)` / `setSparkHardSkipRatio(r)` | Soft/hard spark-skip (traction/launch style torque cut) |
 | `setBoostTargetAdd(v)` / `setBoostTargetMult(v)` / `setBoostDutyAdd(v)` | BoostController closed/open loop (EFI_BOOST_CONTROL) |

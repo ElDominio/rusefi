@@ -89,6 +89,16 @@ The 2D table fields are appended config so existing tunes stay valid. Two mechan
 
 See `docs/calibration-compatibility.md` and `TuneMigrator.java`.
 
+## Rev-limit fuel correction and cuts
+
+The [main rev limiter](rev_limiters.md) progressively adds running fuel over
+its own soft-limit RPM window (`rpmSoftLimitRange`). Cut fuel on RPM limit enables
+both the soft fuel multiplier and the hard fuel cut; the multiplier reaches
+its maximum at the effective hard limit (including Limiter Adders and the Limp Mode cap), while the cut latches strictly above it.
+The fuel adder does not restore injection during a cut. See the limiter guide
+for coolant-based limits, forced fault cuts, STFT recovery delay and the current
+difference between STFT and LTFT learning gates during general cuts.
+
 ## Overrun and deceleration fuel cut
 
 [tag:state_aware_dfco] `DfcoController` runs in the fast fuel loop. The
@@ -127,6 +137,19 @@ telemetry, ignition retard and trim-recovery handling use the same controller.
 `unit_tests/tests/ignition_injection/test_fuelCut.cpp` covers mode selection,
 gear validity, missing/failed speed, common guards, physical-state independence,
 shift suppression and delayed re-entry, alongside the injection-pipeline tests.
+
+## Launch fuel and trim learning
+
+[Launch control](launch_control.md) multiplies running fuel by
+`1 + launchFuelAdderPercent / 100` only in the full launch state, not in the
+pre-launch window. The independent launch fuel cut requires RPM strictly above
+Launch RPM and can suppress injection despite this enrichment.
+
+Both pre-launch and full launch pause STFT cell updates and LTFT learning.
+Existing corrections remain applicable; pausing learning does not reset trims
+to neutral. Fuel math and trim learning run before the launch-state update in
+the fast callback, so they observe its previous iteration's state. See the
+launch guide for exact gates, thresholds, diagnostics and regression tests.
 
 ## Time-based WOT enrichment
 

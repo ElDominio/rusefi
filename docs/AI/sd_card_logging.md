@@ -106,6 +106,13 @@ loggers runs, chosen by `engineConfiguration->sdTriggerLog`:
   1-byte additive checksum.
 - The field list is the generated `log_fields_generated.h`; count is reported by
   `sdinfo` as "SD card fields".
+- Enum fields in mapped live-data fragments are logged as numeric values using
+  their underlying integer width and signedness. The MLG file does not include
+  enum value names.
+- `LiveData.yaml` uses `engineModule` to expose a module's generated state to SD
+  and Lua. Bit offsets are relative to the generated state subobject. Explicit
+  `constexpr` expressions cover other sources. Feature guards still control
+  field availability.
 - `[tag:live_data_output_scale]` Every exported numeric field automatically
   uses its constant INI scale/offset in the descriptor: `(raw + offset) * scale`.
   STFT bank 1/2 and dwell deviation therefore display `0.95`, `1.00`, `1.05`
