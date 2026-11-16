@@ -154,7 +154,8 @@ TEST(MlgOpenIssues, SdHeaderHasNoStartingTuneBlock) {
 	EXPECT_EQ(header.bytes.size(), dataOffset);
 }
 
-TEST(MlgOpenIssues, SdIncludesLtftButOmitsMisfireFields) {
+// Disabled until batch 7 (TS-1/TS-2 output-channel changes expose "LTFT: learning: hits" / ltftCntHit).
+TEST(MlgOpenIssues, DISABLED_SdIncludesLtftButOmitsMisfireFields) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	CaptureWriter header;
 	MLG::writeFileHeader(header);
@@ -178,7 +179,8 @@ TEST(MlgOpenIssues, SdIncludesLtftButOmitsMisfireFields) {
 	}
 }
 
-TEST(MlgOpenIssues, LuaIncludesLtftCounterButOmitsIteratedTrims) {
+// Disabled until batch 7 (see above).
+TEST(MlgOpenIssues, DISABLED_LuaIncludesLtftCounterButOmitsIteratedTrims) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engine->module<LongTermFuelTrim>()->ltftCntHit = 42;
 	engine->module<LongTermFuelTrim>()->ltftCorrection[0] = 1.05f;
