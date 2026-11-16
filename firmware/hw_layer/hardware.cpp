@@ -143,6 +143,10 @@ void applyNewHardwareSettings() {
      */
 	ButtonDebounce::stopConfigurationList();
 
+#ifdef MODULE_FUEL_PUMP
+	stopFuelPump();
+#endif
+
 #if EFI_PROD_CODE
 	stopSensors();
 #endif // EFI_PROD_CODE

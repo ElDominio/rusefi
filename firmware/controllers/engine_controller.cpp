@@ -448,10 +448,6 @@ void commonInitEngineController() {
 	initAlternatorCtrl();
 #endif /* EFI_ALTERNATOR_CONTROL */
 
-#if EFI_ADVANCED_FUEL_PUMP
-	initFuelPumpPwm();
-#endif
-
 #if EFI_VVT_PID
 	initVvtActuators();
 #endif /* EFI_VVT_PID */
@@ -471,6 +467,10 @@ void commonInitEngineController() {
 	initGpPwm();
 	initExhaustCutout();
 	initImrc();
+
+#ifdef MODULE_FUEL_PUMP
+	initFuelPump();
+#endif
 
 #if EFI_IDLE_CONTROL
 	startIdleThread();

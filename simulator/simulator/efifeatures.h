@@ -147,10 +147,6 @@
 #define EFI_MAIN_RELAY_CONTROL FALSE
 #endif
 
-#ifndef EFI_ADVANCED_FUEL_PUMP
-#define EFI_ADVANCED_FUEL_PUMP TRUE
-#endif
-
 #define EFI_CAN_SUPPORT TRUE
 
 #ifndef EFI_UDS

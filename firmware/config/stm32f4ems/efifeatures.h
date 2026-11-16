@@ -568,10 +568,6 @@
 #define EFI_SENT_SUPPORT        FALSE
 #endif
 
-#ifndef EFI_ADVANCED_FUEL_PUMP
-#define EFI_ADVANCED_FUEL_PUMP FALSE
-#endif
-
 #ifndef EFI_VVT_COMPENSATION
 #define EFI_VVT_COMPENSATION FALSE
 #endif

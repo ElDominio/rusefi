@@ -1,220 +1,278 @@
 /**
  * low pressure fuel pump control
  * for high-pressure see HpfpController@high_pressure_fuel_pump
- */
+ *
+*/
 #include "pch.h"
-#include "custom_page.h"
 
 #include "fuel_pump.h"
 #include "bench_test.h"
 
-#if EFI_ADVANCED_FUEL_PUMP
-#if EFI_PROD_CODE || EFI_SIMULATOR
-static SimplePwm fuelPumpPwm("fp_pwm");
-#endif
-
-FuelPumpController::FuelPumpController() {
-	m_fuelPumpPid.initPidClass(&engineConfiguration->fuelPumpControl);
+// Software PWM lets bench tests retain ownership of the output for their whole
+// duration, including timer callbacks between fast-controller ticks.
+static void applyFuelPumpPwm(int stateIndex, PwmConfig* pwm) {
+	if (hasFirmwareError()) {
+		enginePins.fuelPumpRelay.setValue(false);
+	} else if (!isRunningBenchTest()) {
+		applyPinState(stateIndex, pwm);
+	}
 }
-#endif // EFI_ADVANCED_FUEL_PUMP
+
+void FuelPumpController::setDefaultConfiguration() {
+	engineConfiguration->fuelPumpMode = fuel_pump_mode_e::Single;
+	engineConfiguration->fuelPump2Pin = Gpio::Unassigned;
+	engineConfiguration->fuelPump2PinMode = OM_DEFAULT;
+	engineConfiguration->secondaryFpActivationRpm = 3000;
+	engineConfiguration->secondaryFpActivationLoad = 100;
+	engineConfiguration->secondaryFpActivationTps = 50;
+	engineConfiguration->secondaryFpRpmHysteresis = 500;
+	engineConfiguration->secondaryFpLoadHysteresis = 10;
+	engineConfiguration->secondaryFpTpsHysteresis = 10;
+	engineConfiguration->fuelPumpPwmFrequency = 100;
+	engineConfiguration->fuelPumpMinDuty = 0;
+	engineConfiguration->fuelPumpMaxDuty = 100;
+	engineConfiguration->fuelPumpControl = {};
+	engineConfiguration->fuelPumpControl.pFactor = 0.1f;
+	engineConfiguration->fuelPumpControl.minValue = -50;
+	engineConfiguration->fuelPumpControl.maxValue = 50;
+	engineConfiguration->fuelPumpControl.periodMs = FAST_CALLBACK_PERIOD_MS;
+	engineConfiguration->fuelPump_iTermMin = -30;
+	engineConfiguration->fuelPump_iTermMax = 30;
+	engineConfiguration->fuelPumpAggressiveRelief = false;
+	engineConfiguration->fuelPumpReliefMaxInjectedMass = 10;
+	engineConfiguration->fuelPumpReliefEngageOverpressure = 50;
+	engineConfiguration->fuelPumpReliefRecoverOverpressure = 20;
+	setLinearCurve(config->fuelPressureTargetRpmBins, 0, 8000);
+	setLinearCurve(config->fuelPressureTargetLoadBins, 0, 300);
+	setTable(config->fuelPressureTargetTable, 350.0f);
+	setLinearCurve(config->fuelPumpBaseDutyRpmBins, 0, 8000);
+	setLinearCurve(config->fuelPumpBaseDutyFpBins, 0, 700);
+	setTable(config->fuelPumpBaseDutyTable, 50.0f);
+}
+
+void FuelPumpController::resetFeedback() {
+	m_pid.reset();
+	isFpPidActive = false;
+	isFpReliefActive = false;
+}
+
+bool FuelPumpController::isHardwareConfigurationChanged(engine_configuration_s const* previous) const {
+	return previous->fuelPumpMode != engineConfiguration->fuelPumpMode
+		|| previous->fuelPumpPin != engineConfiguration->fuelPumpPin
+		|| previous->fuelPumpPinMode != engineConfiguration->fuelPumpPinMode
+		|| previous->fuelPump2Pin != engineConfiguration->fuelPump2Pin
+		|| previous->fuelPump2PinMode != engineConfiguration->fuelPump2PinMode
+		|| previous->fuelPumpPwmFrequency != engineConfiguration->fuelPumpPwmFrequency;
+}
+
+void FuelPumpController::stopHardware() {
+	chibios_rt::CriticalSectionLocker lock;
+	if (!m_hardwareInitialized) {
+		return;
+	}
+	if (m_pwm) {
+		m_pwm->stop();
+		engine->scheduler.cancel(&m_pwm->scheduling);
+		m_pwm.reset();
+	}
+	enginePins.fuelPumpRelay.setValue(false);
+	enginePins.fuelPumpRelay2.setValue(false);
+	m_hardwareInitialized = false;
+	isSecondaryPumpOn = false;
+	fuelPumpDuty = 0;
+	fuelPressureTarget = 0;
+	resetFeedback();
+}
+
+void FuelPumpController::initHardware() {
+	stopHardware();
+	chibios_rt::CriticalSectionLocker lock;
+	m_pid.initPidClass(&engineConfiguration->fuelPumpControl);
+	resetFeedback();
+	m_mode = engineConfiguration->fuelPumpMode;
+	m_hardwareInitialized = true;
+	isSecondaryPumpOn = false;
+	if (!isRunningBenchTest()) {
+		enginePins.fuelPumpRelay.setValue(false);
+		enginePins.fuelPumpRelay2.setValue(false);
+	}
+	if (m_mode == fuel_pump_mode_e::Pwm && isBrainPinValid(engineConfiguration->fuelPumpPin)
+		&& engineConfiguration->fuelPumpPwmFrequency > 0) {
+		m_pwm.emplace("Fuel pump PWM");
+		startSimplePwm(&*m_pwm, "Fuel pump PWM", &engine->scheduler,
+			&enginePins.fuelPumpRelay, engineConfiguration->fuelPumpPwmFrequency, 0, applyFuelPumpPwm);
+	}
+}
+
+void FuelPumpController::onConfigurationChange(engine_configuration_s const* previous) {
+	if (!m_hardwareInitialized || isHardwareConfigurationChanged(previous)) {
+		initHardware();
+	} else {
+		resetFeedback();
+	}
+}
+
+void initFuelPump() {
+	engine->module<FuelPumpController>()->initHardware();
+}
+
+void stopFuelPump() {
+	if (engine->module<FuelPumpController>()->isHardwareConfigurationChanged(&activeConfiguration)) {
+		engine->module<FuelPumpController>()->stopHardware();
+	}
+}
 
 void FuelPumpController::onSlowCallback() {
 	auto timeSinceIgn = m_ignOnTimer.getElapsedSeconds();
 
+	// If the ignition just turned on, turn on the fuel pump to prime
 	isPrime = timeSinceIgn >= 0 && timeSinceIgn < engineConfiguration->startUpFuelPumpDuration;
 
 #if EFI_SHAFT_POSITION_INPUT
+	// If there was a trigger event recently, turn on the pump, the engine is running!
 	engineTurnedRecently = engine->triggerCentral.engineMovedRecently();
-#endif
+#endif //EFI_SHAFT_POSITION_INPUT
 
-	isFuelPumpOn = isPrime || engineTurnedRecently;
+	isFuelPumpOn = (isPrime || engineTurnedRecently) && !hasFirmwareError();
 
-#if EFI_ADVANCED_FUEL_PUMP
-	fuel_pump_mode_e mode = getCustomPage()->fuelPumpMode;
-
-	if (mode == FP_MODE_SINGLE) {
-		if (!isRunningBenchTest()) {
-			enginePins.fuelPumpRelay.setValue("FP", isFuelPumpOn);
-		}
-	} else if (mode == FP_MODE_DUAL) {
-		if (!isRunningBenchTest()) {
-			enginePins.fuelPumpRelay.setValue("FP", isFuelPumpOn);
-		}
-		updateDualRelay();
-	}
-	// PWM mode: relay is not used; onFastCallback drives the duty via PID
-#else
-	if (!isRunningBenchTest()) {
-		enginePins.fuelPumpRelay.setValue("FP", isFuelPumpOn);
-	}
-#endif // EFI_ADVANCED_FUEL_PUMP
-}
-
-#if EFI_ADVANCED_FUEL_PUMP
-void FuelPumpController::updateDualRelay() {
-	if (!isFuelPumpOn) {
-		m_secondaryPumpOn = false;
-		enginePins.fuelPumpRelay2.setValue("FP2", false);
-		isSecondaryPumpOn = false;
+	if (!m_hardwareInitialized || isRunningBenchTest()) {
 		return;
 	}
-
-	const float rpm  = Sensor::getOrZero(SensorType::Rpm);
-	const float load = getEngineState()->fuelingLoad;
-	const float tps  = Sensor::getOrZero(SensorType::Tps1);
-
-	if (!m_secondaryPumpOn) {
-		// Activation: all three axes must exceed their activation threshold
-		if (rpm  > getCustomPage()->secondaryFpActivationRpm  &&
-		    load > getCustomPage()->secondaryFpActivationLoad &&
-		    tps  > getCustomPage()->secondaryFpActivationTps) {
-			m_secondaryPumpOn = true;
-		}
-	} else {
-		// Deactivation: any single axis dropping below (activation - hysteresis) shuts off secondary
-		if (rpm  < (float)getCustomPage()->secondaryFpActivationRpm  - getCustomPage()->secondaryFpRpmHysteresis  ||
-		    load < (float)getCustomPage()->secondaryFpActivationLoad - getCustomPage()->secondaryFpLoadHysteresis ||
-		    tps  < (float)getCustomPage()->secondaryFpActivationTps  - getCustomPage()->secondaryFpTpsHysteresis) {
-			m_secondaryPumpOn = false;
-		}
+	if (m_mode == fuel_pump_mode_e::Single || m_mode == fuel_pump_mode_e::Dual) {
+		enginePins.fuelPumpRelay.setValue("FP", isFuelPumpOn);
 	}
+	updateDualRelay();
+}
 
-	enginePins.fuelPumpRelay2.setValue("FP2", m_secondaryPumpOn);
-	isSecondaryPumpOn = m_secondaryPumpOn;
+void FuelPumpController::updateDualRelay() {
+	if (m_mode != fuel_pump_mode_e::Dual || !isFuelPumpOn) {
+		isSecondaryPumpOn = false;
+		enginePins.fuelPumpRelay2.setValue(false);
+		return;
+	}
+	auto rpm = Sensor::get(SensorType::Rpm);
+	auto tps = Sensor::get(SensorType::Tps1);
+	float load = getEngineState()->fuelingLoad;
+	if (!rpm || !tps
+		|| !std::isfinite(rpm.Value) || !std::isfinite(tps.Value) || !std::isfinite(load)) {
+		isSecondaryPumpOn = false;
+	} else if (!isSecondaryPumpOn) {
+		isSecondaryPumpOn = rpm.Value > engineConfiguration->secondaryFpActivationRpm
+			&& load > engineConfiguration->secondaryFpActivationLoad
+			&& tps.Value > engineConfiguration->secondaryFpActivationTps;
+	} else if (rpm.Value < engineConfiguration->secondaryFpActivationRpm - engineConfiguration->secondaryFpRpmHysteresis
+		|| load < engineConfiguration->secondaryFpActivationLoad - engineConfiguration->secondaryFpLoadHysteresis
+		|| tps.Value < engineConfiguration->secondaryFpActivationTps - engineConfiguration->secondaryFpTpsHysteresis) {
+		isSecondaryPumpOn = false;
+	}
+	enginePins.fuelPumpRelay2.setValue("FP2", isSecondaryPumpOn);
 }
 
 void FuelPumpController::onFastCallback() {
-	if (getCustomPage()->fuelPumpMode != FP_MODE_PWM) {
+	if (!m_hardwareInitialized || m_mode != fuel_pump_mode_e::Pwm) {
 		return;
 	}
-
-#if EFI_PROD_CODE || EFI_SIMULATOR
-	if (!isBrainPinValid(engineConfiguration->fuelPumpPin)) {
+	if (isRunningBenchTest()) {
+		resetFeedback();
 		return;
 	}
-
-	if (!Sensor::get(SensorType::FuelPressureLow)) {
-		// No pressure sensor — feed-forward only, skip PID
-		isFpPidActive = false;
-		m_fuelPumpPid.reset();
-		auto sp = getSetpoint();
-		setOutput(sp ? getOpenLoop(sp.Value) : expected<percent_t>{unexpected});
+	isFpPidActive = false;
+	if (!observePlant()) {
+		resetFeedback();
+		auto target = getSetpoint();
+		setOutput(target ? getOpenLoop(target.Value) : expected<percent_t>{unexpected});
 	} else {
 		update();
 	}
-#endif
 }
 
 expected<float> FuelPumpController::getSetpoint() {
-	if (!isFuelPumpOn) {
+	fuelPressureTarget = 0;
+	if (!isFuelPumpOn || hasFirmwareError()) {
+		resetFeedback();
 		return unexpected;
 	}
-
-	const float rpm  = Sensor::getOrZero(SensorType::Rpm);
-	const float load = getEngineState()->fuelingLoad;
-
-	float target = interpolate3d(
-		config->fuelPressureTargetTable,
-		config->fuelPressureTargetLoadBins, load,
-		config->fuelPressureTargetRpmBins,  rpm
-	);
-
-	fuelPressureTarget = clampF(0, target, 1275.0f);
-
+	float rpm = Sensor::getOrZero(SensorType::Rpm);
+	float load = getEngineState()->fuelingLoad;
+	if (!std::isfinite(rpm) || !std::isfinite(load)) {
+		resetFeedback();
+		return unexpected;
+	}
+	float target = interpolate3d(config->fuelPressureTargetTable,
+		config->fuelPressureTargetLoadBins, load, config->fuelPressureTargetRpmBins, rpm);
+	if (!std::isfinite(target)) {
+		resetFeedback();
+		return unexpected;
+	}
+	target = clampF(0, target, 1275);
+	fuelPressureTarget = target;
 	return target;
 }
 
 expected<float> FuelPumpController::observePlant() {
-	return Sensor::get(SensorType::FuelPressureLow);
+	auto pressure = Sensor::get(SensorType::FuelPressureLow);
+	return pressure && std::isfinite(pressure.Value) ? pressure : expected<float>{unexpected};
 }
 
 expected<percent_t> FuelPumpController::getOpenLoop(float target) {
-	const float rpm = Sensor::getOrZero(SensorType::Rpm);
-
-	return interpolate3d(
-		config->fuelPumpBaseDutyTable,
-		config->fuelPumpBaseDutyFpBins,  target,
-		config->fuelPumpBaseDutyRpmBins, rpm
-	);
-}
-
-expected<percent_t> FuelPumpController::getClosedLoop(float setpoint, float observation) {
-	bool reliefEligible = getCustomPage()->fuelPumpAggressiveRelief
-	    && engine->fuelComputer.running.fuel < getCustomPage()->fuelPumpReliefMaxInjectedMass;
-
-	if (!reliefEligible) {
-		// Master switch off, or demand has picked back up — PID stays (or resumes) in control.
-		m_reliefActive = false;
-	} else if (observation > setpoint + getCustomPage()->fuelPumpReliefEngageOverpressure) {
-		m_reliefActive = true;
-	} else if (observation <= setpoint + getCustomPage()->fuelPumpReliefRecoverOverpressure) {
-		m_reliefActive = false;
-	}
-	// else: between the recover and engage thresholds — hold whatever state we were already in.
-
-	if (m_reliefActive) {
-		// Pump has no authority to drop pressure faster than the injectors consume it down;
-		// hold at minDuty (via the unexpected fallback in setOutput()) instead of winding the
-		// PID's I-term down against an overpressure it can't actively correct.
+	float rpm = Sensor::getOrZero(SensorType::Rpm);
+	if (!std::isfinite(rpm) || !std::isfinite(target)) {
 		return unexpected;
 	}
+	return interpolate3d(config->fuelPumpBaseDutyTable,
+		config->fuelPumpBaseDutyFpBins, target, config->fuelPumpBaseDutyRpmBins, rpm);
+}
 
+expected<percent_t> FuelPumpController::getClosedLoop(float target, float pressure) {
+	bool reliefEligible = false;
+#if EFI_ENGINE_CONTROL
+	reliefEligible = engineConfiguration->fuelPumpAggressiveRelief
+		&& engine->fuelComputer.running.fuel < engineConfiguration->fuelPumpReliefMaxInjectedMass;
+#endif
+	if (!reliefEligible) {
+		isFpReliefActive = false;
+	} else if (pressure > target + engineConfiguration->fuelPumpReliefEngageOverpressure) {
+		isFpReliefActive = true;
+	} else if (pressure <= target + engineConfiguration->fuelPumpReliefRecoverOverpressure) {
+		isFpReliefActive = false;
+	}
+	if (isFpReliefActive) {
+		return unexpected;
+	}
 	isFpPidActive = true;
-	m_fuelPumpPid.iTermMin = getCustomPage()->fuelPump_iTermMin;
-	m_fuelPumpPid.iTermMax = getCustomPage()->fuelPump_iTermMax;
-	return m_fuelPumpPid.getOutput(setpoint, observation, FAST_CALLBACK_PERIOD_MS / 1000.0f);
+	m_pid.iTermMin = engineConfiguration->fuelPump_iTermMin;
+	m_pid.iTermMax = engineConfiguration->fuelPump_iTermMax;
+	return m_pid.getOutput(target, pressure, FAST_CALLBACK_PERIOD_MS / 1000.0f);
+}
+
+bool FuelPumpController::hasValidDutyLimits() const {
+	return engineConfiguration->fuelPumpMinDuty <= engineConfiguration->fuelPumpMaxDuty
+		&& engineConfiguration->fuelPumpMaxDuty <= 100;
 }
 
 void FuelPumpController::setOutput(expected<percent_t> output) {
-	percent_t duty;
-
-	if (isPrime) {
-		duty = getCustomPage()->fuelPumpMaxDuty;
-		m_fuelPumpPid.reset();
-	} else if (output) {
-		duty = clampF(getCustomPage()->fuelPumpMinDuty,
-		              output.Value,
-		              getCustomPage()->fuelPumpMaxDuty);
+	percent_t duty = 0;
+	if (!isFuelPumpOn || hasFirmwareError() || !hasValidDutyLimits()) {
+		resetFeedback();
+	} else if (isPrime) {
+		duty = engineConfiguration->fuelPumpMaxDuty;
+		resetFeedback();
+	} else if (output && std::isfinite(output.Value)) {
+		duty = clampF(engineConfiguration->fuelPumpMinDuty, output.Value, engineConfiguration->fuelPumpMaxDuty);
 	} else {
-		duty = getCustomPage()->fuelPumpMinDuty;
+		duty = engineConfiguration->fuelPumpMinDuty;
+		m_pid.reset();
 		isFpPidActive = false;
-		m_fuelPumpPid.reset();
 	}
-
 	fuelPumpDuty = duty;
-
-#if EFI_PROD_CODE || EFI_SIMULATOR
-	fuelPumpPwm.setSimplePwmDutyCycle(PERCENT_TO_DUTY(duty));
-#endif
-}
-
-void FuelPumpController::onConfigurationChange(engine_configuration_s const* prev) {
-	if (!m_fuelPumpPid.isSame(&prev->fuelPumpControl)) {
-		m_fuelPumpPid.reset();
+	chibios_rt::CriticalSectionLocker lock;
+	if (m_pwm && !isRunningBenchTest()) {
+		m_pwm->setSimplePwmDutyCycle(PERCENT_TO_DUTY(duty));
 	}
 }
-
-void initFuelPumpPwm() {
-#if EFI_PROD_CODE || EFI_SIMULATOR
-	if (getCustomPage()->fuelPumpMode != FP_MODE_PWM) {
-		return;
-	}
-
-	if (!isBrainPinValid(engineConfiguration->fuelPumpPin)) {
-		return;
-	}
-
-	startSimplePwm(&fuelPumpPwm,
-	               "Fuel pump PWM",
-	               &engine->scheduler,
-	               &enginePins.fuelPumpRelay,
-	               getCustomPage()->fuelPumpPwmFrequency,
-	               PERCENT_TO_DUTY(getCustomPage()->fuelPumpMinDuty));
-#endif
-}
-#endif // EFI_ADVANCED_FUEL_PUMP
 
 void FuelPumpController::onIgnitionStateChanged(bool ignitionOnParam) {
+	// live data parser convention is asking for a field
 	ignitionOn = ignitionOnParam;
 	if (ignitionOn) {
 		m_ignOnTimer.reset();

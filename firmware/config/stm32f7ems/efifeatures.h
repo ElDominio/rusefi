@@ -12,10 +12,6 @@
 
  #pragma once
 
-#ifndef EFI_ADVANCED_FUEL_PUMP
-#define EFI_ADVANCED_FUEL_PUMP TRUE
-#endif
-
 #ifndef EFI_VVT_COMPENSATION
 #define EFI_VVT_COMPENSATION TRUE
 #endif

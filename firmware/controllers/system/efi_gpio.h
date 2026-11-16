@@ -89,9 +89,7 @@ public:
 	// see acRelayPin
 	RegisteredOutputPin acRelay;
 	RegisteredOutputPin fuelPumpRelay;
-#if EFI_ADVANCED_FUEL_PUMP
 	RegisteredOutputPin fuelPumpRelay2;
-#endif
 	RegisteredOutputPin nitrousRelay;
 	RegisteredOutputPin vvlRelay;
 	RegisteredOutputPin cdvSolenoid;

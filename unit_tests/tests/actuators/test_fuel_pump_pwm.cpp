@@ -1,399 +1,348 @@
 #include "pch.h"
-#include "custom_page.h"
+#include "bench_test.h"
 
-// Helper: set all three dual-mode activation thresholds
-static void setDualActivation(uint16_t rpm, uint8_t load, uint8_t tps) {
-	getCustomPage()->secondaryFpActivationRpm  = rpm;
-	getCustomPage()->secondaryFpActivationLoad = load;
-	getCustomPage()->secondaryFpActivationTps  = tps;
-}
+class FuelPumpModes : public testing::Test {
+protected:
+	EngineTestHelper eth{engine_type_e::TEST_ENGINE};
+	FuelPumpController& pump = *engine->module<FuelPumpController>();
 
-// Helper: set all three dual-mode hysteresis values
-static void setDualHysteresis(uint16_t rpm, uint8_t load, uint8_t tps) {
-	getCustomPage()->secondaryFpRpmHysteresis  = rpm;
-	getCustomPage()->secondaryFpLoadHysteresis = load;
-	getCustomPage()->secondaryFpTpsHysteresis  = tps;
-}
+	void SetUp() override {
+		setOutputOnTheBenchTestForUnitTest(nullptr);
+		engineConfiguration->fuelPumpPin = Gpio::A0;
+		engineConfiguration->fuelPump2Pin = Gpio::B0;
+		engineConfiguration->startUpFuelPumpDuration = 0;
+		engineConfiguration->fuelPumpMinDuty = 20;
+		engineConfiguration->fuelPumpMaxDuty = 90;
+		engineConfiguration->fuelPumpControl.pFactor = 1;
+		engineConfiguration->fuelPumpControl.iFactor = 0;
+		engineConfiguration->fuelPumpControl.dFactor = 0;
+		setTable(config->fuelPressureTargetTable, 300.0f);
+		setTable(config->fuelPumpBaseDutyTable, 50.0f);
+		setTimeNowUs(500000);
+		Sensor::setMockValue(SensorType::Rpm, 4000);
+		Sensor::setMockValue(SensorType::Tps1, 70);
+		getEngineState()->fuelingLoad = 120;
+		Sensor::setMockValue(SensorType::FuelPressureLow, 300);
+	}
 
-// Helper: configure secondary pump pin and re-init its GPIO
-static void setupDualPin() {
-	engineConfiguration->fuelPump2Pin = Gpio::B0;
-	enginePins.fuelPumpRelay2.init();
-}
+	void TearDown() override {
+		hasCriticalFirmwareErrorFlag = false;
+		setOutputOnTheBenchTestForUnitTest(nullptr);
+		pump.stopHardware();
+	}
 
-TEST(FuelPumpPwm, SingleModeUnchanged) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
+	void configure(fuel_pump_mode_e mode) {
+		engineConfiguration->fuelPumpMode = mode;
+		// Use the hardware burn ordering: cancel PWM before GPIO reassignment.
+		stopFuelPump();
+		enginePins.unregisterPins();
+		enginePins.fuelPumpRelay.init();
+		enginePins.fuelPumpRelay2.init();
+		pump.onConfigurationChange(&activeConfiguration);
+		activeConfiguration = *engineConfiguration;
+	}
 
-	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	getCustomPage()->fuelPumpMode = FP_MODE_SINGLE;
-	enginePins.fuelPumpRelay.init();
+	void running() {
+		engine->triggerCentral.handleShaftSignal(SHAFT_PRIMARY_FALLING, getTimeNowNt());
+		pump.onSlowCallback();
+		ASSERT_TRUE(pump.isFuelPumpOn);
+		ASSERT_FALSE(pump.isPrime);
+	}
 
-	setTimeNowUs(0.5e6);
-	dut.onIgnitionStateChanged(true);
-	dut.onSlowCallback();
-	EXPECT_TRUE(efiReadPin(Gpio::A0));   // pump priming
+	void pressure(float kpa) {
+		Sensor::setMockValue(SensorType::FuelPressureLow, kpa);
+		pump.onFastCallback();
+	}
 
+	void expectDuty(float percent) {
+		EXPECT_NEAR(percent, pump.fuelPumpDuty, 0.11f);
+	}
+};
+
+TEST_F(FuelPumpModes, DefaultIsSingleRelayAndSecondOutputStaysOff) {
+	EXPECT_EQ(fuel_pump_mode_e::Single, engineConfiguration->fuelPumpMode);
+	configure(fuel_pump_mode_e::Single);
+	running();
+	pump.onFastCallback();
+	EXPECT_TRUE(efiReadPin(Gpio::A0));
+	EXPECT_FALSE(efiReadPin(Gpio::B0));
 	advanceTimeUs(10e6);
-	dut.onSlowCallback();
-	EXPECT_FALSE(efiReadPin(Gpio::A0));  // prime expired, no trigger
+	pump.onSlowCallback();
+	EXPECT_FALSE(efiReadPin(Gpio::A0));
 }
 
-TEST(FuelPumpPwm, DualModeSecondaryOffBelowThresholds) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
-	enginePins.fuelPumpRelay.init();
-	setupDualPin();
-
-	setDualActivation(3000, 60, 50);
-	setDualHysteresis(500, 10, 10);
-
-	// Primary priming, but RPM/load/TPS all zero (below thresholds)
-	setTimeNowUs(0.5e6);
-	dut.onIgnitionStateChanged(true);
-	dut.onSlowCallback();
-
-	EXPECT_TRUE(efiReadPin(Gpio::A0));   // primary on (priming)
-	EXPECT_FALSE(efiReadPin(Gpio::B0));  // secondary off
-}
-
-TEST(FuelPumpPwm, DualModeSecondaryOnAboveAllThresholds) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
-	enginePins.fuelPumpRelay.init();
-	setupDualPin();
-
-	setDualActivation(3000, 60, 50);
-	setDualHysteresis(500, 10, 10);
-
-	Sensor::setMockValue(SensorType::Rpm, 4000);
-	// fuelingLoad is used for "load"; set it via mock
-	getEngineState()->fuelingLoad = 80.0f;
-	Sensor::setMockValue(SensorType::Tps1, 70);
-
-	setTimeNowUs(0.5e6);
-	dut.onIgnitionStateChanged(true);
-	dut.onSlowCallback();
-
-	EXPECT_TRUE(efiReadPin(Gpio::A0));   // primary on
-	EXPECT_TRUE(efiReadPin(Gpio::B0));   // secondary on
-}
-
-TEST(FuelPumpPwm, DualModeSecondaryStaysOffIfOnlyOneConditionMet) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
-	enginePins.fuelPumpRelay.init();
-	setupDualPin();
-
-	setDualActivation(3000, 60, 50);
-	setDualHysteresis(500, 10, 10);
-
-	// RPM above threshold but load and TPS below
-	Sensor::setMockValue(SensorType::Rpm, 4000);
-	getEngineState()->fuelingLoad = 30.0f;  // below 60%
-	Sensor::setMockValue(SensorType::Tps1, 20);  // below 50%
-
-	setTimeNowUs(0.5e6);
-	dut.onIgnitionStateChanged(true);
-	dut.onSlowCallback();
-
-	EXPECT_TRUE(efiReadPin(Gpio::A0));   // primary on
-	EXPECT_FALSE(efiReadPin(Gpio::B0));  // secondary stays off
-}
-
-TEST(FuelPumpPwm, DualHysteresisStaysOnUntilRpmDropsBelow) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
-	enginePins.fuelPumpRelay.init();
-	setupDualPin();
-
-	setDualActivation(3000, 60, 50);
-	setDualHysteresis(500, 10, 10);
-
-	// All conditions above activation thresholds — secondary turns on
-	Sensor::setMockValue(SensorType::Rpm, 4000);
-	getEngineState()->fuelingLoad = 80.0f;
-	Sensor::setMockValue(SensorType::Tps1, 70);
-
-	setTimeNowUs(0.5e6);
-	dut.onIgnitionStateChanged(true);
-	dut.onSlowCallback();
-	EXPECT_TRUE(efiReadPin(Gpio::B0));  // secondary on
-
-	// Drop RPM below deactivation point (3000 - 500 = 2500) — secondary must turn off
-	Sensor::setMockValue(SensorType::Rpm, 2000);  // below deactivation point 2500
-	dut.onSlowCallback();
-	EXPECT_FALSE(efiReadPin(Gpio::B0));  // secondary off
-
-	// Restore RPM above activation — secondary should NOT come back until ALL conditions met
-	Sensor::setMockValue(SensorType::Rpm, 4000);
-	dut.onSlowCallback();
-	EXPECT_TRUE(efiReadPin(Gpio::B0));  // secondary on again (all three above thresholds)
-}
-
-TEST(FuelPumpPwm, DualHysteresisOrLogicOnDeactivation) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	engineConfiguration->fuelPumpPin  = Gpio::A0;
-	getCustomPage()->fuelPumpMode = FP_MODE_DUAL;
-	enginePins.fuelPumpRelay.init();
-	setupDualPin();
-
-	setDualActivation(3000, 60, 50);
-	setDualHysteresis(500, 10, 10);
-
-	// Activate secondary
-	Sensor::setMockValue(SensorType::Rpm, 4000);
-	getEngineState()->fuelingLoad = 80.0f;
-	Sensor::setMockValue(SensorType::Tps1, 70);
-	setTimeNowUs(0.5e6);
-	dut.onIgnitionStateChanged(true);
-	dut.onSlowCallback();
+TEST_F(FuelPumpModes, DualRequiresEveryThresholdAndReleasesOnAnyHysteresis) {
+	configure(fuel_pump_mode_e::Dual);
+	running();
+	EXPECT_TRUE(efiReadPin(Gpio::A0));
 	EXPECT_TRUE(efiReadPin(Gpio::B0));
 
-	// Drop only load below its deactivation point (60 - 10 = 50); RPM and TPS remain above activation
-	getEngineState()->fuelingLoad = 30.0f;  // below deactivation point 50%
-	dut.onSlowCallback();
-	// OR logic: secondary must turn off even though RPM and TPS are fine
+	// Exercise every input separately, including equality at both boundaries.
+	for (int input = 0; input < 3; input++) {
+		auto setInput = [input](float value) {
+			if (input == 0) Sensor::setMockValue(SensorType::Rpm, value);
+			if (input == 1) getEngineState()->fuelingLoad = value;
+			if (input == 2) Sensor::setMockValue(SensorType::Tps1, value);
+		};
+		const float activation[] = {3000, 100, 50};
+		const float release[] = {2500, 90, 40};
+		setInput(release[input]);
+		pump.onSlowCallback();
+		EXPECT_TRUE(efiReadPin(Gpio::B0));
+		setInput(release[input] - 1);
+		pump.onSlowCallback();
+		EXPECT_FALSE(efiReadPin(Gpio::B0));
+		setInput(activation[input]);
+		pump.onSlowCallback();
+		EXPECT_FALSE(efiReadPin(Gpio::B0));
+		setInput(activation[input] + 1);
+		pump.onSlowCallback();
+		EXPECT_TRUE(efiReadPin(Gpio::B0));
+	}
+	advanceTimeUs(10e6);
+	pump.onSlowCallback();
+	EXPECT_FALSE(efiReadPin(Gpio::A0));
 	EXPECT_FALSE(efiReadPin(Gpio::B0));
 }
 
-TEST(FuelPumpPwm, PwmGetSetpointFromTable) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
+TEST_F(FuelPumpModes, DualInvalidSensorsReleaseSecondary) {
+	configure(fuel_pump_mode_e::Dual);
+	running();
+	EXPECT_TRUE(pump.isSecondaryPumpOn);
+	Sensor::setInvalidMockValue(SensorType::Tps1);
+	pump.onSlowCallback();
+	EXPECT_FALSE(pump.isSecondaryPumpOn);
+	EXPECT_TRUE(efiReadPin(Gpio::A0));
+	Sensor::setMockValue(SensorType::Tps1, 70);
+	pump.onSlowCallback();
+	EXPECT_TRUE(pump.isSecondaryPumpOn);
+	getEngineState()->fuelingLoad = NAN;
+	pump.onSlowCallback();
+	EXPECT_FALSE(efiReadPin(Gpio::B0));
+}
 
-	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
+TEST_F(FuelPumpModes, PrimeUsesMaximumAndStoppedPumpUsesZeroDespiteMinimumDuty) {
+	engineConfiguration->startUpFuelPumpDuration = 2;
+	configure(fuel_pump_mode_e::Pwm);
+	pump.onIgnitionStateChanged(true);
+	pump.onSlowCallback();
+	pressure(450);
+	EXPECT_TRUE(pump.isPrime);
+	expectDuty(90);
+	EXPECT_FALSE(pump.isFpPidActive);
+	eth.moveTimeForwardAndInvokeEventsUs(3000000);
+	pump.onSlowCallback();
+	pump.onFastCallback();
+	EXPECT_FALSE(pump.isFuelPumpOn);
+	expectDuty(0);
+	EXPECT_FALSE(efiReadPin(Gpio::A0));
+	EXPECT_FALSE(pump.isFpReliefActive);
+}
 
-	// Fill target table with a constant 300 kPa
-	for (int i = 0; i < FP_PRESSURE_TABLE_SIZE; i++) {
-		for (int j = 0; j < FP_PRESSURE_RPM_SIZE; j++) {
-			config->fuelPressureTargetTable[i][j] = 300;
+TEST_F(FuelPumpModes, FeedbackAddsSignedCorrectionAndClampsTotalDuty) {
+	configure(fuel_pump_mode_e::Pwm);
+	running();
+	pressure(280);
+	expectDuty(70); // 50% base + 20% correction
+	EXPECT_TRUE(pump.isFpPidActive);
+	pressure(320);
+	expectDuty(30);
+	pressure(200);
+	expectDuty(90);
+	pressure(400);
+	expectDuty(20);
+	EXPECT_NEAR(300, pump.fuelPressureTarget, 0.1f);
+}
+
+TEST_F(FuelPumpModes, BothMapsInterpolateTheirOwnAxes) {
+	setLinearCurve(config->fuelPressureTargetRpmBins, 0, 6000);
+	setLinearCurve(config->fuelPressureTargetLoadBins, 0, 300);
+	setLinearCurve(config->fuelPumpBaseDutyRpmBins, 0, 6000);
+	setLinearCurve(config->fuelPumpBaseDutyFpBins, 0, 600);
+	for (int y = 0; y < 4; y++) {
+		for (int x = 0; x < 4; x++) {
+			config->fuelPressureTargetTable[y][x] = 200 + y * 100 + x * 100;
+			config->fuelPumpBaseDutyTable[y][x] = 10 + y * 20 + x * 10;
 		}
 	}
-
-	// Pump must be on for getSetpoint to return a value
-	setTimeNowUs(0.5e6);
-	dut.onIgnitionStateChanged(true);
-	dut.onSlowCallback();
-
-	auto setpoint = dut.getSetpoint();
-	ASSERT_TRUE(setpoint.Valid);
-	EXPECT_NEAR(300.0f, setpoint.Value, 1.0f);
+	configure(fuel_pump_mode_e::Pwm);
+	running();
+	Sensor::setMockValue(SensorType::Rpm, 1000);
+	getEngineState()->fuelingLoad = 50;
+	Sensor::setInvalidMockValue(SensorType::FuelPressureLow);
+	pump.onFastCallback();
+	EXPECT_NEAR(300, pump.fuelPressureTarget, 0.1f);
+	expectDuty(45); // target=300 halfway between pressure bins 200/400, RPM=1000
 }
 
-TEST(FuelPumpPwm, PwmOpenLoopNoSensor) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
+TEST_F(FuelPumpModes, MissingOrNonfinitePressureUsesBaseDutyAndResetsIntegrator) {
+	engineConfiguration->fuelPumpControl.iFactor = 10;
+	configure(fuel_pump_mode_e::Pwm);
+	running();
+	for (int i = 0; i < 100; i++) pressure(280);
+	EXPECT_GT(float(pump.fuelPumpDuty), 70);
+	Sensor::setInvalidMockValue(SensorType::FuelPressureLow);
+	pump.onFastCallback();
+	expectDuty(50);
+	EXPECT_FALSE(pump.isFpPidActive);
+	pressure(NAN);
+	expectDuty(50);
+	EXPECT_FALSE(pump.isFpPidActive);
+	pressure(INFINITY);
+	expectDuty(50);
+	pressure(300);
+	expectDuty(50);
+	EXPECT_TRUE(pump.isFpPidActive);
+}
 
-	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
-
-	// Fill base duty table: at 300 kPa target -> 50% duty
-	for (int i = 0; i < FP_DUTY_TABLE_SIZE; i++) {
-		for (int j = 0; j < FP_DUTY_RPM_SIZE; j++) {
-			config->fuelPumpBaseDutyTable[i][j] = 50;
-		}
+TEST_F(FuelPumpModes, ReliefLatchesThroughPressureBleedAndResumesWithoutWindup) {
+	engineConfiguration->fuelPumpAggressiveRelief = true;
+	engineConfiguration->fuelPumpControl.iFactor = 10;
+	engine->fuelComputer.running.fuel = 2;
+	configure(fuel_pump_mode_e::Pwm);
+	running();
+	pressure(350); // equality at engage threshold does not latch
+	EXPECT_FALSE(pump.isFpReliefActive);
+	pressure(360);
+	EXPECT_TRUE(pump.isFpReliefActive);
+	for (float kpa = 358; kpa > 320; kpa -= 2) {
+		pressure(kpa);
+		expectDuty(20);
+		EXPECT_TRUE(pump.isFpReliefActive);
+		EXPECT_FALSE(pump.isFpPidActive);
 	}
-
-	// No fuel pressure sensor configured — observePlant returns unexpected
-	EXPECT_FALSE(dut.observePlant().Valid);
-
-	// Open loop at 300 kPa target should return 50%
-	auto openLoop = dut.getOpenLoop(300.0f);
-	ASSERT_TRUE(openLoop.Valid);
-	EXPECT_NEAR(50.0f, openLoop.Value, 1.0f);
+	pressure(320); // equality at recovery threshold releases
+	EXPECT_FALSE(pump.isFpReliefActive);
+	EXPECT_TRUE(pump.isFpPidActive);
+	pressure(300);
+	expectDuty(49); // one 5 ms integration step at -20 kPa, not the whole bleed
 }
 
-TEST(FuelPumpPwm, PwmClosedLoopWithSensor) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
-	engineConfiguration->fuelPumpControl.pFactor = 1.0f;
-	engineConfiguration->fuelPumpControl.iFactor = 0;
-	engineConfiguration->fuelPumpControl.dFactor = 0;
-	engineConfiguration->fuelPumpControl.offset   = 0;
-	engineConfiguration->fuelPumpControl.minValue = -100;
-	engineConfiguration->fuelPumpControl.maxValue = 100;
-
-	Sensor::setMockValue(SensorType::FuelPressureLow, 280.0f);
-	EXPECT_NEAR(280.0f, dut.observePlant().value_or(-1), 1.0f);
-
-	// Error = 300 - 280 = 20, P=1.0, closed loop output = 20%
-	auto cl = dut.getClosedLoop(300.0f, 280.0f);
-	ASSERT_TRUE(cl.Valid);
-	EXPECT_NEAR(20.0f, cl.Value, 1.0f);
+TEST_F(FuelPumpModes, ReliefClearsOnDemandIncreaseDisableSensorLossAndStop) {
+	engineConfiguration->fuelPumpAggressiveRelief = true;
+	engine->fuelComputer.running.fuel = 2;
+	configure(fuel_pump_mode_e::Pwm);
+	running();
+	pressure(360);
+	EXPECT_TRUE(pump.isFpReliefActive);
+	engine->fuelComputer.running.fuel = 10;
+	pressure(360);
+	EXPECT_FALSE(pump.isFpReliefActive);
+	engine->fuelComputer.running.fuel = 2;
+	pressure(360);
+	EXPECT_TRUE(pump.isFpReliefActive);
+	engineConfiguration->fuelPumpAggressiveRelief = false;
+	pressure(360);
+	EXPECT_FALSE(pump.isFpReliefActive);
+	engineConfiguration->fuelPumpAggressiveRelief = true;
+	pressure(360);
+	Sensor::setInvalidMockValue(SensorType::FuelPressureLow);
+	pump.onFastCallback();
+	EXPECT_FALSE(pump.isFpReliefActive);
+	expectDuty(50);
+	pressure(360);
+	advanceTimeUs(10e6);
+	pump.onSlowCallback();
+	pump.onFastCallback();
+	EXPECT_FALSE(pump.isFpReliefActive);
+	expectDuty(0);
 }
 
-TEST(FuelPumpPwm, PwmDutyClampedToMinMax) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	getCustomPage()->fuelPumpMode  = FP_MODE_PWM;
-	getCustomPage()->fuelPumpMinDuty = 20;
-	getCustomPage()->fuelPumpMaxDuty = 90;
-
-	// Ignite at t=0, then advance past the prime window
-	setTimeNowUs(0);
-	dut.onIgnitionStateChanged(true);
-	setTimeNowUs(10e6);  // 10s past prime duration
-	dut.onSlowCallback();
-
-	// Output above max should be clamped
-	dut.setOutput(expected<percent_t>(150.0f));
-	EXPECT_EQ(90, dut.fuelPumpDuty);
-
-	// Output below min should be clamped
-	dut.setOutput(expected<percent_t>(5.0f));
-	EXPECT_EQ(20, dut.fuelPumpDuty);
-
-	// Output in range passes through
-	dut.setOutput(expected<percent_t>(60.0f));
-	EXPECT_EQ(60, dut.fuelPumpDuty);
+TEST_F(FuelPumpModes, InvalidDutyLimitsStopOutputEvenDuringPrime) {
+	configure(fuel_pump_mode_e::Pwm);
+	running();
+	engineConfiguration->fuelPumpMinDuty = 95;
+	pressure(280);
+	expectDuty(0);
+	engineConfiguration->fuelPumpMinDuty = 20;
+	engineConfiguration->fuelPumpMaxDuty = 101;
+	engineConfiguration->startUpFuelPumpDuration = 2;
+	pump.onIgnitionStateChanged(true);
+	pump.onSlowCallback();
+	pump.onFastCallback();
+	expectDuty(0);
+	EXPECT_FALSE(efiReadPin(Gpio::A0));
 }
 
-TEST(FuelPumpPwm, AggressiveReliefHoldsThroughSlowPressureBleedOnReturnlessSystem) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	getCustomPage()->fuelPumpMode    = FP_MODE_PWM;
-	getCustomPage()->fuelPumpMinDuty = 20;
-	getCustomPage()->fuelPumpMaxDuty = 90;
-
-	engineConfiguration->fuelPumpControl.pFactor  = 1.0f;
-	engineConfiguration->fuelPumpControl.iFactor  = 0.5f;
-	engineConfiguration->fuelPumpControl.dFactor  = 0;
-	engineConfiguration->fuelPumpControl.offset   = 0;
-	engineConfiguration->fuelPumpControl.minValue = -100;
-	engineConfiguration->fuelPumpControl.maxValue = 100;
-	getCustomPage()->fuelPump_iTermMin = -100;
-	getCustomPage()->fuelPump_iTermMax = 100;
-
-	// Returnless fuel system: the pump can only add pressure to the rail, never bleed it off, so
-	// once demand drops the only way pressure comes back down is via the injectors consuming it —
-	// a slow multi-step decay, never an instant step to target.
-	getCustomPage()->fuelPumpAggressiveRelief = true;
-	getCustomPage()->fuelPumpReliefMaxInjectedMass = 5.0f;      // mg/cycle
-	getCustomPage()->fuelPumpReliefEngageOverpressure = 0;      // engage as soon as above target
-	getCustomPage()->fuelPumpReliefRecoverOverpressure = 0;     // resume once back at/below target
-	engine->fuelComputer.running.fuel = 2.0f;                   // mg/cycle, low demand (below threshold)
-
-	const float setpoint = 300.0f;
-	float pressure = 340.0f;  // rail overpressured after demand dropped
-
-	// Step pressure down a little at a time (never jump straight to target) to model consumption-
-	// driven bleed-down. Relief must hold the pump at minDuty (PID bypassed and reset) at every
-	// step while pressure remains above target.
-	while (pressure > setpoint) {
-		auto cl = dut.getClosedLoop(setpoint, pressure);
-		EXPECT_FALSE(cl.Valid) << "relief should hold at pressure=" << pressure;
-		dut.setOutput(cl);
-		EXPECT_EQ(getCustomPage()->fuelPumpMinDuty, dut.fuelPumpDuty);
-		EXPECT_FALSE(dut.isFpPidActive);
-
-		pressure -= 2.0f;
-	}
-
-	// Pressure has bled back down to target: relief must release control back to the PID
-	// immediately. Since the PID was held/reset throughout the bleed-down instead of winding its
-	// I-term down against pressure it had no authority to correct, the output at zero error is
-	// ~0 rather than a residual negative pull from a wound-down integrator.
-	auto cl = dut.getClosedLoop(setpoint, pressure);
-	ASSERT_TRUE(cl.Valid);
-	dut.setOutput(cl);
-	EXPECT_TRUE(dut.isFpPidActive);
-	EXPECT_NEAR(0.0f, cl.Value, 1.0f);
+TEST_F(FuelPumpModes, PwmDrivesPinAndBenchOwnsItBetweenControllerTicks) {
+	configure(fuel_pump_mode_e::Pwm);
+	running();
+	pressure(300); // 50% at 100 Hz
+	eth.moveTimeForwardAndInvokeEventsUs(11000);
+	EXPECT_TRUE(efiReadPin(Gpio::A0));
+	eth.moveTimeForwardAndInvokeEventsUs(5000);
+	EXPECT_FALSE(efiReadPin(Gpio::A0));
+	setOutputOnTheBenchTestForUnitTest(&enginePins.fuelPumpRelay);
+	enginePins.fuelPumpRelay.setValue(true, /*isForce*/ true);
+	pump.onSlowCallback();
+	pump.onFastCallback();
+	eth.moveTimeForwardAndInvokeEventsUs(30000);
+	EXPECT_TRUE(efiReadPin(Gpio::A0));
+	enginePins.fuelPumpRelay.setValue(false, /*isForce*/ true);
+	eth.moveTimeForwardAndInvokeEventsUs(30000);
+	EXPECT_FALSE(efiReadPin(Gpio::A0));
+	setOutputOnTheBenchTestForUnitTest(nullptr);
+	pump.onFastCallback();
+	eth.moveTimeForwardAndInvokeEventsUs(5000);
+	EXPECT_TRUE(efiReadPin(Gpio::A0));
 }
 
-TEST(FuelPumpPwm, AggressiveReliefDoesNotEngageWhenInjectedMassAboveThreshold) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
+TEST_F(FuelPumpModes, BurnChangesModePinAndFrequencyWithoutOldPwmEvents) {
+	configure(fuel_pump_mode_e::Pwm);
+	running();
+	pressure(300);
+	eth.moveTimeForwardAndInvokeEventsUs(11000);
+	EXPECT_TRUE(efiReadPin(Gpio::A0));
+	configure(fuel_pump_mode_e::Dual);
+	getEngineState()->fuelingLoad = 120;
+	EXPECT_FALSE(efiReadPin(Gpio::A0));
+	pump.onSlowCallback();
+	EXPECT_TRUE(efiReadPin(Gpio::A0));
+	EXPECT_TRUE(efiReadPin(Gpio::B0));
+	eth.moveTimeForwardAndInvokeEventsUs(20000);
+	EXPECT_TRUE(efiReadPin(Gpio::A0)); // no old PWM falling edge
 
-	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
-	engineConfiguration->fuelPumpControl.pFactor  = 1.0f;
-	engineConfiguration->fuelPumpControl.iFactor  = 0;
-	engineConfiguration->fuelPumpControl.dFactor  = 0;
-	engineConfiguration->fuelPumpControl.offset   = 0;
-	engineConfiguration->fuelPumpControl.minValue = -100;
-	engineConfiguration->fuelPumpControl.maxValue = 100;
+	engineConfiguration->fuelPumpPin = Gpio::A1;
+	engineConfiguration->fuelPumpPwmFrequency = 200;
+	configure(fuel_pump_mode_e::Pwm);
+	EXPECT_FALSE(enginePins.fuelPumpRelay2.getLogicValue());
+	pump.onFastCallback();
+	eth.moveTimeForwardAndInvokeEventsUs(6000);
+	EXPECT_TRUE(efiReadPin(Gpio::A1));
+	eth.moveTimeForwardAndInvokeEventsUs(2500);
+	EXPECT_FALSE(efiReadPin(Gpio::A1));
 
-	getCustomPage()->fuelPumpAggressiveRelief = true;
-	getCustomPage()->fuelPumpReliefMaxInjectedMass = 5.0f;   // mg/cycle
-	engine->fuelComputer.running.fuel = 50.0f;                // mg/cycle, well above threshold
-
-	// Pressure is above target, but the engine is actually consuming plenty of fuel (not the
-	// low-demand returnless scenario relief targets) — PID must stay in control.
-	auto cl = dut.getClosedLoop(300.0f, 340.0f);
-	ASSERT_TRUE(cl.Valid);
-	EXPECT_TRUE(dut.isFpPidActive);
+	// Frequency-only and pin-only burns must also restart the PWM, even though
+	// the control mode itself is unchanged.
+	engineConfiguration->fuelPumpPwmFrequency = 400;
+	configure(fuel_pump_mode_e::Pwm);
+	pump.onFastCallback();
+	eth.moveTimeForwardAndInvokeEventsUs(3000);
+	EXPECT_TRUE(efiReadPin(Gpio::A1));
+	eth.moveTimeForwardAndInvokeEventsUs(1250);
+	EXPECT_FALSE(efiReadPin(Gpio::A1));
+	engineConfiguration->fuelPumpPin = Gpio::A2;
+	configure(fuel_pump_mode_e::Pwm);
+	pump.onFastCallback();
+	eth.moveTimeForwardAndInvokeEventsUs(3000);
+	EXPECT_TRUE(efiReadPin(Gpio::A2));
+	pump.stopHardware();
+	eth.moveTimeForwardAndInvokeEventsUs(20000);
+	EXPECT_FALSE(efiReadPin(Gpio::A2));
 }
 
-TEST(FuelPumpPwm, AggressiveReliefHysteresisEngageAndRecoverThresholdsDiffer) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	getCustomPage()->fuelPumpMode = FP_MODE_PWM;
-	engineConfiguration->fuelPumpControl.pFactor  = 1.0f;
-	engineConfiguration->fuelPumpControl.iFactor  = 0;
-	engineConfiguration->fuelPumpControl.dFactor  = 0;
-	engineConfiguration->fuelPumpControl.offset   = 0;
-	engineConfiguration->fuelPumpControl.minValue = -100;
-	engineConfiguration->fuelPumpControl.maxValue = 100;
-
-	getCustomPage()->fuelPumpAggressiveRelief = true;
-	getCustomPage()->fuelPumpReliefMaxInjectedMass = 5.0f;       // mg/cycle
-	getCustomPage()->fuelPumpReliefEngageOverpressure = 10;      // must be >10kPa over target to engage
-	getCustomPage()->fuelPumpReliefRecoverOverpressure = 2;      // stays latched until back within 2kPa
-	engine->fuelComputer.running.fuel = 2.0f;                    // low demand throughout
-
-	const float setpoint = 300.0f;
-
-	// Below the engage threshold (target+10): PID stays in control, relief never latches.
-	auto cl = dut.getClosedLoop(setpoint, setpoint + 5.0f);
-	EXPECT_TRUE(cl.Valid);
-
-	// Cross above the engage threshold: relief latches on.
-	cl = dut.getClosedLoop(setpoint, setpoint + 15.0f);
-	EXPECT_FALSE(cl.Valid);
-
-	// Pressure falls back into the hysteresis band (between recover and engage thresholds) —
-	// relief must stay latched rather than immediately releasing back to PID.
-	cl = dut.getClosedLoop(setpoint, setpoint + 5.0f);
-	EXPECT_FALSE(cl.Valid) << "relief should still be latched inside the hysteresis band";
-
-	// Pressure falls to/below the recover threshold (target+2): relief releases, PID resumes.
-	cl = dut.getClosedLoop(setpoint, setpoint + 1.0f);
-	EXPECT_TRUE(cl.Valid);
-}
-
-TEST(FuelPumpPwm, PwmPrimeForcesMaxDuty) {
-	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
-	FuelPumpController dut;
-
-	getCustomPage()->fuelPumpMode       = FP_MODE_PWM;
-	getCustomPage()->fuelPumpMinDuty    = 20;
-	getCustomPage()->fuelPumpMaxDuty    = 90;
-	engineConfiguration->startUpFuelPumpDuration = 4;
-
-	// Within prime window
-	setTimeNowUs(0.5e6);
-	dut.onIgnitionStateChanged(true);
-	dut.onSlowCallback();
-	EXPECT_TRUE(dut.isPrime);
-
-	// Even if PID says low duty, prime forces max
-	dut.setOutput(expected<percent_t>(30.0f));
-	EXPECT_EQ(90, dut.fuelPumpDuty);
+TEST_F(FuelPumpModes, CriticalErrorStopsPwmBetweenControllerTicks) {
+	configure(fuel_pump_mode_e::Pwm);
+	running();
+	pressure(300);
+	eth.moveTimeForwardAndInvokeEventsUs(11000);
+	EXPECT_TRUE(efiReadPin(Gpio::A0));
+	hasCriticalFirmwareErrorFlag = true;
+	// Normal periodic control can be suspended on fatal errors. Timer events
+	// must not turn the output back on after the global shutdown.
+	eth.moveTimeForwardAndInvokeEventsUs(20000);
+	EXPECT_FALSE(efiReadPin(Gpio::A0));
+	pump.onFastCallback();
+	expectDuty(0);
+	EXPECT_FALSE(pump.isFpPidActive);
 }
