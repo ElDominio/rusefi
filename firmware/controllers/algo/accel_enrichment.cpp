@@ -161,8 +161,19 @@ float TpsAccelEnrichment::getMaxDelta() {
 	return (cb.get(index) - (cb.get(index - 1)));
 }
 
+void TpsAccelEnrichment::onEngineStop() {
+	resetAE();
+}
+
 void TpsAccelEnrichment::resetAE() {
 	cb.clear();
+	tpsFrom = 0;
+	tpsTo = 0;
+	deltaTps = 0;
+	isAboveAccelThreshold = false;
+	isBelowDecelThreshold = false;
+	m_accelEventJustOccurred = false;
+	extraFuel = 0;
 	resetFractionValues();
 }
 
@@ -181,6 +192,15 @@ void TpsAccelEnrichment::setLength(int length) {
 void TpsAccelEnrichment::onNewValue(float currentValue) {
 	// Push new value in to the history buffer
 	cb.add(currentValue);
+	if (cb.getCount() < 2) {
+		// the first sample after a reset only establishes a baseline
+		tpsFrom = currentValue;
+		tpsTo = currentValue;
+		deltaTps = 0;
+		isAboveAccelThreshold = false;
+		isBelowDecelThreshold = false;
+		return;
+	}
 
 	// Update deltas
 	int maxDeltaIndex = getMaxDeltaIndex();

@@ -27,6 +27,7 @@ public:
 	TpsAccelEnrichment();
 
 	void onConfigurationChange(engine_configuration_s const* previousConfig) override;
+	void onEngineStop() override;
 
 	Timer m_timeSinceAccel;
 	// This function returns true ONCE per acceleration event.
